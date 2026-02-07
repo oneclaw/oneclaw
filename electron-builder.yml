@@ -1,0 +1,40 @@
+appId: com.oneclaw.app
+productName: OneClaw
+copyright: Copyright © 2025 OneClaw
+
+directories:
+  output: out
+
+files:
+  - dist/**/*
+  - setup/**/*
+  - assets/**/*
+  - package.json
+
+# afterPack 钩子：绕过 node_modules 剥离，直接注入 resources/ 到 app bundle
+afterPack: ./scripts/afterPack.js
+
+# --- macOS ---
+mac:
+  target: dmg
+  icon: upstream/openclaw/apps/macos/Sources/OpenClaw/Resources/OpenClaw.icns
+  category: public.app-category.productivity
+  hardenedRuntime: true
+  gatekeeperAssess: false
+
+dmg:
+  sign: false
+  artifactName: "OneClaw-${version}-${arch}.${ext}"
+
+# --- Windows ---
+win:
+  target: nsis
+  icon: assets/icon.ico
+
+nsis:
+  oneClick: true
+  perMachine: false
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  runAfterFinish: true
+  artifactName: "OneClaw-Setup-${version}-${arch}.${ext}"

@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self'; script-src 'self';">
+  <title>OneClaw Setup</title>
+  <link rel="stylesheet" href="setup.css">
+</head>
+<body>
+
+  <!-- 进度指示器 -->
+  <div class="progress-bar">
+    <div class="progress-fill" id="progressFill"></div>
+  </div>
+
+  <!-- 步骤容器 -->
+  <div class="steps-container" id="stepsContainer">
+
+    <!-- Step 1: 欢迎页 -->
+    <section class="step active" id="step1">
+      <div class="step-content">
+        <div class="logo-area">
+          <svg width="56" height="56" viewBox="0 0 56 56" fill="none">
+            <rect width="56" height="56" rx="14" fill="#3b82f6"/>
+            <path d="M18 28C18 22.477 22.477 18 28 18C33.523 18 38 22.477 38 28C38 33.523 33.523 38 28 38" stroke="white" stroke-width="2.5" stroke-linecap="round"/>
+            <circle cx="28" cy="28" r="4" fill="white"/>
+            <path d="M20 36L16 40" stroke="white" stroke-width="2.5" stroke-linecap="round"/>
+          </svg>
+        </div>
+        <h1>Welcome to OneClaw</h1>
+        <p class="subtitle">Your intelligent desktop assistant powered by large language models. Let's get you set up in just a few steps.</p>
+
+        <div class="info-card">
+          <div class="info-card-icon">
+            <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+              <path d="M10 2L3 6V14L10 18L17 14V6L10 2Z" stroke="#3b82f6" stroke-width="1.5"/>
+              <path d="M10 9V13M10 7V7.01" stroke="#3b82f6" stroke-width="1.5" stroke-linecap="round"/>
+            </svg>
+          </div>
+          <div class="info-card-text">
+            <strong>Your keys stay local</strong>
+            <span>API keys are stored securely on your machine and never sent to any third-party server.</span>
+          </div>
+        </div>
+
+        <button class="btn-primary" id="btnToStep2">Next</button>
+      </div>
+    </section>
+
+    <!-- Step 2: Provider 配置 -->
+    <section class="step" id="step2">
+      <div class="step-content">
+        <h2>Configure Provider</h2>
+        <p class="subtitle">Choose your LLM provider and enter your API key.</p>
+
+        <!-- Provider 分段选择器 -->
+        <div class="provider-tabs" id="providerTabs">
+          <button class="provider-tab active" data-provider="anthropic">Anthropic</button>
+          <button class="provider-tab" data-provider="moonshot">Moonshot</button>
+          <button class="provider-tab" data-provider="openai">OpenAI</button>
+          <button class="provider-tab" data-provider="google">Google</button>
+          <button class="provider-tab" data-provider="custom">Custom</button>
+        </div>
+
+        <!-- Moonshot 子平台选择 -->
+        <div class="field-group hidden" id="subPlatformGroup">
+          <label>Platform</label>
+          <div class="radio-group">
+            <label class="radio-item">
+              <input type="radio" name="subPlatform" value="moonshot-cn" checked>
+              <span>Moonshot CN</span>
+            </label>
+            <label class="radio-item">
+              <input type="radio" name="subPlatform" value="moonshot-ai">
+              <span>Moonshot AI</span>
+            </label>
+            <label class="radio-item">
+              <input type="radio" name="subPlatform" value="kimi-code">
+              <span>Kimi Code</span>
+            </label>
+          </div>
+        </div>
+
+        <!-- Custom: Base URL -->
+        <div class="field-group hidden" id="baseURLGroup">
+          <label for="baseURL">Base URL</label>
+          <input type="url" id="baseURL" placeholder="https://api.example.com/v1" autocomplete="off">
+        </div>
+
+        <!-- API Key 输入 -->
+        <div class="field-group">
+          <label for="apiKey">API Key</label>
+          <div class="input-password-wrap">
+            <input type="password" id="apiKey" placeholder="sk-ant-..." autocomplete="off" spellcheck="false">
+            <button class="btn-toggle-vis" id="btnToggleKey" type="button" title="Toggle visibility">
+              <svg class="icon-eye" width="18" height="18" viewBox="0 0 18 18" fill="none">
+                <path d="M1.5 9C1.5 9 4 3.75 9 3.75C14 3.75 16.5 9 16.5 9C16.5 9 14 14.25 9 14.25C4 14.25 1.5 9 1.5 9Z" stroke="currentColor" stroke-width="1.3"/>
+                <circle cx="9" cy="9" r="2.25" stroke="currentColor" stroke-width="1.3"/>
+              </svg>
+              <svg class="icon-eye-off hidden" width="18" height="18" viewBox="0 0 18 18" fill="none">
+                <path d="M2.5 2.5L15.5 15.5M7.05 7.05A2.25 2.25 0 0010.95 10.95M1.5 9C1.5 9 4 3.75 9 3.75C10.2 3.75 11.3 4.1 12.25 4.6M16.5 9C16.5 9 14 14.25 9 14.25C7.8 14.25 6.7 13.9 5.75 13.4" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
+              </svg>
+            </button>
+          </div>
+        </div>
+
+        <!-- 模型选择（非 Custom） -->
+        <div class="field-group" id="modelSelectGroup">
+          <label for="modelSelect">Model</label>
+          <select id="modelSelect"></select>
+        </div>
+
+        <!-- Custom: Model ID 手动输入 -->
+        <div class="field-group hidden" id="modelInputGroup">
+          <label for="modelInput">Model ID</label>
+          <input type="text" id="modelInput" placeholder="e.g. my-custom-model" autocomplete="off">
+        </div>
+
+        <!-- Custom: API Type -->
+        <div class="field-group hidden" id="apiTypeGroup">
+          <label>API Type</label>
+          <div class="radio-group">
+            <label class="radio-item">
+              <input type="radio" name="apiType" value="openai-completions" checked>
+              <span>OpenAI Completions</span>
+            </label>
+            <label class="radio-item">
+              <input type="radio" name="apiType" value="anthropic-messages">
+              <span>Anthropic Messages</span>
+            </label>
+            <label class="radio-item">
+              <input type="radio" name="apiType" value="openai-responses">
+              <span>OpenAI Responses</span>
+            </label>
+          </div>
+        </div>
+
+        <!-- 错误信息 -->
+        <div class="error-msg hidden" id="errorMsg"></div>
+
+        <!-- 操作按钮 -->
+        <div class="btn-row">
+          <button class="btn-secondary" id="btnBackToStep1">Back</button>
+          <button class="btn-primary" id="btnVerify">
+            <span class="btn-text">Verify &amp; Continue</span>
+            <span class="btn-spinner hidden"></span>
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <!-- Step 3: 完成 -->
+    <section class="step" id="step3">
+      <div class="step-content">
+        <div class="logo-area">
+          <svg width="48" height="48" viewBox="0 0 48 48" fill="none">
+            <circle cx="24" cy="24" r="22" stroke="#22c55e" stroke-width="2.5"/>
+            <path d="M15 24L21 30L33 18" stroke="#22c55e" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </div>
+        <h1>All Set!</h1>
+        <p class="subtitle">OneClaw is ready. Here's what you can do:</p>
+
+        <ul class="feature-list">
+          <li>
+            <span class="feature-icon">
+              <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+                <path d="M3 5H17M3 10H17M3 15H10" stroke="#3b82f6" stroke-width="1.5" stroke-linecap="round"/>
+              </svg>
+            </span>
+            <span>Chat with state-of-the-art language models</span>
+          </li>
+          <li>
+            <span class="feature-icon">
+              <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+                <path d="M6 4L14 10L6 16V4Z" stroke="#3b82f6" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+            </span>
+            <span>Generate and execute code in real time</span>
+          </li>
+          <li>
+            <span class="feature-icon">
+              <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+                <rect x="3" y="3" width="14" height="14" rx="2" stroke="#3b82f6" stroke-width="1.5"/>
+                <path d="M7 10H13M10 7V13" stroke="#3b82f6" stroke-width="1.5" stroke-linecap="round"/>
+              </svg>
+            </span>
+            <span>Manage multiple conversations and contexts</span>
+          </li>
+          <li>
+            <span class="feature-icon">
+              <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+                <circle cx="10" cy="10" r="7" stroke="#3b82f6" stroke-width="1.5"/>
+                <path d="M10 6V10L13 13" stroke="#3b82f6" stroke-width="1.5" stroke-linecap="round"/>
+              </svg>
+            </span>
+            <span>Switch providers or models anytime in Settings</span>
+          </li>
+        </ul>
+
+        <button class="btn-primary" id="btnStart">Start OneClaw</button>
+      </div>
+    </section>
+
+  </div>
+
+  <script src="setup.js"></script>
+</body>
+</html>
