@@ -19,8 +19,7 @@ mac:
   target: dmg
   icon: upstream/openclaw/apps/macos/Sources/OpenClaw/Resources/OpenClaw.icns
   category: public.app-category.productivity
-  hardenedRuntime: true
-  gatekeeperAssess: false
+  identity: null
 
 dmg:
   sign: false

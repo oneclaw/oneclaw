@@ -181,6 +181,14 @@ async function downloadAndExtractNode(version, platform, arch) {
 
   const runtimeDir = path.join(ROOT, "resources", "runtime");
 
+  // 增量检测：版本戳文件记录已解压的版本+架构
+  const stampFile = path.join(runtimeDir, ".node-stamp");
+  const stampValue = `${version}-${platform}-${arch}`;
+  if (fs.existsSync(stampFile) && fs.readFileSync(stampFile, "utf-8").trim() === stampValue) {
+    log(`runtime 已是 ${stampValue}，跳过解压`);
+    return;
+  }
+
   // 构造文件名和 URL
   const ext = platform === "darwin" ? "tar.gz" : "zip";
   const filename = `node-v${version}-${platform === "win32" ? "win" : "darwin"}-${arch}.${ext}`;
@@ -206,6 +214,9 @@ async function downloadAndExtractNode(version, platform, arch) {
   } else {
     extractWin32(cachedFile, runtimeDir, version, arch);
   }
+
+  // 写入版本戳
+  fs.writeFileSync(stampFile, stampValue);
 }
 
 // macOS: 从 tar.gz 中提取 node 二进制和 npm
@@ -328,6 +339,19 @@ function getPackageSource() {
 // 安装 openclaw 依赖并裁剪 node_modules
 function installDependencies() {
   const gatewayDir = path.join(ROOT, "resources", "gateway");
+
+  // 增量检测：比较 upstream 构建产物的 mtime
+  const upstreamEntry = path.join(ROOT, "upstream", "openclaw", "dist", "entry.js");
+  const installedEntry = path.join(gatewayDir, "node_modules", "openclaw", "dist", "entry.js");
+  if (fs.existsSync(installedEntry) && fs.existsSync(upstreamEntry)) {
+    const srcMtime = fs.statSync(upstreamEntry).mtimeMs;
+    const dstMtime = fs.statSync(installedEntry).mtimeMs;
+    if (dstMtime >= srcMtime) {
+      log("gateway 依赖未变化，跳过 npm install");
+      return;
+    }
+  }
+
   rmDir(gatewayDir);
   ensureDir(gatewayDir);
 

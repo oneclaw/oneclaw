@@ -1,6 +1,9 @@
 # 上游依赖（各自独立 git 仓库）
 upstream/
 
+# 内部文档（独立仓库）
+oneclaw-docs/
+
 # 依赖
 node_modules/
 
@@ -11,3 +14,7 @@ out/
 # 打包时生成的运行时资源
 resources/runtime/
 resources/gateway/
+resources/app-icon.png
+
+# 下载缓存
+.cache/

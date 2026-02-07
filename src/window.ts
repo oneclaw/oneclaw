@@ -48,11 +48,15 @@ export class WindowManager {
 
     const url = `http://127.0.0.1:${opts.port}/`;
 
+    // 第一次加载：建立同源上下文
     await this.loadWithRetry(url);
 
-    // 注入 gateway token 到 localStorage（原版 openclaw 从这里读认证信息）
+    // 注入 gateway token 到 localStorage，仅 token 变化时才 reload
     if (opts.token) {
-      await this.injectToken(opts.token);
+      const needsReload = await this.ensureToken(opts.token);
+      if (needsReload) {
+        await this.win.loadURL(url);
+      }
     }
 
     this.win.show();
@@ -66,20 +70,20 @@ export class WindowManager {
     this.win = null;
   }
 
-  // 注入 token 到 localStorage 并 reload（让 Control UI 的 WebSocket 客户端拿到认证信息）
-  private async injectToken(token: string): Promise<void> {
+  // 写入 token 到 localStorage，返回是否需要 reload（token 变化时）
+  private async ensureToken(token: string): Promise<boolean> {
     const escaped = token.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
-    const script = `
-      try {
+    return await this.win!.webContents.executeJavaScript(`
+      (() => {
         const key = "openclaw.control.settings.v1";
         const raw = localStorage.getItem(key);
-        const settings = raw ? JSON.parse(raw) : {};
-        settings.token = "${escaped}";
-        localStorage.setItem(key, JSON.stringify(settings));
-      } catch(e) { console.error("[oneclaw] token inject failed:", e); }
-    `;
-    await this.win!.webContents.executeJavaScript(script);
-    await this.win!.loadURL(this.win!.webContents.getURL());
+        const s = raw ? JSON.parse(raw) : {};
+        if (s.token === "${escaped}") return false;
+        s.token = "${escaped}";
+        localStorage.setItem(key, JSON.stringify(s));
+        return true;
+      })();
+    `);
   }
 
   // 重试加载 URL（Gateway 可能还没就绪）
