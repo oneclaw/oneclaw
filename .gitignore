@@ -1,0 +1,13 @@
+# 上游依赖（各自独立 git 仓库）
+upstream/
+
+# 依赖
+node_modules/
+
+# 构建产物
+dist/
+out/
+
+# 打包时生成的运行时资源
+resources/runtime/
+resources/gateway/
