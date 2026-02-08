@@ -1,4 +1,4 @@
-import { app, ipcMain } from "electron";
+import { app, ipcMain, shell } from "electron";
 import { GatewayProcess } from "./gateway-process";
 import { WindowManager } from "./window";
 import { TrayManager } from "./tray";
@@ -38,6 +38,7 @@ function showMainWindow(): Promise<void> {
 ipcMain.on("gateway:restart", () => gateway.restart());
 ipcMain.handle("gateway:state", () => gateway.getState());
 ipcMain.on("app:check-updates", () => checkForUpdates());
+ipcMain.handle("app:open-external", (_e, url: string) => shell.openExternal(url));
 registerSetupIpc({ setupManager });
 
 // ── 退出 ──

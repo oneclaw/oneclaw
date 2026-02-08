@@ -10,6 +10,7 @@
   const PROVIDERS = {
     anthropic: {
       placeholder: "sk-ant-...",
+      platformUrl: "https://console.anthropic.com",
       models: [
         "claude-sonnet-4-5-20250929",
         "claude-opus-4-5-20251101",
@@ -23,16 +24,25 @@
     },
     openai: {
       placeholder: "sk-...",
+      platformUrl: "https://platform.openai.com",
       models: ["gpt-5.2", "gpt-5.2-codex"],
     },
     google: {
       placeholder: "AI...",
+      platformUrl: "https://aistudio.google.com",
       models: ["gemini-3-pro-preview", "gemini-3-flash-preview"],
     },
     custom: {
       placeholder: "",
       models: [],
     },
+  };
+
+  // Moonshot 子平台各自的 URL
+  const SUB_PLATFORM_URLS = {
+    "moonshot-cn": "https://platform.moonshot.cn",
+    "moonshot-ai": "https://platform.moonshot.ai",
+    "kimi-code": "https://kimi.com/code",
   };
 
   // Kimi Code 子平台使用独立模型列表
@@ -49,6 +59,7 @@
     btnToStep2: $("#btnToStep2"),
     // Step 2
     providerTabs: $("#providerTabs"),
+    platformLink: $("#platformLink"),
     subPlatformGroup: $("#subPlatformGroup"),
     baseURLGroup: $("#baseURLGroup"),
     apiKeyInput: $("#apiKey"),
@@ -104,6 +115,9 @@
 
     hideError();
 
+    // 平台链接
+    updatePlatformLink();
+
     // Moonshot 子平台
     toggleEl(els.subPlatformGroup, config.hasSubPlatform === true);
 
@@ -118,6 +132,22 @@
 
     if (!isCustom) {
       updateModels();
+    }
+  }
+
+  // ---- 更新平台链接 ----
+  function updatePlatformLink() {
+    let url = PROVIDERS[currentProvider].platformUrl || "";
+    // Moonshot 子平台各有独立 URL
+    if (currentProvider === "moonshot") {
+      url = SUB_PLATFORM_URLS[getSubPlatform()] || "";
+    }
+    if (url) {
+      els.platformLink.textContent = "Get API Key →";
+      els.platformLink.dataset.url = url;
+      els.platformLink.classList.remove("hidden");
+    } else {
+      els.platformLink.classList.add("hidden");
     }
   }
 
@@ -271,14 +301,24 @@
       if (tab) switchProvider(tab.dataset.provider);
     });
 
-    // Moonshot 子平台切换 → 更新模型列表
+    // Moonshot 子平台切换 → 更新模型列表和平台链接
     if (els.subPlatformGroup) {
       els.subPlatformGroup.addEventListener("change", () => {
         if (currentProvider === "moonshot") {
           updateModels();
+          updatePlatformLink();
         }
       });
     }
+
+    // 平台链接点击 → 用系统浏览器打开
+    els.platformLink.addEventListener("click", (e) => {
+      e.preventDefault();
+      const url = els.platformLink.dataset.url;
+      if (url && window.oneclaw?.openExternal) {
+        window.oneclaw.openExternal(url);
+      }
+    });
 
     els.btnToggleKey.addEventListener("click", toggleKeyVisibility);
     els.btnVerify.addEventListener("click", handleVerify);

@@ -15,4 +15,7 @@ contextBridge.exposeInMainWorld("oneclaw", {
   saveConfig: (params: Record<string, unknown>) =>
     ipcRenderer.invoke("setup:save-config", params),
   completeSetup: () => ipcRenderer.send("setup:complete"),
+
+  // 打开外部链接（走 IPC 到主进程，sandbox 下 shell 不可用）
+  openExternal: (url: string) => ipcRenderer.invoke("app:open-external", url),
 });

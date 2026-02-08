@@ -3,6 +3,7 @@ import * as crypto from "crypto";
 import * as http from "http";
 import * as path from "path";
 import * as fs from "fs";
+import { app } from "electron";
 import {
   DEFAULT_PORT,
   HEALTH_TIMEOUT_MS,
@@ -15,6 +16,15 @@ import {
   resolveGatewayCwd,
   resolveResourcesPath,
 } from "./constants";
+
+// 诊断日志（写入 userData 目录，方便定位 gateway 启动失败）
+const LOG_PATH = path.join(app.getPath("userData"), "gateway.log");
+
+function diagLog(msg: string): void {
+  const line = `[${new Date().toISOString()}] ${msg}\n`;
+  process.stderr.write(line);
+  try { fs.appendFileSync(LOG_PATH, line); } catch {}
+}
 
 export type GatewayState = "stopped" | "starting" | "running" | "stopping";
 
@@ -60,20 +70,28 @@ export class GatewayProcess {
     }
 
     this.setState("starting");
-    console.log(`[gateway] token=${this.token}  →  http://127.0.0.1:${this.port}/?token=${this.token}`);
 
     const nodeBin = resolveNodeBin();
     const entry = resolveGatewayEntry();
     const cwd = resolveGatewayCwd();
 
+    // 诊断：打印所有关键路径
+    diagLog(`--- gateway start ---`);
+    diagLog(`platform=${process.platform} arch=${process.arch} packaged=${app.isPackaged}`);
+    diagLog(`resourcesPath=${resolveResourcesPath()}`);
+    diagLog(`nodeBin=${nodeBin} exists=${fs.existsSync(nodeBin)}`);
+    diagLog(`entry=${entry} exists=${fs.existsSync(entry)}`);
+    diagLog(`cwd=${cwd} exists=${fs.existsSync(cwd)}`);
+    diagLog(`token=${this.token} port=${this.port}`);
+
     // 检查关键文件
     if (!fs.existsSync(nodeBin)) {
-      console.error(`[gateway] node 二进制不存在: ${nodeBin}`);
+      diagLog(`FATAL: node 二进制不存在`);
       this.setState("stopped");
       return;
     }
     if (!fs.existsSync(entry)) {
-      console.error(`[gateway] gateway 入口不存在: ${entry}`);
+      diagLog(`FATAL: gateway 入口不存在`);
       this.setState("stopped");
       return;
     }
@@ -82,35 +100,43 @@ export class GatewayProcess {
     const runtimeDir = path.join(resolveResourcesPath(), "runtime");
     const envPath = runtimeDir + path.delimiter + (process.env.PATH ?? "");
 
-    this.proc = spawn(
-      nodeBin,
-      [entry, "gateway", "run", "--port", String(this.port), "--bind", "loopback"],
-      {
-        cwd,
-        env: {
-          ...process.env,
-          NODE_ENV: "production",
-          OPENCLAW_LENIENT_CONFIG: "1",
-          OPENCLAW_GATEWAY_TOKEN: this.token,
-          OPENCLAW_NPM_BIN: resolveNpmBin(),
-          PATH: envPath,
-        },
-        stdio: ["ignore", "pipe", "pipe"],
-        windowsHide: true,
-      }
-    );
+    const args = [entry, "gateway", "run", "--port", String(this.port), "--bind", "loopback"];
+    diagLog(`spawn: ${nodeBin} ${args.join(" ")}`);
 
-    // 转发日志
+    this.proc = spawn(nodeBin, args, {
+      cwd,
+      env: {
+        ...process.env,
+        NODE_ENV: "production",
+        OPENCLAW_LENIENT_CONFIG: "1",
+        OPENCLAW_GATEWAY_TOKEN: this.token,
+        OPENCLAW_NPM_BIN: resolveNpmBin(),
+        PATH: envPath,
+      },
+      stdio: ["ignore", "pipe", "pipe"],
+      windowsHide: true,
+    });
+
+    // 捕获 spawn 错误（如二进制不可执行）
+    this.proc.on("error", (err) => {
+      diagLog(`spawn error: ${err.message}`);
+    });
+
+    // 转发日志（同时写入诊断文件）
     this.proc.stdout?.on("data", (d: Buffer) => {
-      process.stdout.write(`[gateway] ${d}`);
+      const s = d.toString();
+      process.stdout.write(`[gateway] ${s}`);
+      diagLog(`stdout: ${s.trimEnd()}`);
     });
     this.proc.stderr?.on("data", (d: Buffer) => {
-      process.stderr.write(`[gateway] ${d}`);
+      const s = d.toString();
+      process.stderr.write(`[gateway] ${s}`);
+      diagLog(`stderr: ${s.trimEnd()}`);
     });
 
     // 退出处理
     this.proc.on("exit", (code, signal) => {
-      console.log(`[gateway] 进程退出 code=${code} signal=${signal}`);
+      diagLog(`exit code=${code} signal=${signal}`);
       if (this.state === "stopping") {
         this.setState("stopped");
       } else {
@@ -124,9 +150,10 @@ export class GatewayProcess {
     // 轮询健康检查
     const healthy = await this.waitForHealth(HEALTH_TIMEOUT_MS);
     if (healthy) {
+      diagLog("health check passed");
       this.setState("running");
     } else {
-      console.error("[gateway] 健康检查超时，停止进程");
+      diagLog("FATAL: health check timeout");
       this.stop();
     }
   }
