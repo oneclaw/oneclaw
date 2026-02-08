@@ -11,8 +11,8 @@
     "package:resources": "node scripts/package-resources.js",
     "dist:mac": "npm run package:resources && electron-builder --mac --arm64",
     "dist:mac:x64": "npm run package:resources -- --arch x64 && electron-builder --mac --x64",
-    "dist:win:x64": "npm run package:resources -- --arch x64 && electron-builder --win --x64",
-    "dist:win:arm64": "npm run package:resources -- --arch arm64 && electron-builder --win --arm64",
+    "dist:win:x64": "npm run package:resources -- --platform win32 --arch x64 && electron-builder --win --x64",
+    "dist:win:arm64": "npm run package:resources -- --platform win32 --arch arm64 && electron-builder --win --arm64",
     "clean": "rm -rf dist resources/runtime resources/gateway out"
   },
 

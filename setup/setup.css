@@ -230,6 +230,28 @@ h2 {
   letter-spacing: 0.04em;
 }
 
+/* Label 行（label + 平台链接） */
+.label-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.platform-link {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--accent);
+  text-decoration: none;
+  cursor: pointer;
+  transition: color var(--transition);
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+.platform-link:hover {
+  color: var(--accent-hover);
+}
+
 /* 输入框通用样式 */
 input[type="text"],
 input[type="password"],
