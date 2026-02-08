@@ -30,7 +30,11 @@ export class SetupManager {
       app.quit();
     });
 
-    this.setupWin.loadFile(path.join(__dirname, "..", "setup", "index.html"));
+    // 根据系统语言传递 lang 参数，zh 开头用中文，其余 fallback 英文
+    const lang = app.getLocale().startsWith("zh") ? "zh" : "en";
+    this.setupWin.loadFile(path.join(__dirname, "..", "setup", "index.html"), {
+      query: { lang },
+    });
     this.setupWin.show();
   }
 

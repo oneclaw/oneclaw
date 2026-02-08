@@ -28,8 +28,8 @@
             <path d="M20 36L16 40" stroke="white" stroke-width="2.5" stroke-linecap="round"/>
           </svg>
         </div>
-        <h1>Welcome to OneClaw</h1>
-        <p class="subtitle">Your intelligent desktop assistant powered by large language models. Let's get you set up in just a few steps.</p>
+        <h1 data-i18n="welcome.title">Welcome to OneClaw</h1>
+        <p class="subtitle" data-i18n="welcome.subtitle">Your intelligent desktop assistant powered by large language models. Let's get you set up in just a few steps.</p>
 
         <div class="info-card">
           <div class="info-card-icon">
@@ -39,20 +39,20 @@
             </svg>
           </div>
           <div class="info-card-text">
-            <strong>Your keys stay local</strong>
-            <span>API keys are stored securely on your machine and never sent to any third-party server.</span>
+            <strong data-i18n="welcome.security.title">Your keys stay local</strong>
+            <span data-i18n="welcome.security.desc">API keys are stored securely on your machine and never sent to any third-party server.</span>
           </div>
         </div>
 
-        <button class="btn-primary" id="btnToStep2">Next</button>
+        <button class="btn-primary" id="btnToStep2" data-i18n="welcome.next">Next</button>
       </div>
     </section>
 
     <!-- Step 2: Provider 配置 -->
     <section class="step" id="step2">
       <div class="step-content">
-        <h2>Configure Provider</h2>
-        <p class="subtitle">Choose your LLM provider and enter your API key.</p>
+        <h2 data-i18n="config.title">Configure Provider</h2>
+        <p class="subtitle" data-i18n="config.subtitle">Choose your LLM provider and enter your API key.</p>
 
         <!-- Provider 分段选择器 -->
         <div class="provider-tabs" id="providerTabs">
@@ -60,12 +60,12 @@
           <button class="provider-tab" data-provider="moonshot">Moonshot</button>
           <button class="provider-tab" data-provider="openai">OpenAI</button>
           <button class="provider-tab" data-provider="google">Google</button>
-          <button class="provider-tab" data-provider="custom">Custom</button>
+          <button class="provider-tab" data-provider="custom" data-i18n="config.custom">Custom</button>
         </div>
 
         <!-- Moonshot 子平台选择 -->
         <div class="field-group hidden" id="subPlatformGroup">
-          <label>Platform</label>
+          <label data-i18n="config.platform">Platform</label>
           <div class="radio-group">
             <label class="radio-item">
               <input type="radio" name="subPlatform" value="moonshot-cn" checked>
@@ -84,14 +84,14 @@
 
         <!-- Custom: Base URL -->
         <div class="field-group hidden" id="baseURLGroup">
-          <label for="baseURL">Base URL</label>
+          <label for="baseURL" data-i18n="config.baseUrl">Base URL</label>
           <input type="url" id="baseURL" placeholder="https://api.example.com/v1" autocomplete="off">
         </div>
 
         <!-- API Key 输入 -->
         <div class="field-group">
           <div class="label-row">
-            <label for="apiKey">API Key</label>
+            <label for="apiKey" data-i18n="config.apiKey">API Key</label>
             <a href="#" class="platform-link" id="platformLink">Get API Key →</a>
           </div>
           <div class="input-password-wrap">
@@ -110,19 +110,19 @@
 
         <!-- 模型选择（非 Custom） -->
         <div class="field-group" id="modelSelectGroup">
-          <label for="modelSelect">Model</label>
+          <label for="modelSelect" data-i18n="config.model">Model</label>
           <select id="modelSelect"></select>
         </div>
 
         <!-- Custom: Model ID 手动输入 -->
         <div class="field-group hidden" id="modelInputGroup">
-          <label for="modelInput">Model ID</label>
+          <label for="modelInput" data-i18n="config.modelId">Model ID</label>
           <input type="text" id="modelInput" placeholder="e.g. my-custom-model" autocomplete="off">
         </div>
 
         <!-- Custom: API Type -->
         <div class="field-group hidden" id="apiTypeGroup">
-          <label>API Type</label>
+          <label data-i18n="config.apiType">API Type</label>
           <div class="radio-group">
             <label class="radio-item">
               <input type="radio" name="apiType" value="openai-completions" checked>
@@ -144,9 +144,9 @@
 
         <!-- 操作按钮 -->
         <div class="btn-row">
-          <button class="btn-secondary" id="btnBackToStep1">Back</button>
+          <button class="btn-secondary" id="btnBackToStep1" data-i18n="config.back">Back</button>
           <button class="btn-primary" id="btnVerify">
-            <span class="btn-text">Verify &amp; Continue</span>
+            <span class="btn-text" data-i18n="config.verify">Verify &amp; Continue</span>
             <span class="btn-spinner hidden"></span>
           </button>
         </div>
@@ -162,8 +162,8 @@
             <path d="M15 24L21 30L33 18" stroke="#22c55e" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
           </svg>
         </div>
-        <h1>All Set!</h1>
-        <p class="subtitle">OneClaw is ready. Here's what you can do:</p>
+        <h1 data-i18n="done.title">All Set!</h1>
+        <p class="subtitle" data-i18n="done.subtitle">OneClaw is ready. Here's what you can do:</p>
 
         <ul class="feature-list">
           <li>
@@ -172,7 +172,7 @@
                 <path d="M3 5H17M3 10H17M3 15H10" stroke="#3b82f6" stroke-width="1.5" stroke-linecap="round"/>
               </svg>
             </span>
-            <span>Chat with state-of-the-art language models</span>
+            <span data-i18n="done.feature1">Chat with state-of-the-art language models</span>
           </li>
           <li>
             <span class="feature-icon">
@@ -180,7 +180,7 @@
                 <path d="M6 4L14 10L6 16V4Z" stroke="#3b82f6" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
               </svg>
             </span>
-            <span>Generate and execute code in real time</span>
+            <span data-i18n="done.feature2">Generate and execute code in real time</span>
           </li>
           <li>
             <span class="feature-icon">
@@ -189,7 +189,7 @@
                 <path d="M7 10H13M10 7V13" stroke="#3b82f6" stroke-width="1.5" stroke-linecap="round"/>
               </svg>
             </span>
-            <span>Manage multiple conversations and contexts</span>
+            <span data-i18n="done.feature3">Manage multiple conversations and contexts</span>
           </li>
           <li>
             <span class="feature-icon">
@@ -198,11 +198,11 @@
                 <path d="M10 6V10L13 13" stroke="#3b82f6" stroke-width="1.5" stroke-linecap="round"/>
               </svg>
             </span>
-            <span>Switch providers or models anytime in Settings</span>
+            <span data-i18n="done.feature4">Switch providers or models anytime in Settings</span>
           </li>
         </ul>
 
-        <button class="btn-primary" id="btnStart">Start OneClaw</button>
+        <button class="btn-primary" id="btnStart" data-i18n="done.start">Start OneClaw</button>
       </div>
     </section>
 

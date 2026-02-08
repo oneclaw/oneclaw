@@ -48,6 +48,72 @@
   // Kimi Code 子平台使用独立模型列表
   const KIMI_CODE_MODELS = ["k2p5"];
 
+  // ---- 国际化文案 ----
+  const I18N = {
+    en: {
+      "welcome.title": "Welcome to OneClaw",
+      "welcome.subtitle": "Your intelligent desktop assistant powered by large language models. Let's get you set up in just a few steps.",
+      "welcome.security.title": "Your keys stay local",
+      "welcome.security.desc": "API keys are stored securely on your machine and never sent to any third-party server.",
+      "welcome.next": "Next",
+      "config.title": "Configure Provider",
+      "config.subtitle": "Choose your LLM provider and enter your API key.",
+      "config.platform": "Platform",
+      "config.baseUrl": "Base URL",
+      "config.apiKey": "API Key",
+      "config.getKey": "Get API Key →",
+      "config.model": "Model",
+      "config.modelId": "Model ID",
+      "config.apiType": "API Type",
+      "config.custom": "Custom",
+      "config.back": "Back",
+      "config.verify": "Verify & Continue",
+      "done.title": "All Set!",
+      "done.subtitle": "OneClaw is ready. Here's what you can do:",
+      "done.feature1": "Chat with state-of-the-art language models",
+      "done.feature2": "Generate and execute code in real time",
+      "done.feature3": "Manage multiple conversations and contexts",
+      "done.feature4": "Switch providers or models anytime in Settings",
+      "done.start": "Start OneClaw",
+      "error.noKey": "Please enter your API key.",
+      "error.noBaseUrl": "Please enter the Base URL.",
+      "error.noModelId": "Please enter the Model ID.",
+      "error.verifyFailed": "Verification failed. Please check your API key.",
+      "error.connection": "Connection error: ",
+    },
+    zh: {
+      "welcome.title": "欢迎使用 OneClaw",
+      "welcome.subtitle": "基于大语言模型的智能桌面助手，只需几步即可完成配置。",
+      "welcome.security.title": "密钥安全存储",
+      "welcome.security.desc": "API 密钥安全存储在本地设备，绝不会发送到任何第三方服务器。",
+      "welcome.next": "下一步",
+      "config.title": "配置服务商",
+      "config.subtitle": "选择 LLM 服务商并输入 API 密钥。",
+      "config.platform": "平台",
+      "config.baseUrl": "接口地址",
+      "config.apiKey": "API 密钥",
+      "config.getKey": "获取密钥 →",
+      "config.model": "模型",
+      "config.modelId": "模型 ID",
+      "config.apiType": "接口类型",
+      "config.custom": "自定义",
+      "config.back": "返回",
+      "config.verify": "验证并继续",
+      "done.title": "配置完成！",
+      "done.subtitle": "OneClaw 已就绪，你可以：",
+      "done.feature1": "与最先进的大语言模型对话",
+      "done.feature2": "实时生成并执行代码",
+      "done.feature3": "管理多个对话和上下文",
+      "done.feature4": "随时在设置中切换服务商或模型",
+      "done.start": "启动 OneClaw",
+      "error.noKey": "请输入 API 密钥。",
+      "error.noBaseUrl": "请输入接口地址。",
+      "error.noModelId": "请输入模型 ID。",
+      "error.verifyFailed": "验证失败，请检查 API 密钥。",
+      "error.connection": "连接错误：",
+    },
+  };
+
   // ---- DOM 引用 ----
   const $ = (sel) => document.querySelector(sel);
   const $$ = (sel) => document.querySelectorAll(sel);
@@ -82,6 +148,26 @@
   let currentStep = 1;
   let currentProvider = "anthropic";
   let verifying = false;
+  let currentLang = "en";
+
+  // ---- 语言检测（从 URL ?lang= 参数读取） ----
+  function detectLang() {
+    const params = new URLSearchParams(window.location.search);
+    const lang = params.get("lang");
+    currentLang = lang && I18N[lang] ? lang : "en";
+  }
+
+  // 翻译取值
+  function t(key) {
+    return (I18N[currentLang] && I18N[currentLang][key]) || I18N.en[key] || key;
+  }
+
+  // 遍历 data-i18n 属性，替换文本
+  function applyI18n() {
+    document.querySelectorAll("[data-i18n]").forEach((el) => {
+      el.textContent = t(el.getAttribute("data-i18n"));
+    });
+  }
 
   // ---- 步骤切换 ----
   function goToStep(step) {
@@ -143,7 +229,7 @@
       url = SUB_PLATFORM_URLS[getSubPlatform()] || "";
     }
     if (url) {
-      els.platformLink.textContent = "Get API Key →";
+      els.platformLink.textContent = t("config.getKey");
       els.platformLink.dataset.url = url;
       els.platformLink.classList.remove("hidden");
     } else {
@@ -190,7 +276,7 @@
 
     const apiKey = els.apiKeyInput.value.trim();
     if (!apiKey) {
-      showError("Please enter your API key.");
+      showError(t("error.noKey"));
       return;
     }
 
@@ -204,7 +290,7 @@
       const result = await window.oneclaw.verifyKey(params);
 
       if (!result.success) {
-        showError(result.message || "Verification failed. Please check your API key.");
+        showError(result.message || t("error.verifyFailed"));
         setVerifying(false);
         return;
       }
@@ -213,7 +299,7 @@
       setVerifying(false);
       goToStep(3);
     } catch (err) {
-      showError("Connection error: " + (err.message || "Unknown error"));
+      showError(t("error.connection") + (err.message || "Unknown error"));
       setVerifying(false);
     }
   }
@@ -229,11 +315,11 @@
       const baseURL = ($("#baseURL").value || "").trim();
       const modelID = (els.modelInput.value || "").trim();
       if (!baseURL) {
-        showError("Please enter the Base URL.");
+        showError(t("error.noBaseUrl"));
         return null;
       }
       if (!modelID) {
-        showError("Please enter the Model ID.");
+        showError(t("error.noModelId"));
         return null;
       }
       params.baseURL = baseURL;
@@ -332,6 +418,8 @@
 
   // ---- 初始化 ----
   function init() {
+    detectLang();
+    applyI18n();
     bindEvents();
     switchProvider("anthropic");
     goToStep(1);
