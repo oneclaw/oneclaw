@@ -1,4 +1,5 @@
-import { app, ipcMain, shell } from "electron";
+import { app, dialog, ipcMain, shell } from "electron";
+import * as path from "path";
 import { GatewayProcess } from "./gateway-process";
 import { WindowManager } from "./window";
 import { TrayManager } from "./tray";
@@ -33,6 +34,29 @@ function showMainWindow(): Promise<void> {
   });
 }
 
+// ── Gateway 启动失败提示（避免静默失败） ──
+
+function reportGatewayStartFailure(source: string): void {
+  const logPath = path.join(app.getPath("userData"), "gateway.log");
+  const title = "OneClaw Gateway 启动失败";
+  const detail =
+    `来源: ${source}\n` +
+    `请检查托盘菜单中的 Restart Gateway，或查看日志:\n${logPath}`;
+  console.error(`[main] ${title} (${source})`);
+  console.error(`[main] 诊断日志: ${logPath}`);
+  dialog.showErrorBox(title, detail);
+}
+
+// ── 统一启动链路：启动 Gateway → 打开主窗口 ──
+
+async function startGatewayAndShowMain(source: string): Promise<void> {
+  await gateway.start();
+  if (gateway.getState() !== "running") {
+    reportGatewayStartFailure(source);
+  }
+  await showMainWindow();
+}
+
 // ── IPC 注册 ──
 
 ipcMain.on("gateway:restart", () => gateway.restart());
@@ -53,12 +77,7 @@ function quit(): void {
 // ── Setup 完成后：启动 Gateway → 打开主窗口 ──
 
 setupManager.setOnComplete(async () => {
-  await gateway.start();
-  if (gateway.getState() !== "running") {
-    console.error("[main] Gateway 启动失败，无法打开主窗口");
-    return;
-  }
-  await showMainWindow();
+  await startGatewayAndShowMain("setup:complete");
 });
 
 // ── 应用就绪 ──
@@ -77,8 +96,7 @@ app.whenReady().then(async () => {
     // 无配置 → 先走 Setup，Gateway 在 Setup 完成回调里启动
     setupManager.showSetup();
   } else {
-    await gateway.start();
-    await showMainWindow();
+    await startGatewayAndShowMain("app:startup");
   }
 });
 
@@ -88,7 +106,9 @@ app.on("second-instance", () => {
   if (setupManager.isSetupOpen()) {
     setupManager.focusSetup();
   } else {
-    showMainWindow();
+    showMainWindow().catch((err) => {
+      console.error("[main] second-instance 打开主窗口失败:", err);
+    });
   }
 });
 

@@ -49,13 +49,28 @@ export class WindowManager {
     const url = `http://127.0.0.1:${opts.port}/`;
 
     // 第一次加载：建立同源上下文
-    await this.loadWithRetry(url);
+    const loaded = await this.loadWithRetry(url);
+    if (!loaded) {
+      await this.loadGatewayErrorPage(url);
+      this.win.show();
+      return;
+    }
 
     // 注入 gateway token 到 localStorage，仅 token 变化时才 reload
     if (opts.token) {
-      const needsReload = await this.ensureToken(opts.token);
-      if (needsReload) {
-        await this.win.loadURL(url);
+      try {
+        const needsReload = await this.ensureToken(opts.token);
+        if (needsReload) {
+          try {
+            await this.win.loadURL(url);
+          } catch {
+            console.error("[window] token 注入后 reload 失败，切换错误页");
+            await this.loadGatewayErrorPage(url);
+          }
+        }
+      } catch {
+        console.error("[window] token 注入失败，切换错误页");
+        await this.loadGatewayErrorPage(url);
       }
     }
 
@@ -87,16 +102,86 @@ export class WindowManager {
   }
 
   // 重试加载 URL（Gateway 可能还没就绪）
-  private async loadWithRetry(url: string): Promise<void> {
+  private async loadWithRetry(url: string): Promise<boolean> {
     for (let i = 1; i <= WINDOW_LOAD_MAX_RETRIES; i++) {
       try {
         await this.win!.loadURL(url);
-        return;
+        return true;
       } catch {
         console.log(`[window] 加载重试 ${i}/${WINDOW_LOAD_MAX_RETRIES}`);
         await new Promise((r) => setTimeout(r, WINDOW_LOAD_RETRY_INTERVAL_MS));
       }
     }
     console.error("[window] 加载失败，已达最大重试次数");
+    return false;
+  }
+
+  // Gateway 无法访问时，显示可见错误页，避免白屏
+  private async loadGatewayErrorPage(url: string): Promise<void> {
+    const html = `<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Gateway Not Available</title>
+  <style>
+    :root { color-scheme: light dark; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      display: grid;
+      place-items: center;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: #0b1020;
+      color: #e6ebff;
+    }
+    .card {
+      width: min(680px, calc(100vw - 40px));
+      border-radius: 14px;
+      background: #111938;
+      border: 1px solid #2a366f;
+      box-shadow: 0 20px 50px rgba(0, 0, 0, 0.35);
+      padding: 22px 20px;
+    }
+    h1 { margin: 0 0 10px; font-size: 20px; }
+    p { margin: 0 0 10px; line-height: 1.5; color: #c8d2ff; }
+    code {
+      display: block;
+      margin: 8px 0 16px;
+      padding: 10px 12px;
+      border-radius: 8px;
+      background: #0a1026;
+      border: 1px solid #2a366f;
+      color: #9cb0ff;
+      overflow-wrap: anywhere;
+    }
+    button {
+      border: 0;
+      border-radius: 8px;
+      padding: 10px 14px;
+      font-weight: 600;
+      cursor: pointer;
+      color: #071033;
+      background: #8ea7ff;
+    }
+  </style>
+</head>
+<body>
+  <main class="card">
+    <h1>Gateway not available</h1>
+    <p>OneClaw 无法连接本地 Gateway，主界面未加载。</p>
+    <p>请在托盘菜单中尝试 <strong>Restart Gateway</strong>，然后点击下方按钮重试。</p>
+    <code>${url}</code>
+    <button id="retryBtn" type="button">Retry</button>
+  </main>
+  <script>
+    document.getElementById("retryBtn")?.addEventListener("click", () => {
+      window.location.href = ${JSON.stringify(url)};
+    });
+  </script>
+</body>
+</html>`;
+
+    await this.win!.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(html)}`);
   }
 }

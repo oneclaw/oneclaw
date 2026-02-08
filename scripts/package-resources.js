@@ -16,6 +16,25 @@ const { execSync } = require("child_process");
 
 // ─── 项目根目录 ───
 const ROOT = path.resolve(__dirname, "..");
+const TARGETS_ROOT = path.join(ROOT, "resources", "targets");
+
+// 计算目标产物的唯一标识
+function getTargetId(platform, arch) {
+  return `${platform}-${arch}`;
+}
+
+// 计算目标产物的目录集合
+function getTargetPaths(platform, arch) {
+  const targetId = getTargetId(platform, arch);
+  const targetBase = path.join(TARGETS_ROOT, targetId);
+  return {
+    targetId,
+    targetBase,
+    runtimeDir: path.join(targetBase, "runtime"),
+    gatewayDir: path.join(targetBase, "gateway"),
+    iconPath: path.join(targetBase, "app-icon.png"),
+  };
+}
 
 // ─── 参数解析 ───
 function parseArgs() {
@@ -67,6 +86,15 @@ function rmDir(dir) {
   }
 }
 
+// 安全删除单个文件（忽略不存在或权限瞬时错误）
+function safeUnlink(filePath) {
+  try {
+    if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+  } catch {
+    // 忽略清理异常，保留原始错误上下文
+  }
+}
+
 // HTTPS GET，返回 Promise<Buffer>
 function httpGet(url) {
   return new Promise((resolve, reject) => {
@@ -111,10 +139,10 @@ function downloadFile(url, dest) {
           const totalBytes = parseInt(res.headers["content-length"], 10) || 0;
           let downloaded = 0;
           const file = fs.createWriteStream(dest);
+          let settled = false;
 
           res.on("data", (chunk) => {
             downloaded += chunk.length;
-            file.write(chunk);
             if (totalBytes > 0) {
               const pct = ((downloaded / totalBytes) * 100).toFixed(1);
               const mb = (downloaded / 1024 / 1024).toFixed(1);
@@ -122,22 +150,78 @@ function downloadFile(url, dest) {
             }
           });
 
-          res.on("end", () => {
-            file.end();
-            if (totalBytes > 0) process.stdout.write("\n");
-            resolve();
+          const fail = (err) => {
+            if (settled) return;
+            settled = true;
+            res.destroy();
+            file.destroy();
+            safeUnlink(dest);
+            reject(err);
+          };
+
+          res.on("error", fail);
+          file.on("error", fail);
+
+          // 确保写入句柄真正 flush + close 后再返回，避免拿到半截压缩包
+          file.on("finish", () => {
+            file.close((closeErr) => {
+              if (settled) return;
+              settled = true;
+              if (closeErr) {
+                safeUnlink(dest);
+                reject(closeErr);
+                return;
+              }
+              if (totalBytes > 0) process.stdout.write("\n");
+              resolve();
+            });
           });
 
-          res.on("error", (err) => {
-            file.destroy();
-            fs.unlinkSync(dest);
-            reject(err);
-          });
+          res.pipe(file);
         })
-        .on("error", reject);
+        .on("error", (err) => {
+          safeUnlink(dest);
+          reject(err);
+        });
     };
     request(url);
   });
+}
+
+// 依次尝试多个下载源，直到成功
+async function downloadFileWithFallback(urls, dest) {
+  const errors = [];
+  for (const url of urls) {
+    try {
+      await downloadFile(url, dest);
+      return;
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      errors.push(`${url} -> ${message}`);
+      safeUnlink(dest);
+    }
+  }
+  throw new Error(`全部下载源失败:\n${errors.join("\n")}`);
+}
+
+// 快速校验 zip 的 EOCD 签名，提前识别损坏缓存包
+function assertZipHasCentralDirectory(zipPath) {
+  const stat = fs.statSync(zipPath);
+  if (stat.size < 22) {
+    throw new Error(`zip 文件过小: ${zipPath}`);
+  }
+  const readSize = Math.min(stat.size, 128 * 1024);
+  const buf = Buffer.alloc(readSize);
+  const fd = fs.openSync(zipPath, "r");
+  try {
+    fs.readSync(fd, buf, 0, readSize, stat.size - readSize);
+  } finally {
+    fs.closeSync(fd);
+  }
+  const eocdSig = Buffer.from([0x50, 0x4b, 0x05, 0x06]);
+  if (buf.lastIndexOf(eocdSig) === -1) {
+    throw new Error(`zip 缺少 End-of-central-directory 签名: ${zipPath}`);
+  }
 }
 
 // ─── Step 1: 下载 Node.js 22 发行包 ───
@@ -174,12 +258,10 @@ function pickV22(versions) {
   return v22.version.slice(1); // 去掉前缀 "v"
 }
 
-// 下载并解压 Node.js 运行时到 resources/runtime/
-async function downloadAndExtractNode(version, platform, arch) {
+// 下载并解压 Node.js 运行时到目标目录
+async function downloadAndExtractNode(version, platform, arch, runtimeDir) {
   const cacheDir = path.join(ROOT, ".cache", "node");
   ensureDir(cacheDir);
-
-  const runtimeDir = path.join(ROOT, "resources", "runtime");
 
   // 增量检测：版本戳文件记录已解压的版本+架构
   const stampFile = path.join(runtimeDir, ".node-stamp");
@@ -192,7 +274,10 @@ async function downloadAndExtractNode(version, platform, arch) {
   // 构造文件名和 URL
   const ext = platform === "darwin" ? "tar.gz" : "zip";
   const filename = `node-v${version}-${platform === "win32" ? "win" : "darwin"}-${arch}.${ext}`;
-  const url = `https://nodejs.org/dist/v${version}/${filename}`;
+  const downloadUrls = [
+    `https://nodejs.org/dist/v${version}/${filename}`,
+    `https://npmmirror.com/mirrors/node/v${version}/${filename}`,
+  ];
   const cachedFile = path.join(cacheDir, filename);
 
   // 下载（如果缓存中没有）
@@ -200,34 +285,57 @@ async function downloadAndExtractNode(version, platform, arch) {
     log(`使用缓存: ${filename}`);
   } else {
     log(`正在下载 ${filename} ...`);
-    await downloadFile(url, cachedFile);
+    await downloadFileWithFallback(downloadUrls, cachedFile);
     log(`下载完成: ${filename}`);
   }
 
-  // 清理旧的 runtime 目录，准备全新解压
-  rmDir(runtimeDir);
-  ensureDir(runtimeDir);
-
-  // 解压并提取所需文件
-  if (platform === "darwin") {
-    extractDarwin(cachedFile, runtimeDir, version, arch);
-  } else {
-    extractWin32(cachedFile, runtimeDir, version, arch);
+  // 先尝试使用缓存包解压；若缓存损坏则删除后重下并重试一次
+  try {
+    extractNodeRuntimeArchive(cachedFile, runtimeDir, version, platform, arch);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    log(`检测到运行时缓存可能损坏，准备重下: ${filename}`);
+    log(`解压失败原因: ${message}`);
+    rmDir(runtimeDir);
+    safeUnlink(cachedFile);
+    log(`重新下载 ${filename} ...`);
+    await downloadFileWithFallback(downloadUrls, cachedFile);
+    log(`重新下载完成: ${filename}`);
+    extractNodeRuntimeArchive(cachedFile, runtimeDir, version, platform, arch);
   }
 
   // 写入版本戳
   fs.writeFileSync(stampFile, stampValue);
 }
 
+// 清理目标目录并解压 Node.js 运行时压缩包
+function extractNodeRuntimeArchive(cachedFile, runtimeDir, version, platform, arch) {
+  rmDir(runtimeDir);
+  ensureDir(runtimeDir);
+  const targetId = getTargetId(platform, arch);
+  if (platform === "darwin") {
+    extractDarwin(cachedFile, runtimeDir, version, arch, targetId);
+  } else {
+    assertZipHasCentralDirectory(cachedFile);
+    extractWin32(cachedFile, runtimeDir, version, arch, targetId);
+  }
+}
+
+// 生成并发安全的临时解压目录
+function createExtractTmpDir(cacheDir, targetId) {
+  const tmpDir = path.join(cacheDir, `_extract_tmp_${targetId}_${process.pid}_${Date.now()}`);
+  rmDir(tmpDir);
+  ensureDir(tmpDir);
+  return tmpDir;
+}
+
 // macOS: 从 tar.gz 中提取 node 二进制和 npm
-function extractDarwin(tarPath, runtimeDir, version, arch) {
+function extractDarwin(tarPath, runtimeDir, version, arch, targetId) {
   log("正在解压 macOS Node.js 运行时...");
   const prefix = `node-v${version}-darwin-${arch}`;
 
   // 创建临时解压目录
-  const tmpDir = path.join(path.dirname(tarPath), "_extract_tmp");
-  rmDir(tmpDir);
-  ensureDir(tmpDir);
+  const tmpDir = createExtractTmpDir(path.dirname(tarPath), targetId);
 
   execSync(`tar xzf "${tarPath}" -C "${tmpDir}"`, { stdio: "inherit" });
 
@@ -264,14 +372,12 @@ function extractDarwin(tarPath, runtimeDir, version, arch) {
 }
 
 // Windows: 从 zip 中提取 node.exe 和 npm
-function extractWin32(zipPath, runtimeDir, version, arch) {
+function extractWin32(zipPath, runtimeDir, version, arch, targetId) {
   log("正在解压 Windows Node.js 运行时...");
   const prefix = `node-v${version}-win-${arch}`;
 
   // 创建临时解压目录
-  const tmpDir = path.join(path.dirname(zipPath), "_extract_tmp");
-  rmDir(tmpDir);
-  ensureDir(tmpDir);
+  const tmpDir = createExtractTmpDir(path.dirname(zipPath), targetId);
 
   // 判断宿主平台选择解压方式
   if (process.platform === "win32") {
@@ -318,8 +424,8 @@ function copyDirSync(src, dest) {
 }
 
 // ─── Step 1.5: 写入 .npmrc ───
-function writeNpmrc() {
-  const npmrcPath = path.join(ROOT, "resources", "runtime", ".npmrc");
+function writeNpmrc(runtimeDir) {
+  const npmrcPath = path.join(runtimeDir, ".npmrc");
   const content = [
     "registry=https://registry.npmmirror.com",
     "disturl=https://npmmirror.com/mirrors/node",
@@ -336,20 +442,125 @@ function getPackageSource() {
   return `file:${path.join(ROOT, "upstream", "openclaw")}`;
 }
 
-// 安装 openclaw 依赖并裁剪 node_modules
-function installDependencies() {
-  const gatewayDir = path.join(ROOT, "resources", "gateway");
+// 读取 gateway 依赖平台戳
+function readGatewayStamp(stampPath) {
+  try {
+    return fs.readFileSync(stampPath, "utf-8").trim();
+  } catch {
+    return "";
+  }
+}
+
+// 原生平台包前缀（用于跨平台污染检测与清理）
+const NATIVE_NAME_PREFIX = [
+  "sharp-",
+  "sharp-libvips-",
+  "node-pty-",
+  "sqlite-vec-",
+  "canvas-",
+  "reflink-",
+  "clipboard-",
+];
+
+// 收集 node_modules 第一层包（含 @scope 下子包）
+function collectTopLevelPackages(nmDir) {
+  const scopedDirs = fs.existsSync(nmDir)
+    ? fs.readdirSync(nmDir, { withFileTypes: true })
+    : [];
+
+  const packages = [];
+  for (const entry of scopedDirs) {
+    if (!entry.isDirectory()) continue;
+    const abs = path.join(nmDir, entry.name);
+    if (entry.name.startsWith("@")) {
+      for (const child of fs.readdirSync(abs, { withFileTypes: true })) {
+        if (!child.isDirectory()) continue;
+        packages.push({ name: child.name, dir: path.join(abs, child.name) });
+      }
+    } else {
+      packages.push({ name: entry.name, dir: abs });
+    }
+  }
+  return packages;
+}
+
+// 解析包名中的平台三元组（如 xxx-darwin-arm64）
+function parseNativePackageTarget(name) {
+  if (!NATIVE_NAME_PREFIX.some((prefix) => name.startsWith(prefix))) return null;
+  const match = name.match(/-(darwin|linux|win32)-([a-z0-9_-]+)/i);
+  if (!match) return null;
+  return {
+    platform: match[1],
+    arch: match[2].split("-")[0],
+  };
+}
+
+// Darwin 目标下移除 universal 原生包，强制仅保留 arm64/x64 二选一
+function pruneDarwinUniversalNativePackages(nmDir, platform) {
+  if (platform !== "darwin") return;
+
+  const removed = [];
+  for (const item of collectTopLevelPackages(nmDir)) {
+    const target = parseNativePackageTarget(item.name);
+    if (!target) continue;
+    if (target.platform === "darwin" && target.arch === "universal") {
+      rmDir(item.dir);
+      removed.push(item.name);
+    }
+  }
+
+  if (removed.length > 0) {
+    log(`已移除 darwin-universal 原生包: ${removed.join(", ")}`);
+  }
+}
+
+// 校验平台相关原生包，避免把其它平台或 universal 包打进目标产物
+function assertNativeDepsMatchTarget(nmDir, platform, arch) {
+  const mismatches = [];
+  for (const item of collectTopLevelPackages(nmDir)) {
+    const target = parseNativePackageTarget(item.name);
+    if (!target) continue;
+    if (target.platform !== platform || target.arch !== arch) {
+      mismatches.push(`${item.name} (目标 ${platform}-${arch})`);
+    }
+  }
+
+  if (mismatches.length > 0) {
+    die(
+      [
+        "检测到与目标平台不匹配的原生依赖：",
+        ...mismatches.slice(0, 10).map((m) => `  - ${m}`),
+        "",
+        "请重新执行 package-resources，确保 npm install 按目标平台/架构运行。",
+      ].join("\n")
+    );
+  }
+}
+
+// 安装 openclaw 依赖并裁剪 node_modules（按目标平台安装，避免跨平台污染）
+function installDependencies(opts, gatewayDir) {
+  const stampPath = path.join(gatewayDir, ".gateway-stamp");
+  const targetStamp = `${opts.platform}-${opts.arch}`;
 
   // 增量检测：比较 upstream 构建产物的 mtime
   const upstreamEntry = path.join(ROOT, "upstream", "openclaw", "dist", "entry.js");
   const installedEntry = path.join(gatewayDir, "node_modules", "openclaw", "dist", "entry.js");
+  const cachedStamp = readGatewayStamp(stampPath);
   if (fs.existsSync(installedEntry) && fs.existsSync(upstreamEntry)) {
     const srcMtime = fs.statSync(upstreamEntry).mtimeMs;
     const dstMtime = fs.statSync(installedEntry).mtimeMs;
-    if (dstMtime >= srcMtime) {
-      log("gateway 依赖未变化，跳过 npm install");
+    if (dstMtime >= srcMtime && cachedStamp === targetStamp) {
+      log(`gateway 依赖未变化且平台匹配 (${targetStamp})，跳过 npm install`);
+      const nmDir = path.join(gatewayDir, "node_modules");
+      pruneDarwinUniversalNativePackages(nmDir, opts.platform);
+      assertNativeDepsMatchTarget(nmDir, opts.platform, opts.arch);
       return;
     }
+    log(
+      cachedStamp && cachedStamp !== targetStamp
+        ? `检测到平台变更（${cachedStamp} → ${targetStamp}），重新安装 gateway 依赖`
+        : "检测到 gateway 依赖更新，重新安装"
+    );
   }
 
   rmDir(gatewayDir);
@@ -367,15 +578,27 @@ function installDependencies() {
   fs.writeFileSync(path.join(gatewayDir, "package.json"), JSON.stringify(pkg, null, 2));
 
   // 使用系统 npm 执行安装
+  // --os/--cpu + npm_config_os/cpu：强制按目标平台安装，避免跨平台打包时复用宿主机原生包
   // --install-links: 对 file: 依赖做实际拷贝而非符号链接
-  execSync("npm install --production --install-links", {
+  execSync(`npm install --omit=dev --install-links --os=${opts.platform} --cpu=${opts.arch}`, {
     cwd: gatewayDir,
     stdio: "inherit",
-    env: { ...process.env, NODE_ENV: "production" },
+    env: {
+      ...process.env,
+      NODE_ENV: "production",
+      npm_config_os: opts.platform,
+      npm_config_cpu: opts.arch,
+      // 避免 node-llama-cpp 在 cross-build 时执行 postinstall 下载/本地编译
+      NODE_LLAMA_CPP_SKIP_DOWNLOAD: "true",
+    },
   });
 
   log("依赖安装完成，开始裁剪 node_modules...");
-  pruneNodeModules(path.join(gatewayDir, "node_modules"));
+  const nmDir = path.join(gatewayDir, "node_modules");
+  pruneNodeModules(nmDir);
+  pruneDarwinUniversalNativePackages(nmDir, opts.platform);
+  assertNativeDepsMatchTarget(nmDir, opts.platform, opts.arch);
+  fs.writeFileSync(stampPath, targetStamp);
   log("node_modules 裁剪完成");
 }
 
@@ -438,23 +661,21 @@ function pruneNodeModules(nmDir) {
 
 // ─── Step 3: 拷贝图标资源 ───
 
-function copyAppIcon() {
+function copyAppIcon(iconPath) {
   const src = path.join(ROOT, "upstream", "openclaw", "apps", "macos", "Icon.icon", "Assets", "openclaw-mac.png");
-  const dest = path.join(ROOT, "resources", "app-icon.png");
 
   if (!fs.existsSync(src)) {
     die(`图标文件不存在: ${src}`);
   }
 
-  fs.copyFileSync(src, dest);
-  log("已拷贝 app-icon.png");
+  ensureDir(path.dirname(iconPath));
+  fs.copyFileSync(src, iconPath);
+  log(`已拷贝 app-icon.png 到 ${path.relative(ROOT, iconPath)}`);
 }
 
 // ─── Step 4: 生成统一入口和构建信息 ───
 
-function generateEntryAndBuildInfo(platform, arch) {
-  const gatewayDir = path.join(ROOT, "resources", "gateway");
-
+function generateEntryAndBuildInfo(gatewayDir, platform, arch) {
   // 写入 gateway-entry.mjs
   const entryContent = 'import "./node_modules/openclaw/dist/entry.js";\n';
   fs.writeFileSync(path.join(gatewayDir, "gateway-entry.mjs"), entryContent);
@@ -470,23 +691,25 @@ function generateEntryAndBuildInfo(platform, arch) {
   log("已生成 build-info.json");
 }
 
-// 验证关键文件是否存在
-function verifyOutput(platform) {
+// 验证目标目录关键文件是否存在
+function verifyOutput(targetPaths, platform) {
   log("正在验证输出文件...");
 
   const nodeExe = platform === "darwin" ? "node" : "node.exe";
+  const targetRel = path.relative(ROOT, targetPaths.targetBase);
 
   // macOS npm 在 vendor/npm/，Windows npm 在 node_modules/npm/
   const npmDir = platform === "darwin"
-    ? path.join("resources", "runtime", "vendor", "npm")
-    : path.join("resources", "runtime", "node_modules", "npm");
+    ? path.join(targetRel, "runtime", "vendor", "npm")
+    : path.join(targetRel, "runtime", "node_modules", "npm");
 
   const required = [
-    path.join("resources", "runtime", nodeExe),
+    path.join(targetRel, "runtime", nodeExe),
     npmDir,
-    path.join("resources", "gateway", "gateway-entry.mjs"),
-    path.join("resources", "gateway", "node_modules", "openclaw", "dist", "entry.js"),
-    path.join("resources", "gateway", "node_modules", "openclaw", "dist", "control-ui", "index.html"),
+    path.join(targetRel, "gateway", "gateway-entry.mjs"),
+    path.join(targetRel, "gateway", "node_modules", "openclaw", "dist", "entry.js"),
+    path.join(targetRel, "gateway", "node_modules", "openclaw", "dist", "control-ui", "index.html"),
+    path.join(targetRel, "app-icon.png"),
   ];
 
   let allOk = true;
@@ -509,10 +732,13 @@ function verifyOutput(platform) {
 
 async function main() {
   const opts = parseArgs();
+  const targetPaths = getTargetPaths(opts.platform, opts.arch);
+  ensureDir(targetPaths.targetBase);
 
   console.log();
   log("========================================");
   log(`平台: ${opts.platform} | 架构: ${opts.arch}`);
+  log(`目标: ${targetPaths.targetId}`);
   log("========================================");
   console.log();
 
@@ -520,34 +746,34 @@ async function main() {
   log("Step 1: 下载 Node.js 22 运行时");
   const nodeVersion = await getLatestNode22Version();
   log(`最新 Node.js 22.x 版本: v${nodeVersion}`);
-  await downloadAndExtractNode(nodeVersion, opts.platform, opts.arch);
+  await downloadAndExtractNode(nodeVersion, opts.platform, opts.arch, targetPaths.runtimeDir);
 
   // Step 1.5: 写入 .npmrc
   log("Step 1.5: 配置 .npmrc");
-  writeNpmrc();
+  writeNpmrc(targetPaths.runtimeDir);
 
   console.log();
 
   // Step 2: 安装 openclaw 生产依赖
   log("Step 2: 安装 openclaw 生产依赖");
-  installDependencies();
+  installDependencies(opts, targetPaths.gatewayDir);
 
   console.log();
 
   // Step 3: 拷贝图标资源（来自 upstream openclaw macOS app）
   log("Step 3: 拷贝图标资源");
-  copyAppIcon();
+  copyAppIcon(targetPaths.iconPath);
 
   console.log();
 
   // Step 4: 生成入口文件和构建信息
   log("Step 4: 生成入口文件和构建信息");
-  generateEntryAndBuildInfo(opts.platform, opts.arch);
+  generateEntryAndBuildInfo(targetPaths.gatewayDir, opts.platform, opts.arch);
 
   console.log();
 
   // 最终验证
-  verifyOutput(opts.platform);
+  verifyOutput(targetPaths, opts.platform);
 
   console.log();
   log("资源打包完成！");

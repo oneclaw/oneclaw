@@ -15,6 +15,10 @@ out/
 resources/runtime/
 resources/gateway/
 resources/app-icon.png
+resources/targets/
+
+# 系统缓存
+.DS_Store
 
 # 下载缓存
 .cache/
