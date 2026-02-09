@@ -574,6 +574,71 @@ function pruneDarwinUniversalNativePackages(nmDir, platform) {
   }
 }
 
+// 是否保留 node-llama-cpp（默认移除；设置 ONECLAW_KEEP_LLAMA=true/1 可保留）
+function shouldKeepLlamaPackages() {
+  const raw = readEnvText("ONECLAW_KEEP_LLAMA").toLowerCase();
+  return raw === "1" || raw === "true" || raw === "yes";
+}
+
+// 定点裁剪 llama 相关依赖，避免 --omit=optional 误伤其它可选功能
+function pruneLlamaPackages(nmDir) {
+  if (shouldKeepLlamaPackages()) {
+    log("已保留 llama 依赖（ONECLAW_KEEP_LLAMA 已启用）");
+    return;
+  }
+
+  const removeTargets = [
+    path.join(nmDir, "node-llama-cpp"),
+    path.join(nmDir, "@node-llama-cpp"),
+  ];
+
+  const removed = [];
+  for (const target of removeTargets) {
+    if (!fs.existsSync(target)) continue;
+    rmDir(target);
+    removed.push(path.basename(target));
+  }
+
+  if (removed.length > 0) {
+    log(`已移除 llama 依赖: ${removed.join(", ")}`);
+  } else {
+    log("llama 依赖不存在，跳过移除");
+  }
+}
+
+// 清理 node_modules/.bin 中的悬挂符号链接（避免 afterPack 拷贝时报 ENOENT）
+function pruneDanglingBinLinks(nmDir) {
+  const binDir = path.join(nmDir, ".bin");
+  if (!fs.existsSync(binDir)) return;
+
+  const removed = [];
+  let entries;
+  try {
+    entries = fs.readdirSync(binDir, { withFileTypes: true });
+  } catch {
+    return;
+  }
+
+  for (const entry of entries) {
+    if (!entry.isSymbolicLink()) continue;
+    const linkPath = path.join(binDir, entry.name);
+    try {
+      fs.realpathSync(linkPath);
+    } catch {
+      try {
+        fs.unlinkSync(linkPath);
+        removed.push(entry.name);
+      } catch {
+        // 忽略清理异常，后续由打包阶段暴露更具体错误
+      }
+    }
+  }
+
+  if (removed.length > 0) {
+    log(`已移除悬挂 .bin 链接: ${removed.join(", ")}`);
+  }
+}
+
 // 校验平台相关原生包，避免把其它平台或 universal 包打进目标产物
 function assertNativeDepsMatchTarget(nmDir, platform, arch) {
   const mismatches = [];
@@ -613,6 +678,8 @@ function installDependencies(opts, gatewayDir) {
       log(`gateway 依赖未变化且平台匹配 (${targetStamp})，跳过 npm install`);
       const nmDir = path.join(gatewayDir, "node_modules");
       pruneDarwinUniversalNativePackages(nmDir, opts.platform);
+      pruneLlamaPackages(nmDir);
+      pruneDanglingBinLinks(nmDir);
       assertNativeDepsMatchTarget(nmDir, opts.platform, opts.arch);
       return;
     }
@@ -657,6 +724,8 @@ function installDependencies(opts, gatewayDir) {
   const nmDir = path.join(gatewayDir, "node_modules");
   pruneNodeModules(nmDir);
   pruneDarwinUniversalNativePackages(nmDir, opts.platform);
+  pruneLlamaPackages(nmDir);
+  pruneDanglingBinLinks(nmDir);
   assertNativeDepsMatchTarget(nmDir, opts.platform, opts.arch);
   fs.writeFileSync(stampPath, targetStamp);
   log("node_modules 裁剪完成");
