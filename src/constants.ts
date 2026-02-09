@@ -9,7 +9,8 @@ export const DEFAULT_BIND = "loopback";
 
 // ── 健康检查 ──
 
-export const HEALTH_TIMEOUT_MS = 30_000;
+// Windows 冷启动可能受 Defender/磁盘预热影响，30s 容易误判失败。
+export const HEALTH_TIMEOUT_MS = 90_000;
 export const HEALTH_POLL_INTERVAL_MS = 500;
 
 // ── 崩溃冷却 ──
@@ -72,6 +73,11 @@ export function resolveUserStateDir(): string {
 /** 用户配置文件（JSON5 格式） */
 export function resolveUserConfigPath(): string {
   return path.join(resolveUserStateDir(), "openclaw.json");
+}
+
+/** Gateway 诊断日志（固定写入 ~/.openclaw/gateway.log） */
+export function resolveGatewayLogPath(): string {
+  return path.join(resolveUserStateDir(), "gateway.log");
 }
 
 // ── Setup 完成判断 ──

@@ -15,6 +15,8 @@ const { Arch } = require("builder-util");
 // ── 注入目录列表 ──
 
 const INJECT_DIRS = ["runtime", "gateway"];
+const REQUIRED_FILES = ["analytics-config.json"];
+const OPTIONAL_FILES = ["app-icon.png"];
 
 // 解析 electron-builder 产物架构
 function resolveArchName(arch) {
@@ -67,12 +69,24 @@ exports.default = async function afterPack(context) {
     console.log(`[afterPack] 已注入 ${name}/ → ${path.relative(appOutDir, dest)}`);
   }
 
-  // 注入 app 图标（tray 使用）
-  const iconSrc = path.join(sourceBase, "app-icon.png");
-  if (fs.existsSync(iconSrc)) {
-    const iconDest = path.join(targetBase, "app-icon.png");
-    fs.copyFileSync(iconSrc, iconDest);
-    console.log(`[afterPack] 已注入 app-icon.png`);
+  // 注入必须存在的单文件资源（如打包时动态生成的埋点配置）
+  for (const name of REQUIRED_FILES) {
+    const src = path.join(sourceBase, name);
+    const dest = path.join(targetBase, name);
+    if (!fs.existsSync(src)) {
+      throw new Error(`[afterPack] 必需文件不存在: ${src}`);
+    }
+    fs.copyFileSync(src, dest);
+    console.log(`[afterPack] 已注入 ${name}`);
+  }
+
+  // 注入可选单文件资源（缺失则跳过）
+  for (const name of OPTIONAL_FILES) {
+    const src = path.join(sourceBase, name);
+    const dest = path.join(targetBase, name);
+    if (!fs.existsSync(src)) continue;
+    fs.copyFileSync(src, dest);
+    console.log(`[afterPack] 已注入 ${name}`);
   }
 };
 

@@ -1,34 +1,31 @@
 {
   "name": "oneclaw",
-  "version": "0.1.0",
+  "version": "2026.2.6",
   "private": true,
   "description": "OneClaw desktop app — cross-platform Electron shell for openclaw",
   "main": "dist/main.js",
-
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "dev": "electron .",
+    "version:sync": "node scripts/sync-openclaw-version.js",
     "package:resources": "node scripts/package-resources.js",
     "dist:mac": "npm run dist:mac:arm64",
-    "dist:mac:arm64": "ONECLAW_TARGET=darwin-arm64 npm run package:resources -- --platform darwin --arch arm64 && ONECLAW_TARGET=darwin-arm64 electron-builder --mac --arm64 --config.directories.output=out/darwin-arm64",
-    "dist:mac:x64": "ONECLAW_TARGET=darwin-x64 npm run package:resources -- --platform darwin --arch x64 && ONECLAW_TARGET=darwin-x64 electron-builder --mac --x64 --config.directories.output=out/darwin-x64",
-    "dist:win:x64": "ONECLAW_TARGET=win32-x64 npm run package:resources -- --platform win32 --arch x64 && ONECLAW_TARGET=win32-x64 electron-builder --win --x64 --config.directories.output=out/win32-x64",
-    "dist:win:arm64": "ONECLAW_TARGET=win32-arm64 npm run package:resources -- --platform win32 --arch arm64 && ONECLAW_TARGET=win32-arm64 electron-builder --win --arm64 --config.directories.output=out/win32-arm64",
-    "dist:all:parallel": "bash scripts/dist-all-parallel.sh",
+    "dist:mac:arm64": "npm run version:sync && ONECLAW_TARGET=darwin-arm64 npm run package:resources -- --platform darwin --arch arm64 && ONECLAW_TARGET=darwin-arm64 electron-builder --mac --arm64 --config.directories.output=out/darwin-arm64",
+    "dist:mac:x64": "npm run version:sync && ONECLAW_TARGET=darwin-x64 npm run package:resources -- --platform darwin --arch x64 && ONECLAW_TARGET=darwin-x64 electron-builder --mac --x64 --config.directories.output=out/darwin-x64",
+    "dist:win:x64": "npm run version:sync && ONECLAW_TARGET=win32-x64 npm run package:resources -- --platform win32 --arch x64 && ONECLAW_TARGET=win32-x64 electron-builder --win --x64 --config.directories.output=out/win32-x64",
+    "dist:win:arm64": "npm run version:sync && ONECLAW_TARGET=win32-arm64 npm run package:resources -- --platform win32 --arch arm64 && ONECLAW_TARGET=win32-arm64 electron-builder --win --arm64 --config.directories.output=out/win32-arm64",
+    "dist:all:parallel": "npm run version:sync && ONECLAW_SKIP_VERSION_SYNC=1 bash scripts/dist-all-parallel.sh",
     "clean": "rm -rf dist resources/runtime resources/gateway resources/targets out"
   },
-
   "dependencies": {
     "electron-updater": "^6.3.9"
   },
-
   "devDependencies": {
     "@types/node": "^22.15.0",
     "electron": "^40.2.1",
     "electron-builder": "^26.7.0",
     "typescript": "^5.9.3"
   },
-
   "engines": {
     "node": ">=22.12.0"
   }

@@ -1,5 +1,6 @@
 import { BrowserWindow } from "electron";
 import * as path from "path";
+import * as log from "./logger";
 import {
   WINDOW_WIDTH,
   WINDOW_HEIGHT,
@@ -33,11 +34,23 @@ export class WindowManager {
       minHeight: WINDOW_MIN_HEIGHT,
       show: false,
       title: "OneClaw",
+      autoHideMenuBar: true,
       webPreferences: {
         contextIsolation: true,
         nodeIntegration: false,
         preload: path.join(__dirname, "preload.js"),
       },
+    });
+    // 主窗口隐藏菜单栏（File/Edit/View...）
+    this.win.setMenuBarVisibility(false);
+    this.win.removeMenu();
+
+    // 渲染进程崩溃 / 无响应监控
+    this.win.webContents.on("render-process-gone", (_e, details) => {
+      log.error(`render-process-gone: reason=${details.reason} exitCode=${details.exitCode}`);
+    });
+    this.win.on("unresponsive", () => {
+      log.warn("窗口无响应");
     });
 
     // 关闭 → 隐藏到托盘（不退出）
@@ -64,12 +77,12 @@ export class WindowManager {
           try {
             await this.win.loadURL(url);
           } catch {
-            console.error("[window] token 注入后 reload 失败，切换错误页");
+            log.error("token 注入后 reload 失败，切换错误页");
             await this.loadGatewayErrorPage(url);
           }
         }
       } catch {
-        console.error("[window] token 注入失败，切换错误页");
+        log.error("token 注入失败，切换错误页");
         await this.loadGatewayErrorPage(url);
       }
     }
@@ -108,11 +121,11 @@ export class WindowManager {
         await this.win!.loadURL(url);
         return true;
       } catch {
-        console.log(`[window] 加载重试 ${i}/${WINDOW_LOAD_MAX_RETRIES}`);
+        log.info(`加载重试 ${i}/${WINDOW_LOAD_MAX_RETRIES}`);
         await new Promise((r) => setTimeout(r, WINDOW_LOAD_RETRY_INTERVAL_MS));
       }
     }
-    console.error("[window] 加载失败，已达最大重试次数");
+    log.error("加载失败，已达最大重试次数");
     return false;
   }
 

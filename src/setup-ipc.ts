@@ -4,7 +4,9 @@ import * as http from "http";
 import * as fs from "fs";
 import * as path from "path";
 import { resolveUserStateDir } from "./constants";
+import { ensureGatewayAuthTokenInConfig } from "./gateway-auth";
 import { SetupManager } from "./setup-manager";
+import * as analytics from "./analytics";
 
 interface SetupIpcDeps {
   setupManager: SetupManager;
@@ -78,9 +80,10 @@ export function registerSetupIpc(deps: SetupIpcDeps): void {
         config.agents.defaults.model.primary = `${provider}/${modelID}`;
       }
 
-      // gateway mode = local（允许本地启动，auth token 由 Electron 进程环境变量注入）
+      // 统一 gateway 鉴权配置：local 模式 + 持久化 token（单一真相源）
       config.gateway ??= {};
       config.gateway.mode = "local";
+      ensureGatewayAuthTokenInConfig(config);
 
       // 标记 Setup 已完成（字段对齐 openclaw config schema，避免每次启动重走 onboarding）
       config.wizard = { lastRunAt: new Date().toISOString() };
@@ -93,8 +96,16 @@ export function registerSetupIpc(deps: SetupIpcDeps): void {
   });
 
   // ── Setup 完成（Gateway 启动 + 窗口切换由 setOnComplete 回调统一处理） ──
-  ipcMain.on("setup:complete", () => {
-    setupManager.complete();
+  ipcMain.handle("setup:complete", async () => {
+    const ok = await setupManager.complete();
+    if (ok) {
+      analytics.track("setup_completed");
+      return { success: true };
+    }
+    return {
+      success: false,
+      message: "Gateway 启动超时或失败，请稍后重试。",
+    };
   });
 }
 
