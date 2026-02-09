@@ -25,3 +25,7 @@ resources/targets/
 
 # 本地工具（含埋点接收服务）
 tools/
+
+# 签名密钥与本地环境变量（绝对不能提交）
+.env
+private_keys/

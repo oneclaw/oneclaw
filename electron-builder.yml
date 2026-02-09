@@ -19,7 +19,15 @@ mac:
   target: dmg
   icon: upstream/openclaw/apps/macos/Sources/OpenClaw/Resources/OpenClaw.icns
   category: public.app-category.productivity
-  identity: null
+  # 签名身份由 CSC_NAME 环境变量指定（见 .env），避免把证书名写入仓库
+  hardenedRuntime: true
+  gatekeeperAssess: false
+  notarize: true
+
+# 自动更新：指向阿里云 CDN
+publish:
+  provider: generic
+  url: https://claw.ver0.cn/releases/
 
 dmg:
   sign: false
