@@ -202,7 +202,11 @@
           </li>
         </ul>
 
-        <button class="btn-primary" id="btnStart" data-i18n="done.start">Start OneClaw</button>
+        <button class="btn-primary" id="btnStart">
+          <span class="btn-text" data-i18n="done.start">Start OneClaw</span>
+          <span class="btn-spinner hidden" id="btnStartSpinner"></span>
+        </button>
+        <div class="status-msg hidden" id="doneStatus"></div>
       </div>
     </section>
 

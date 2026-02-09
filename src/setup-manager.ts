@@ -4,10 +4,11 @@ import * as path from "path";
 // Setup 窗口生命周期管理
 export class SetupManager {
   private setupWin: BrowserWindow | null = null;
-  private onComplete?: () => void | Promise<void>;
+  private onComplete?: () => boolean | Promise<boolean>;
+  private completing = false;
 
   // 注册完成回调（支持 async）
-  setOnComplete(cb: () => void | Promise<void>): void {
+  setOnComplete(cb: () => boolean | Promise<boolean>): void {
     this.onComplete = cb;
   }
 
@@ -18,12 +19,16 @@ export class SetupManager {
       height: 680,
       resizable: false,
       title: "OneClaw Setup",
+      autoHideMenuBar: true,
       webPreferences: {
         contextIsolation: true,
         nodeIntegration: false,
         preload: path.join(__dirname, "preload.js"),
       },
     });
+    // Windows/Linux 隐藏窗口菜单栏（File/Edit/View...）
+    this.setupWin.setMenuBarVisibility(false);
+    this.setupWin.removeMenu();
 
     // Setup 窗口关闭 → 直接退出应用
     this.setupWin.on("close", () => {
@@ -38,20 +43,26 @@ export class SetupManager {
     this.setupWin.show();
   }
 
-  // Setup 完成 → 关闭窗口，触发回调
-  complete(): void {
-    if (this.setupWin && !this.setupWin.isDestroyed()) {
-      this.setupWin.removeAllListeners("close");
-      this.setupWin.close();
-    }
-    this.setupWin = null;
+  // Setup 完成：先执行启动回调，成功后再关闭 Setup（避免用户看到空白等待）
+  async complete(): Promise<boolean> {
+    if (this.completing) return false;
+    this.completing = true;
 
-    // onComplete 可能是 async，捕获错误防止静默丢失
-    const result = this.onComplete?.();
-    if (result && typeof (result as Promise<void>).catch === "function") {
-      (result as Promise<void>).catch((err) => {
-        console.error("[setup] onComplete 回调错误:", err);
-      });
+    try {
+      const ok = this.onComplete ? await this.onComplete() : true;
+      if (!ok) return false;
+
+      if (this.setupWin && !this.setupWin.isDestroyed()) {
+        this.setupWin.removeAllListeners("close");
+        this.setupWin.close();
+      }
+      this.setupWin = null;
+      return true;
+    } catch (err) {
+      console.error("[setup] onComplete 回调错误:", err);
+      return false;
+    } finally {
+      this.completing = false;
     }
   }
 

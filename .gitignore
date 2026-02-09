@@ -22,3 +22,6 @@ resources/targets/
 
 # 下载缓存
 .cache/
+
+# 本地工具（含埋点接收服务）
+tools/

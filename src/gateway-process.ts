@@ -1,5 +1,4 @@
 import { ChildProcess, spawn } from "child_process";
-import * as crypto from "crypto";
 import * as http from "http";
 import * as path from "path";
 import * as fs from "fs";
@@ -9,7 +8,7 @@ import {
   HEALTH_TIMEOUT_MS,
   HEALTH_POLL_INTERVAL_MS,
   CRASH_COOLDOWN_MS,
-  IS_WIN,
+  resolveGatewayLogPath,
   resolveNodeBin,
   resolveNpmBin,
   resolveGatewayEntry,
@@ -17,19 +16,23 @@ import {
   resolveResourcesPath,
 } from "./constants";
 
-// 诊断日志（写入 userData 目录，方便定位 gateway 启动失败）
-const LOG_PATH = path.join(app.getPath("userData"), "gateway.log");
+// 诊断日志（固定写入 ~/.openclaw/gateway.log，便于用户定位）
+const LOG_PATH = resolveGatewayLogPath();
 
 function diagLog(msg: string): void {
   const line = `[${new Date().toISOString()}] ${msg}\n`;
   process.stderr.write(line);
-  try { fs.appendFileSync(LOG_PATH, line); } catch {}
+  try {
+    fs.mkdirSync(path.dirname(LOG_PATH), { recursive: true });
+    fs.appendFileSync(LOG_PATH, line);
+  } catch {}
 }
 
 export type GatewayState = "stopped" | "starting" | "running" | "stopping";
 
 interface GatewayOptions {
   port?: number;
+  token: string;
   onStateChange?: (state: GatewayState) => void;
 }
 
@@ -41,9 +44,9 @@ export class GatewayProcess {
   private lastCrashTime = 0;
   private onStateChange?: (state: GatewayState) => void;
 
-  constructor(opts: GatewayOptions = {}) {
+  constructor(opts: GatewayOptions) {
     this.port = opts.port ?? DEFAULT_PORT;
-    this.token = crypto.randomBytes(16).toString("hex");
+    this.token = opts.token;
     this.onStateChange = opts.onStateChange;
   }
 
@@ -57,6 +60,13 @@ export class GatewayProcess {
 
   getToken(): string {
     return this.token;
+  }
+
+  // 更新 Gateway 鉴权 token（在 start 前调用）
+  setToken(token: string): void {
+    const trimmed = token.trim();
+    if (!trimmed) return;
+    this.token = trimmed;
   }
 
   // 启动 Gateway 子进程
@@ -82,7 +92,7 @@ export class GatewayProcess {
     diagLog(`nodeBin=${nodeBin} exists=${fs.existsSync(nodeBin)}`);
     diagLog(`entry=${entry} exists=${fs.existsSync(entry)}`);
     diagLog(`cwd=${cwd} exists=${fs.existsSync(cwd)}`);
-    diagLog(`token=${this.token} port=${this.port}`);
+    diagLog(`token=${maskToken(this.token)} port=${this.port}`);
 
     // 检查关键文件
     if (!fs.existsSync(nodeBin)) {
@@ -116,6 +126,7 @@ export class GatewayProcess {
       stdio: ["ignore", "pipe", "pipe"],
       windowsHide: true,
     });
+    const childPid = this.proc.pid ?? -1;
 
     // 捕获 spawn 错误（如二进制不可执行）
     this.proc.on("error", (err) => {
@@ -148,7 +159,7 @@ export class GatewayProcess {
     });
 
     // 轮询健康检查
-    const healthy = await this.waitForHealth(HEALTH_TIMEOUT_MS);
+    const healthy = await this.waitForHealth(HEALTH_TIMEOUT_MS, childPid);
     if (healthy) {
       diagLog("health check passed");
       this.setState("running");
@@ -198,13 +209,24 @@ export class GatewayProcess {
   }
 
   // 轮询等待健康
-  private async waitForHealth(timeoutMs: number): Promise<boolean> {
+  private async waitForHealth(timeoutMs: number, childPid: number): Promise<boolean> {
+    if (childPid <= 0) return false;
+
     const deadline = Date.now() + timeoutMs;
     while (Date.now() < deadline) {
+      if (!this.isChildAlive(childPid)) {
+        diagLog(`health check aborted: child exited pid=${childPid}`);
+        return false;
+      }
       if (await this.probeHealth()) return true;
       await sleep(HEALTH_POLL_INTERVAL_MS);
     }
     return false;
+  }
+
+  // 仅当同一子进程仍存活时才认为启动检查有效，避免旧端口进程误判
+  private isChildAlive(childPid: number): boolean {
+    return !!this.proc && this.proc.pid === childPid && this.proc.exitCode == null;
   }
 
   private setState(s: GatewayState): void {
@@ -215,4 +237,10 @@ export class GatewayProcess {
 
 function sleep(ms: number): Promise<void> {
   return new Promise((r) => setTimeout(r, ms));
+}
+
+// 脱敏显示 token，避免明文泄露到日志
+function maskToken(token: string): string {
+  if (token.length <= 8) return "***";
+  return `${token.slice(0, 4)}...${token.slice(-4)}`;
 }

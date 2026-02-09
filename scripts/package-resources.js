@@ -33,6 +33,7 @@ function getTargetPaths(platform, arch) {
     runtimeDir: path.join(targetBase, "runtime"),
     gatewayDir: path.join(targetBase, "gateway"),
     iconPath: path.join(targetBase, "app-icon.png"),
+    analyticsConfigPath: path.join(targetBase, "analytics-config.json"),
   };
 }
 
@@ -435,6 +436,65 @@ function writeNpmrc(runtimeDir) {
   log("已写入 .npmrc（使用 npmmirror 镜像源）");
 }
 
+// ─── Step 1.8: 生成埋点配置（由打包环境动态注入） ───
+
+function readEnvText(name) {
+  return (process.env[name] || "").trim();
+}
+
+function readEnvPositiveInt(name, fallback) {
+  const raw = readEnvText(name);
+  if (!raw) return fallback;
+  const parsed = Number.parseInt(raw, 10);
+  if (!Number.isFinite(parsed) || parsed <= 0) return fallback;
+  return parsed;
+}
+
+function readEnvRetryDelays(name, fallback) {
+  const raw = readEnvText(name);
+  if (!raw) return [...fallback];
+  const delays = raw
+    .split(",")
+    .map((item) => Number.parseInt(item.trim(), 10))
+    .filter((value) => Number.isFinite(value) && value >= 0);
+  return delays.length > 0 ? delays : [...fallback];
+}
+
+function buildAnalyticsConfig() {
+  const captureURL = readEnvText("ONECLAW_ANALYTICS_CAPTURE_URL");
+  const captureFallbackURL = readEnvText("ONECLAW_ANALYTICS_CAPTURE_FALLBACK_URL") || captureURL;
+  const apiKey = readEnvText("ONECLAW_ANALYTICS_API_KEY");
+  const requestTimeoutMs = readEnvPositiveInt("ONECLAW_ANALYTICS_REQUEST_TIMEOUT_MS", 8000);
+  const retryDelaysMs = readEnvRetryDelays("ONECLAW_ANALYTICS_RETRY_DELAYS_MS", [0, 500, 1500]);
+  const enabled = captureURL.length > 0 && apiKey.length > 0;
+
+  if (!enabled) {
+    return {
+      enabled: false,
+      captureURL: "",
+      captureFallbackURL: "",
+      apiKey: "",
+      requestTimeoutMs,
+      retryDelaysMs,
+    };
+  }
+
+  return {
+    enabled: true,
+    captureURL,
+    captureFallbackURL,
+    apiKey,
+    requestTimeoutMs,
+    retryDelaysMs,
+  };
+}
+
+function writeAnalyticsConfig(configPath) {
+  const config = buildAnalyticsConfig();
+  fs.writeFileSync(configPath, JSON.stringify(config, null, 2));
+  log(`已生成 analytics-config.json（enabled=${config.enabled ? "true" : "false"}）`);
+}
+
 // ─── Step 2: 安装 openclaw 生产依赖 ───
 
 // openclaw 包源路径（使用绝对路径，避免 npm file: 相对路径解析错误）
@@ -659,7 +719,13 @@ function pruneNodeModules(nmDir) {
   walk(nmDir);
 }
 
-// ─── Step 3: 拷贝图标资源 ───
+// ─── Step 3: 生成埋点配置 ───
+
+function generateAnalyticsConfig(targetPaths) {
+  writeAnalyticsConfig(targetPaths.analyticsConfigPath);
+}
+
+// ─── Step 4: 拷贝图标资源 ───
 
 function copyAppIcon(iconPath) {
   const src = path.join(ROOT, "upstream", "openclaw", "apps", "macos", "Icon.icon", "Assets", "openclaw-mac.png");
@@ -673,7 +739,7 @@ function copyAppIcon(iconPath) {
   log(`已拷贝 app-icon.png 到 ${path.relative(ROOT, iconPath)}`);
 }
 
-// ─── Step 4: 生成统一入口和构建信息 ───
+// ─── Step 5: 生成统一入口和构建信息 ───
 
 function generateEntryAndBuildInfo(gatewayDir, platform, arch) {
   // 写入 gateway-entry.mjs
@@ -709,6 +775,7 @@ function verifyOutput(targetPaths, platform) {
     path.join(targetRel, "gateway", "gateway-entry.mjs"),
     path.join(targetRel, "gateway", "node_modules", "openclaw", "dist", "entry.js"),
     path.join(targetRel, "gateway", "node_modules", "openclaw", "dist", "control-ui", "index.html"),
+    path.join(targetRel, "analytics-config.json"),
     path.join(targetRel, "app-icon.png"),
   ];
 
@@ -760,14 +827,20 @@ async function main() {
 
   console.log();
 
-  // Step 3: 拷贝图标资源（来自 upstream openclaw macOS app）
-  log("Step 3: 拷贝图标资源");
+  // Step 3: 生成埋点配置（URL / API Key 仅来自打包环境变量）
+  log("Step 3: 生成埋点配置");
+  generateAnalyticsConfig(targetPaths);
+
+  console.log();
+
+  // Step 4: 拷贝图标资源（来自 upstream openclaw macOS app）
+  log("Step 4: 拷贝图标资源");
   copyAppIcon(targetPaths.iconPath);
 
   console.log();
 
-  // Step 4: 生成入口文件和构建信息
-  log("Step 4: 生成入口文件和构建信息");
+  // Step 5: 生成入口文件和构建信息
+  log("Step 5: 生成入口文件和构建信息");
   generateEntryAndBuildInfo(targetPaths.gatewayDir, opts.platform, opts.arch);
 
   console.log();
