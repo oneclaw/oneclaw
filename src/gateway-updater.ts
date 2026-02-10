@@ -136,10 +136,10 @@ export class GatewayUpdater {
       this.setState("updating");
       this.notify("OpenClaw 内核更新", `正在更新 ${currentVersion} → ${latestVersion}...`);
 
-      // 停止 Gateway
+      // 停止 Gateway 并等待进程真正退出（避免 Windows 文件锁导致 npm update 失败）
       diagLog("stopping gateway for update...");
       this.gateway.stop();
-      await sleep(2000); // 等待 Gateway 完全停止
+      await this.waitForGatewayStopped(15_000);
 
       // 执行 npm update
       const updateOk = await this.runNpmUpdate();
@@ -342,6 +342,23 @@ export class GatewayUpdater {
       diagLog(`notification error: ${err}`);
     }
     log.info(`[updater] ${title}: ${body}`);
+  }
+
+  /**
+   * 等待 Gateway 进程真正停止（轮询 state），避免 Windows 文件锁导致 npm update 失败。
+   * 超时后不抛异常，由调用方决定是否继续。
+   */
+  private async waitForGatewayStopped(timeoutMs: number): Promise<boolean> {
+    const deadline = Date.now() + timeoutMs;
+    while (Date.now() < deadline) {
+      if (this.gateway.getState() === "stopped") {
+        diagLog("gateway stopped confirmed");
+        return true;
+      }
+      await sleep(500);
+    }
+    diagLog(`gateway stop timeout after ${timeoutMs}ms, state=${this.gateway.getState()}`);
+    return false;
   }
 
   /** 更新内部状态并触发回调 */
