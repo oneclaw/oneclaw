@@ -13,6 +13,14 @@ export const DEFAULT_BIND = "loopback";
 export const HEALTH_TIMEOUT_MS = 90_000;
 export const HEALTH_POLL_INTERVAL_MS = 500;
 
+// ── 内核自动更新 ──
+
+/** 定时检查间隔（24 小时） */
+export const UPDATE_CHECK_INTERVAL_MS = 24 * 60 * 60 * 1000;
+
+/** 启动后延迟首次检查（30 秒，避免影响首次启动体验） */
+export const UPDATE_INITIAL_DELAY_MS = 30_000;
+
 // ── 崩溃冷却 ──
 
 export const CRASH_COOLDOWN_MS = 5_000;
@@ -61,6 +69,26 @@ export function resolveGatewayEntry(): string {
 /** Gateway 工作目录（路径固定，不区分 locale） */
 export function resolveGatewayCwd(): string {
   return path.join(resolveResourcesPath(), "gateway", "node_modules", "openclaw");
+}
+
+/** Gateway 目录（gateway-entry.mjs 所在目录） */
+export function resolveGatewayDir(): string {
+  return path.join(resolveResourcesPath(), "gateway");
+}
+
+/**
+ * npm-cli.js 的实际路径（跨平台）。
+ * macOS: runtime/vendor/npm/bin/npm-cli.js
+ * Windows: runtime/node_modules/npm/bin/npm-cli.js
+ *
+ * 注意：Windows 下 npm.cmd 不能直接 spawn，需要用 node npm-cli.js 来执行。
+ */
+export function resolveNpmCliJs(): string {
+  const runtimeDir = path.join(resolveResourcesPath(), "runtime");
+  if (IS_WIN) {
+    return path.join(runtimeDir, "node_modules", "npm", "bin", "npm-cli.js");
+  }
+  return path.join(runtimeDir, "vendor", "npm", "bin", "npm-cli.js");
 }
 
 /** 用户状态目录（~/.openclaw/） */

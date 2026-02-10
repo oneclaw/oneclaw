@@ -1,5 +1,6 @@
 import { app, dialog, ipcMain, shell, Menu } from "electron";
 import { GatewayProcess } from "./gateway-process";
+import { GatewayUpdater } from "./gateway-updater";
 import { WindowManager } from "./window";
 import { TrayManager } from "./tray";
 import { SetupManager } from "./setup-manager";
@@ -36,6 +37,12 @@ const gateway = new GatewayProcess({
 const windowManager = new WindowManager();
 const tray = new TrayManager();
 const setupManager = new SetupManager();
+
+// 内核自动更新器（Gateway 启动成功后初始化）
+const gatewayUpdater = new GatewayUpdater({
+  gateway,
+  onStateChange: () => tray.updateMenu(),
+});
 
 // ── 显示主窗口的统一入口 ──
 
@@ -113,6 +120,7 @@ async function startGatewayAndShowMain(source: string, opts: StartMainOptions = 
 ipcMain.on("gateway:restart", () => gateway.restart());
 ipcMain.handle("gateway:state", () => gateway.getState());
 ipcMain.on("app:check-updates", () => checkForUpdates());
+ipcMain.on("gateway:check-update", () => gatewayUpdater.checkAndUpdate());
 ipcMain.handle("app:open-external", (_e, url: string) => shell.openExternal(url));
 registerSetupIpc({ setupManager });
 
@@ -121,6 +129,7 @@ registerSetupIpc({ setupManager });
 async function quit(): Promise<void> {
   analytics.track("app_closed");
   await analytics.shutdown();
+  gatewayUpdater.stop();
   windowManager.destroy();
   gateway.stop();
   tray.destroy();
@@ -130,10 +139,15 @@ async function quit(): Promise<void> {
 // ── Setup 完成后：启动 Gateway → 打开主窗口 ──
 
 setupManager.setOnComplete(async () => {
-  return await startGatewayAndShowMain("setup:complete", {
+  const ok = await startGatewayAndShowMain("setup:complete", {
     openOnFailure: false,
     reportFailure: false,
   });
+  // Setup 完成且 Gateway 启动成功后，启动内核自动更新调度
+  if (ok) {
+    gatewayUpdater.start();
+  }
+  return ok;
 });
 
 // ── 应用就绪 ──
@@ -149,6 +163,7 @@ app.whenReady().then(async () => {
   tray.create({
     windowManager,
     gateway,
+    gatewayUpdater,
     onQuit: quit,
     onCheckUpdates: checkForUpdates,
   });
@@ -157,7 +172,11 @@ app.whenReady().then(async () => {
     // 无配置 → 先走 Setup，Gateway 在 Setup 完成回调里启动
     setupManager.showSetup();
   } else {
-    await startGatewayAndShowMain("app:startup");
+    const running = await startGatewayAndShowMain("app:startup");
+    // Gateway 启动成功后启动内核自动更新调度
+    if (running) {
+      gatewayUpdater.start();
+    }
   }
 });
 
@@ -182,6 +201,7 @@ app.on("window-all-closed", () => {
 // ── 退出前清理 ──
 
 app.on("before-quit", () => {
+  gatewayUpdater.stop();
   windowManager.destroy();
   gateway.stop();
 });

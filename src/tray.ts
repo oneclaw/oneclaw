@@ -1,21 +1,31 @@
 import { Tray, Menu, app, nativeImage } from "electron";
 import * as path from "path";
 import { GatewayProcess, GatewayState } from "./gateway-process";
+import { GatewayUpdater, UpdateState } from "./gateway-updater";
 import { WindowManager } from "./window";
 
 interface TrayOptions {
   windowManager: WindowManager;
   gateway: GatewayProcess;
+  gatewayUpdater: GatewayUpdater;
   onQuit: () => void;
   onCheckUpdates: () => void;
 }
 
-// 状态标签映射
+// Gateway 状态标签映射
 const STATE_LABELS: Record<GatewayState, string> = {
   running: "Gateway: Running",
   starting: "Gateway: Starting...",
   stopping: "Gateway: Stopping...",
   stopped: "Gateway: Stopped",
+};
+
+// 内核更新状态标签映射
+const UPDATE_STATE_LABELS: Record<UpdateState, string> = {
+  idle: "Check for Core Updates",
+  checking: "Checking for Core Updates...",
+  updating: "Updating OpenClaw Core...",
+  error: "Check for Core Updates (Retry)",
 };
 
 export class TrayManager {
@@ -50,12 +60,15 @@ export class TrayManager {
     this.updateMenu();
   }
 
-  // 刷新托盘菜单（Gateway 状态变化时调用）
+  // 刷新托盘菜单（Gateway / Updater 状态变化时调用）
   updateMenu(): void {
     if (!this.tray || !this.opts) return;
 
-    const { windowManager, gateway, onQuit, onCheckUpdates } = this.opts;
+    const { windowManager, gateway, gatewayUpdater, onQuit, onCheckUpdates } = this.opts;
     const statusLabel = STATE_LABELS[gateway.getState()];
+
+    // 内核更新菜单项：根据 updater 状态动态显示
+    const coreUpdateItem = this.buildCoreUpdateMenuItem(gatewayUpdater);
 
     const menu = Menu.buildFromTemplate([
       {
@@ -66,12 +79,29 @@ export class TrayManager {
       { label: statusLabel, enabled: false },
       { label: "Restart Gateway", click: () => gateway.restart() },
       { type: "separator" },
-      { label: "Check for Updates…", click: onCheckUpdates },
+      coreUpdateItem,
+      { label: "Check for App Updates…", click: onCheckUpdates },
       { type: "separator" },
       { label: "Quit OneClaw", click: onQuit },
     ]);
 
     this.tray.setContextMenu(menu);
+  }
+
+  // 根据 updater 状态构建内核更新菜单项
+  private buildCoreUpdateMenuItem(updater: GatewayUpdater): Electron.MenuItemConstructorOptions {
+    const state = updater.getState();
+    const label = UPDATE_STATE_LABELS[state];
+
+    // 正在检查或更新时，菜单项不可点击
+    if (state === "checking" || state === "updating") {
+      return { label, enabled: false };
+    }
+
+    return {
+      label,
+      click: () => updater.checkAndUpdate(),
+    };
   }
 
   destroy(): void {
