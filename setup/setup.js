@@ -10,7 +10,7 @@
   const PROVIDERS = {
     anthropic: {
       placeholder: "sk-ant-...",
-      platformUrl: "https://console.anthropic.com",
+      platformUrl: "https://console.anthropic.com?utm_source=oneclaw",
       models: [
         "claude-sonnet-4-5-20250929",
         "claude-opus-4-5-20251101",
@@ -24,12 +24,12 @@
     },
     openai: {
       placeholder: "sk-...",
-      platformUrl: "https://platform.openai.com",
+      platformUrl: "https://platform.openai.com?utm_source=oneclaw",
       models: ["gpt-5.2", "gpt-5.2-codex"],
     },
     google: {
       placeholder: "AI...",
-      platformUrl: "https://aistudio.google.com",
+      platformUrl: "https://aistudio.google.com?utm_source=oneclaw",
       models: ["gemini-3-pro-preview", "gemini-3-flash-preview"],
     },
     custom: {
@@ -40,9 +40,9 @@
 
   // Moonshot 子平台各自的 URL
   const SUB_PLATFORM_URLS = {
-    "moonshot-cn": "https://platform.moonshot.cn",
-    "moonshot-ai": "https://platform.moonshot.ai",
-    "kimi-code": "https://kimi.com/code",
+    "moonshot-cn": "https://platform.moonshot.cn?utm_source=oneclaw",
+    "moonshot-ai": "https://platform.moonshot.ai?utm_source=oneclaw",
+    "kimi-code": "https://kimi.com/code?utm_source=oneclaw",
   };
 
   // Kimi Code 子平台使用独立模型列表
