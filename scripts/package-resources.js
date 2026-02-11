@@ -677,6 +677,8 @@ function installDependencies(opts, gatewayDir) {
     if (dstMtime >= srcMtime && cachedStamp === targetStamp) {
       log(`gateway 依赖未变化且平台匹配 (${targetStamp})，跳过 npm install`);
       const nmDir = path.join(gatewayDir, "node_modules");
+      // 即使复用缓存依赖，也要执行最新裁剪规则，避免历史产物遗留冗余文件
+      pruneNodeModules(nmDir);
       pruneDarwinUniversalNativePackages(nmDir, opts.platform);
       pruneLlamaPackages(nmDir);
       pruneDanglingBinLinks(nmDir);
@@ -735,24 +737,105 @@ function installDependencies(opts, gatewayDir) {
 function pruneNodeModules(nmDir) {
   if (!fs.existsSync(nmDir)) return;
 
-  // 需要删除的文件后缀
-  const junkExts = new Set([".d.ts", ".map"]);
+  const openclawDir = path.join(nmDir, "openclaw");
+  const openclawDocsDir = path.join(openclawDir, "docs");
+  const openclawDocsKeepDir = path.join(openclawDocsDir, "reference", "templates");
 
   // 需要删除的文档文件名（精确匹配，不区分大小写，避免误杀 changelog.js 等源文件）
   const junkNames = new Set([
     "readme", "readme.md", "readme.txt", "readme.markdown",
     "changelog", "changelog.md", "changelog.txt",
-    "license", "license.md", "license.txt", "licence", "licence.md",
     "history.md", "authors", "authors.md", "contributors.md",
   ]);
 
-  // 需要删除的目录名
-  const junkDirs = new Set(["test", "tests", "__tests__", "docs", "examples"]);
-
-  // 保留 openclaw 包的 docs（包含运行时模板如 AGENTS.md，不可裁剪）
-  const protectedDirs = new Set([
-    path.join(nmDir, "openclaw", "docs"),
+  // 需要删除的目录名（只保留运行所需内容）
+  const junkDirs = new Set([
+    "test",
+    "tests",
+    "__tests__",
+    "docs",
+    "examples",
+    ".github",
+    ".vscode",
+    "benchmark",
+    "benchmarks",
   ]);
+
+  let removedFiles = 0;
+  let removedDirs = 0;
+
+  // 判断路径是否位于某个目录内部（含目录本身）
+  function isPathInside(targetPath, basePath) {
+    const rel = path.relative(basePath, targetPath);
+    return rel === "" || (!rel.startsWith("..") && !path.isAbsolute(rel));
+  }
+
+  // 安全删除单个文件并统计
+  function removeFile(filePath) {
+    try {
+      if (!fs.existsSync(filePath)) return;
+      fs.unlinkSync(filePath);
+      removedFiles += 1;
+    } catch {
+      // 忽略单文件清理异常，避免中断整体打包
+    }
+  }
+
+  // 删除目录并统计（按入口目录计数）
+  function removeDir(dirPath) {
+    if (!fs.existsSync(dirPath)) return;
+    rmDir(dirPath);
+    removedDirs += 1;
+  }
+
+  // 判断是否为 TS 声明文件（path.extname 无法直接识别 .d.ts）
+  function isTypeDeclarationFile(fileNameLower) {
+    return (
+      fileNameLower.endsWith(".d.ts") ||
+      fileNameLower.endsWith(".d.mts") ||
+      fileNameLower.endsWith(".d.cts")
+    );
+  }
+
+  // 精简 openclaw/docs，仅保留运行时必需模板 docs/reference/templates
+  function pruneOpenclawDocs() {
+    if (!fs.existsSync(openclawDocsDir)) return;
+    if (!fs.existsSync(openclawDocsKeepDir)) {
+      log("openclaw docs/reference/templates 不存在，跳过 openclaw docs 裁剪");
+      return;
+    }
+
+    // 递归清理 docs：保留模板目录及其祖先路径，删除其余内容
+    function walkDocs(dir) {
+      let entries;
+      try {
+        entries = fs.readdirSync(dir, { withFileTypes: true });
+      } catch {
+        return;
+      }
+
+      for (const entry of entries) {
+        const fullPath = path.join(dir, entry.name);
+        const keepSelf = isPathInside(fullPath, openclawDocsKeepDir);
+        const keepAncestor = isPathInside(openclawDocsKeepDir, fullPath);
+
+        if (entry.isDirectory()) {
+          if (keepSelf || keepAncestor) {
+            walkDocs(fullPath);
+          } else {
+            removeDir(fullPath);
+          }
+          continue;
+        }
+
+        if (!keepSelf) {
+          removeFile(fullPath);
+        }
+      }
+    }
+
+    walkDocs(openclawDocsDir);
+  }
 
   // 递归遍历并清理
   function walk(dir) {
@@ -767,25 +850,30 @@ function pruneNodeModules(nmDir) {
       const fullPath = path.join(dir, entry.name);
 
       if (entry.isDirectory()) {
-        if (protectedDirs.has(fullPath)) {
-          // 跳过受保护目录，保留全部内容
-        } else if (junkDirs.has(entry.name)) {
-          rmDir(fullPath);
+        // openclaw/docs 需要保留模板目录，不能整目录删除
+        if (fullPath === openclawDocsDir) {
+          pruneOpenclawDocs();
+          continue;
+        }
+
+        if (junkDirs.has(entry.name)) {
+          removeDir(fullPath);
         } else {
           walk(fullPath);
         }
       } else {
-        const ext = path.extname(entry.name);
         const nameLower = entry.name.toLowerCase();
-        const shouldDelete = junkExts.has(ext) || junkNames.has(nameLower);
+        const ext = path.extname(nameLower);
+        const shouldDelete = isTypeDeclarationFile(nameLower) || ext === ".map" || junkNames.has(nameLower);
         if (shouldDelete) {
-          fs.unlinkSync(fullPath);
+          removeFile(fullPath);
         }
       }
     }
   }
 
   walk(nmDir);
+  log(`node_modules 裁剪统计: 删除文件 ${removedFiles} 个，删除目录 ${removedDirs} 个`);
 }
 
 // ─── Step 3: 生成埋点配置 ───
