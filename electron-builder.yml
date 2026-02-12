@@ -19,8 +19,11 @@ mac:
   target:
     - dmg   # 手动分发
     - zip   # 自动更新（electron-updater 在 macOS 上要求 zip）
-  icon: upstream/openclaw/apps/macos/Sources/OpenClaw/Resources/OpenClaw.icns
+  icon: assets/icon.icns
   category: public.app-category.productivity
+  # zip artifactName 含 arch + -mac 后缀，供 electron-updater findFile 按架构匹配
+  # dmg.artifactName 会覆盖 DMG 的命名
+  artifactName: "OneClaw-${version}-${arch}-mac.${ext}"
   # 签名身份由 CSC_NAME 环境变量指定（见 .env），避免把证书名写入仓库
   hardenedRuntime: true
   gatekeeperAssess: false
@@ -34,10 +37,6 @@ publish:
 dmg:
   sign: false
   artifactName: "OneClaw-${version}-${arch}.${ext}"
-
-# zip 文件名含 arch 和 -mac 后缀，供 electron-updater findFile 按架构匹配
-zip:
-  artifactName: "OneClaw-${version}-${arch}-mac.${ext}"
 
 # --- Windows ---
 win:
