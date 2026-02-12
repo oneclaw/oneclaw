@@ -82,6 +82,7 @@
       "error.noModelId": "Please enter the Model ID.",
       "error.verifyFailed": "Verification failed. Please check your API key.",
       "error.connection": "Connection error: ",
+      "config.imageSupport": "Model supports image input",
     },
     zh: {
       "welcome.title": "欢迎使用 OneClaw",
@@ -115,6 +116,7 @@
       "error.noModelId": "请输入模型 ID。",
       "error.verifyFailed": "验证失败，请检查 API 密钥。",
       "error.connection": "连接错误：",
+      "config.imageSupport": "模型支持图片输入",
     },
   };
 
@@ -139,6 +141,8 @@
     modelInputGroup: $("#modelInputGroup"),
     modelInput: $("#modelInput"),
     apiTypeGroup: $("#apiTypeGroup"),
+    imageSupportGroup: $("#imageSupportGroup"),
+    imageSupport: $("#imageSupport"),
     errorMsg: $("#errorMsg"),
     btnBackToStep1: $("#btnBackToStep1"),
     btnVerify: $("#btnVerify"),
@@ -220,6 +224,7 @@
     toggleEl(els.baseURLGroup, isCustom);
     toggleEl(els.modelInputGroup, isCustom);
     toggleEl(els.apiTypeGroup, isCustom);
+    toggleEl(els.imageSupportGroup, isCustom);
 
     // 模型选择
     toggleEl(els.modelSelectGroup, !isCustom);
@@ -333,6 +338,7 @@
       params.baseURL = baseURL;
       params.modelID = modelID;
       params.apiType = document.querySelector('input[name="apiType"]:checked').value;
+      params.supportImage = els.imageSupport.checked;
     } else {
       params.modelID = els.modelSelect.value;
     }
@@ -354,6 +360,7 @@
       baseURL: params.baseURL || "",
       api: params.apiType || "",
       subPlatform: params.subPlatform || "",
+      supportImage: params.supportImage ?? true,
     };
   }
 
