@@ -1,19 +1,19 @@
 /* ============================================
-   OneClaw Settings — 深色主题双栏布局
+   OneClaw Settings — 中性深色主题双栏布局
    复用 setup.css 的 CSS 变量体系
    ============================================ */
 
-/* 基础变量 */
+/* 基础变量 — 中性黑白灰 */
 :root {
-  --bg-primary: #1a1a2e;
-  --bg-secondary: #16213e;
-  --bg-card: #1e2a45;
-  --bg-input: #0f1729;
-  --border: #2a3a5c;
+  --bg-primary: #1a1a1a;
+  --bg-secondary: #151515;
+  --bg-card: #222222;
+  --bg-input: #111111;
+  --border: #303030;
   --border-focus: #3b82f6;
-  --text-primary: #f0f0f5;
-  --text-secondary: #94a3b8;
-  --text-muted: #64748b;
+  --text-primary: #e8e8e8;
+  --text-secondary: #999999;
+  --text-muted: #666666;
   --accent: #3b82f6;
   --accent-hover: #60a5fa;
   --accent-dim: rgba(59, 130, 246, 0.12);
@@ -566,4 +566,32 @@ select option {
 ::-webkit-scrollbar-thumb {
   background: var(--border);
   border-radius: 3px;
+}
+
+/* ── 浅色主题适配 ── */
+@media (prefers-color-scheme: light) {
+  :root {
+    --bg-primary: #ffffff;
+    --bg-secondary: #f5f5f5;
+    --bg-card: #ffffff;
+    --bg-input: #f5f5f5;
+    --border: #e0e0e0;
+    --text-primary: #1a1a1a;
+    --text-secondary: #555555;
+    --text-muted: #888888;
+    --accent-dim: rgba(59, 130, 246, 0.08);
+    --success-bg: rgba(34, 197, 94, 0.06);
+    --error-bg: rgba(239, 68, 68, 0.06);
+    --warning-bg: rgba(245, 158, 11, 0.06);
+  }
+
+  /* 导航 hover：浅色下用黑色半透明 */
+  .nav-item:hover {
+    background: rgba(0, 0, 0, 0.04);
+  }
+
+  /* 分段选择器激活态：蓝底强制白字 */
+  .provider-tab.active {
+    color: #fff;
+  }
 }
