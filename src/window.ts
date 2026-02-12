@@ -1,6 +1,7 @@
 import { BrowserWindow } from "electron";
 import * as path from "path";
 import * as log from "./logger";
+import { shouldHideWindowOnClose } from "./window-close-policy";
 import {
   WINDOW_WIDTH,
   WINDOW_HEIGHT,
@@ -18,6 +19,7 @@ interface ShowOptions {
 
 export class WindowManager {
   private win: BrowserWindow | null = null;
+  private allowAppQuit = false;
 
   // 显示主窗口（加载 Gateway Control UI）
   async show(opts: ShowOptions): Promise<void> {
@@ -53,10 +55,16 @@ export class WindowManager {
       log.warn("窗口无响应");
     });
 
-    // 关闭 → 隐藏到托盘（不退出）
+    // 关闭 → 普通场景隐藏到托盘；退出/更新场景放行关闭
     this.win.on("close", (e) => {
+      if (!shouldHideWindowOnClose({ allowAppQuit: this.allowAppQuit })) return;
       e.preventDefault();
       this.win?.hide();
+    });
+    // 窗口真正销毁后重置状态，避免退出标记泄漏到后续窗口生命周期
+    this.win.on("closed", () => {
+      this.win = null;
+      this.allowAppQuit = false;
     });
 
     const url = `http://127.0.0.1:${opts.port}/`;
@@ -88,6 +96,11 @@ export class WindowManager {
     }
 
     this.win.show();
+  }
+
+  // 标记应用进入退出流程（例如手动退出/更新安装）
+  prepareForAppQuit(): void {
+    this.allowAppQuit = true;
   }
 
   // 销毁窗口（应用退出前调用）

@@ -11,6 +11,7 @@ import {
   checkForUpdates,
   startAutoCheckSchedule,
   stopAutoCheckSchedule,
+  setBeforeQuitForInstallCallback,
   setProgressCallback,
 } from "./auto-updater";
 import { isSetupComplete, DEFAULT_PORT, resolveGatewayLogPath } from "./constants";
@@ -158,6 +159,12 @@ app.whenReady().then(async () => {
   analytics.track("app_launched");
   setupAutoUpdater();
   startAutoCheckSchedule();
+
+  // 更新安装前先放行窗口关闭，避免托盘“隐藏而不退出”拦截 quitAndInstall。
+  setBeforeQuitForInstallCallback(() => {
+    stopAutoCheckSchedule();
+    windowManager.prepareForAppQuit();
+  });
 
   // 下载进度 → 更新托盘 tooltip
   setProgressCallback((pct) => {

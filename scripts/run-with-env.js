@@ -34,20 +34,6 @@ function loadEnvFile(envPath) {
   return result;
 }
 
-// 兼容常见写法：CSC_NAME 带前缀时自动裁剪，避免 electron-builder 报错
-function normalizeEnv(env) {
-  const normalized = { ...env };
-  const key = "CSC_NAME";
-  const raw = normalized[key];
-  if (typeof raw !== "string") return normalized;
-
-  const prefix = "Developer ID Application:";
-  if (raw.startsWith(prefix)) {
-    normalized[key] = raw.slice(prefix.length).trim();
-  }
-  return normalized;
-}
-
 // 运行目标命令，并把 .env 注入子进程环境变量
 function run() {
   const args = process.argv.slice(2);
@@ -57,7 +43,8 @@ function run() {
   }
 
   const envFromFile = loadEnvFile(path.resolve(process.cwd(), ".env"));
-  const env = normalizeEnv({ ...process.env, ...envFromFile });
+  // 变量优先级：命令行/当前 shell > .env 默认值
+  const env = { ...envFromFile, ...process.env };
   const command = args[0];
   const commandArgs = args.slice(1);
 

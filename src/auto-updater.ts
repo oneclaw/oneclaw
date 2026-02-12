@@ -13,6 +13,13 @@ let isManualCheck = false;
 let startupTimer: ReturnType<typeof setTimeout> | null = null;
 let intervalTimer: ReturnType<typeof setInterval> | null = null;
 let progressCallback: ((percent: number | null) => void) | null = null;
+let beforeQuitForInstallCallback: (() => void) | null = null;
+
+// 统一格式化更新错误，避免日志出现 [object Object]
+function formatUpdaterError(err: unknown): string {
+  if (err instanceof Error) return err.message;
+  return String(err);
+}
 
 // 初始化自动更新
 export function setupAutoUpdater(): void {
@@ -33,7 +40,7 @@ export function setupAutoUpdater(): void {
   // 发现新版本
   autoUpdater.on("update-available", (info) => {
     log.info(`[updater] 发现新版本 ${info.version}`);
-    dialog
+    void dialog
       .showMessageBox({
         type: "info",
         title: "Update Available",
@@ -41,7 +48,13 @@ export function setupAutoUpdater(): void {
         buttons: ["下载", "稍后"],
       })
       .then((r) => {
-        if (r.response === 0) autoUpdater.downloadUpdate();
+        if (r.response !== 0) return;
+        void autoUpdater.downloadUpdate().catch((err) => {
+          log.error(`[updater] 下载更新触发失败: ${formatUpdaterError(err)}`);
+        });
+      })
+      .catch((err) => {
+        log.error(`[updater] 更新提示框失败: ${formatUpdaterError(err)}`);
       });
   });
 
@@ -68,7 +81,7 @@ export function setupAutoUpdater(): void {
   autoUpdater.on("update-downloaded", () => {
     log.info("[updater] 更新下载完成");
     progressCallback?.(null);
-    dialog
+    void dialog
       .showMessageBox({
         type: "info",
         title: "Update Ready",
@@ -76,7 +89,13 @@ export function setupAutoUpdater(): void {
         buttons: ["立即重启", "稍后"],
       })
       .then((r) => {
-        if (r.response === 0) autoUpdater.quitAndInstall();
+        if (r.response !== 0) return;
+        log.info("[updater] 用户确认立即重启，准备安装更新");
+        beforeQuitForInstallCallback?.();
+        autoUpdater.quitAndInstall();
+      })
+      .catch((err) => {
+        log.error(`[updater] 安装确认框失败: ${formatUpdaterError(err)}`);
       });
   });
 
@@ -98,7 +117,9 @@ export function setupAutoUpdater(): void {
 // 检查更新（manual=true 时弹窗反馈"已是最新"或错误）
 export function checkForUpdates(manual = false): void {
   isManualCheck = manual;
-  autoUpdater.checkForUpdates();
+  void autoUpdater.checkForUpdates().catch((err) => {
+    log.error(`[updater] 检查更新调用失败: ${formatUpdaterError(err)}`);
+  });
 }
 
 // 启动定时检查（延迟首次 + 周期轮询）
@@ -118,4 +139,9 @@ export function stopAutoCheckSchedule(): void {
 // 注入下载进度回调（供 tray 显示 tooltip）
 export function setProgressCallback(cb: (percent: number | null) => void): void {
   progressCallback = cb;
+}
+
+// 注入更新安装前回调（供主进程放行窗口关闭）
+export function setBeforeQuitForInstallCallback(cb: () => void): void {
+  beforeQuitForInstallCallback = cb;
 }
