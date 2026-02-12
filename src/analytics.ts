@@ -19,6 +19,8 @@ interface AnalyticsConfig {
   retryDelaysMs: number[];
 }
 
+type AnalyticsEventProps = object;
+
 let analyticsConfig: AnalyticsConfig = {
   enabled: false,
   captureURL: "",
@@ -144,12 +146,15 @@ function formatErr(err: unknown): string {
 }
 
 // 构建 capture 接口 payload。
-function buildPayload(event: string): Record<string, unknown> {
+function buildPayload(event: string, eventProps: AnalyticsEventProps = {}): Record<string, unknown> {
   return {
     api_key: analyticsConfig.apiKey,
     event,
     distinct_id: deviceId,
-    properties: commonProps(),
+    properties: {
+      ...commonProps(),
+      ...(eventProps as Record<string, unknown>),
+    },
     timestamp: new Date().toISOString(),
   };
 }
@@ -182,10 +187,10 @@ async function sleep(ms: number): Promise<void> {
 }
 
 // 统一发送埋点：支持重试并在主/备地址之间切换。
-async function sendEvent(event: string): Promise<void> {
+async function sendEvent(event: string, eventProps: AnalyticsEventProps = {}): Promise<void> {
   if (!analyticsConfig.enabled) return;
 
-  const payload = buildPayload(event);
+  const payload = buildPayload(event, eventProps);
   const targets = Array.from(
     new Set(
       (currentCaptureURL === analyticsConfig.captureURL
@@ -230,11 +235,11 @@ export function init(): void {
 }
 
 // 上报事件（唯一入口）。
-export function track(event: string): void {
+export function track(event: string, eventProps: AnalyticsEventProps = {}): void {
   if (!deviceId) {
     deviceId = getDeviceId();
   }
-  void sendEvent(event);
+  void sendEvent(event, eventProps);
 }
 
 // 停止心跳；埋点是即时发送，不需要额外 flush。
