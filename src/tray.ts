@@ -2,10 +2,12 @@ import { Tray, Menu, app, nativeImage } from "electron";
 import * as path from "path";
 import { GatewayProcess, GatewayState } from "./gateway-process";
 import { WindowManager } from "./window";
+import { SettingsManager } from "./settings-manager";
 
 interface TrayOptions {
   windowManager: WindowManager;
   gateway: GatewayProcess;
+  settingsManager: SettingsManager;
   onQuit: () => void;
   onCheckUpdates: () => void;
 }
@@ -54,7 +56,7 @@ export class TrayManager {
   updateMenu(): void {
     if (!this.tray || !this.opts) return;
 
-    const { windowManager, gateway, onQuit, onCheckUpdates } = this.opts;
+    const { windowManager, gateway, settingsManager, onQuit, onCheckUpdates } = this.opts;
     const statusLabel = STATE_LABELS[gateway.getState()];
 
     const menu = Menu.buildFromTemplate([
@@ -66,6 +68,7 @@ export class TrayManager {
       { label: statusLabel, enabled: false },
       { label: "Restart Gateway", click: () => gateway.restart() },
       { type: "separator" },
+      { label: "Settings…", click: () => settingsManager.show() },
       { label: "Check for Updates…", click: onCheckUpdates },
       { type: "separator" },
       { label: "Quit OneClaw", click: onQuit },

@@ -35,12 +35,13 @@ export const IS_WIN = process.platform === "win32";
 
 // ── 路径解析（自动适配 dev / packaged 两种环境） ──
 
-/** 资源根目录 */
+/** 资源根目录（dev 模式指向 targets/<platform-arch>，打包后 afterPack 已拍平） */
 export function resolveResourcesPath(): string {
   if (app.isPackaged) {
     return path.join(process.resourcesPath, "resources");
   }
-  return path.join(app.getAppPath(), "resources");
+  const target = process.env.ONECLAW_TARGET ?? `${process.platform}-${process.arch}`;
+  return path.join(app.getAppPath(), "resources", "targets", target);
 }
 
 /** 内嵌 Node.js 二进制 */

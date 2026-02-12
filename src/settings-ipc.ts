@@ -1,0 +1,237 @@
+import { ipcMain } from "electron";
+import { ChildProcess, spawn } from "child_process";
+import { GatewayProcess } from "./gateway-process";
+import { SettingsManager } from "./settings-manager";
+import { resolveNodeBin, resolveGatewayEntry, resolveGatewayCwd, resolveResourcesPath } from "./constants";
+import { resolveGatewayAuthToken } from "./gateway-auth";
+import {
+  PROVIDER_PRESETS,
+  MOONSHOT_SUB_PLATFORMS,
+  verifyProvider,
+  buildProviderConfig,
+  saveMoonshotConfig,
+  readUserConfig,
+  writeUserConfig,
+} from "./provider-config";
+import * as path from "path";
+
+interface SettingsIpcDeps {
+  settingsManager: SettingsManager;
+  gateway: GatewayProcess;
+}
+
+let doctorProc: ChildProcess | null = null;
+
+// 注册 Settings 相关 IPC
+export function registerSettingsIpc(deps: SettingsIpcDeps): void {
+  const { settingsManager, gateway } = deps;
+
+  // ── 读取当前 provider/model 配置（apiKey 掩码返回） ──
+  ipcMain.handle("settings:get-config", async () => {
+    try {
+      const config = readUserConfig();
+      return { success: true, data: extractProviderInfo(config) };
+    } catch (err: any) {
+      return { success: false, message: err.message };
+    }
+  });
+
+  // ── 验证 API Key（复用 provider-config） ──
+  ipcMain.handle("settings:verify-key", async (_event, params) => {
+    return verifyProvider(params);
+  });
+
+  // ── 保存 provider 配置 ──
+  ipcMain.handle("settings:save-provider", async (_event, params) => {
+    const { provider, apiKey, modelID, baseURL, api, subPlatform, supportImage } = params;
+    try {
+      const config = readUserConfig();
+
+      // 初始化嵌套结构
+      config.models ??= {};
+      config.models.providers ??= {};
+      config.agents ??= {};
+      config.agents.defaults ??= {};
+      config.agents.defaults.model ??= {};
+
+      if (provider === "moonshot") {
+        // 记住现有 models 再写入（saveMoonshotConfig 会覆盖）
+        const sub = MOONSHOT_SUB_PLATFORMS[subPlatform || "moonshot-cn"];
+        const provKey = sub?.providerKey || "moonshot";
+        const prevModels: any[] = config.models.providers[provKey]?.models ?? [];
+
+        saveMoonshotConfig(config, apiKey, modelID, subPlatform);
+
+        // 合并：保留已有模型，确保选中模型在列表中
+        mergeModels(config.models.providers[provKey], modelID, prevModels);
+      } else {
+        const prevModels: any[] = config.models.providers[provider]?.models ?? [];
+
+        const providerConfig = buildProviderConfig(provider, apiKey, modelID, baseURL, api, supportImage);
+        config.models.providers[provider] = providerConfig;
+        config.agents.defaults.model.primary = `${provider}/${modelID}`;
+
+        mergeModels(config.models.providers[provider], modelID, prevModels);
+      }
+
+      writeUserConfig(config);
+      return { success: true };
+    } catch (err: any) {
+      return { success: false, message: err.message || String(err) };
+    }
+  });
+
+  // ── 重启 gateway ──
+  ipcMain.handle("settings:restart-gateway", async () => {
+    try {
+      gateway.setToken(resolveGatewayAuthToken());
+      await gateway.restart();
+      const running = gateway.getState() === "running";
+      return { success: running, message: running ? undefined : "Gateway 重启失败" };
+    } catch (err: any) {
+      return { success: false, message: err.message };
+    }
+  });
+
+  // ── Doctor 子进程 ──
+  ipcMain.handle("settings:run-doctor", async () => {
+    // 防止并发
+    if (doctorProc && doctorProc.exitCode == null) {
+      return { success: false, message: "Doctor 正在运行中" };
+    }
+
+    const nodeBin = resolveNodeBin();
+    const entry = resolveGatewayEntry();
+    const cwd = resolveGatewayCwd();
+
+    // 组装 PATH，内嵌 runtime 优先
+    const runtimeDir = path.join(resolveResourcesPath(), "runtime");
+    const envPath = runtimeDir + path.delimiter + (process.env.PATH ?? "");
+
+    doctorProc = spawn(nodeBin, [entry, "doctor", "--non-interactive", "--repair"], {
+      cwd,
+      env: {
+        ...process.env,
+        PATH: envPath,
+        FORCE_COLOR: "0",
+      },
+      stdio: ["ignore", "pipe", "pipe"],
+      windowsHide: true,
+    });
+
+    const wc = settingsManager.getWebContents();
+
+    // 流式推送 stdout/stderr
+    const pushOutput = (data: Buffer) => {
+      if (wc && !wc.isDestroyed()) {
+        wc.send("settings:doctor-output", data.toString());
+      }
+    };
+    doctorProc.stdout?.on("data", pushOutput);
+    doctorProc.stderr?.on("data", pushOutput);
+
+    // 完成时推送退出码
+    doctorProc.on("exit", (code) => {
+      if (wc && !wc.isDestroyed()) {
+        wc.send("settings:doctor-exit", code ?? -1);
+      }
+      doctorProc = null;
+    });
+
+    doctorProc.on("error", (err) => {
+      if (wc && !wc.isDestroyed()) {
+        wc.send("settings:doctor-output", `Error: ${err.message}\n`);
+        wc.send("settings:doctor-exit", -1);
+      }
+      doctorProc = null;
+    });
+
+    return { success: true, pid: doctorProc.pid };
+  });
+}
+
+// ── 从配置中提取当前 provider 信息（apiKey 掩码） ──
+
+function extractProviderInfo(config: any): any {
+  const primary: string = config?.agents?.defaults?.model?.primary ?? "";
+  const providers = config?.models?.providers ?? {};
+  const env = config?.env ?? {};
+
+  // 解析 "provider/model" 格式
+  const slashIdx = primary.indexOf("/");
+  const providerKey = slashIdx > 0 ? primary.slice(0, slashIdx) : "";
+  const modelID = slashIdx > 0 ? primary.slice(slashIdx + 1) : primary;
+
+  let provider = providerKey;
+  let subPlatform = "";
+  let apiKey = "";
+  let baseURL = "";
+  let api = "";
+  let supportsImage = true;
+  let configuredModels: string[] = [];
+
+  // 从 provider 入口的 models 数组提取 id 列表
+  const extractModelIds = (prov: any): string[] => {
+    if (!Array.isArray(prov?.models)) return [];
+    return prov.models.map((m: any) => (typeof m === "string" ? m : m?.id)).filter(Boolean);
+  };
+
+  // Kimi Code 特殊路径：provider key = kimi-coding，apiKey 在 env 中
+  if (providerKey === "kimi-coding") {
+    provider = "moonshot";
+    subPlatform = "kimi-code";
+    apiKey = env.KIMI_API_KEY ?? "";
+    configuredModels = extractModelIds(providers["kimi-coding"]);
+  } else if (providerKey === "moonshot") {
+    provider = "moonshot";
+    const prov = providers.moonshot;
+    if (prov?.baseUrl?.includes("moonshot.ai")) {
+      subPlatform = "moonshot-ai";
+    } else {
+      subPlatform = "moonshot-cn";
+    }
+    apiKey = prov?.apiKey ?? "";
+    configuredModels = extractModelIds(prov);
+  } else if (providers[providerKey]) {
+    const prov = providers[providerKey];
+    apiKey = prov?.apiKey ?? "";
+    baseURL = prov?.baseUrl ?? "";
+    api = prov?.api ?? "";
+    configuredModels = extractModelIds(prov);
+    // 从 models[0].input 推断 custom provider 是否支持图像
+    const modelEntry = (prov?.models ?? [])[0];
+    if (modelEntry?.input) {
+      supportsImage = Array.isArray(modelEntry.input) && modelEntry.input.includes("image");
+    }
+  }
+
+  return {
+    provider,
+    subPlatform,
+    modelID,
+    apiKey,
+    baseURL,
+    api,
+    supportsImage,
+    configuredModels,
+    raw: primary,
+  };
+}
+
+// 合并模型列表：保留 prevModels 中的全部条目，确保 selectedID 存在
+function mergeModels(provEntry: any, selectedID: string, prevModels: any[]): void {
+  if (!provEntry || !prevModels.length) return;
+  const newEntry = (provEntry.models ?? [])[0]; // buildProviderConfig 生成的单条目
+  const merged = [...prevModels];
+  const exists = merged.some((m: any) => m.id === selectedID);
+  if (!exists && newEntry) {
+    merged.push(newEntry);
+  }
+  provEntry.models = merged;
+}
+
+// API Key 掩码：保留首尾各 4 字符
+function maskApiKey(key: string): string {
+  if (!key || key.length <= 8) return key ? "••••••••" : "";
+  return key.slice(0, 4) + "••••" + key.slice(-4);
+}
