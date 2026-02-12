@@ -68,11 +68,13 @@ function readRemoteLatestVersion(packageName, options = {}) {
   const logError = typeof options.logError === "function" ? options.logError : null;
 
   try {
+    // Windows 上 npm 是 npm.cmd，execFileSync 需要 shell 才能找到
     const out = execFileSync("npm", ["view", packageName, "version", "--json"], {
       cwd,
       stdio: ["ignore", "pipe", "pipe"],
       env,
       encoding: "utf-8",
+      shell: true,
     });
     const text = String(out || "").trim();
     if (!text) return "";

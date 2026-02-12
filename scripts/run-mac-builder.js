@@ -58,7 +58,7 @@ function buildArgs(arch, output, signAndNotarize) {
 
   if (signAndNotarize) {
     const cscName = requireEnv("CSC_NAME");
-    requireEnv("APPLE_API_KEY");
+    // APPLE_API_KEY 不需要校验：electron-builder 通过 ~/private_keys/AuthKey_{ID}.p8 做公证
     requireEnv("APPLE_API_KEY_ID");
     requireEnv("APPLE_API_ISSUER");
     args.push(`--config.mac.identity=${cscName}`);
