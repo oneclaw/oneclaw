@@ -54,6 +54,7 @@ function buildArgs(arch, output, signAndNotarize) {
     "--mac",
     `--${arch}`,
     `--config.directories.output=${output}`,
+    "--publish", "never",
   ];
 
   if (signAndNotarize) {
