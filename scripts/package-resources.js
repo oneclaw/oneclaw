@@ -13,11 +13,7 @@ const fs = require("fs");
 const path = require("path");
 const https = require("https");
 const { execSync } = require("child_process");
-const {
-  normalizeSemverText,
-  compareSemver,
-  readRemoteLatestVersion,
-} = require("./lib/openclaw-version-utils");
+const { normalizeSemverText } = require("./lib/openclaw-version-utils");
 
 // ─── 项目根目录 ───
 const ROOT = path.resolve(__dirname, "..");
@@ -502,176 +498,32 @@ function writeAnalyticsConfig(configPath) {
 
 // ─── Step 2: 安装 openclaw 生产依赖 ───
 
-// openclaw 包源路径（优先跟随根 package.json 版本，避免壳版本和内嵌依赖分叉）
+// 确定 openclaw 安装来源：根 package.json 版本 → npm registry 安装
 function getPackageSource() {
+  // 显式覆盖（调试/测试用逃生舱）
   const explicitSource = readEnvText("OPENCLAW_PACKAGE_SOURCE");
   if (explicitSource) {
     log(`使用 OPENCLAW_PACKAGE_SOURCE 指定来源: ${explicitSource}`);
     return {
       source: explicitSource,
       stampSource: `explicit:${explicitSource}`,
-      kind: "explicit",
-      localVersion: "",
-      remoteVersion: "",
     };
   }
 
-  const localSource = `file:${path.join(ROOT, "upstream", "openclaw")}`;
-  const localVersion = readLocalUpstreamVersion();
+  // 读取根 package.json 版本号，与 version:sync 写入的一致
   const rootVersion = readRootPackageVersion();
-  const useRootVersionLock = readEnvBool("ONECLAW_USE_ROOT_VERSION_LOCK", true);
-
-  // 优先按壳版本锁定依赖版本，保证产物名/version 字段与内嵌 openclaw 一致。
-  if (useRootVersionLock && rootVersion) {
-    if (!localVersion) {
-      log(`根版本锁定 ${rootVersion}（本地 upstream 无版本信息），使用远端 openclaw@${rootVersion}`);
-      return {
-        source: rootVersion,
-        stampSource: `remote:openclaw@${rootVersion}`,
-        kind: "remote",
-        localVersion: "",
-        remoteVersion: rootVersion,
-      };
-    }
-
-    const cmpRootLocal = compareSemver(rootVersion, localVersion);
-    if (cmpRootLocal === 0) {
-      log(`根版本 ${rootVersion} 与本地 upstream 一致，使用本地 upstream/openclaw`);
-      return {
-        source: localSource,
-        stampSource: `local:${localVersion}`,
-        kind: "local",
-        localVersion,
-        remoteVersion: "",
-      };
-    }
-
-    if (cmpRootLocal != null && cmpRootLocal > 0) {
-      log(`根版本锁定 ${rootVersion}（本地 ${localVersion}），使用远端 openclaw@${rootVersion}`);
-      return {
-        source: rootVersion,
-        stampSource: `remote:openclaw@${rootVersion}`,
-        kind: "remote",
-        localVersion,
-        remoteVersion: rootVersion,
-      };
-    }
-
-    if (cmpRootLocal != null && cmpRootLocal < 0) {
-      log(`根版本 ${rootVersion} 低于本地 ${localVersion}，回退本地 upstream/openclaw（建议先执行 version:sync）`);
-      return {
-        source: localSource,
-        stampSource: `local:${localVersion}`,
-        kind: "local",
-        localVersion,
-        remoteVersion: "",
-      };
-    }
-
-    log(`根版本 ${rootVersion} 与本地 ${localVersion} 不可比较，回退远端检查逻辑`);
-  } else if (useRootVersionLock) {
-    log("根 package.json 缺少版本号，回退远端检查逻辑");
-  } else {
-    log("已禁用根版本锁定（ONECLAW_USE_ROOT_VERSION_LOCK=false），回退远端检查逻辑");
+  if (!rootVersion) {
+    die("根 package.json 缺少版本号，无法确定 openclaw 安装版本（请先执行 npm run version:sync）");
   }
 
-  if (!readEnvBool("ONECLAW_CHECK_REMOTE_OPENCLAW", true)) {
-    log("已禁用远端版本检查（ONECLAW_CHECK_REMOTE_OPENCLAW=false），使用本地 upstream/openclaw");
-    return {
-      source: localSource,
-      stampSource: `local:${localVersion || "unknown"}`,
-      kind: "local",
-      localVersion,
-      remoteVersion: "",
-    };
-  }
-
-  const remoteVersion = readRemoteLatestVersion("openclaw", {
-    cwd: ROOT,
-    env: process.env,
-    logError(message) {
-      log(message);
-    },
-  });
-  if (!remoteVersion) {
-    log("未获取到远端 openclaw 最新版本，回退本地 upstream/openclaw");
-    return {
-      source: localSource,
-      stampSource: `local:${localVersion || "unknown"}`,
-      kind: "local",
-      localVersion,
-      remoteVersion: "",
-    };
-  }
-
-  if (!localVersion) {
-    log(`本地 upstream/openclaw 缺少版本信息，使用远端 openclaw@${remoteVersion}`);
-    return {
-      source: remoteVersion,
-      stampSource: `remote:openclaw@${remoteVersion}`,
-      kind: "remote",
-      localVersion: "",
-      remoteVersion,
-    };
-  }
-
-  const cmp = compareSemver(remoteVersion, localVersion);
-  if (cmp == null) {
-    log(
-      `版本号不可比较（local=${localVersion}, remote=${remoteVersion}），默认使用本地 upstream/openclaw`
-    );
-    return {
-      source: localSource,
-      stampSource: `local:${localVersion}`,
-      kind: "local",
-      localVersion,
-      remoteVersion,
-    };
-  }
-
-  if (cmp > 0) {
-    log(`检测到远端更新版本 ${remoteVersion}（本地 ${localVersion}），将拉取远端最新版`);
-    return {
-      source: remoteVersion,
-      stampSource: `remote:openclaw@${remoteVersion}`,
-      kind: "remote",
-      localVersion,
-      remoteVersion,
-    };
-  }
-
-  log(`远端版本 ${remoteVersion} 未高于本地 ${localVersion}，使用本地 upstream/openclaw`);
+  log(`使用 openclaw@${rootVersion}（来源: 根 package.json）`);
   return {
-    source: localSource,
-    stampSource: `local:${localVersion}`,
-    kind: "local",
-    localVersion,
-    remoteVersion,
+    source: rootVersion,
+    stampSource: `remote:openclaw@${rootVersion}`,
   };
 }
 
-// 读取 bool 环境变量（支持 true/false/1/0/yes/no/on/off）
-function readEnvBool(name, fallback) {
-  const raw = readEnvText(name).toLowerCase();
-  if (!raw) return fallback;
-  if (["1", "true", "yes", "on"].includes(raw)) return true;
-  if (["0", "false", "no", "off"].includes(raw)) return false;
-  return fallback;
-}
-
-// 读取本地 upstream/openclaw 的版本号
-function readLocalUpstreamVersion() {
-  const pkgPath = path.join(ROOT, "upstream", "openclaw", "package.json");
-  try {
-    const raw = fs.readFileSync(pkgPath, "utf-8");
-    const pkg = JSON.parse(raw);
-    return normalizeSemverText(String(pkg.version || ""));
-  } catch {
-    return "";
-  }
-}
-
-// 读取根 package.json 的版本号（用于锁定打包依赖版本）。
+// 读取根 package.json 的版本号（由 version:sync 从 npm latest 写入）。
 function readRootPackageVersion() {
   const pkgPath = path.join(ROOT, "package.json");
   try {
@@ -849,35 +701,22 @@ function installDependencies(opts, gatewayDir) {
   const sourceInfo = getPackageSource();
   const targetStamp = `${opts.platform}-${opts.arch}|${sourceInfo.stampSource}`;
 
-  // 增量检测：比较 upstream 构建产物的 mtime
-  const upstreamEntry = path.join(ROOT, "upstream", "openclaw", "dist", "entry.js");
+  // 增量检测：stamp 匹配 + entry.js 存在 → 跳过安装
   const installedEntry = path.join(gatewayDir, "node_modules", "openclaw", "dist", "entry.js");
   const cachedStamp = readGatewayStamp(stampPath);
   if (fs.existsSync(installedEntry) && cachedStamp === targetStamp) {
-    let canReuse = true;
-    if (sourceInfo.kind === "local") {
-      if (!fs.existsSync(upstreamEntry)) {
-        canReuse = false;
-      } else {
-        const srcMtime = fs.statSync(upstreamEntry).mtimeMs;
-        const dstMtime = fs.statSync(installedEntry).mtimeMs;
-        canReuse = dstMtime >= srcMtime;
-      }
-    }
+    log(`gateway 依赖未变化且平台/来源匹配 (${targetStamp})，跳过 npm install`);
+    const nmDir = path.join(gatewayDir, "node_modules");
+    // 即使复用缓存依赖，也要执行最新裁剪规则，避免历史产物遗留冗余文件
+    pruneNodeModules(nmDir);
+    pruneDarwinUniversalNativePackages(nmDir, opts.platform);
+    pruneLlamaPackages(nmDir);
+    pruneDanglingBinLinks(nmDir);
+    assertNativeDepsMatchTarget(nmDir, opts.platform, opts.arch);
+    return;
+  }
 
-    if (canReuse) {
-      log(`gateway 依赖未变化且平台/来源匹配 (${targetStamp})，跳过 npm install`);
-      const nmDir = path.join(gatewayDir, "node_modules");
-      // 即使复用缓存依赖，也要执行最新裁剪规则，避免历史产物遗留冗余文件
-      pruneNodeModules(nmDir);
-      pruneDarwinUniversalNativePackages(nmDir, opts.platform);
-      pruneLlamaPackages(nmDir);
-      pruneDanglingBinLinks(nmDir);
-      assertNativeDepsMatchTarget(nmDir, opts.platform, opts.arch);
-      return;
-    }
-    log("检测到本地 upstream 依赖更新，重新安装 gateway 依赖");
-  } else if (cachedStamp && cachedStamp !== targetStamp) {
+  if (cachedStamp && cachedStamp !== targetStamp) {
     log(`检测到依赖来源或平台变更（${cachedStamp} → ${targetStamp}），重新安装 gateway 依赖`);
   } else if (fs.existsSync(installedEntry)) {
     log("检测到 gateway 依赖缺少来源戳，重新安装");
@@ -1076,18 +915,14 @@ function generateAnalyticsConfig(targetPaths) {
 // ─── Step 4: 拷贝图标资源 ───
 
 function copyAppIcon(iconPath) {
-  // 优先从 upstream 取高分辨率图标，fallback 到 assets/icon.png（CI 无 upstream 目录）
-  const upstreamIcon = path.join(ROOT, "upstream", "openclaw", "apps", "macos", "Icon.icon", "Assets", "openclaw-mac.png");
-  const fallbackIcon = path.join(ROOT, "assets", "icon.png");
-  const src = fs.existsSync(upstreamIcon) ? upstreamIcon : fallbackIcon;
-
+  const src = path.join(ROOT, "assets", "icon.png");
   if (!fs.existsSync(src)) {
-    die(`图标文件不存在: upstream 和 fallback 均缺失`);
+    die(`图标文件不存在: ${src}`);
   }
 
   ensureDir(path.dirname(iconPath));
   fs.copyFileSync(src, iconPath);
-  log(`已拷贝 app-icon.png (来源: ${path.basename(path.dirname(path.dirname(src)))}) 到 ${path.relative(ROOT, iconPath)}`);
+  log(`已拷贝 app-icon.png 到 ${path.relative(ROOT, iconPath)}`);
 }
 
 // ─── Step 5: 生成统一入口和构建信息 ───
@@ -1184,7 +1019,7 @@ async function main() {
 
   console.log();
 
-  // Step 4: 拷贝图标资源（来自 upstream openclaw macOS app）
+  // Step 4: 拷贝图标资源
   log("Step 4: 拷贝图标资源");
   copyAppIcon(targetPaths.iconPath);
 

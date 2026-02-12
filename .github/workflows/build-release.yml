@@ -8,13 +8,11 @@ on:
   push:
     tags: ["v*"]
 
-# CI 中版本已由 tag 确定，跳过 version:sync（它依赖本地 upstream 目录）
-# package-resources.js 会自动从 npm registry 安装对应版本的 openclaw
+# CI 中版本已由 tag 确定，跳过 version:sync
+# package-resources.js 按根 package.json 版本从 npm registry 安装 openclaw
 env:
   ARTIFACT_RETENTION_DAYS: 3
   ONECLAW_SKIP_VERSION_SYNC: "1"
-  # CI 无本地 upstream，禁用版本锁定让 package-resources 从 npm 安装 latest
-  ONECLAW_USE_ROOT_VERSION_LOCK: "false"
   # 埋点配置
   ONECLAW_ANALYTICS_API_KEY: ${{ secrets.ONECLAW_ANALYTICS_API_KEY }}
   ONECLAW_ANALYTICS_CAPTURE_URL: ${{ secrets.ONECLAW_ANALYTICS_CAPTURE_URL }}
