@@ -767,6 +767,7 @@ function pruneNodeModules(nmDir) {
 
   const openclawDir = path.join(nmDir, "openclaw");
   const openclawDocsDir = path.join(openclawDir, "docs");
+  const openclawExtensionsDir = path.join(openclawDir, "extensions");
   const openclawDocsKeepDir = path.join(openclawDocsDir, "reference", "templates");
 
   // 需要删除的文档文件名（精确匹配，不区分大小写，避免误杀 changelog.js 等源文件）
@@ -878,6 +879,11 @@ function pruneNodeModules(nmDir) {
       const fullPath = path.join(dir, entry.name);
 
       if (entry.isDirectory()) {
+        // extensions 目录整体保护 — 插件 skills、docs 等子目录不受裁剪
+        if (isPathInside(fullPath, openclawExtensionsDir)) {
+          continue;
+        }
+
         // openclaw/docs 需要保留模板目录，不能整目录删除
         if (fullPath === openclawDocsDir) {
           pruneOpenclawDocs();

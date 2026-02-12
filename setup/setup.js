@@ -1,5 +1,5 @@
 // ============================================
-// OneClaw Setup — 三步向导交互逻辑
+// OneClaw Setup — 四步向导交互逻辑
 // （与 kimiclaw macOS ProviderSetupView.swift 对齐）
 // ============================================
 
@@ -83,6 +83,16 @@
       "error.verifyFailed": "Verification failed. Please check your API key.",
       "error.connection": "Connection error: ",
       "config.imageSupport": "Model supports image input",
+      "channel.title": "Connect a Channel (Optional)",
+      "channel.subtitle": "Connect Feishu to chat with AI directly in your group.",
+      "channel.appId": "Feishu App ID",
+      "channel.appSecret": "App Secret",
+      "channel.getKey": "Open Feishu Console →",
+      "channel.skip": "Skip",
+      "channel.verify": "Verify & Continue",
+      "channel.verifying": "Verifying...",
+      "error.noAppId": "Please enter the Feishu App ID.",
+      "error.noAppSecret": "Please enter the App Secret.",
     },
     zh: {
       "welcome.title": "欢迎使用 OneClaw",
@@ -117,6 +127,16 @@
       "error.verifyFailed": "验证失败，请检查 API 密钥。",
       "error.connection": "连接错误：",
       "config.imageSupport": "模型支持图片输入",
+      "channel.title": "连接频道（可选）",
+      "channel.subtitle": "连接飞书，在群聊中直接与 AI 对话。",
+      "channel.appId": "飞书应用 ID",
+      "channel.appSecret": "应用密钥",
+      "channel.getKey": "打开飞书开放平台 →",
+      "channel.skip": "跳过",
+      "channel.verify": "验证并继续",
+      "channel.verifying": "验证中...",
+      "error.noAppId": "请输入飞书应用 ID。",
+      "error.noAppSecret": "请输入应用密钥。",
     },
   };
 
@@ -148,7 +168,17 @@
     btnVerify: $("#btnVerify"),
     btnVerifyText: $("#btnVerify .btn-text"),
     btnVerifySpinner: $("#btnVerify .btn-spinner"),
-    // Step 3
+    // Step 3 — 频道配置
+    feishuAppId: $("#feishuAppId"),
+    feishuAppSecret: $("#feishuAppSecret"),
+    btnToggleSecret: $("#btnToggleSecret"),
+    feishuConsoleLink: $("#feishuConsoleLink"),
+    channelErrorMsg: $("#channelErrorMsg"),
+    btnSkipChannel: $("#btnSkipChannel"),
+    btnVerifyChannel: $("#btnVerifyChannel"),
+    btnVerifyChannelText: $("#btnVerifyChannel .btn-text"),
+    btnVerifyChannelSpinner: $("#btnVerifyChannel .btn-spinner"),
+    // Step 4 — 完成
     btnStart: $("#btnStart"),
     btnStartText: $("#btnStart .btn-text"),
     btnStartSpinner: $("#btnStartSpinner"),
@@ -184,7 +214,7 @@
   // ---- 步骤切换 ----
   function goToStep(step) {
     currentStep = step;
-    els.progressFill.style.width = `${step * 33.33}%`;
+    els.progressFill.style.width = `${step * 25}%`;
 
     els.steps.forEach((el, i) => {
       el.classList.toggle("active", i + 1 === step);
@@ -310,7 +340,7 @@
 
       await window.oneclaw.saveConfig(buildSavePayload(params));
       setVerifying(false);
-      goToStep(3);
+      goToStep(3); // 跳到频道配置
     } catch (err) {
       showError(t("error.connection") + (err.message || "Unknown error"));
       setVerifying(false);
@@ -404,7 +434,7 @@
     els.btnVerifySpinner.classList.toggle("hidden", !loading);
   }
 
-  // Step 3 启动状态（等待 Gateway 就绪）
+  // Step 4 启动状态（等待 Gateway 就绪）
   function setStarting(loading) {
     starting = loading;
     els.btnStart.disabled = loading;
@@ -417,7 +447,7 @@
     }
   }
 
-  // Step 3 状态提示（成功时清空，失败时显示错误）
+  // Step 4 状态提示（成功时清空，失败时显示错误）
   function setDoneStatus(msg, isError) {
     if (!msg) {
       els.doneStatus.classList.add("hidden");
@@ -428,6 +458,72 @@
     els.doneStatus.textContent = msg;
     els.doneStatus.classList.remove("hidden");
     els.doneStatus.classList.toggle("error", !!isError);
+  }
+
+  // ---- 频道验证 ----
+  let channelVerifying = false;
+
+  function showChannelError(msg) {
+    els.channelErrorMsg.textContent = msg;
+    els.channelErrorMsg.classList.remove("hidden");
+  }
+
+  function hideChannelError() {
+    els.channelErrorMsg.classList.add("hidden");
+    els.channelErrorMsg.textContent = "";
+  }
+
+  function setChannelVerifying(loading) {
+    channelVerifying = loading;
+    els.btnVerifyChannel.disabled = loading;
+    els.btnVerifyChannelText.classList.toggle("hidden", loading);
+    els.btnVerifyChannelSpinner.classList.toggle("hidden", !loading);
+  }
+
+  // 密码可见性切换（App Secret）
+  function toggleSecretVisibility() {
+    const input = els.feishuAppSecret;
+    const isPassword = input.type === "password";
+    input.type = isPassword ? "text" : "password";
+
+    const eyeOn = els.btnToggleSecret.querySelector(".icon-eye");
+    const eyeOff = els.btnToggleSecret.querySelector(".icon-eye-off");
+    eyeOn.classList.toggle("hidden", !isPassword);
+    eyeOff.classList.toggle("hidden", isPassword);
+  }
+
+  async function handleChannelVerify() {
+    if (channelVerifying) return;
+
+    const appId = els.feishuAppId.value.trim();
+    const appSecret = els.feishuAppSecret.value.trim();
+
+    if (!appId) { showChannelError(t("error.noAppId")); return; }
+    if (!appSecret) { showChannelError(t("error.noAppSecret")); return; }
+
+    setChannelVerifying(true);
+    hideChannelError();
+
+    try {
+      const result = await window.oneclaw.verifyKey({
+        provider: "feishu",
+        appId,
+        appSecret,
+      });
+
+      if (!result.success) {
+        showChannelError(result.message || t("error.verifyFailed"));
+        setChannelVerifying(false);
+        return;
+      }
+
+      await window.oneclaw.saveChannelConfig({ appId, appSecret });
+      setChannelVerifying(false);
+      goToStep(4);
+    } catch (err) {
+      showChannelError(t("error.connection") + (err.message || "Unknown error"));
+      setChannelVerifying(false);
+    }
   }
 
   // ---- 事件绑定 ----
@@ -467,6 +563,23 @@
       if (e.key === "Enter") handleVerify();
     });
 
+    // Step 3 — 频道配置
+    els.btnSkipChannel.addEventListener("click", () => goToStep(4));
+    els.btnVerifyChannel.addEventListener("click", handleChannelVerify);
+    els.btnToggleSecret.addEventListener("click", toggleSecretVisibility);
+
+    els.feishuConsoleLink.addEventListener("click", (e) => {
+      e.preventDefault();
+      if (window.oneclaw?.openExternal) {
+        window.oneclaw.openExternal("https://open.feishu.cn/app");
+      }
+    });
+
+    els.feishuAppSecret.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") handleChannelVerify();
+    });
+
+    // Step 4 — 完成
     els.btnStart.addEventListener("click", handleComplete);
   }
 

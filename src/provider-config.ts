@@ -171,6 +171,42 @@ export function verifyMoonshot(apiKey: string, subPlatform?: string): Promise<vo
   });
 }
 
+// 飞书应用凭据验证（通过 tenant_access_token 接口校验 appId + appSecret）
+export function verifyFeishu(appId: string, appSecret: string): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const body = JSON.stringify({ app_id: appId, app_secret: appSecret });
+    const req = https.request(
+      {
+        hostname: "open.feishu.cn",
+        path: "/open-apis/auth/v3/tenant_access_token/internal",
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        timeout: 15000,
+      },
+      (res) => {
+        let data = "";
+        res.on("data", (d) => (data += d));
+        res.on("end", () => {
+          try {
+            const json = JSON.parse(data);
+            if (json.code === 0) {
+              resolve();
+            } else {
+              reject(new Error(json.msg || `飞书验证失败 (code: ${json.code})`));
+            }
+          } catch {
+            reject(new Error(`飞书响应解析失败: ${data.slice(0, 200)}`));
+          }
+        });
+      }
+    );
+    req.on("error", (e) => reject(new Error(`网络错误: ${e.message}`)));
+    req.on("timeout", () => { req.destroy(); reject(new Error("请求超时")); });
+    req.write(body);
+    req.end();
+  });
+}
+
 // Custom provider 验证
 export function verifyCustom(apiKey: string, baseURL?: string): Promise<void> {
   if (!baseURL) throw new Error("Custom provider 需要 Base URL");
@@ -184,27 +220,32 @@ export function verifyCustom(apiKey: string, baseURL?: string): Promise<void> {
 
 export async function verifyProvider(params: {
   provider: string;
-  apiKey: string;
+  apiKey?: string;
   baseURL?: string;
   subPlatform?: string;
+  appId?: string;
+  appSecret?: string;
 }): Promise<{ success: boolean; message?: string }> {
-  const { provider, apiKey, baseURL, subPlatform } = params;
+  const { provider, apiKey, baseURL, subPlatform, appId, appSecret } = params;
   try {
     switch (provider) {
       case "anthropic":
-        await verifyAnthropic(apiKey);
+        await verifyAnthropic(apiKey!);
         break;
       case "openai":
-        await verifyOpenAI(apiKey);
+        await verifyOpenAI(apiKey!);
         break;
       case "google":
-        await verifyGoogle(apiKey);
+        await verifyGoogle(apiKey!);
         break;
       case "moonshot":
-        await verifyMoonshot(apiKey, subPlatform);
+        await verifyMoonshot(apiKey!, subPlatform);
         break;
       case "custom":
-        await verifyCustom(apiKey, baseURL);
+        await verifyCustom(apiKey!, baseURL);
+        break;
+      case "feishu":
+        await verifyFeishu(appId!, appSecret!);
         break;
       default:
         return { success: false, message: `未知 Provider: ${provider}` };

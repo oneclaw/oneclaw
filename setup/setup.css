@@ -65,7 +65,7 @@ button, input, select, label, a {
 
 .progress-fill {
   height: 100%;
-  width: 33.33%;
+  width: 25%;
   background: var(--accent);
   transition: width 400ms cubic-bezier(0.4, 0, 0.2, 1);
 }
@@ -139,9 +139,14 @@ h2 {
   font-size: 13.5px;
 }
 
-#step2 .subtitle {
+#step2 .subtitle,
+#step3 .subtitle {
   text-align: left;
   max-width: none;
+}
+
+#step3 .step-content {
+  align-items: stretch;
 }
 
 /* ---- 安全提示卡片 ---- */
@@ -499,7 +504,7 @@ select option {
   to { transform: rotate(360deg); }
 }
 
-/* Step 3 启动状态提示 */
+/* Step 4 启动状态提示 */
 .status-msg {
   margin-top: -6px;
   font-size: 12.5px;
@@ -511,7 +516,7 @@ select option {
   color: var(--error);
 }
 
-/* ---- Step 3 功能列表 ---- */
+/* ---- Step 4 功能列表 ---- */
 .feature-list {
   list-style: none;
   width: 100%;

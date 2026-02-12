@@ -67,6 +67,32 @@ export function registerSetupIpc(deps: SetupIpcDeps): void {
     }
   });
 
+  // ── 保存频道配置（追加到已有 config，Step 2 之后执行） ──
+  ipcMain.handle("setup:save-channel", async (_event, params) => {
+    const { appId, appSecret } = params;
+    try {
+      const config = readUserConfig();
+
+      config.plugins ??= {};
+      config.plugins.entries ??= {};
+      config.plugins.entries.feishu = { enabled: true };
+
+      config.channels ??= {};
+      config.channels.feishu = { appId, appSecret };
+
+      writeUserConfig(config);
+
+      // 追加频道信息到 analytics 上下文
+      if (latestSetupCompletedProps) {
+        latestSetupCompletedProps.channel = "feishu";
+      }
+
+      return { success: true };
+    } catch (err: any) {
+      return { success: false, message: err.message || String(err) };
+    }
+  });
+
   // ── Setup 完成（Gateway 启动 + 窗口切换由 setOnComplete 回调统一处理） ──
   ipcMain.handle("setup:complete", async () => {
     const ok = await setupManager.complete();

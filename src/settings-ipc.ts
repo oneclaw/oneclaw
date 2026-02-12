@@ -81,6 +81,45 @@ export function registerSettingsIpc(deps: SettingsIpcDeps): void {
     }
   });
 
+  // ── 读取频道配置 ──
+  ipcMain.handle("settings:get-channel-config", async () => {
+    try {
+      const config = readUserConfig();
+      const feishu = config?.channels?.feishu ?? {};
+      const enabled = config?.plugins?.entries?.feishu?.enabled === true;
+      return {
+        success: true,
+        data: {
+          appId: feishu.appId ?? "",
+          appSecret: feishu.appSecret ?? "",
+          enabled,
+        },
+      };
+    } catch (err: any) {
+      return { success: false, message: err.message };
+    }
+  });
+
+  // ── 保存频道配置 ──
+  ipcMain.handle("settings:save-channel", async (_event, params) => {
+    const { appId, appSecret } = params;
+    try {
+      const config = readUserConfig();
+
+      config.plugins ??= {};
+      config.plugins.entries ??= {};
+      config.plugins.entries.feishu = { enabled: true };
+
+      config.channels ??= {};
+      config.channels.feishu = { appId, appSecret };
+
+      writeUserConfig(config);
+      return { success: true };
+    } catch (err: any) {
+      return { success: false, message: err.message || String(err) };
+    }
+  });
+
   // ── 重启 gateway ──
   ipcMain.handle("settings:restart-gateway", async () => {
     try {

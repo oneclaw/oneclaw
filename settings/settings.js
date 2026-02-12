@@ -52,6 +52,7 @@
     en: {
       "title": "Settings",
       "nav.provider": "Provider",
+      "nav.channels": "Channels",
       "nav.doctor": "Doctor",
       "provider.title": "Provider Configuration",
       "provider.desc": "Change your LLM provider, API key, or model.",
@@ -73,6 +74,18 @@
       "provider.restarted": "Gateway restarted successfully.",
       "provider.restartFailed": "Gateway restart failed.",
       "provider.currentUsing": "Current: ",
+      "channel.title": "Channel Configuration",
+      "channel.desc": "Connect Feishu to chat with AI directly in your group.",
+      "channel.appId": "Feishu App ID",
+      "channel.appSecret": "App Secret",
+      "channel.getKey": "Open Feishu Console →",
+      "channel.save": "Save",
+      "channel.saving": "Saving…",
+      "channel.saved": "Channel configuration saved.",
+      "channel.status": "Connected: Feishu",
+      "channel.restartHint": "Channel config saved. Restart gateway to apply.",
+      "error.noAppId": "Please enter the Feishu App ID.",
+      "error.noAppSecret": "Please enter the App Secret.",
       "error.noKey": "Please enter your API key.",
       "error.noBaseUrl": "Please enter the Base URL.",
       "error.noModelId": "Please enter the Model ID.",
@@ -88,6 +101,7 @@
     zh: {
       "title": "设置",
       "nav.provider": "服务商",
+      "nav.channels": "频道",
       "nav.doctor": "诊断修复",
       "provider.title": "服务商配置",
       "provider.desc": "修改 LLM 服务商、API 密钥或模型。",
@@ -109,6 +123,18 @@
       "provider.restarted": "Gateway 重启成功。",
       "provider.restartFailed": "Gateway 重启失败。",
       "provider.currentUsing": "当前使用: ",
+      "channel.title": "频道配置",
+      "channel.desc": "连接飞书，在群聊中直接与 AI 对话。",
+      "channel.appId": "飞书应用 ID",
+      "channel.appSecret": "应用密钥",
+      "channel.getKey": "打开飞书开放平台 →",
+      "channel.save": "保存",
+      "channel.saving": "保存中…",
+      "channel.saved": "频道配置已保存。",
+      "channel.status": "已连接: 飞书",
+      "channel.restartHint": "频道配置已保存，重启 Gateway 生效。",
+      "error.noAppId": "请输入飞书应用 ID。",
+      "error.noAppSecret": "请输入应用密钥。",
       "error.noKey": "请输入 API 密钥。",
       "error.noBaseUrl": "请输入接口地址。",
       "error.noModelId": "请输入模型 ID。",
@@ -155,6 +181,20 @@
     btnRestart: $("#btnRestart"),
     btnRestartText: $("#btnRestart .btn-text"),
     btnRestartSpinner: $("#btnRestart .btn-spinner"),
+    // Channels tab
+    chAppId: $("#chAppId"),
+    chAppSecret: $("#chAppSecret"),
+    btnToggleChSecret: $("#btnToggleChSecret"),
+    chConsoleLink: $("#chConsoleLink"),
+    chMsgBox: $("#chMsgBox"),
+    chStatus: $("#chStatus"),
+    btnChSave: $("#btnChSave"),
+    btnChSaveText: $("#btnChSave .btn-text"),
+    btnChSaveSpinner: $("#btnChSave .btn-spinner"),
+    chRestartBanner: $("#chRestartBanner"),
+    btnChRestart: $("#btnChRestart"),
+    btnChRestartText: $("#btnChRestart .btn-text"),
+    btnChRestartSpinner: $("#btnChRestart .btn-spinner"),
     // Doctor tab
     btnDoctor: $("#btnDoctor"),
     btnDoctorText: $("#btnDoctor .btn-text"),
@@ -168,6 +208,8 @@
   let currentProvider = "anthropic";
   let saving = false;
   let restarting = false;
+  let chSaving = false;
+  let chRestarting = false;
   let doctorRunning = false;
   let currentLang = "en";
 
@@ -389,6 +431,132 @@
     } catch (err) {
       setRestarting(false);
       showMsg(t("provider.restartFailed"), "error");
+    }
+  }
+
+  // ── Channels ──
+
+  // 频道密码可见性切换
+  function toggleChSecretVisibility() {
+    var input = els.chAppSecret;
+    var isPassword = input.type === "password";
+    input.type = isPassword ? "text" : "password";
+    var eyeOn = els.btnToggleChSecret.querySelector(".icon-eye");
+    var eyeOff = els.btnToggleChSecret.querySelector(".icon-eye-off");
+    eyeOn.classList.toggle("hidden", !isPassword);
+    eyeOff.classList.toggle("hidden", isPassword);
+  }
+
+  // 频道消息框
+  function showChMsg(msg, type) {
+    els.chMsgBox.textContent = msg;
+    els.chMsgBox.className = "msg-box " + type;
+  }
+
+  function hideChMsg() {
+    els.chMsgBox.classList.add("hidden");
+    els.chMsgBox.textContent = "";
+    els.chMsgBox.className = "msg-box hidden";
+  }
+
+  function setChSaving(loading) {
+    chSaving = loading;
+    els.btnChSave.disabled = loading;
+    els.btnChSaveText.textContent = loading ? t("channel.saving") : t("channel.save");
+    els.btnChSaveSpinner.classList.toggle("hidden", !loading);
+  }
+
+  function setChRestarting(loading) {
+    chRestarting = loading;
+    els.btnChRestart.disabled = loading;
+    els.btnChRestartText.textContent = loading ? t("provider.restarting") : t("provider.restart");
+    els.btnChRestartSpinner.classList.toggle("hidden", !loading);
+  }
+
+  // 保存频道配置
+  async function handleChSave() {
+    if (chSaving) return;
+
+    var appId = els.chAppId.value.trim();
+    var appSecret = els.chAppSecret.value.trim();
+
+    if (!appId) { showChMsg(t("error.noAppId"), "error"); return; }
+    if (!appSecret) { showChMsg(t("error.noAppSecret"), "error"); return; }
+
+    setChSaving(true);
+    hideChMsg();
+
+    try {
+      // 先验证飞书凭据
+      var verifyResult = await window.oneclaw.settingsVerifyKey({
+        provider: "feishu",
+        appId: appId,
+        appSecret: appSecret,
+      });
+      if (!verifyResult.success) {
+        showChMsg(verifyResult.message || t("error.verifyFailed"), "error");
+        setChSaving(false);
+        return;
+      }
+
+      // 保存配置
+      var saveResult = await window.oneclaw.settingsSaveChannel({ appId: appId, appSecret: appSecret });
+      if (!saveResult.success) {
+        showChMsg(saveResult.message || "Save failed", "error");
+        setChSaving(false);
+        return;
+      }
+
+      setChSaving(false);
+      showChMsg(t("channel.saved"), "success");
+      // 更新状态指示
+      els.chStatus.textContent = t("channel.status");
+      els.chStatus.classList.remove("hidden");
+      // 显示重启 banner
+      els.chRestartBanner.classList.remove("hidden");
+    } catch (err) {
+      showChMsg(t("error.connection") + (err.message || "Unknown error"), "error");
+      setChSaving(false);
+    }
+  }
+
+  // 加载已有频道配置
+  async function loadChannelConfig() {
+    try {
+      var result = await window.oneclaw.settingsGetChannelConfig();
+      if (!result.success || !result.data) return;
+
+      var data = result.data;
+      if (data.appId) els.chAppId.value = data.appId;
+      if (data.appSecret) els.chAppSecret.value = data.appSecret;
+
+      // 有配置且已启用 → 显示连接状态
+      if (data.enabled && data.appId) {
+        els.chStatus.textContent = t("channel.status");
+        els.chStatus.classList.remove("hidden");
+      }
+    } catch (err) {
+      console.error("[Settings] loadChannelConfig failed:", err);
+    }
+  }
+
+  // 频道 tab 的重启按钮
+  async function handleChRestart() {
+    if (chRestarting) return;
+    setChRestarting(true);
+
+    try {
+      var result = await window.oneclaw.settingsRestartGateway();
+      setChRestarting(false);
+      if (result.success) {
+        els.chRestartBanner.classList.add("hidden");
+        showChMsg(t("provider.restarted"), "success");
+      } else {
+        showChMsg(result.message || t("provider.restartFailed"), "error");
+      }
+    } catch (err) {
+      setChRestarting(false);
+      showChMsg(t("provider.restartFailed"), "error");
     }
   }
 
@@ -632,6 +800,20 @@
     // 重启
     els.btnRestart.addEventListener("click", handleRestart);
 
+    // Channels tab
+    els.btnToggleChSecret.addEventListener("click", toggleChSecretVisibility);
+    els.chConsoleLink.addEventListener("click", function (e) {
+      e.preventDefault();
+      if (window.oneclaw && window.oneclaw.openExternal) {
+        window.oneclaw.openExternal("https://open.feishu.cn/app");
+      }
+    });
+    els.btnChSave.addEventListener("click", handleChSave);
+    els.chAppSecret.addEventListener("keydown", function (e) {
+      if (e.key === "Enter") handleChSave();
+    });
+    els.btnChRestart.addEventListener("click", handleChRestart);
+
     // Doctor
     els.btnDoctor.addEventListener("click", handleDoctor);
 
@@ -652,6 +834,7 @@
     bindEvents();
     switchProvider("anthropic");
     loadCurrentConfig();
+    loadChannelConfig();
   }
 
   init();

@@ -14,6 +14,8 @@ contextBridge.exposeInMainWorld("oneclaw", {
     ipcRenderer.invoke("setup:verify-key", params),
   saveConfig: (params: Record<string, unknown>) =>
     ipcRenderer.invoke("setup:save-config", params),
+  saveChannelConfig: (params: Record<string, unknown>) =>
+    ipcRenderer.invoke("setup:save-channel", params),
   completeSetup: () => ipcRenderer.invoke("setup:complete"),
 
   // Settings 相关
@@ -22,6 +24,9 @@ contextBridge.exposeInMainWorld("oneclaw", {
     ipcRenderer.invoke("settings:verify-key", params),
   settingsSaveProvider: (params: Record<string, unknown>) =>
     ipcRenderer.invoke("settings:save-provider", params),
+  settingsGetChannelConfig: () => ipcRenderer.invoke("settings:get-channel-config"),
+  settingsSaveChannel: (params: Record<string, unknown>) =>
+    ipcRenderer.invoke("settings:save-channel", params),
   settingsRestartGateway: () => ipcRenderer.invoke("settings:restart-gateway"),
   settingsRunDoctor: () => ipcRenderer.invoke("settings:run-doctor"),
 
