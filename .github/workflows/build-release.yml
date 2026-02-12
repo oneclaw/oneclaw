@@ -68,6 +68,9 @@ jobs:
           export APPLE_API_KEY="$HOME/private_keys/AuthKey_${APPLE_API_KEY_ID}.p8"
           npm run dist:mac:arm64
 
+      - name: 清理 blockmap（macOS arm64）
+        run: find out/darwin-arm64 -type f -name "*.blockmap" -delete
+
       - uses: actions/upload-artifact@v4
         with:
           name: mac-arm64
@@ -123,6 +126,9 @@ jobs:
           export APPLE_API_KEY="$HOME/private_keys/AuthKey_${APPLE_API_KEY_ID}.p8"
           npm run dist:mac:x64
 
+      - name: 清理 blockmap（macOS x64）
+        run: find out/darwin-x64 -type f -name "*.blockmap" -delete
+
       - uses: actions/upload-artifact@v4
         with:
           name: mac-x64
@@ -156,6 +162,9 @@ jobs:
       - name: 构建 Windows x64
         run: npm run dist:win:x64
 
+      - name: 清理 blockmap（Windows x64）
+        run: find out/win32-x64 -type f -name "*.blockmap" -delete
+
       - uses: actions/upload-artifact@v4
         with:
           name: win-x64
@@ -187,6 +196,9 @@ jobs:
 
       - name: 构建 Windows arm64
         run: npm run dist:win:arm64
+
+      - name: 清理 blockmap（Windows arm64）
+        run: find out/win32-arm64 -type f -name "*.blockmap" -delete
 
       - uses: actions/upload-artifact@v4
         with:
@@ -236,6 +248,9 @@ jobs:
       # 合并多架构 yml + 收集产物
       - name: 合并发布文件
         run: node scripts/merge-release-yml.js
+
+      - name: 二次清理 blockmap（release）
+        run: find out -type f -name "*.blockmap" -delete
 
       # 安装阿里云 ossutil（install.sh 需要 sudo 写入 /usr/bin/）
       - name: 安装 ossutil

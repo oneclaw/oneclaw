@@ -37,6 +37,8 @@ publish:
 
 dmg:
   sign: false
+  # 关闭 DMG 差分更新元数据，避免生成 .dmg.blockmap
+  writeUpdateInfo: false
   artifactName: "OneClaw-${version}-${arch}.${ext}"
 
 # --- Windows ---
@@ -50,4 +52,6 @@ nsis:
   createDesktopShortcut: true
   createStartMenuShortcut: true
   runAfterFinish: true
+  # 关闭 NSIS 差分包，避免生成 .exe.blockmap
+  differentialPackage: false
   artifactName: "OneClaw-Setup-${version}-${arch}.${ext}"
