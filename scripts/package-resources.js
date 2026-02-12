@@ -12,7 +12,12 @@
 const fs = require("fs");
 const path = require("path");
 const https = require("https");
-const { execSync, execFileSync } = require("child_process");
+const { execSync } = require("child_process");
+const {
+  normalizeSemverText,
+  compareSemver,
+  readRemoteLatestVersion,
+} = require("./lib/openclaw-version-utils");
 
 // ─── 项目根目录 ───
 const ROOT = path.resolve(__dirname, "..");
@@ -497,7 +502,7 @@ function writeAnalyticsConfig(configPath) {
 
 // ─── Step 2: 安装 openclaw 生产依赖 ───
 
-// openclaw 包源路径（默认本地 upstream；若远端版本更高则自动切到远端）
+// openclaw 包源路径（优先跟随根 package.json 版本，避免壳版本和内嵌依赖分叉）
 function getPackageSource() {
   const explicitSource = readEnvText("OPENCLAW_PACKAGE_SOURCE");
   if (explicitSource) {
@@ -513,6 +518,62 @@ function getPackageSource() {
 
   const localSource = `file:${path.join(ROOT, "upstream", "openclaw")}`;
   const localVersion = readLocalUpstreamVersion();
+  const rootVersion = readRootPackageVersion();
+  const useRootVersionLock = readEnvBool("ONECLAW_USE_ROOT_VERSION_LOCK", true);
+
+  // 优先按壳版本锁定依赖版本，保证产物名/version 字段与内嵌 openclaw 一致。
+  if (useRootVersionLock && rootVersion) {
+    if (!localVersion) {
+      log(`根版本锁定 ${rootVersion}（本地 upstream 无版本信息），使用远端 openclaw@${rootVersion}`);
+      return {
+        source: rootVersion,
+        stampSource: `remote:openclaw@${rootVersion}`,
+        kind: "remote",
+        localVersion: "",
+        remoteVersion: rootVersion,
+      };
+    }
+
+    const cmpRootLocal = compareSemver(rootVersion, localVersion);
+    if (cmpRootLocal === 0) {
+      log(`根版本 ${rootVersion} 与本地 upstream 一致，使用本地 upstream/openclaw`);
+      return {
+        source: localSource,
+        stampSource: `local:${localVersion}`,
+        kind: "local",
+        localVersion,
+        remoteVersion: "",
+      };
+    }
+
+    if (cmpRootLocal != null && cmpRootLocal > 0) {
+      log(`根版本锁定 ${rootVersion}（本地 ${localVersion}），使用远端 openclaw@${rootVersion}`);
+      return {
+        source: rootVersion,
+        stampSource: `remote:openclaw@${rootVersion}`,
+        kind: "remote",
+        localVersion,
+        remoteVersion: rootVersion,
+      };
+    }
+
+    if (cmpRootLocal != null && cmpRootLocal < 0) {
+      log(`根版本 ${rootVersion} 低于本地 ${localVersion}，回退本地 upstream/openclaw（建议先执行 version:sync）`);
+      return {
+        source: localSource,
+        stampSource: `local:${localVersion}`,
+        kind: "local",
+        localVersion,
+        remoteVersion: "",
+      };
+    }
+
+    log(`根版本 ${rootVersion} 与本地 ${localVersion} 不可比较，回退远端检查逻辑`);
+  } else if (useRootVersionLock) {
+    log("根 package.json 缺少版本号，回退远端检查逻辑");
+  } else {
+    log("已禁用根版本锁定（ONECLAW_USE_ROOT_VERSION_LOCK=false），回退远端检查逻辑");
+  }
 
   if (!readEnvBool("ONECLAW_CHECK_REMOTE_OPENCLAW", true)) {
     log("已禁用远端版本检查（ONECLAW_CHECK_REMOTE_OPENCLAW=false），使用本地 upstream/openclaw");
@@ -525,7 +586,13 @@ function getPackageSource() {
     };
   }
 
-  const remoteVersion = readRemoteLatestVersion("openclaw");
+  const remoteVersion = readRemoteLatestVersion("openclaw", {
+    cwd: ROOT,
+    env: process.env,
+    logError(message) {
+      log(message);
+    },
+  });
   if (!remoteVersion) {
     log("未获取到远端 openclaw 最新版本，回退本地 upstream/openclaw");
     return {
@@ -604,100 +671,16 @@ function readLocalUpstreamVersion() {
   }
 }
 
-// 读取远端 npm 包最新版本（npm view）
-function readRemoteLatestVersion(packageName) {
+// 读取根 package.json 的版本号（用于锁定打包依赖版本）。
+function readRootPackageVersion() {
+  const pkgPath = path.join(ROOT, "package.json");
   try {
-    const out = execFileSync("npm", ["view", packageName, "version", "--json"], {
-      cwd: ROOT,
-      stdio: ["ignore", "pipe", "pipe"],
-      env: process.env,
-      encoding: "utf-8",
-    });
-    const text = String(out || "").trim();
-    if (!text) return "";
-
-    let parsed = null;
-    try {
-      parsed = JSON.parse(text);
-    } catch {
-      parsed = text;
-    }
-
-    const version =
-      typeof parsed === "string" || typeof parsed === "number"
-        ? String(parsed).trim()
-        : Array.isArray(parsed)
-          ? String(parsed[parsed.length - 1] || "").trim()
-          : parsed && typeof parsed.version === "string"
-            ? parsed.version.trim()
-            : "";
-
-    return normalizeSemverText(version);
-  } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    log(`远端版本检查失败（npm view ${packageName} version）: ${message}`);
+    const raw = fs.readFileSync(pkgPath, "utf-8");
+    const pkg = JSON.parse(raw);
+    return normalizeSemverText(String(pkg.version || ""));
+  } catch {
     return "";
   }
-}
-
-// 归一化版本文本（去掉前缀 v）
-function normalizeSemverText(version) {
-  const raw = String(version || "").trim();
-  if (!raw) return "";
-  if (/^v\d+\.\d+\.\d+/i.test(raw)) return raw.slice(1);
-  return raw;
-}
-
-// 解析 semver（宽松：支持 pre-release，忽略 build metadata）
-function parseSemver(version) {
-  const normalized = normalizeSemverText(version).split("+", 1)[0];
-  const match = normalized.match(/^(\d+)\.(\d+)\.(\d+)(?:-([0-9A-Za-z.-]+))?$/);
-  if (!match) return null;
-  return {
-    major: Number.parseInt(match[1], 10),
-    minor: Number.parseInt(match[2], 10),
-    patch: Number.parseInt(match[3], 10),
-    prerelease: match[4] ? match[4].split(".") : [],
-  };
-}
-
-// 比较 semver：a>b 返回 1，a<b 返回 -1，相等返回 0，不可比较返回 null
-function compareSemver(a, b) {
-  const va = parseSemver(a);
-  const vb = parseSemver(b);
-  if (!va || !vb) return null;
-
-  if (va.major !== vb.major) return va.major > vb.major ? 1 : -1;
-  if (va.minor !== vb.minor) return va.minor > vb.minor ? 1 : -1;
-  if (va.patch !== vb.patch) return va.patch > vb.patch ? 1 : -1;
-
-  // 无 pre-release 的版本优先级更高
-  const aPre = va.prerelease;
-  const bPre = vb.prerelease;
-  if (aPre.length === 0 && bPre.length === 0) return 0;
-  if (aPre.length === 0) return 1;
-  if (bPre.length === 0) return -1;
-
-  const len = Math.max(aPre.length, bPre.length);
-  for (let i = 0; i < len; i += 1) {
-    const ai = aPre[i];
-    const bi = bPre[i];
-    if (ai == null) return -1;
-    if (bi == null) return 1;
-    if (ai === bi) continue;
-
-    const aNum = /^\d+$/.test(ai);
-    const bNum = /^\d+$/.test(bi);
-    if (aNum && bNum) {
-      const av = Number.parseInt(ai, 10);
-      const bv = Number.parseInt(bi, 10);
-      if (av !== bv) return av > bv ? 1 : -1;
-      continue;
-    }
-    if (aNum !== bNum) return aNum ? -1 : 1;
-    return ai > bi ? 1 : -1;
-  }
-  return 0;
 }
 
 // 读取 gateway 依赖平台戳
