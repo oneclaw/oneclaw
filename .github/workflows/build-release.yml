@@ -79,7 +79,6 @@ jobs:
           path: |
             out/darwin-arm64/*.dmg
             out/darwin-arm64/*.zip
-            out/darwin-arm64/*.blockmap
             out/darwin-arm64/latest-mac.yml
 
   # ── macOS x64：签名 + 公证（在 arm64 runner 上交叉编译） ──
@@ -135,7 +134,6 @@ jobs:
           path: |
             out/darwin-x64/*.dmg
             out/darwin-x64/*.zip
-            out/darwin-x64/*.blockmap
             out/darwin-x64/latest-mac.yml
 
   # ── Windows x64 ──
@@ -168,7 +166,6 @@ jobs:
           retention-days: ${{ env.ARTIFACT_RETENTION_DAYS }}
           path: |
             out/win32-x64/*.exe
-            out/win32-x64/*.blockmap
             out/win32-x64/latest.yml
 
   # ── Windows arm64 ──
@@ -201,7 +198,6 @@ jobs:
           retention-days: ${{ env.ARTIFACT_RETENTION_DAYS }}
           path: |
             out/win32-arm64/*.exe
-            out/win32-arm64/*.blockmap
             out/win32-arm64/latest.yml
 
   # ── 合并 + 上传 OSS + 刷新 CDN + 创建 GitHub Release ──
@@ -247,11 +243,15 @@ jobs:
 
       # 安装阿里云 ossutil（install.sh 需要 sudo 写入 /usr/bin/）
       - name: 安装 ossutil
+        continue-on-error: true
+        id: ossutil
         run: |
           curl -fsSL https://gosspublic.alicdn.com/ossutil/install.sh | sudo bash
 
-      # 上传到阿里云 OSS
+      # 上传到阿里云 OSS（OSS 失败不阻塞 release）
       - name: 上传到 OSS
+        if: steps.ossutil.outcome == 'success'
+        continue-on-error: true
         env:
           ALIYUN_ACCESS_KEY_ID: ${{ secrets.ALIYUN_ACCESS_KEY_ID }}
           ALIYUN_ACCESS_KEY_SECRET: ${{ secrets.ALIYUN_ACCESS_KEY_SECRET }}
@@ -260,8 +260,9 @@ jobs:
           ossutil cp -r out/release/ oss://oneclaw/releases/ --force
           echo "OSS 上传完成"
 
-      # 安装阿里云 CLI 并刷新 CDN 缓存
+      # 安装阿里云 CLI 并刷新 CDN 缓存（CDN 失败不阻塞 release）
       - name: 刷新 CDN 缓存
+        continue-on-error: true
         env:
           ALIYUN_ACCESS_KEY_ID: ${{ secrets.ALIYUN_ACCESS_KEY_ID }}
           ALIYUN_ACCESS_KEY_SECRET: ${{ secrets.ALIYUN_ACCESS_KEY_SECRET }}
