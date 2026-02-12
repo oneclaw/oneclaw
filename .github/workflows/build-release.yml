@@ -8,9 +8,11 @@ on:
   push:
     tags: ["v*"]
 
-# 构建产物最多保留 3 天（release job 完成后不再需要）
+# CI 中版本已由 tag 确定，跳过 version:sync（它依赖本地 upstream 目录）
+# package-resources.js 会自动从 npm registry 安装对应版本的 openclaw
 env:
   ARTIFACT_RETENTION_DAYS: 3
+  ONECLAW_SKIP_VERSION_SYNC: "1"
 
 jobs:
   # ── macOS arm64：签名 + 公证 ──
@@ -24,10 +26,6 @@ jobs:
           node-version: 22
 
       - run: npm ci
-
-      # 克隆 upstream openclaw（与本地开发流程一致）
-      - name: 准备 upstream/openclaw
-        run: git clone --depth 1 https://github.com/anthropics/claude-code upstream/openclaw
 
       # 导入签名证书到临时 keychain
       - name: 导入 macOS 签名证书
@@ -72,9 +70,9 @@ jobs:
             out/darwin-arm64/*.blockmap
             out/darwin-arm64/latest-mac.yml
 
-  # ── macOS x64：签名 + 公证 ──
+  # ── macOS x64：签名 + 公证（在 arm64 runner 上交叉编译） ──
   build-mac-x64:
-    runs-on: macos-13
+    runs-on: macos-14
     steps:
       - uses: actions/checkout@v4
 
@@ -83,9 +81,6 @@ jobs:
           node-version: 22
 
       - run: npm ci
-
-      - name: 准备 upstream/openclaw
-        run: git clone --depth 1 https://github.com/anthropics/claude-code upstream/openclaw
 
       - name: 导入 macOS 签名证书
         env:
@@ -139,9 +134,6 @@ jobs:
 
       - run: npm ci
 
-      - name: 准备 upstream/openclaw
-        run: git clone --depth 1 https://github.com/anthropics/claude-code upstream/openclaw
-
       - name: 构建 Windows x64
         run: npm run dist:win:x64
 
@@ -165,9 +157,6 @@ jobs:
           node-version: 22
 
       - run: npm ci
-
-      - name: 准备 upstream/openclaw
-        run: git clone --depth 1 https://github.com/anthropics/claude-code upstream/openclaw
 
       - name: 构建 Windows arm64
         run: npm run dist:win:arm64
