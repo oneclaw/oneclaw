@@ -12,6 +12,8 @@ import {
   readUserConfig,
   writeUserConfig,
 } from "./provider-config";
+import * as log from "./logger";
+import { installCli } from "./cli-integration";
 interface SetupIpcDeps {
   setupManager: SetupManager;
 }
@@ -160,21 +162,34 @@ export function registerSetupIpc(deps: SetupIpcDeps): void {
   });
 
   // ── Setup 完成（Gateway 启动 + 窗口切换由 setOnComplete 回调统一处理） ──
-  ipcMain.handle("setup:complete", async (_event, params) => {
+  ipcMain.handle("setup:complete", async (_event, params?: { installCli?: boolean; launchAtLogin?: boolean }) => {
     const launchAtLogin = typeof params?.launchAtLogin === "boolean" ? params.launchAtLogin : undefined;
     return runTrackedSetupAction("complete", { launch_at_login: launchAtLogin }, async () => {
       if (typeof launchAtLogin === "boolean") {
         setLaunchAtLoginEnabled(app, launchAtLogin);
       }
       const ok = await setupManager.complete();
-      if (ok) {
-        analytics.track("setup_completed", latestSetupCompletedProps ?? {});
-        return { success: true };
+      if (!ok) {
+        return {
+          success: false,
+          message: "Gateway 启动超时或失败，请稍后重试。",
+        };
       }
-      return {
-        success: false,
-        message: "Gateway 启动超时或失败，请稍后重试。",
-      };
+
+      analytics.track("setup_completed", latestSetupCompletedProps ?? {});
+
+      // CLI 安装（默认开启，失败不阻塞 Setup）
+      if (params?.installCli !== false) {
+        const cliResult = await installCli();
+        if (cliResult.success) {
+          analytics.track("cli_installed", { method: "setup_wizard" });
+        } else {
+          log.error(`[setup] CLI install failed: ${cliResult.message}`);
+          analytics.track("cli_install_failed", { error: cliResult.message });
+        }
+      }
+
+      return { success: true };
     });
   });
 }

@@ -76,6 +76,7 @@
       "done.feature3": "Manage multiple conversations and contexts",
       "done.feature4": "Switch providers or models anytime in Settings",
       "done.launchAtLogin": "Launch at login",
+      "done.installCli": "Add openclaw command to terminal PATH",
       "done.start": "Start OneClaw",
       "done.starting": "Starting Gateway…",
       "done.startFailed": "Gateway failed to start. Please click Start OneClaw to retry.",
@@ -112,6 +113,7 @@
       "done.feature3": "管理多个对话和上下文",
       "done.feature4": "随时在设置中切换服务商或模型",
       "done.launchAtLogin": "开机启动",
+      "done.installCli": "将 openclaw 命令添加到终端 PATH",
       "done.start": "启动 OneClaw",
       "done.starting": "正在启动 Gateway…",
       "done.startFailed": 'Gateway 启动失败，请点击"启动 OneClaw"重试。',
@@ -152,6 +154,7 @@
     btnVerifyText: $("#btnVerify .btn-text"),
     btnVerifySpinner: $("#btnVerify .btn-spinner"),
     // Step 3 — 完成
+    installCliCheck: $("#installCliCheck"),
     btnStart: $("#btnStart"),
     btnStartText: $("#btnStart .btn-text"),
     btnStartSpinner: $("#btnStartSpinner"),
@@ -378,9 +381,12 @@
     setDoneStatus("");
 
     try {
-      const payload = launchAtLoginSupported
-        ? { launchAtLogin: !!els.launchAtLoginEnabled.checked }
-        : {};
+      const payload = {
+        installCli: els.installCliCheck.checked,
+      };
+      if (launchAtLoginSupported) {
+        payload.launchAtLogin = !!els.launchAtLoginEnabled.checked;
+      }
       const result = await window.oneclaw.completeSetup(payload);
       if (!result || !result.success) {
         setStarting(false);
