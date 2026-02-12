@@ -199,6 +199,18 @@ app.on("second-instance", () => {
   }
 });
 
+// ── macOS: 点击 Dock 图标时恢复窗口 ──
+
+app.on("activate", () => {
+  if (setupManager.isSetupOpen()) {
+    setupManager.focusSetup();
+  } else {
+    showMainWindow().catch((err) => {
+      log.error(`activate 打开主窗口失败: ${err}`);
+    });
+  }
+});
+
 // ── 托盘应用：所有窗口关闭不退出 ──
 
 app.on("window-all-closed", () => {
