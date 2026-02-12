@@ -51,10 +51,10 @@
   const I18N = {
     en: {
       "title": "Settings",
-      "nav.provider": "Provider",
+      "nav.provider": "Model",
       "nav.channels": "Chat Channels",
       "nav.doctor": "Doctor",
-      "provider.title": "Provider Configuration",
+      "provider.title": "Model Configuration",
       "provider.desc": "Change your LLM provider, API key, or model.",
       "provider.custom": "Custom",
       "provider.platform": "Platform",
@@ -101,11 +101,11 @@
     },
     zh: {
       "title": "设置",
-      "nav.provider": "服务商",
+      "nav.provider": "模型",
       "nav.channels": "聊天频道",
       "nav.doctor": "诊断修复",
-      "provider.title": "服务商配置",
-      "provider.desc": "修改 LLM 服务商、API 密钥或模型。",
+      "provider.title": "模型配置",
+      "provider.desc": "修改 LLM 云厂商、API 密钥或模型。",
       "provider.custom": "自定义",
       "provider.platform": "平台",
       "provider.baseUrl": "接口地址",
