@@ -245,10 +245,10 @@ jobs:
       - name: 合并发布文件
         run: node scripts/merge-release-yml.js
 
-      # 安装阿里云 ossutil
+      # 安装阿里云 ossutil（install.sh 需要 sudo 写入 /usr/bin/）
       - name: 安装 ossutil
         run: |
-          curl -fsSL https://gosspublic.alicdn.com/ossutil/install.sh | bash
+          curl -fsSL https://gosspublic.alicdn.com/ossutil/install.sh | sudo bash
 
       # 上传到阿里云 OSS
       - name: 上传到 OSS
