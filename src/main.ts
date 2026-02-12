@@ -1,4 +1,4 @@
-import { app, dialog, ipcMain, shell, Menu } from "electron";
+import { app, dialog, ipcMain, shell, Menu, BrowserWindow } from "electron";
 import { GatewayProcess } from "./gateway-process";
 import { WindowManager } from "./window";
 import { TrayManager } from "./tray";
@@ -149,10 +149,31 @@ setupManager.setOnComplete(async () => {
   });
 });
 
+// ── macOS Dock 可见性：窗口全隐藏时切换纯托盘模式 ──
+
+function updateDockVisibility(): void {
+  if (process.platform !== "darwin" || !app.dock) return;
+  const anyVisible = BrowserWindow.getAllWindows().some(
+    (w) => !w.isDestroyed() && w.isVisible(),
+  );
+  if (anyVisible) {
+    app.dock.show();
+  } else {
+    app.dock.hide();
+  }
+}
+
 // ── 应用就绪 ──
 
 app.whenReady().then(async () => {
   log.info("app ready");
+
+  // 所有窗口的 show/hide/closed 事件统一驱动 Dock 可见性
+  app.on("browser-window-created", (_e, win) => {
+    win.on("show", updateDockVisibility);
+    win.on("hide", updateDockVisibility);
+    win.on("closed", updateDockVisibility);
+  });
   // macOS: 最小化应用菜单，保留 Cmd+, 打开设置
   // Windows: 隐藏菜单栏，避免标题栏下方出现菜单条
   if (process.platform === "darwin") {
@@ -160,15 +181,26 @@ app.whenReady().then(async () => {
       {
         label: app.name,
         submenu: [
+          { role: "about" },
+          { type: "separator" },
           {
             label: "Settings…",
             accelerator: "CommandOrControl+,",
             click: () => settingsManager.show(),
           },
           { type: "separator" },
+          { role: "services" },
+          { type: "separator" },
+          { role: "hide" },
+          { role: "hideOthers" },
+          { role: "unhide" },
+          { type: "separator" },
           { role: "quit" },
         ],
       },
+      { role: "fileMenu" },
+      { role: "editMenu" },
+      { role: "windowMenu" },
     ]));
   } else {
     Menu.setApplicationMenu(null);
