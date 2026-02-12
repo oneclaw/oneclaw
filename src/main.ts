@@ -153,8 +153,26 @@ setupManager.setOnComplete(async () => {
 
 app.whenReady().then(async () => {
   log.info("app ready");
-  // 全局禁用 Electron 默认菜单（File/Edit/View...）
-  Menu.setApplicationMenu(null);
+  // macOS: 最小化应用菜单，保留 Cmd+, 打开设置
+  // Windows: 隐藏菜单栏，避免标题栏下方出现菜单条
+  if (process.platform === "darwin") {
+    Menu.setApplicationMenu(Menu.buildFromTemplate([
+      {
+        label: app.name,
+        submenu: [
+          {
+            label: "Settings…",
+            accelerator: "CommandOrControl+,",
+            click: () => settingsManager.show(),
+          },
+          { type: "separator" },
+          { role: "quit" },
+        ],
+      },
+    ]));
+  } else {
+    Menu.setApplicationMenu(null);
+  }
   analytics.init();
   analytics.track("app_launched");
   setupAutoUpdater();
