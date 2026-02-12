@@ -31,7 +31,7 @@ const MERGE_TARGETS = [
 ];
 
 // 需要收集到 release/ 的文件扩展名
-const COLLECT_EXTENSIONS = [".dmg", ".zip", ".exe", ".blockmap", ".yml"];
+const COLLECT_EXTENSIONS = [".dmg", ".zip", ".exe", ".yml"];
 
 // 读取并解析 yml
 function loadYml(filePath) {
@@ -112,7 +112,7 @@ function collectArtifacts() {
 
       for (const file of fs.readdirSync(dirPath)) {
         const ext = path.extname(file).toLowerCase();
-        // 只收集安装包和 blockmap，不收集子目录的 yml（已合并）
+        // 只收集安装包，不收集子目录的 yml（已合并）和 blockmap
         if (!COLLECT_EXTENSIONS.includes(ext)) continue;
         if (file.endsWith(".yml")) continue;
 
