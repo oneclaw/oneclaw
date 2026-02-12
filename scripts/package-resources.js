@@ -13,7 +13,10 @@ const fs = require("fs");
 const path = require("path");
 const https = require("https");
 const { execSync } = require("child_process");
-const { normalizeSemverText } = require("./lib/openclaw-version-utils");
+const {
+  normalizeSemverText,
+  readRemoteLatestVersion,
+} = require("./lib/openclaw-version-utils");
 
 // ─── 项目根目录 ───
 const ROOT = path.resolve(__dirname, "..");
@@ -498,7 +501,7 @@ function writeAnalyticsConfig(configPath) {
 
 // ─── Step 2: 安装 openclaw 生产依赖 ───
 
-// 确定 openclaw 安装来源：根 package.json 版本 → npm registry 安装
+// 确定 openclaw 安装来源：查询 npm latest stable
 function getPackageSource() {
   // 显式覆盖（调试/测试用逃生舱）
   const explicitSource = readEnvText("OPENCLAW_PACKAGE_SOURCE");
@@ -510,29 +513,24 @@ function getPackageSource() {
     };
   }
 
-  // 读取根 package.json 版本号，与 version:sync 写入的一致
-  const rootVersion = readRootPackageVersion();
-  if (!rootVersion) {
-    die("根 package.json 缺少版本号，无法确定 openclaw 安装版本（请先执行 npm run version:sync）");
+  // 查询 npm registry 获取 openclaw latest 版本
+  const latestVersion = readRemoteLatestVersion("openclaw", {
+    cwd: ROOT,
+    env: process.env,
+    logError(message) {
+      log(message);
+    },
+  });
+
+  if (!latestVersion) {
+    die("无法从 npm 获取 openclaw 最新版本（检查网络或设置 OPENCLAW_PACKAGE_SOURCE 手动指定）");
   }
 
-  log(`使用 openclaw@${rootVersion}（来源: 根 package.json）`);
+  log(`使用 openclaw@${latestVersion}（来源: npm latest）`);
   return {
-    source: rootVersion,
-    stampSource: `remote:openclaw@${rootVersion}`,
+    source: latestVersion,
+    stampSource: `remote:openclaw@${latestVersion}`,
   };
-}
-
-// 读取根 package.json 的版本号（由 version:sync 从 npm latest 写入）。
-function readRootPackageVersion() {
-  const pkgPath = path.join(ROOT, "package.json");
-  try {
-    const raw = fs.readFileSync(pkgPath, "utf-8");
-    const pkg = JSON.parse(raw);
-    return normalizeSemverText(String(pkg.version || ""));
-  } catch {
-    return "";
-  }
 }
 
 // 读取 gateway 依赖平台戳
