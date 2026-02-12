@@ -33,6 +33,9 @@ jobs:
 
       - run: npm ci
 
+      # TypeScript 编译（dist:* 脚本不含 tsc）
+      - run: npm run build
+
       # 导入签名证书到临时 keychain
       - name: 导入 macOS 签名证书
         env:
@@ -87,6 +90,8 @@ jobs:
           node-version: 22
 
       - run: npm ci
+
+      - run: npm run build
 
       - name: 导入 macOS 签名证书
         env:
@@ -143,6 +148,8 @@ jobs:
 
       - run: npm ci
 
+      - run: npm run build
+
       # npm 在 Windows 默认用 cmd.exe 跑 scripts，package.json 里的 ENV=val 语法是 bash 专属
       - name: 让 npm 通过 bash 执行 scripts
         run: npm config set script-shell "$(which bash)"
@@ -173,6 +180,8 @@ jobs:
           node-version: 22
 
       - run: npm ci
+
+      - run: npm run build
 
       # npm 在 Windows 默认用 cmd.exe 跑 scripts
       - name: 让 npm 通过 bash 执行 scripts
