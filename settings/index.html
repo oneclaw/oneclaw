@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self'; script-src 'self';">
+  <title>Settings</title>
+  <link rel="stylesheet" href="settings.css">
+</head>
+<body>
+
+  <div class="settings-layout">
+
+    <!-- 左侧导航 -->
+    <nav class="sidebar">
+      <div class="sidebar-title" data-i18n="title">Settings</div>
+      <ul class="nav-list">
+        <li class="nav-item active" data-tab="provider">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+            <path d="M8 1L2 4.5V11.5L8 15L14 11.5V4.5L8 1Z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/>
+            <circle cx="8" cy="8" r="2" stroke="currentColor" stroke-width="1.3"/>
+          </svg>
+          <span data-i18n="nav.provider">Provider</span>
+        </li>
+        <li class="nav-item" data-tab="doctor">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+            <path d="M8 2V14M2 8H14" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
+            <rect x="1" y="1" width="14" height="14" rx="3" stroke="currentColor" stroke-width="1.3"/>
+          </svg>
+          <span data-i18n="nav.doctor">Doctor</span>
+        </li>
+      </ul>
+    </nav>
+
+    <!-- 右侧内容区 -->
+    <main class="content">
+
+      <!-- Provider Tab -->
+      <section class="tab-panel active" id="tabProvider">
+        <h2 data-i18n="provider.title">Provider Configuration</h2>
+        <p class="desc" data-i18n="provider.desc">Change your LLM provider, API key, or model.</p>
+
+        <!-- 当前 provider 状态指示 -->
+        <div class="current-provider-status hidden" id="currentProviderStatus"></div>
+
+        <!-- Provider 分段选择器 -->
+        <div class="provider-tabs" id="providerTabs">
+          <button class="provider-tab active" data-provider="anthropic">Anthropic</button>
+          <button class="provider-tab" data-provider="moonshot">Moonshot</button>
+          <button class="provider-tab" data-provider="openai">OpenAI</button>
+          <button class="provider-tab" data-provider="google">Google</button>
+          <button class="provider-tab" data-provider="custom" data-i18n="provider.custom">Custom</button>
+        </div>
+
+        <!-- Moonshot 子平台 -->
+        <div class="field-group hidden" id="subPlatformGroup">
+          <label data-i18n="provider.platform">Platform</label>
+          <div class="radio-group">
+            <label class="radio-item">
+              <input type="radio" name="subPlatform" value="moonshot-cn" checked>
+              <span>Moonshot CN</span>
+            </label>
+            <label class="radio-item">
+              <input type="radio" name="subPlatform" value="moonshot-ai">
+              <span>Moonshot AI</span>
+            </label>
+            <label class="radio-item">
+              <input type="radio" name="subPlatform" value="kimi-code">
+              <span>Kimi Code</span>
+            </label>
+          </div>
+        </div>
+
+        <!-- Custom: Base URL -->
+        <div class="field-group hidden" id="baseURLGroup">
+          <label for="baseURL" data-i18n="provider.baseUrl">Base URL</label>
+          <input type="url" id="baseURL" placeholder="https://api.example.com/v1" autocomplete="off">
+        </div>
+
+        <!-- API Key -->
+        <div class="field-group">
+          <div class="label-row">
+            <label for="apiKey" data-i18n="provider.apiKey">API Key</label>
+            <a href="#" class="platform-link" id="platformLink">Get API Key →</a>
+          </div>
+          <div class="input-password-wrap">
+            <input type="password" id="apiKey" placeholder="sk-ant-..." autocomplete="off" spellcheck="false">
+            <button class="btn-toggle-vis" id="btnToggleKey" type="button" title="Toggle visibility">
+              <svg class="icon-eye" width="18" height="18" viewBox="0 0 18 18" fill="none">
+                <path d="M1.5 9C1.5 9 4 3.75 9 3.75C14 3.75 16.5 9 16.5 9C16.5 9 14 14.25 9 14.25C4 14.25 1.5 9 1.5 9Z" stroke="currentColor" stroke-width="1.3"/>
+                <circle cx="9" cy="9" r="2.25" stroke="currentColor" stroke-width="1.3"/>
+              </svg>
+              <svg class="icon-eye-off hidden" width="18" height="18" viewBox="0 0 18 18" fill="none">
+                <path d="M2.5 2.5L15.5 15.5M7.05 7.05A2.25 2.25 0 0010.95 10.95M1.5 9C1.5 9 4 3.75 9 3.75C10.2 3.75 11.3 4.1 12.25 4.6M16.5 9C16.5 9 14 14.25 9 14.25C7.8 14.25 6.7 13.9 5.75 13.4" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
+              </svg>
+            </button>
+          </div>
+        </div>
+
+        <!-- 模型选择（非 Custom） -->
+        <div class="field-group" id="modelSelectGroup">
+          <label for="modelSelect" data-i18n="provider.model">Model</label>
+          <select id="modelSelect"></select>
+        </div>
+
+        <!-- Custom: Model ID -->
+        <div class="field-group hidden" id="modelInputGroup">
+          <label for="modelInput" data-i18n="provider.modelId">Model ID</label>
+          <input type="text" id="modelInput" placeholder="e.g. my-custom-model" autocomplete="off">
+        </div>
+
+        <!-- Custom: API Type -->
+        <div class="field-group hidden" id="apiTypeGroup">
+          <label data-i18n="provider.apiType">API Type</label>
+          <div class="radio-group">
+            <label class="radio-item">
+              <input type="radio" name="apiType" value="openai-completions" checked>
+              <span>OpenAI Completions</span>
+            </label>
+            <label class="radio-item">
+              <input type="radio" name="apiType" value="anthropic-messages">
+              <span>Anthropic Messages</span>
+            </label>
+            <label class="radio-item">
+              <input type="radio" name="apiType" value="openai-responses">
+              <span>OpenAI Responses</span>
+            </label>
+          </div>
+        </div>
+
+        <!-- Custom: 图像支持 -->
+        <div class="field-group hidden" id="imageSupportGroup">
+          <label class="checkbox-item">
+            <input type="checkbox" id="supportImage" checked>
+            <span data-i18n="provider.supportImage">Supports image input</span>
+          </label>
+        </div>
+
+        <!-- 错误 / 成功信息 -->
+        <div class="msg-box hidden" id="msgBox"></div>
+
+        <!-- 操作按钮 -->
+        <div class="btn-row">
+          <button class="btn-primary" id="btnSave">
+            <span class="btn-text" data-i18n="provider.save">Save</span>
+            <span class="btn-spinner hidden"></span>
+          </button>
+        </div>
+
+        <!-- 重启 banner -->
+        <div class="restart-banner hidden" id="restartBanner">
+          <span data-i18n="provider.restartHint">Configuration saved. Restart gateway to apply changes.</span>
+          <button class="btn-restart" id="btnRestart">
+            <span class="btn-text" data-i18n="provider.restart">Restart Gateway</span>
+            <span class="btn-spinner hidden"></span>
+          </button>
+        </div>
+      </section>
+
+      <!-- Doctor Tab -->
+      <section class="tab-panel" id="tabDoctor">
+        <h2 data-i18n="doctor.title">Doctor</h2>
+        <p class="desc" data-i18n="doctor.desc">Run diagnostics and auto-repair configuration issues.</p>
+
+        <button class="btn-primary" id="btnDoctor">
+          <span class="btn-text" data-i18n="doctor.run">Run Doctor</span>
+          <span class="btn-spinner hidden"></span>
+        </button>
+
+        <pre class="doctor-log hidden" id="doctorLog"></pre>
+
+        <div class="doctor-exit hidden" id="doctorExit"></div>
+      </section>
+
+    </main>
+  </div>
+
+  <script src="settings.js"></script>
+</body>
+</html>

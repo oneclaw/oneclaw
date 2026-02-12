@@ -3,7 +3,9 @@ import { GatewayProcess } from "./gateway-process";
 import { WindowManager } from "./window";
 import { TrayManager } from "./tray";
 import { SetupManager } from "./setup-manager";
+import { SettingsManager } from "./settings-manager";
 import { registerSetupIpc } from "./setup-ipc";
+import { registerSettingsIpc } from "./settings-ipc";
 import {
   setupAutoUpdater,
   checkForUpdates,
@@ -42,6 +44,7 @@ const gateway = new GatewayProcess({
 const windowManager = new WindowManager();
 const tray = new TrayManager();
 const setupManager = new SetupManager();
+const settingsManager = new SettingsManager();
 
 // ── 显示主窗口的统一入口 ──
 
@@ -121,6 +124,7 @@ ipcMain.handle("gateway:state", () => gateway.getState());
 ipcMain.on("app:check-updates", () => checkForUpdates(true));
 ipcMain.handle("app:open-external", (_e, url: string) => shell.openExternal(url));
 registerSetupIpc({ setupManager });
+registerSettingsIpc({ settingsManager, gateway });
 
 // ── 退出 ──
 
@@ -128,6 +132,7 @@ async function quit(): Promise<void> {
   stopAutoCheckSchedule();
   analytics.track("app_closed");
   await analytics.shutdown();
+  settingsManager.destroy();
   windowManager.destroy();
   gateway.stop();
   tray.destroy();
@@ -162,6 +167,7 @@ app.whenReady().then(async () => {
   tray.create({
     windowManager,
     gateway,
+    settingsManager,
     onQuit: quit,
     onCheckUpdates: () => checkForUpdates(true),
   });
@@ -195,6 +201,7 @@ app.on("window-all-closed", () => {
 // ── 退出前清理 ──
 
 app.on("before-quit", () => {
+  settingsManager.destroy();
   windowManager.destroy();
   gateway.stop();
 });
