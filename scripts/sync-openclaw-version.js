@@ -5,14 +5,12 @@ const fs = require("fs");
 const path = require("path");
 const {
   normalizeSemverText,
-  compareSemver,
   readRemoteLatestVersion,
 } = require("./lib/openclaw-version-utils");
 
 const ROOT = path.resolve(__dirname, "..");
 const ROOT_PKG_PATH = path.join(ROOT, "package.json");
 const ROOT_LOCK_PATH = path.join(ROOT, "package-lock.json");
-const UPSTREAM_PKG_PATH = path.join(ROOT, "upstream", "openclaw", "package.json");
 const OPENCLAW_PACKAGE_NAME = "openclaw";
 
 // 读取 JSON 文件并做基础存在性校验。
@@ -49,19 +47,17 @@ function assertVersion(version) {
   }
 }
 
-// 解析目标版本：默认使用本地 upstream；若远端更高则自动跟随远端版本。
+// 解析目标版本：从 npm registry 查询 latest，离线时回退当前根版本。
 function resolveTargetVersion() {
-  const upstreamPkg = readJSON(UPSTREAM_PKG_PATH);
-  const localVersion = normalizeSemverText(String(upstreamPkg.version || ""));
-  assertVersion(localVersion);
+  const rootPkg = readJSON(ROOT_PKG_PATH);
+  const currentVersion = normalizeSemverText(String(rootPkg.version || ""));
 
+  // 离线开发：禁用远端查询时直接用根 package.json 当前值
   if (!readEnvBool("ONECLAW_CHECK_REMOTE_OPENCLAW", true)) {
-    return {
-      targetVersion: localVersion,
-      source: "local",
-      localVersion,
-      remoteVersion: "",
-    };
+    if (!currentVersion) {
+      throw new Error("根 package.json 缺少版本号，且已禁用远端版本检查");
+    }
+    return { targetVersion: currentVersion, source: "current" };
   }
 
   const remoteVersion = readRemoteLatestVersion(OPENCLAW_PACKAGE_NAME, {
@@ -71,47 +67,20 @@ function resolveTargetVersion() {
       console.warn(`[version:sync] ${message}`);
     },
   });
+
   if (!remoteVersion) {
-    return {
-      targetVersion: localVersion,
-      source: "local",
-      localVersion,
-      remoteVersion: "",
-    };
+    if (!currentVersion) {
+      throw new Error("无法获取远端版本，且根 package.json 缺少版本号");
+    }
+    console.warn("[version:sync] 远端版本查询失败，保留当前版本");
+    return { targetVersion: currentVersion, source: "current" };
   }
 
   assertVersion(remoteVersion);
-  const cmp = compareSemver(remoteVersion, localVersion);
-  if (cmp == null) {
-    console.warn(
-      `[version:sync] 版本号不可比较（local=${localVersion}, remote=${remoteVersion}），回退本地版本`
-    );
-    return {
-      targetVersion: localVersion,
-      source: "local",
-      localVersion,
-      remoteVersion,
-    };
-  }
-
-  if (cmp > 0) {
-    return {
-      targetVersion: remoteVersion,
-      source: "remote",
-      localVersion,
-      remoteVersion,
-    };
-  }
-
-  return {
-    targetVersion: localVersion,
-    source: "local",
-    localVersion,
-    remoteVersion,
-  };
+  return { targetVersion: remoteVersion, source: "remote" };
 }
 
-// 将根 package 与 lockfile 版本同步到 upstream/openclaw。
+// 将根 package 与 lockfile 版本同步到 npm latest。
 function syncVersion() {
   if (process.env.ONECLAW_SKIP_VERSION_SYNC === "1") {
     console.log("[version:sync] skip by env ONECLAW_SKIP_VERSION_SYNC=1");
@@ -151,13 +120,13 @@ function syncVersion() {
     console.log(
       `[version:sync] updated to ${targetVersion} (package.json: ${beforePkgVersion} -> ${rootPkg.version}, ` +
         `lockfile: ${beforeLockVersion} -> ${rootLock.version}, root package: ${beforeRootPackageVersion} -> ${rootLock?.packages?.[""]?.version}, ` +
-        `source=${resolved.source}, local=${resolved.localVersion || "unknown"}, remote=${resolved.remoteVersion || "n/a"})`
+        `source=${resolved.source})`
     );
     return;
   }
 
   console.log(
-    `[version:sync] already up to date (${targetVersion}, source=${resolved.source}, local=${resolved.localVersion || "unknown"}, remote=${resolved.remoteVersion || "n/a"})`
+    `[version:sync] already up to date (${targetVersion}, source=${resolved.source})`
   );
 }
 
