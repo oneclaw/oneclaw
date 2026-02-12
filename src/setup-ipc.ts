@@ -12,6 +12,8 @@ interface SetupIpcDeps {
   setupManager: SetupManager;
 }
 
+let latestSetupCompletedProps: Record<string, string> | null = null;
+
 // 注册 Setup 相关 IPC
 export function registerSetupIpc(deps: SetupIpcDeps): void {
   const { setupManager } = deps;
@@ -89,6 +91,8 @@ export function registerSetupIpc(deps: SetupIpcDeps): void {
       config.wizard = { lastRunAt: new Date().toISOString() };
 
       fs.writeFileSync(configPath, JSON.stringify(config, null, 2), "utf-8");
+      // 配置落盘成功后再缓存埋点上下文，避免失败时污染事件参数。
+      latestSetupCompletedProps = buildSetupCompletedProps(params, config);
       return { success: true };
     } catch (err: any) {
       return { success: false, message: err.message || String(err) };
@@ -99,7 +103,7 @@ export function registerSetupIpc(deps: SetupIpcDeps): void {
   ipcMain.handle("setup:complete", async () => {
     const ok = await setupManager.complete();
     if (ok) {
-      analytics.track("setup_completed");
+      analytics.track("setup_completed", latestSetupCompletedProps ?? {});
       return { success: true };
     }
     return {
@@ -186,6 +190,26 @@ function saveMoonshotConfig(
   };
 
   config.agents.defaults.model.primary = `${providerKey}/${modelID}`;
+}
+
+// 将 setup 表单参数转换为 setup_completed 事件需要的属性字段。
+function buildSetupCompletedProps(params: {
+  provider: string;
+  modelID: string;
+  baseURL?: string;
+}, config?: any): Record<string, string> {
+  const { provider, modelID, baseURL } = params;
+  const configBaseUrl = config?.models?.providers?.[provider]?.baseUrl;
+  const rawBaseUrl =
+    typeof configBaseUrl === "string"
+      ? configBaseUrl
+      : (PROVIDER_PRESETS[provider]?.baseUrl ?? baseURL ?? "");
+
+  return {
+    provider,
+    model: modelID,
+    base_url: rawBaseUrl.trim().replace(/\/+$/, ""),
+  };
 }
 
 // ── 验证函数 ──
