@@ -143,6 +143,10 @@ jobs:
 
       - run: npm ci
 
+      # npm 在 Windows 默认用 cmd.exe 跑 scripts，package.json 里的 ENV=val 语法是 bash 专属
+      - name: 让 npm 通过 bash 执行 scripts
+        run: npm config set script-shell "$(which bash)"
+
       - name: 构建 Windows x64
         run: npm run dist:win:x64
 
@@ -169,6 +173,10 @@ jobs:
           node-version: 22
 
       - run: npm ci
+
+      # npm 在 Windows 默认用 cmd.exe 跑 scripts
+      - name: 让 npm 通过 bash 执行 scripts
+        run: npm config set script-shell "$(which bash)"
 
       - name: 构建 Windows arm64
         run: npm run dist:win:arm64

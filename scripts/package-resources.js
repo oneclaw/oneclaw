@@ -1076,15 +1076,18 @@ function generateAnalyticsConfig(targetPaths) {
 // ─── Step 4: 拷贝图标资源 ───
 
 function copyAppIcon(iconPath) {
-  const src = path.join(ROOT, "upstream", "openclaw", "apps", "macos", "Icon.icon", "Assets", "openclaw-mac.png");
+  // 优先从 upstream 取高分辨率图标，fallback 到 assets/icon.png（CI 无 upstream 目录）
+  const upstreamIcon = path.join(ROOT, "upstream", "openclaw", "apps", "macos", "Icon.icon", "Assets", "openclaw-mac.png");
+  const fallbackIcon = path.join(ROOT, "assets", "icon.png");
+  const src = fs.existsSync(upstreamIcon) ? upstreamIcon : fallbackIcon;
 
   if (!fs.existsSync(src)) {
-    die(`图标文件不存在: ${src}`);
+    die(`图标文件不存在: upstream 和 fallback 均缺失`);
   }
 
   ensureDir(path.dirname(iconPath));
   fs.copyFileSync(src, iconPath);
-  log(`已拷贝 app-icon.png 到 ${path.relative(ROOT, iconPath)}`);
+  log(`已拷贝 app-icon.png (来源: ${path.basename(path.dirname(path.dirname(src)))}) 到 ${path.relative(ROOT, iconPath)}`);
 }
 
 // ─── Step 5: 生成统一入口和构建信息 ───
