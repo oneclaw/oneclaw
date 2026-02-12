@@ -12,13 +12,61 @@ interface TrayOptions {
   onCheckUpdates: () => void;
 }
 
-// 状态标签映射
-const STATE_LABELS: Record<GatewayState, string> = {
-  running: "Gateway: Running",
-  starting: "Gateway: Starting...",
-  stopping: "Gateway: Stopping...",
-  stopped: "Gateway: Stopped",
+// 托盘菜单国际化
+type TrayStrings = {
+  stateRunning: string;
+  stateStarting: string;
+  stateStopping: string;
+  stateStopped: string;
+  openDashboard: string;
+  restartGateway: string;
+  settings: string;
+  checkUpdates: string;
+  quit: string;
 };
+
+const I18N: Record<string, TrayStrings> = {
+  en: {
+    stateRunning: "Gateway: Running",
+    stateStarting: "Gateway: Starting…",
+    stateStopping: "Gateway: Stopping…",
+    stateStopped: "Gateway: Stopped",
+    openDashboard: "Open Dashboard",
+    restartGateway: "Restart Gateway",
+    settings: "Settings…",
+    checkUpdates: "Check for Updates…",
+    quit: "Quit OneClaw",
+  },
+  zh: {
+    stateRunning: "Gateway: 运行中",
+    stateStarting: "Gateway: 启动中…",
+    stateStopping: "Gateway: 停止中…",
+    stateStopped: "Gateway: 已停止",
+    openDashboard: "打开 OneClaw",
+    restartGateway: "重启 Gateway",
+    settings: "设置…",
+    checkUpdates: "检查更新…",
+    quit: "退出 OneClaw",
+  },
+};
+
+// 根据系统语言选择文案
+function getTrayStrings(): TrayStrings {
+  const locale = app.getLocale();
+  return locale.startsWith("zh") ? I18N.zh : I18N.en;
+}
+
+// 状态标签映射
+function getStateLabel(state: GatewayState): string {
+  const s = getTrayStrings();
+  const map: Record<GatewayState, string> = {
+    running: s.stateRunning,
+    starting: s.stateStarting,
+    stopping: s.stateStopping,
+    stopped: s.stateStopped,
+  };
+  return map[state];
+}
 
 export class TrayManager {
   private tray: Tray | null = null;
@@ -57,21 +105,21 @@ export class TrayManager {
     if (!this.tray || !this.opts) return;
 
     const { windowManager, gateway, settingsManager, onQuit, onCheckUpdates } = this.opts;
-    const statusLabel = STATE_LABELS[gateway.getState()];
+    const t = getTrayStrings();
 
     const menu = Menu.buildFromTemplate([
       {
-        label: "Open Dashboard",
+        label: t.openDashboard,
         click: () => windowManager.show({ port: gateway.getPort(), token: gateway.getToken() }),
       },
       { type: "separator" },
-      { label: statusLabel, enabled: false },
-      { label: "Restart Gateway", click: () => gateway.restart() },
+      { label: getStateLabel(gateway.getState()), enabled: false },
+      { label: t.restartGateway, click: () => gateway.restart() },
       { type: "separator" },
-      { label: "Settings…", click: () => settingsManager.show() },
-      { label: "Check for Updates…", click: onCheckUpdates },
+      { label: t.settings, click: () => settingsManager.show() },
+      { label: t.checkUpdates, click: onCheckUpdates },
       { type: "separator" },
-      { label: "Quit OneClaw", click: onQuit },
+      { label: t.quit, click: onQuit },
     ]);
 
     this.tray.setContextMenu(menu);
