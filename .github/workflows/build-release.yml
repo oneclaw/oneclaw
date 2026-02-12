@@ -1,0 +1,264 @@
+# 自动构建 + 发布工作流
+# 触发：推送 v* 标签（如 git tag v2026.2.10 && git push --tags）
+# 流程：4 并行构建 → 合并 yml → 上传 OSS → 刷新 CDN → 创建 GitHub Release
+
+name: Build & Release
+
+on:
+  push:
+    tags: ["v*"]
+
+# 构建产物最多保留 3 天（release job 完成后不再需要）
+env:
+  ARTIFACT_RETENTION_DAYS: 3
+
+jobs:
+  # ── macOS arm64：签名 + 公证 ──
+  build-mac-arm64:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - run: npm ci
+
+      # 克隆 upstream openclaw（与本地开发流程一致）
+      - name: 准备 upstream/openclaw
+        run: git clone --depth 1 https://github.com/anthropics/claude-code upstream/openclaw
+
+      # 导入签名证书到临时 keychain
+      - name: 导入 macOS 签名证书
+        env:
+          CSC_LINK: ${{ secrets.CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
+        run: |
+          echo "$CSC_LINK" | base64 -d > /tmp/cert.p12
+          security create-keychain -p "" build.keychain
+          security default-keychain -s build.keychain
+          security unlock-keychain -p "" build.keychain
+          security import /tmp/cert.p12 -k build.keychain -P "$CSC_KEY_PASSWORD" -T /usr/bin/codesign
+          security set-key-partition-list -S apple-tool:,apple: -s -k "" build.keychain
+          rm /tmp/cert.p12
+
+      # 写入 Apple API Key 供公证使用
+      - name: 准备 Apple 公证密钥
+        env:
+          APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
+          APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+        run: |
+          mkdir -p ~/private_keys
+          echo "$APPLE_API_KEY" > ~/private_keys/AuthKey_${APPLE_API_KEY_ID}.p8
+
+      # 构建 macOS arm64（签名 + 公证）
+      - name: 构建 macOS arm64
+        env:
+          ONECLAW_MAC_SIGN_AND_NOTARIZE: "true"
+          CSC_NAME: ${{ secrets.CSC_NAME }}
+          CSC_KEYCHAIN: build.keychain
+          APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+        run: npm run dist:mac:arm64
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: mac-arm64
+          retention-days: ${{ env.ARTIFACT_RETENTION_DAYS }}
+          path: |
+            out/darwin-arm64/*.dmg
+            out/darwin-arm64/*.zip
+            out/darwin-arm64/*.blockmap
+            out/darwin-arm64/latest-mac.yml
+
+  # ── macOS x64：签名 + 公证 ──
+  build-mac-x64:
+    runs-on: macos-13
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - run: npm ci
+
+      - name: 准备 upstream/openclaw
+        run: git clone --depth 1 https://github.com/anthropics/claude-code upstream/openclaw
+
+      - name: 导入 macOS 签名证书
+        env:
+          CSC_LINK: ${{ secrets.CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
+        run: |
+          echo "$CSC_LINK" | base64 -d > /tmp/cert.p12
+          security create-keychain -p "" build.keychain
+          security default-keychain -s build.keychain
+          security unlock-keychain -p "" build.keychain
+          security import /tmp/cert.p12 -k build.keychain -P "$CSC_KEY_PASSWORD" -T /usr/bin/codesign
+          security set-key-partition-list -S apple-tool:,apple: -s -k "" build.keychain
+          rm /tmp/cert.p12
+
+      - name: 准备 Apple 公证密钥
+        env:
+          APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
+          APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+        run: |
+          mkdir -p ~/private_keys
+          echo "$APPLE_API_KEY" > ~/private_keys/AuthKey_${APPLE_API_KEY_ID}.p8
+
+      - name: 构建 macOS x64
+        env:
+          ONECLAW_MAC_SIGN_AND_NOTARIZE: "true"
+          CSC_NAME: ${{ secrets.CSC_NAME }}
+          CSC_KEYCHAIN: build.keychain
+          APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+        run: npm run dist:mac:x64
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: mac-x64
+          retention-days: ${{ env.ARTIFACT_RETENTION_DAYS }}
+          path: |
+            out/darwin-x64/*.dmg
+            out/darwin-x64/*.zip
+            out/darwin-x64/*.blockmap
+            out/darwin-x64/latest-mac.yml
+
+  # ── Windows x64 ──
+  build-win-x64:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - run: npm ci
+
+      - name: 准备 upstream/openclaw
+        run: git clone --depth 1 https://github.com/anthropics/claude-code upstream/openclaw
+
+      - name: 构建 Windows x64
+        run: npm run dist:win:x64
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: win-x64
+          retention-days: ${{ env.ARTIFACT_RETENTION_DAYS }}
+          path: |
+            out/win32-x64/*.exe
+            out/win32-x64/*.blockmap
+            out/win32-x64/latest.yml
+
+  # ── Windows arm64 ──
+  build-win-arm64:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - run: npm ci
+
+      - name: 准备 upstream/openclaw
+        run: git clone --depth 1 https://github.com/anthropics/claude-code upstream/openclaw
+
+      - name: 构建 Windows arm64
+        run: npm run dist:win:arm64
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: win-arm64
+          retention-days: ${{ env.ARTIFACT_RETENTION_DAYS }}
+          path: |
+            out/win32-arm64/*.exe
+            out/win32-arm64/*.blockmap
+            out/win32-arm64/latest.yml
+
+  # ── 合并 + 上传 OSS + 刷新 CDN + 创建 GitHub Release ──
+  release:
+    needs: [build-mac-arm64, build-mac-x64, build-win-x64, build-win-arm64]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      # 下载四个平台的构建产物到对应目录
+      - uses: actions/download-artifact@v4
+        with:
+          name: mac-arm64
+          path: out/darwin-arm64
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: mac-x64
+          path: out/darwin-x64
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: win-x64
+          path: out/win32-x64
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: win-arm64
+          path: out/win32-arm64
+
+      # 安装 js-yaml（merge 脚本依赖）
+      - run: npm install js-yaml
+
+      # 合并多架构 yml + 收集产物
+      - name: 合并发布文件
+        run: node scripts/merge-release-yml.js
+
+      # 安装阿里云 ossutil
+      - name: 安装 ossutil
+        run: |
+          curl -fsSL https://gosspublic.alicdn.com/ossutil/install.sh | bash
+
+      # 上传到阿里云 OSS
+      - name: 上传到 OSS
+        env:
+          ALIYUN_ACCESS_KEY_ID: ${{ secrets.ALIYUN_ACCESS_KEY_ID }}
+          ALIYUN_ACCESS_KEY_SECRET: ${{ secrets.ALIYUN_ACCESS_KEY_SECRET }}
+        run: |
+          ossutil config -e oss-cn-beijing.aliyuncs.com -i "$ALIYUN_ACCESS_KEY_ID" -k "$ALIYUN_ACCESS_KEY_SECRET"
+          ossutil cp -r out/release/ oss://oneclaw/releases/ --force
+          echo "OSS 上传完成"
+
+      # 安装阿里云 CLI 并刷新 CDN 缓存
+      - name: 刷新 CDN 缓存
+        env:
+          ALIYUN_ACCESS_KEY_ID: ${{ secrets.ALIYUN_ACCESS_KEY_ID }}
+          ALIYUN_ACCESS_KEY_SECRET: ${{ secrets.ALIYUN_ACCESS_KEY_SECRET }}
+        run: |
+          curl -fsSL https://aliyuncli.alicdn.com/aliyun-cli-linux-latest-amd64.tgz | tar xz
+          chmod +x aliyun
+          ./aliyun configure set \
+            --access-key-id "$ALIYUN_ACCESS_KEY_ID" \
+            --access-key-secret "$ALIYUN_ACCESS_KEY_SECRET" \
+            --region cn-beijing
+          ./aliyun cdn RefreshObjectCaches \
+            --ObjectType File \
+            --ObjectPath "https://claw.ver0.cn/releases/latest-mac.yml
+          https://claw.ver0.cn/releases/latest.yml"
+          echo "CDN 缓存刷新已提交"
+
+      # 创建 GitHub Release（草稿模式，手动确认后发布）
+      - name: 创建 GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: out/release/*
+          draft: true
+          generate_release_notes: true

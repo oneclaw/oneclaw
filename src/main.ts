@@ -4,7 +4,13 @@ import { WindowManager } from "./window";
 import { TrayManager } from "./tray";
 import { SetupManager } from "./setup-manager";
 import { registerSetupIpc } from "./setup-ipc";
-import { setupAutoUpdater, checkForUpdates } from "./auto-updater";
+import {
+  setupAutoUpdater,
+  checkForUpdates,
+  startAutoCheckSchedule,
+  stopAutoCheckSchedule,
+  setProgressCallback,
+} from "./auto-updater";
 import { isSetupComplete, DEFAULT_PORT, resolveGatewayLogPath } from "./constants";
 import { resolveGatewayAuthToken } from "./gateway-auth";
 import * as log from "./logger";
@@ -112,13 +118,14 @@ async function startGatewayAndShowMain(source: string, opts: StartMainOptions = 
 
 ipcMain.on("gateway:restart", () => gateway.restart());
 ipcMain.handle("gateway:state", () => gateway.getState());
-ipcMain.on("app:check-updates", () => checkForUpdates());
+ipcMain.on("app:check-updates", () => checkForUpdates(true));
 ipcMain.handle("app:open-external", (_e, url: string) => shell.openExternal(url));
 registerSetupIpc({ setupManager });
 
 // ── 退出 ──
 
 async function quit(): Promise<void> {
+  stopAutoCheckSchedule();
   analytics.track("app_closed");
   await analytics.shutdown();
   windowManager.destroy();
@@ -145,12 +152,18 @@ app.whenReady().then(async () => {
   analytics.init();
   analytics.track("app_launched");
   setupAutoUpdater();
+  startAutoCheckSchedule();
+
+  // 下载进度 → 更新托盘 tooltip
+  setProgressCallback((pct) => {
+    tray.setTooltip(pct != null ? `OneClaw — 下载更新 ${pct.toFixed(0)}%` : "OneClaw");
+  });
 
   tray.create({
     windowManager,
     gateway,
     onQuit: quit,
-    onCheckUpdates: checkForUpdates,
+    onCheckUpdates: () => checkForUpdates(true),
   });
 
   if (!isSetupComplete()) {

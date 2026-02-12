@@ -15,6 +15,7 @@
     "dist:win:x64": "npm run version:sync && ONECLAW_TARGET=win32-x64 npm run package:resources -- --platform win32 --arch x64 && ONECLAW_TARGET=win32-x64 electron-builder --win --x64 --config.directories.output=out/win32-x64",
     "dist:win:arm64": "npm run version:sync && ONECLAW_TARGET=win32-arm64 npm run package:resources -- --platform win32 --arch arm64 && ONECLAW_TARGET=win32-arm64 electron-builder --win --arm64 --config.directories.output=out/win32-arm64",
     "dist:all:parallel": "npm run version:sync && ONECLAW_SKIP_VERSION_SYNC=1 bash scripts/dist-all-parallel.sh",
+    "merge:release": "node scripts/merge-release-yml.js",
     "clean": "rm -rf dist resources/runtime resources/gateway resources/targets out"
   },
   "dependencies": {
