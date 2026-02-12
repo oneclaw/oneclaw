@@ -65,6 +65,7 @@ jobs:
           ONECLAW_MAC_SIGN_AND_NOTARIZE: "true"
           CSC_NAME: ${{ secrets.CSC_NAME }}
           CSC_KEYCHAIN: build.keychain
+          APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
           APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
           APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
         run: npm run dist:mac:arm64
@@ -119,6 +120,7 @@ jobs:
           ONECLAW_MAC_SIGN_AND_NOTARIZE: "true"
           CSC_NAME: ${{ secrets.CSC_NAME }}
           CSC_KEYCHAIN: build.keychain
+          APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
           APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
           APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
         run: npm run dist:mac:x64
