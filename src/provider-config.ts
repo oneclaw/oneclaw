@@ -66,20 +66,7 @@ export function saveMoonshotConfig(
   const sub = MOONSHOT_SUB_PLATFORMS[subPlatform] || MOONSHOT_SUB_PLATFORMS["moonshot-cn"];
   const providerKey = sub.providerKey;
 
-  // Kimi Code：写 env + primary，同时覆盖 model input 声明以启用图片
-  if (subPlatform === "kimi-code") {
-    config.env ??= {};
-    config.env.KIMI_API_KEY = apiKey;
-    config.agents.defaults.model.primary = `${providerKey}/${modelID}`;
-    // gateway 内置 catalog 漏标了图片能力，用 providers 覆盖
-    config.models.providers[providerKey] ??= {};
-    config.models.providers[providerKey].models = [
-      { id: modelID, input: ["text", "image"] },
-    ];
-    return;
-  }
-
-  // moonshot-cn / moonshot-ai：常规 provider 配置
+  // 所有子平台统一写法：apiKey + baseUrl + api + models 写入 providers
   config.models.providers[providerKey] = {
     apiKey,
     baseUrl: sub.baseUrl,
