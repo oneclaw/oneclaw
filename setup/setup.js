@@ -1,5 +1,5 @@
 // ============================================
-// OneClaw Setup — 四步向导交互逻辑
+// OneClaw Setup — 三步向导交互逻辑
 // ============================================
 
 (function () {
@@ -69,22 +69,6 @@
       "config.back": "Back",
       "config.verify": "Verify & Continue",
       "config.imageSupport": "Model supports image input",
-      "channel.title": "Connect Channels (Optional)",
-      "channel.subtitle": "Connect channels to extend OneClaw capabilities.",
-      "channel.kimiTitle": "KimiClaw",
-      "channel.kimiDesc": "Control OneClaw remotely via Kimi",
-      "channel.kimiGuide1": "Visit ",
-      "channel.kimiGuide2": "Click 'Associate existing OpenClaw' → copy command → paste below",
-      "channel.kimiInputLabel": "Paste BotToken or command (auto parse token)",
-      "channel.kimiParsed": "Token parsed: ",
-      "channel.feishuTitle": "Feishu Integration",
-      "channel.feishuDesc": "Chat with AI directly in your Feishu group.",
-      "channel.appId": "Feishu App ID",
-      "channel.appSecret": "App Secret",
-      "channel.getKey": "Open Feishu Console →",
-      "channel.skip": "Set up later",
-      "channel.continue": "Save & Continue",
-      "channel.saving": "Saving...",
       "done.title": "All Set!",
       "done.subtitle": "OneClaw is ready. Here's what you can do:",
       "done.feature1": "Chat with state-of-the-art language models",
@@ -95,13 +79,10 @@
       "done.starting": "Starting Gateway…",
       "done.startFailed": "Gateway failed to start. Please click Start OneClaw to retry.",
       "error.noKey": "Please enter your API key.",
-      "error.noKimiBotToken": "Please paste the command or enter your Bot Token.",
       "error.noBaseUrl": "Please enter the Base URL.",
       "error.noModelId": "Please enter the Model ID.",
       "error.verifyFailed": "Verification failed. Please check your API key.",
       "error.connection": "Connection error: ",
-      "error.noAppId": "Please enter the Feishu App ID.",
-      "error.noAppSecret": "Please enter the App Secret.",
     },
     zh: {
       title: "OneClaw 安装引导",
@@ -123,22 +104,6 @@
       "config.back": "返回",
       "config.verify": "验证并继续",
       "config.imageSupport": "模型支持图片输入",
-      "channel.title": "连接频道（可选）",
-      "channel.subtitle": "通过频道连接外部服务，扩展 OneClaw 能力。",
-      "channel.kimiTitle": "KimiClaw",
-      "channel.kimiDesc": "通过 Kimi 远程遥控 OneClaw",
-      "channel.kimiGuide1": "访问 ",
-      "channel.kimiGuide2": '点击"关联已有 OpenClaw" → 复制命令 → 粘贴到下方',
-      "channel.kimiInputLabel": "粘贴 BotToken 或命令(自动解析Token)。",
-      "channel.kimiParsed": "解析到 Token：",
-      "channel.feishuTitle": "飞书集成",
-      "channel.feishuDesc": "在飞书群聊中直接与 AI 对话。",
-      "channel.appId": "飞书应用 ID",
-      "channel.appSecret": "应用密钥",
-      "channel.getKey": "打开飞书开放平台 →",
-      "channel.skip": "稍后设置",
-      "channel.continue": "保存并继续",
-      "channel.saving": "保存中...",
       "done.title": "配置完成！",
       "done.subtitle": "OneClaw 已就绪，你可以：",
       "done.feature1": "与最先进的大语言模型对话",
@@ -149,13 +114,10 @@
       "done.starting": "正在启动 Gateway…",
       "done.startFailed": 'Gateway 启动失败，请点击"启动 OneClaw"重试。',
       "error.noKey": "请输入 API 密钥。",
-      "error.noKimiBotToken": "请粘贴命令或输入 Bot Token。",
       "error.noBaseUrl": "请输入接口地址。",
       "error.noModelId": "请输入模型 ID。",
       "error.verifyFailed": "验证失败，请检查 API 密钥。",
       "error.connection": "连接错误：",
-      "error.noAppId": "请输入飞书应用 ID。",
-      "error.noAppSecret": "请输入应用密钥。",
     },
   };
 
@@ -187,25 +149,7 @@
     btnVerify: $("#btnVerify"),
     btnVerifyText: $("#btnVerify .btn-text"),
     btnVerifySpinner: $("#btnVerify .btn-spinner"),
-    // Step 3 — 频道配置
-    kimiEnabled: $("#kimiEnabled"),
-    kimiFields: $("#kimiFields"),
-    kimiCommandInput: $("#kimiCommandInput"),
-    kimiParsedToken: $("#kimiParsedToken"),
-    kimiMaskedToken: $("#kimiMaskedToken"),
-    kimiBotLink: $("#kimiBotLink"),
-    feishuEnabled: $("#feishuEnabled"),
-    feishuFields: $("#feishuFields"),
-    feishuAppId: $("#feishuAppId"),
-    feishuAppSecret: $("#feishuAppSecret"),
-    btnToggleSecret: $("#btnToggleSecret"),
-    feishuConsoleLink: $("#feishuConsoleLink"),
-    channelErrorMsg: $("#channelErrorMsg"),
-    btnSkipChannel: $("#btnSkipChannel"),
-    btnSaveChannels: $("#btnSaveChannels"),
-    btnSaveChannelsText: $("#btnSaveChannels .btn-text"),
-    btnSaveChannelsSpinner: $("#btnSaveChannels .btn-spinner"),
-    // Step 4 — 完成
+    // Step 3 — 完成
     btnStart: $("#btnStart"),
     btnStartText: $("#btnStart .btn-text"),
     btnStartSpinner: $("#btnStartSpinner"),
@@ -217,7 +161,6 @@
   let currentProvider = "anthropic";
   let verifying = false;
   let starting = false;
-  let channelSaving = false;
   let currentLang = "en";
 
   // ---- 语言检测（从 URL ?lang= 参数读取） ----
@@ -243,7 +186,7 @@
   // ---- 步骤切换 ----
   function goToStep(step) {
     currentStep = step;
-    els.progressFill.style.width = `${step * 25}%`;
+    els.progressFill.style.width = `${Math.round(step * 100 / 3)}%`;
 
     els.steps.forEach((el, i) => {
       el.classList.toggle("active", i + 1 === step);
@@ -342,23 +285,6 @@
     eyeOff.classList.toggle("hidden", isPassword);
   }
 
-  // ---- Bot Token 解析 ----
-
-  // 从 install.sh 命令或直接输入解析 bot token
-  function parseBotToken(input) {
-    var match = input.match(/--bot-token\s+(\S+)/);
-    if (match) return match[1];
-    var trimmed = input.trim();
-    if (trimmed && !/\s/.test(trimmed)) return trimmed;
-    return "";
-  }
-
-  // 掩码 token（保留首尾各 4 字符）
-  function maskToken(token) {
-    if (!token || token.length <= 8) return token || "";
-    return token.slice(0, 4) + "..." + token.slice(-4);
-  }
-
   // ---- 验证并保存配置（Step 2） ----
   async function handleVerify() {
     if (verifying) return;
@@ -440,78 +366,6 @@
     };
   }
 
-  // ---- Step 3：保存频道配置 ----
-  async function handleSaveChannels() {
-    if (channelSaving) return;
-
-    var kimiChecked = els.kimiEnabled.checked;
-    var feishuChecked = els.feishuEnabled.checked;
-
-    // 都没勾选 → 直接跳过
-    if (!kimiChecked && !feishuChecked) {
-      goToStep(4);
-      return;
-    }
-
-    // 验证 Kimi token
-    var botToken = "";
-    if (kimiChecked) {
-      botToken = parseBotToken(els.kimiCommandInput.value);
-      if (!botToken) {
-        showChannelError(t("error.noKimiBotToken"));
-        return;
-      }
-    }
-
-    // 验证 Feishu 字段
-    var appId = "";
-    var appSecret = "";
-    if (feishuChecked) {
-      appId = els.feishuAppId.value.trim();
-      appSecret = els.feishuAppSecret.value.trim();
-      if (!appId) { showChannelError(t("error.noAppId")); return; }
-      if (!appSecret) { showChannelError(t("error.noAppSecret")); return; }
-    }
-
-    setChannelSaving(true);
-    hideChannelError();
-
-    try {
-      // 先验证 Feishu（如果启用）
-      if (feishuChecked) {
-        var verifyResult = await window.oneclaw.verifyKey({
-          provider: "feishu",
-          appId: appId,
-          appSecret: appSecret,
-        });
-        if (!verifyResult.success) {
-          showChannelError(verifyResult.message || t("error.verifyFailed"));
-          setChannelSaving(false);
-          return;
-        }
-        await window.oneclaw.saveChannelConfig({ appId: appId, appSecret: appSecret });
-      }
-
-      // 保存 Kimi（如果启用）
-      if (kimiChecked) {
-        var kimiResult = await window.oneclaw.saveKimiChannelConfig({ botToken: botToken });
-        if (!kimiResult.success) {
-          showChannelError(kimiResult.message || "Save Kimi config failed");
-          setChannelSaving(false);
-          return;
-        }
-        els.kimiParsedToken.classList.add("hidden");
-        els.kimiMaskedToken.textContent = "";
-      }
-
-      setChannelSaving(false);
-      goToStep(4);
-    } catch (err) {
-      showChannelError(t("error.connection") + (err.message || "Unknown error"));
-      setChannelSaving(false);
-    }
-  }
-
   // ---- 完成 Setup ----
   async function handleComplete() {
     if (starting) return;
@@ -578,37 +432,6 @@
     els.doneStatus.classList.toggle("error", !!isError);
   }
 
-  // ---- Step 3 频道辅助 ----
-
-  function showChannelError(msg) {
-    els.channelErrorMsg.textContent = msg;
-    els.channelErrorMsg.classList.remove("hidden");
-  }
-
-  function hideChannelError() {
-    els.channelErrorMsg.classList.add("hidden");
-    els.channelErrorMsg.textContent = "";
-  }
-
-  function setChannelSaving(loading) {
-    channelSaving = loading;
-    els.btnSaveChannels.disabled = loading;
-    els.btnSaveChannelsText.textContent = loading ? t("channel.saving") : t("channel.continue");
-    els.btnSaveChannelsSpinner.classList.toggle("hidden", !loading);
-  }
-
-  // 密码可见性切换（App Secret）
-  function toggleSecretVisibility() {
-    const input = els.feishuAppSecret;
-    const isPassword = input.type === "password";
-    input.type = isPassword ? "text" : "password";
-
-    const eyeOn = els.btnToggleSecret.querySelector(".icon-eye");
-    const eyeOff = els.btnToggleSecret.querySelector(".icon-eye-off");
-    eyeOn.classList.toggle("hidden", !isPassword);
-    eyeOff.classList.toggle("hidden", isPassword);
-  }
-
   // ---- 事件绑定 ----
   function bindEvents() {
     els.btnToStep2.addEventListener("click", () => goToStep(2));
@@ -646,52 +469,7 @@
       if (e.key === "Enter") handleVerify();
     });
 
-    // Step 3 — 频道配置
-    els.kimiEnabled.addEventListener("change", () => {
-      toggleEl(els.kimiFields, els.kimiEnabled.checked);
-      hideChannelError();
-    });
-    els.feishuEnabled.addEventListener("change", () => {
-      toggleEl(els.feishuFields, els.feishuEnabled.checked);
-      hideChannelError();
-    });
-
-    // Kimi 命令输入 → 实时解析 token
-    els.kimiCommandInput.addEventListener("input", () => {
-      var raw = els.kimiCommandInput.value;
-      var token = parseBotToken(raw);
-      if (token) {
-        // 从命令格式中提取到 token → 替换输入框为纯 token
-        if (raw.indexOf("--bot-token") !== -1 && raw !== token) {
-          els.kimiCommandInput.value = token;
-        }
-        els.kimiMaskedToken.textContent = maskToken(token);
-        els.kimiParsedToken.classList.remove("hidden");
-      } else {
-        els.kimiParsedToken.classList.add("hidden");
-      }
-    });
-
-    // Kimi Bot 链接
-    els.kimiBotLink.addEventListener("click", (e) => {
-      e.preventDefault();
-      if (window.oneclaw?.openExternal) {
-        window.oneclaw.openExternal("https://www.kimi.com/bot");
-      }
-    });
-
-    els.btnSkipChannel.addEventListener("click", () => goToStep(4));
-    els.btnSaveChannels.addEventListener("click", handleSaveChannels);
-    els.btnToggleSecret.addEventListener("click", toggleSecretVisibility);
-
-    els.feishuConsoleLink.addEventListener("click", (e) => {
-      e.preventDefault();
-      if (window.oneclaw?.openExternal) {
-        window.oneclaw.openExternal("https://open.feishu.cn/app");
-      }
-    });
-
-    // Step 4 — 完成
+    // Step 3 — 完成
     els.btnStart.addEventListener("click", handleComplete);
   }
 

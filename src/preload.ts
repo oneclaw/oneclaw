@@ -14,10 +14,6 @@ contextBridge.exposeInMainWorld("oneclaw", {
     ipcRenderer.invoke("setup:verify-key", params),
   saveConfig: (params: Record<string, unknown>) =>
     ipcRenderer.invoke("setup:save-config", params),
-  saveChannelConfig: (params: Record<string, unknown>) =>
-    ipcRenderer.invoke("setup:save-channel", params),
-  saveKimiChannelConfig: (params: Record<string, unknown>) =>
-    ipcRenderer.invoke("setup:save-kimi-channel", params),
   completeSetup: () => ipcRenderer.invoke("setup:complete"),
 
   // Settings 相关
