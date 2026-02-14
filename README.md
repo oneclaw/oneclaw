@@ -1,11 +1,11 @@
 # OneClaw
 
-OneClaw is an AI desktop assistant built for everyday users.  
+OneClaw is an AI desktop assistant built for everyday users.
 You describe what you want, and it can automate browser tasks, organize information, and generate files.
 
 OneClaw means **One-Click OpenClaw**.
 
-中文版本: [README.zh.md](README.zh.md)
+Chinese version: [README.zh.md](README.zh.md)
 
 Its goal is simple: **AI that gets things done, not just chats.**
 
@@ -17,6 +17,10 @@ Its goal is simple: **AI that gets things done, not just chats.**
 - Real task execution: browser automation, data extraction, and file generation
 - Cross-platform: supports macOS and Windows (x64 / arm64)
 - China-friendly network defaults: smoother experience in restricted network environments
+- Settings: change provider, model, and chat channel anytime
+- Feishu integration: connect Feishu (Lark) as a chat channel
+- Auto-update: always stay on the latest version
+- System tray: runs in background, supports Chinese and English
 
 ## Typical Use Cases
 
@@ -26,23 +30,9 @@ Its goal is simple: **AI that gets things done, not just chats.**
 
 You define the goal, OneClaw executes.
 
-## Get Started in 3 Steps
-
-1. Download and install OneClaw (macOS or Windows)
-2. On first launch, choose your AI provider and enter your API key
-3. Open the main window and start giving tasks in natural language
-
-## Supported AI Providers
-
-- Anthropic
-- Moonshot (moonshot.ai / moonshot.cn / Kimi Code)
-- OpenAI
-- Google
-- Custom OpenAI-compatible API
-
 ## Download
 
-- Releases: <https://github.com/oneclaw/oneclaw/releases>
+- Releases: <https://github.com/nicepkg/oneclaw/releases>
 
 ## Which Installer Should I Choose?
 
@@ -60,13 +50,37 @@ Quick tips:
 - On most Windows laptops/desktops, use `x64.exe`
 - Use `arm64.exe` only if your Windows device is ARM-based
 
+## Get Started
+
+1. Download and install OneClaw (macOS or Windows)
+2. On first launch, choose your AI provider and enter your API key
+3. Open the main window and start giving tasks in natural language
+
+## Supported AI Providers
+
+- Anthropic
+- OpenAI
+- Google
+- Moonshot (moonshot.cn / moonshot.ai / Kimi Code)
+- Custom OpenAI/Anthropic-compatible API
+
 ## FAQ
 
-**Q: Can I use this if I don't code at all?**  
+**Q: Can I use this if I don't code at all?**
 A: Yes. OneClaw is designed for non-technical users.
 
-**Q: Do I need to install Node.js or Git myself?**  
-A: No. The app includes the runtime it needs.
+**Q: Do I need to install Node.js or Git myself?**
+A: No. The app includes everything it needs.
 
-**Q: Is the initial setup complicated?**  
+**Q: Is the initial setup complicated?**
 A: Not really. Follow the setup flow, pick a provider, and enter your API key.
+
+**Q: Can I change the provider after setup?**
+A: Yes. Open Settings from the tray menu (or `Cmd+,` on macOS) to change provider, model, or channel config.
+
+**Q: What is the Feishu channel?**
+A: You can connect OneClaw to Feishu (Lark) so it works as a chat bot in your Feishu workspace.
+
+## License
+
+MIT

@@ -22,42 +22,49 @@ The main process spawns a gateway subprocess, waits for its health check, then o
 | Language | TypeScript → CommonJS (no ESM) |
 | Packager | electron-builder 26.7.0 |
 | Updater | electron-updater (generic provider, CDN at `claw.ver0.cn`) |
-| Targets | macOS DMG (arm64/x64), Windows NSIS (x64/arm64) |
-| Version scheme | Calendar-based: `2026.2.10` (synced from upstream openclaw) |
+| Targets | macOS DMG + ZIP (arm64/x64), Windows NSIS (x64/arm64) |
+| Version scheme | Calendar-based: `2026.2.13` (auto-fetched from openclaw npm at build time) |
 
 ## Repository Layout
 
 ```
 oneclaw/
-├── src/                    # 12 TypeScript modules (1619 LOC total)
-│   ├── main.ts             # App entry, lifecycle, IPC registration
+├── src/                    # 16 TypeScript modules (2367 LOC total)
+│   ├── main.ts             # App entry, lifecycle, IPC registration, Dock toggle, menu
 │   ├── constants.ts        # Path resolution (dev vs packaged), health check params
 │   ├── gateway-process.ts  # Child process state machine + diagnostics
 │   ├── gateway-auth.ts     # Auth token read/generate/persist
 │   ├── window.ts           # BrowserWindow lifecycle, token injection, retry
-│   ├── tray.ts             # System tray icon + context menu
-│   ├── preload.ts          # contextBridge IPC whitelist (7 methods)
+│   ├── window-close-policy.ts  # Close behavior: hide vs destroy
+│   ├── tray.ts             # System tray icon + i18n context menu
+│   ├── preload.ts          # contextBridge IPC whitelist (15 methods + 2 listeners)
+│   ├── provider-config.ts  # Provider presets, verification, config R/W
 │   ├── setup-manager.ts    # Setup wizard window lifecycle
-│   ├── setup-ipc.ts        # Provider validation + config write
-│   ├── analytics.ts        # Telemetry (PostHog-style events)
-│   ├── auto-updater.ts     # electron-updater wrapper
+│   ├── setup-ipc.ts        # Setup validation + config write + Feishu channel
+│   ├── settings-manager.ts # Settings window lifecycle
+│   ├── settings-ipc.ts     # Settings provider/channel CRUD, Doctor runner
+│   ├── analytics.ts        # Telemetry (PostHog-style, retry + fallback URL)
+│   ├── auto-updater.ts     # electron-updater wrapper + progress callback
 │   └── logger.ts           # Dual-write logger (file + console)
 ├── setup/                  # Setup wizard frontend (vanilla HTML/CSS/JS)
 │   ├── index.html          # 3-step wizard with data-i18n attributes
-│   ├── setup.css           # Dark theme, drag region
-│   └── setup.js            # i18n dict (en/zh) + form logic
+│   ├── setup.css           # Dark/light theme via prefers-color-scheme
+│   └── setup.js            # i18n dict (en/zh) + form logic + Feishu channel
+├── settings/               # Settings page frontend (vanilla HTML/CSS/JS)
+│   ├── index.html          # Provider config + channel tabs + Doctor
+│   ├── settings.css        # Dark/light theme via prefers-color-scheme
+│   └── settings.js         # Provider CRUD, channel management, Doctor stream
 ├── scripts/
-│   ├── package-resources.js    # Downloads Node.js 22 + installs openclaw deps
+│   ├── package-resources.js    # Downloads Node.js 22 + installs openclaw from npm
 │   ├── afterPack.js            # electron-builder hook: injects resources post-strip
-│   ├── sync-openclaw-version.js # Syncs version from upstream/openclaw
 │   ├── run-mac-builder.js      # macOS build wrapper (sign + notarize)
 │   ├── run-with-env.js         # .env loader for child processes
+│   ├── merge-release-yml.js    # Merges per-arch latest.yml for auto-updater
 │   ├── dist-all-parallel.sh    # Parallel cross-platform build
-│   ├── clean.sh
-│   └── lib/openclaw-version-utils.js
+│   └── clean.sh
 ├── assets/                 # Icons: .icns, .ico, .png, tray templates
-├── upstream/               # openclaw source (gitignored, cloned separately)
-├── electron-builder.yml    # Build config
+├── .github/workflows/      # CI: build-release.yml (4-target parallel build + CDN upload)
+├── electron-builder.yml    # Build config (DMG + ZIP for mac, NSIS for win)
 ├── tsconfig.json           # target ES2022, module CommonJS
 └── .env                    # Signing keys + analytics config (gitignored)
 ```
@@ -79,8 +86,8 @@ out/                                 # electron-builder output (DMG/NSIS)
 ```bash
 npm run build                # TypeScript → dist/
 npm run dev                  # Run in dev mode (electron .)
-npm run package:resources    # Download Node.js 22 + install openclaw
-npm run dist:mac:arm64       # Full pipeline: sync version → package → DMG (arm64)
+npm run package:resources    # Download Node.js 22 + install openclaw from npm
+npm run dist:mac:arm64       # Full pipeline: package → DMG + ZIP (arm64)
 npm run dist:mac:x64         # Same for x64
 npm run dist:win:x64         # Windows NSIS x64 (cross-compile from macOS works)
 npm run dist:win:arm64       # Windows NSIS arm64
@@ -89,10 +96,9 @@ npm run clean                # Remove all generated files
 ```
 
 **Full build pipeline** (what `dist:mac:arm64` does):
-1. `version:sync` — read version from `upstream/openclaw/package.json`, write to root `package.json`
-2. `package:resources` — download Node.js 22, `npm install openclaw --production --install-links`
-3. `tsc` — compile TypeScript
-4. `electron-builder` → `afterPack.js` injects `resources/targets/<target>/` into app bundle → DMG/NSIS
+1. `package:resources` — download Node.js 22, `npm install openclaw --production --install-links` (version auto-fetched from npm)
+2. `tsc` — compile TypeScript
+3. `electron-builder` → `afterPack.js` injects `resources/targets/<target>/` into app bundle → DMG/ZIP/NSIS
 
 ## Key Design Decisions
 
@@ -119,9 +125,9 @@ The gateway requires an auth token. The main process generates one (or reads fro
 localStorage.setItem("openclaw.control.settings.v1", JSON.stringify({token}))
 ```
 
-### Setup Wizard (`setup-ipc.ts`, `setup/`)
+### Provider Configuration (`provider-config.ts`)
 
-First-launch 3-step wizard: Welcome → Provider Config → Done.
+Centralized module for all provider presets, API key verification, and config file I/O. Shared by both Setup wizard and Settings page.
 
 Supported providers:
 - **Anthropic** — standard Anthropic Messages API
@@ -130,15 +136,47 @@ Supported providers:
 - **Google** — Google Generative AI
 - **Custom** — user-supplied base URL + API type
 
-**Kimi Code special case:** Does NOT write `models.providers` entry. Only writes `env.KIMI_API_KEY` + `agents.defaults.model.primary = "kimi-coding/k2p5"`. This lets the gateway's built-in config handle the provider routing.
+All sub-platforms (including Kimi Code) use a unified config format: `apiKey` + `baseUrl` + `api` + `models` written to `models.providers`.
+
+### Setup Wizard (`setup-ipc.ts`, `setup/`)
+
+First-launch 3-step wizard: Welcome → Provider Config → Done.
+
+Also supports optional Feishu channel configuration (appId + appSecret).
 
 Config is written to `~/.openclaw/openclaw.json`. Setup completion is marked by `config.wizard.lastRunAt`.
+
+### Settings Page (`settings-ipc.ts`, `settings/`)
+
+Post-setup configuration management with:
+- **Model tab** — View/edit provider config, verify API key, switch models
+- **Chat Channel tab** — Feishu integration (appId + appSecret)
+- **Doctor** — Run `openclaw doctor --non-interactive --repair` with streamed output
+- **Restart Gateway** — Apply config changes without app restart
+
+Opened via tray menu "Settings" or macOS `Cmd+,` keyboard shortcut.
+
+### macOS Dock Visibility (`main.ts`)
+
+Dynamic Dock icon toggle: visible when any window is shown, hidden when all windows are closed (pure tray mode). Driven by `browser-window-created` + `show`/`hide`/`closed` events.
+
+### Tray i18n (`tray.ts`)
+
+Tray context menu labels are localized (Chinese/English) based on `app.getLocale()`. Menu includes: Open Dashboard, Gateway status, Restart Gateway, Settings, Check for Updates, Quit.
+
+### Auto-Updater (`auto-updater.ts`)
+
+CDN-based updates via `electron-updater`:
+- macOS requires ZIP artifact (DMG is for manual distribution)
+- Auto-check every 4 hours (30s startup delay)
+- Download progress shown in tray tooltip
+- Pre-quit callback ensures window close policy doesn't block `quitAndInstall()`
 
 ### Incremental Resource Packaging (`package-resources.js`)
 
 A stamp file (`resources/targets/<target>/.node-stamp`) records `version-platform-arch`. If stamp matches, skip download. Cross-platform builds (e.g., building win32-x64 on darwin-arm64) auto-detect the mismatch and re-download.
 
-Node.js download mirrors: npmmirror.com (China) first, nodejs.org fallback.
+openclaw is installed directly from npm (no local upstream directory needed). Node.js download mirrors: npmmirror.com (China) first, nodejs.org fallback.
 
 ### afterPack Hook (`afterPack.js`)
 
@@ -148,12 +186,14 @@ Target ID resolution: env `ONECLAW_TARGET` > `${electronPlatformName}-${arch}`.
 
 ### Preload Security (`preload.ts`)
 
-Electron 40 defaults to sandbox mode. Only 7 IPC methods are exposed via `contextBridge`:
+Electron 40 defaults to sandbox mode. 15 IPC methods + 2 event listeners are exposed via `contextBridge`:
 
-```
-restartGateway, getGatewayState, checkForUpdates,
-verifyKey, saveConfig, completeSetup, openExternal
-```
+**Gateway control:** `restartGateway`, `getGatewayState`
+**Auto-update:** `checkForUpdates`
+**Setup:** `verifyKey`, `saveConfig`, `saveChannelConfig`, `completeSetup`
+**Settings:** `settingsGetConfig`, `settingsVerifyKey`, `settingsSaveProvider`, `settingsGetChannelConfig`, `settingsSaveChannel`, `settingsRestartGateway`, `settingsRunDoctor`
+**Doctor stream:** `onDoctorOutput`, `onDoctorExit` (event listeners)
+**Utility:** `openExternal`
 
 `openExternal` exists because `shell.openExternal` is unavailable in sandboxed preload — must go through IPC to main process.
 
@@ -161,7 +201,7 @@ verifyKey, saveConfig, completeSetup, openExternal
 
 ```
 ~/.openclaw/
-  ├── openclaw.json     # User config (provider, model, auth token)
+  ├── openclaw.json     # User config (provider, model, auth token, channels)
   ├── .device-id        # Analytics device ID (UUID)
   ├── app.log           # Application log (5MB truncate)
   └── gateway.log       # Gateway child process diagnostic log
@@ -173,46 +213,55 @@ verifyKey, saveConfig, completeSetup, openExternal
 
 2. **Cross-platform build needs re-packaging.** After switching target platform, `npm run package:resources` must run again because the Node.js binary and native modules differ per platform.
 
-3. **Kimi Code provider config is special.** Don't write `models.providers` — let gateway built-in config handle it. Only set the env var and default model.
+3. **All Moonshot sub-platforms use unified config.** All three (moonshot-cn, moonshot-ai, kimi-code) write `apiKey` + `baseUrl` + `api` + `models` to `models.providers`. No special-casing.
 
 4. **Health check timeout is 90 seconds.** This is intentionally long for Windows. Don't reduce it without testing on slow machines.
 
-5. **Tray app behavior.** Closing the window hides it; the app stays in the tray. `Cmd+Q` (or Quit from tray menu) actually quits.
+5. **Tray app behavior.** Closing the window hides it; the app stays in the tray. `Cmd+Q` (or Quit from tray menu) actually quits. macOS Dock icon hides automatically when no windows are visible.
 
 6. **macOS signing.** By default uses ad-hoc identity (`-`). Set `ONECLAW_MAC_SIGN_AND_NOTARIZE=true` + `CSC_NAME`, `APPLE_API_KEY`, `APPLE_API_KEY_ID`, `APPLE_API_ISSUER` in `.env` for real signing.
 
-7. **Version is calendar-based** (`2026.2.10`), synced from upstream openclaw. Don't manually edit `package.json` version — use `npm run version:sync`.
+7. **Version is calendar-based** (`2026.2.13`). Don't manually edit `package.json` version.
+
+8. **No local upstream directory needed.** openclaw is installed from npm directly during `package:resources`. The `upstream/` directory is no longer required.
+
+9. **Blockmap generation is disabled.** Both DMG and NSIS have blockmap/differential disabled to avoid unnecessary `.blockmap` files.
+
+10. **macOS auto-update requires ZIP.** electron-updater needs the ZIP artifact, not DMG. Both are built: DMG for manual distribution, ZIP for auto-update.
 
 ## Architecture Diagram
 
 ```
-┌─────────────────────────────────────────────────────┐
-│                 Electron Main Process                │
-│                                                     │
-│  main.ts ─── gateway-process.ts ─── constants.ts    │
-│     │              │                     │          │
-│     │         spawn child ──────── path resolution  │
-│     │              │                                │
-│     ├── window.ts (BrowserWindow + token inject)    │
-│     ├── tray.ts   (system tray + menu)              │
-│     ├── setup-manager.ts + setup-ipc.ts (wizard)    │
-│     ├── analytics.ts (telemetry)                    │
-│     ├── auto-updater.ts (CDN updates)               │
-│     ├── gateway-auth.ts (token management)          │
-│     └── logger.ts (file + console)                  │
-│                                                     │
-│  preload.ts ─── contextBridge (7 IPC methods)       │
-└─────────────────┬───────────────────────────────────┘
-                  │
-    ┌─────────────┴─────────────┐
-    │   Gateway Child Process   │
-    │   Node.js 22 + openclaw   │
-    │   :18789 loopback only    │
-    └─────────────┬─────────────┘
-                  │ HTTP
-    ┌─────────────┴─────────────┐
-    │      BrowserWindow        │
-    │   loads Control UI from   │
-    │   http://127.0.0.1:18789  │
-    └───────────────────────────┘
+┌──────────────────────────────────────────────────────────┐
+│                   Electron Main Process                   │
+│                                                          │
+│  main.ts ─── gateway-process.ts ─── constants.ts         │
+│     │              │                     │               │
+│     │         spawn child ──────── path resolution       │
+│     │              │                                     │
+│     ├── window.ts (BrowserWindow + token inject)         │
+│     │     └── window-close-policy.ts (hide vs destroy)   │
+│     ├── tray.ts   (system tray + i18n menu)              │
+│     ├── provider-config.ts (presets + verify + config)   │
+│     ├── setup-manager.ts + setup-ipc.ts (wizard)         │
+│     ├── settings-manager.ts + settings-ipc.ts (settings) │
+│     ├── analytics.ts (telemetry + retry + fallback)      │
+│     ├── auto-updater.ts (CDN updates + progress)         │
+│     ├── gateway-auth.ts (token management)               │
+│     └── logger.ts (file + console)                       │
+│                                                          │
+│  preload.ts ─── contextBridge (15 IPC + 2 listeners)     │
+└──────────────────┬───────────────────────────────────────┘
+                   │
+     ┌─────────────┴─────────────┐
+     │   Gateway Child Process   │
+     │   Node.js 22 + openclaw   │
+     │   :18789 loopback only    │
+     └─────────────┬─────────────┘
+                   │ HTTP
+     ┌─────────────┴─────────────┐
+     │      BrowserWindow        │
+     │   loads Control UI from   │
+     │   http://127.0.0.1:18789  │
+     └───────────────────────────┘
 ```
