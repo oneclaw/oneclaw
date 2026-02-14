@@ -605,6 +605,45 @@ select option {
   color: var(--error);
 }
 
+/* ── Toast 提示 ── */
+
+.toast-container {
+  position: fixed;
+  top: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 9999;
+  pointer-events: none;
+}
+
+.toast {
+  padding: 10px 20px;
+  font-size: 13px;
+  font-weight: 500;
+  border-radius: var(--radius-sm);
+  color: var(--success);
+  background: var(--success-bg);
+  border: 1px solid rgba(212, 119, 106, 0.25);
+  backdrop-filter: blur(8px);
+  opacity: 0;
+  transform: translateY(-8px);
+  animation: toast-in 200ms ease forwards, toast-out 200ms ease 2.6s forwards;
+}
+
+.toast.error {
+  color: var(--error);
+  background: var(--error-bg);
+  border-color: rgba(192, 57, 43, 0.25);
+}
+
+@keyframes toast-in {
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes toast-out {
+  to { opacity: 0; transform: translateY(-8px); }
+}
+
 /* ── 工具类 ── */
 
 .hidden {

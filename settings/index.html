@@ -9,6 +9,8 @@
 </head>
 <body>
 
+  <div class="toast-container" id="toastContainer"></div>
+
   <div class="settings-layout">
 
     <!-- 左侧导航 -->
@@ -227,14 +229,10 @@
           <a href="#" class="platform-link" id="kimiBotPageLink" data-i18n="kimi.getGuide">Go to kimi.com/bot →</a>
         </div>
 
-        <div class="current-provider-status hidden" id="kimiStatus"></div>
-
-        <p class="kimi-guide-text" data-i18n="kimi.guideText">
-          Click 'Associate existing OpenClaw' → copy command → paste below
-        </p>
+        <p class="kimi-guide-text" data-i18n="kimi.guideText">Click 'Associate existing OpenClaw' → copy command → paste below</p>
 
         <div class="field-group">
-          <label for="kimiSettingsInput" data-i18n="kimi.inputLabel">Paste command or Bot Token</label>
+          <label for="kimiSettingsInput" data-i18n="kimi.inputLabel">Paste BotToken or command (auto parse token)</label>
           <input type="text" id="kimiSettingsInput"
             placeholder="bash &lt;(curl ...) --bot-token YOUR_TOKEN"
             autocomplete="off" spellcheck="false">
@@ -246,14 +244,6 @@
         </div>
 
         <div class="msg-box hidden" id="kimiMsgBox"></div>
-
-        <div class="restart-banner hidden" id="kimiRestartBanner">
-          <span data-i18n="kimi.restartHint">Config saved. Restart gateway to apply.</span>
-          <button class="btn-restart" id="btnKimiRestart">
-            <span class="btn-text" data-i18n="provider.restart">Restart Gateway</span>
-            <span class="btn-spinner hidden"></span>
-          </button>
-        </div>
 
         <div class="btn-row bottom-actions">
           <button class="btn-primary" id="btnKimiSave">

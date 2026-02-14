@@ -4,7 +4,7 @@ import { DEFAULT_PORT, resolveGatewayCwd } from "./constants";
 
 export const KIMI_PLUGIN_ID = "kimi-claw";
 export const KIMI_SEARCH_PLUGIN_ID = "kimi-search";
-export const DEFAULT_KIMI_BRIDGE_WS_URL = "wss://kimi-claw.dev.kimi.team/api-claw/bots/agent-ws";
+export const DEFAULT_KIMI_BRIDGE_WS_URL = "wss://www.kimi.com/api-claw/bots/agent-ws";
 
 export interface SaveKimiPluginParams {
   botToken: string;
@@ -77,10 +77,11 @@ export function resolveKimiPluginDir(): string {
 // 检查 kimi-claw 插件是否随应用内置（缺失则拒绝写配置，避免网关启动失败）
 export function isKimiPluginBundled(): boolean {
   const pluginDir = resolveKimiPluginDir();
-  return (
-    fs.existsSync(path.join(pluginDir, "index.ts")) &&
-    fs.existsSync(path.join(pluginDir, "openclaw.plugin.json"))
-  );
+  // 入口可能是源码 index.ts 或编译产物 dist/index.js
+  const hasEntry =
+    fs.existsSync(path.join(pluginDir, "index.ts")) ||
+    fs.existsSync(path.join(pluginDir, "dist", "index.js"));
+  return hasEntry && fs.existsSync(path.join(pluginDir, "openclaw.plugin.json"));
 }
 
 // 从已有配置中提取 kimi-claw 插件信息（供 settings 回显）

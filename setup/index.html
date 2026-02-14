@@ -168,7 +168,7 @@
         <p class="subtitle" data-i18n="channel.subtitle">Connect channels to extend OneClaw capabilities.</p>
 
         <!-- KimiClaw 区块 -->
-        <div class="channel-section">
+            <div class="channel-section">
           <label class="checkbox-row">
             <input type="checkbox" id="kimiEnabled">
             <span data-i18n="channel.kimiTitle">KimiClaw</span>
@@ -178,10 +178,10 @@
             <p class="channel-guide">
               <span data-i18n="channel.kimiGuide1">Visit </span>
               <a href="#" class="platform-link" id="kimiBotLink">kimi.com/bot</a>
-              <span data-i18n="channel.kimiGuide2"> → click 'Associate existing OpenClaw' → copy command → paste below</span>
             </p>
+            <p class="channel-guide" data-i18n="channel.kimiGuide2">Click 'Associate existing OpenClaw' → copy command → paste below</p>
             <div class="field-group">
-              <label for="kimiCommandInput" data-i18n="channel.kimiInputLabel">Paste command or Bot Token</label>
+              <label for="kimiCommandInput" data-i18n="channel.kimiInputLabel">Paste BotToken or command (auto parse token)</label>
               <input type="text" id="kimiCommandInput"
                 placeholder="bash &lt;(curl ...) --bot-token YOUR_TOKEN"
                 autocomplete="off" spellcheck="false">

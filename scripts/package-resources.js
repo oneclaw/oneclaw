@@ -21,9 +21,11 @@ const {
 // ─── 项目根目录 ───
 const ROOT = path.resolve(__dirname, "..");
 const TARGETS_ROOT = path.join(ROOT, "resources", "targets");
-const KIMI_CLAW_DEFAULT_TGZ_URL =
-  "https://kimi-web-img.moonshot.cn/demo/kimi_claw/kimi-claw-latest.tgz";
+const KIMI_CLAW_BASE_URL = "https://cdn.kimi.com/kimi-claw";
+const KIMI_CLAW_DEFAULT_TGZ_URL = `${KIMI_CLAW_BASE_URL}/kimi-claw-latest.tgz`;
 const KIMI_CLAW_CACHE_FILE = "kimi-claw-latest.tgz";
+const KIMI_SEARCH_DEFAULT_TGZ_URL = `${KIMI_CLAW_BASE_URL}/openclaw-kimi-search-0.1.2.tgz`;
+const KIMI_SEARCH_CACHE_FILE = "openclaw-kimi-search-0.1.2.tgz";
 
 // 计算目标产物的唯一标识
 function getTargetId(platform, arch) {
@@ -764,72 +766,87 @@ function installDependencies(opts, gatewayDir) {
   log("node_modules 裁剪完成");
 }
 
-// ─── Step 2.5: 注入 kimi-claw 插件（bundled extension） ───
+// ─── Step 2.5: 注入 bundled 插件（kimi-claw + kimi-search） ───
 
-// 解析 kimi-claw 包来源（优先本地 tgz，其次远程 URL）
-function resolveKimiClawPackageSource() {
-  const localTgz = readEnvText("ONECLAW_KIMI_CLAW_TGZ_PATH");
+// 插件定义（id → 下载/缓存参数）
+const BUNDLED_PLUGINS = [
+  {
+    id: "kimi-claw",
+    localEnv: "ONECLAW_KIMI_CLAW_TGZ_PATH",
+    urlEnv: "ONECLAW_KIMI_CLAW_TGZ_URL",
+    refreshEnv: "ONECLAW_KIMI_CLAW_REFRESH",
+    defaultURL: KIMI_CLAW_DEFAULT_TGZ_URL,
+    cacheFile: KIMI_CLAW_CACHE_FILE,
+    // 校验解压产物必须包含的文件
+    requiredFiles: ["package.json", "openclaw.plugin.json"],
+  },
+  {
+    id: "kimi-search",
+    localEnv: "ONECLAW_KIMI_SEARCH_TGZ_PATH",
+    urlEnv: "ONECLAW_KIMI_SEARCH_TGZ_URL",
+    refreshEnv: "ONECLAW_KIMI_SEARCH_REFRESH",
+    defaultURL: KIMI_SEARCH_DEFAULT_TGZ_URL,
+    cacheFile: KIMI_SEARCH_CACHE_FILE,
+    requiredFiles: ["package.json", "openclaw.plugin.json"],
+  },
+];
+
+// 解析插件包来源（优先本地 tgz，其次远程 URL）
+function resolvePluginSource(plugin) {
+  const localTgz = readEnvText(plugin.localEnv);
   if (localTgz) {
     const resolved = path.resolve(localTgz);
     if (!fs.existsSync(resolved)) {
-      die(`ONECLAW_KIMI_CLAW_TGZ_PATH 指向的文件不存在: ${resolved}`);
+      die(`${plugin.localEnv} 指向的文件不存在: ${resolved}`);
     }
-    return {
-      archivePath: resolved,
-      sourceLabel: `local:${resolved}`,
-    };
+    return { archivePath: resolved, sourceLabel: `local:${resolved}` };
   }
 
-  const cacheDir = path.join(ROOT, ".cache", "kimi-claw");
+  const cacheDir = path.join(ROOT, ".cache", plugin.id);
   ensureDir(cacheDir);
-  const archivePath = path.join(cacheDir, KIMI_CLAW_CACHE_FILE);
-  const sourceURL = readEnvText("ONECLAW_KIMI_CLAW_TGZ_URL") || KIMI_CLAW_DEFAULT_TGZ_URL;
-  const refresh = readEnvText("ONECLAW_KIMI_CLAW_REFRESH").toLowerCase();
+  const archivePath = path.join(cacheDir, plugin.cacheFile);
+  const sourceURL = readEnvText(plugin.urlEnv) || plugin.defaultURL;
+  const refresh = readEnvText(plugin.refreshEnv).toLowerCase();
   const forceRefresh = refresh === "1" || refresh === "true" || refresh === "yes";
 
-  return {
-    archivePath,
-    sourceURL,
-    sourceLabel: sourceURL,
-    forceRefresh,
-  };
+  return { archivePath, sourceURL, sourceLabel: sourceURL, forceRefresh };
 }
 
-// 下载（或复用缓存）kimi-claw 打包产物
-async function ensureKimiClawArchive() {
-  const source = resolveKimiClawPackageSource();
+// 下载（或复用缓存）插件 tgz
+async function ensurePluginArchive(plugin) {
+  const source = resolvePluginSource(plugin);
   const { archivePath } = source;
 
-  // 本地文件模式：直接复用
   if (!source.sourceURL) {
-    log(`使用本地 kimi-claw 包: ${path.relative(ROOT, archivePath)}`);
+    log(`使用本地 ${plugin.id} 包: ${path.relative(ROOT, archivePath)}`);
     return source;
   }
 
   if (source.forceRefresh || !fs.existsSync(archivePath)) {
-    log(`下载 kimi-claw 插件包: ${source.sourceURL}`);
+    log(`下载 ${plugin.id} 插件包: ${source.sourceURL}`);
     safeUnlink(archivePath);
     await downloadFileWithFallback([source.sourceURL], archivePath);
   } else {
-    log(`使用缓存的 kimi-claw 包: ${path.relative(ROOT, archivePath)}`);
+    log(`使用缓存的 ${plugin.id} 包: ${path.relative(ROOT, archivePath)}`);
   }
 
   return source;
 }
 
-// 将 kimi-claw 插件注入 openclaw/extensions/kimi-claw
-async function bundleKimiClawPlugin(gatewayDir, targetId) {
-  const source = await ensureKimiClawArchive();
+// 将插件 tgz 解压并注入 openclaw/extensions/<id>
+async function bundlePlugin(plugin, gatewayDir, targetId) {
+  const source = await ensurePluginArchive(plugin);
   const openclawDir = path.join(gatewayDir, "node_modules", "openclaw");
   if (!fs.existsSync(openclawDir)) {
-    die(`openclaw 依赖目录不存在，无法注入 kimi-claw: ${openclawDir}`);
+    die(`openclaw 依赖目录不存在，无法注入 ${plugin.id}: ${openclawDir}`);
   }
 
   const extRoot = path.join(openclawDir, "extensions");
-  const pluginDir = path.join(extRoot, "kimi-claw");
+  const pluginDir = path.join(extRoot, plugin.id);
   ensureDir(extRoot);
 
-  const tmpDir = createExtractTmpDir(path.dirname(source.archivePath), `${targetId}_kimi_claw`);
+  const safeId = plugin.id.replace(/-/g, "_");
+  const tmpDir = createExtractTmpDir(path.dirname(source.archivePath), `${targetId}_${safeId}`);
   let extracted = false;
   for (let attempt = 1; attempt <= 2; attempt++) {
     try {
@@ -838,7 +855,7 @@ async function bundleKimiClawPlugin(gatewayDir, targetId) {
       break;
     } catch (err) {
       if (attempt === 1 && source.sourceURL) {
-        log("检测到 kimi-claw 缓存包可能损坏，重新下载后重试...");
+        log(`检测到 ${plugin.id} 缓存包可能损坏，重新下载后重试...`);
         rmDir(tmpDir);
         ensureDir(tmpDir);
         safeUnlink(source.archivePath);
@@ -846,36 +863,41 @@ async function bundleKimiClawPlugin(gatewayDir, targetId) {
         continue;
       }
       rmDir(tmpDir);
-      die(`解压 kimi-claw 包失败: ${err.message || String(err)}`);
+      die(`解压 ${plugin.id} 包失败: ${err.message || String(err)}`);
     }
   }
 
   if (!extracted) {
     rmDir(tmpDir);
-    die("解压 kimi-claw 包失败（未知原因）");
+    die(`解压 ${plugin.id} 包失败（未知原因）`);
   }
 
+  // 校验解压产物
   const extractedPkgDir = path.join(tmpDir, "package");
-  const pkgJson = path.join(extractedPkgDir, "package.json");
-  const pluginJson = path.join(extractedPkgDir, "openclaw.plugin.json");
-  if (!fs.existsSync(pkgJson) || !fs.existsSync(pluginJson)) {
-    rmDir(tmpDir);
-    die("kimi-claw 包内容无效（缺少 package/package.json 或 openclaw.plugin.json）");
+  for (const f of plugin.requiredFiles) {
+    if (!fs.existsSync(path.join(extractedPkgDir, f))) {
+      rmDir(tmpDir);
+      die(`${plugin.id} 包内容无效（缺少 package/${f}）`);
+    }
   }
 
   rmDir(pluginDir);
   copyDirSync(extractedPkgDir, pluginDir);
   rmDir(tmpDir);
 
-  const stamp = {
-    source: source.sourceLabel,
-    bundledAt: new Date().toISOString(),
-  };
+  const stamp = { source: source.sourceLabel, bundledAt: new Date().toISOString() };
   fs.writeFileSync(
-    path.join(pluginDir, ".oneclaw-kimi-claw-stamp.json"),
+    path.join(pluginDir, `.oneclaw-${plugin.id}-stamp.json`),
     JSON.stringify(stamp, null, 2)
   );
-  log(`已注入 kimi-claw 插件到 ${path.relative(ROOT, pluginDir)}`);
+  log(`已注入 ${plugin.id} 插件到 ${path.relative(ROOT, pluginDir)}`);
+}
+
+// 注入所有 bundled 插件
+async function bundleAllPlugins(gatewayDir, targetId) {
+  for (const plugin of BUNDLED_PLUGINS) {
+    await bundlePlugin(plugin, gatewayDir, targetId);
+  }
 }
 
 // 裁剪 node_modules，删除无用文件以减小体积
@@ -1082,16 +1104,8 @@ function verifyOutput(targetPaths, platform) {
     path.join(targetRel, "gateway", "gateway-entry.mjs"),
     path.join(targetRel, "gateway", "node_modules", "openclaw", "dist", "entry.js"),
     path.join(targetRel, "gateway", "node_modules", "openclaw", "dist", "control-ui", "index.html"),
-    path.join(targetRel, "gateway", "node_modules", "openclaw", "extensions", "kimi-claw", "index.ts"),
-    path.join(
-      targetRel,
-      "gateway",
-      "node_modules",
-      "openclaw",
-      "extensions",
-      "kimi-claw",
-      "openclaw.plugin.json"
-    ),
+    path.join(targetRel, "gateway", "node_modules", "openclaw", "extensions", "kimi-claw", "openclaw.plugin.json"),
+    path.join(targetRel, "gateway", "node_modules", "openclaw", "extensions", "kimi-search", "openclaw.plugin.json"),
     path.join(targetRel, "analytics-config.json"),
     path.join(targetRel, "app-icon.png"),
   ];
@@ -1144,9 +1158,9 @@ async function main() {
 
   console.log();
 
-  // Step 2.5: 注入 kimi-claw 插件（bundled extension）
-  log("Step 2.5: 注入 kimi-claw 插件");
-  await bundleKimiClawPlugin(targetPaths.gatewayDir, targetPaths.targetId);
+  // Step 2.5: 注入 bundled 插件（kimi-claw + kimi-search）
+  log("Step 2.5: 注入 bundled 插件");
+  await bundleAllPlugins(targetPaths.gatewayDir, targetPaths.targetId);
 
   console.log();
 

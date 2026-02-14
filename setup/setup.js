@@ -74,8 +74,8 @@
       "channel.kimiTitle": "KimiClaw",
       "channel.kimiDesc": "Control OneClaw remotely via Kimi",
       "channel.kimiGuide1": "Visit ",
-      "channel.kimiGuide2": " → click 'Associate existing OpenClaw' → copy command → paste below",
-      "channel.kimiInputLabel": "Paste command or Bot Token",
+      "channel.kimiGuide2": "Click 'Associate existing OpenClaw' → copy command → paste below",
+      "channel.kimiInputLabel": "Paste BotToken or command (auto parse token)",
       "channel.kimiParsed": "Token parsed: ",
       "channel.feishuTitle": "Feishu Integration",
       "channel.feishuDesc": "Chat with AI directly in your Feishu group.",
@@ -128,8 +128,8 @@
       "channel.kimiTitle": "KimiClaw",
       "channel.kimiDesc": "通过 Kimi 远程遥控 OneClaw",
       "channel.kimiGuide1": "访问 ",
-      "channel.kimiGuide2": ' → 点击"关联已有 OpenClaw" → 复制命令 → 粘贴到下方',
-      "channel.kimiInputLabel": "粘贴命令或 Bot Token",
+      "channel.kimiGuide2": '点击"关联已有 OpenClaw" → 复制命令 → 粘贴到下方',
+      "channel.kimiInputLabel": "粘贴 BotToken 或命令(自动解析Token)。",
       "channel.kimiParsed": "解析到 Token：",
       "channel.feishuTitle": "飞书集成",
       "channel.feishuDesc": "在飞书群聊中直接与 AI 对话。",
@@ -500,6 +500,8 @@
           setChannelSaving(false);
           return;
         }
+        els.kimiParsedToken.classList.add("hidden");
+        els.kimiMaskedToken.textContent = "";
       }
 
       setChannelSaving(false);
@@ -656,8 +658,13 @@
 
     // Kimi 命令输入 → 实时解析 token
     els.kimiCommandInput.addEventListener("input", () => {
-      var token = parseBotToken(els.kimiCommandInput.value);
+      var raw = els.kimiCommandInput.value;
+      var token = parseBotToken(raw);
       if (token) {
+        // 从命令格式中提取到 token → 替换输入框为纯 token
+        if (raw.indexOf("--bot-token") !== -1 && raw !== token) {
+          els.kimiCommandInput.value = token;
+        }
         els.kimiMaskedToken.textContent = maskToken(token);
         els.kimiParsedToken.classList.remove("hidden");
       } else {

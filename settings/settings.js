@@ -95,14 +95,14 @@
       "kimi.title": "KimiClaw",
       "kimi.desc": "Control OneClaw remotely via Kimi",
       "kimi.getGuide": "Go to kimi.com/bot →",
-      "kimi.guideText": "Click 'Associate existing OpenClaw' → copy command → paste below",
-      "kimi.inputLabel": "Paste command or Bot Token",
+  "kimi.guideText": "Click 'Associate existing OpenClaw' → copy command → paste below",
+  "kimi.inputLabel": "Paste BotToken or command (auto parse token)",
       "kimi.parsed": "Token parsed: ",
       "kimi.save": "Save",
       "kimi.saving": "Saving…",
+      "kimi.restarting": "Restarting…",
       "kimi.saved": "KimiClaw config saved.",
-      "kimi.status": "Connected: KimiClaw",
-      "kimi.restartHint": "Config saved. Restart gateway to apply.",
+      "kimi.savedNoRestart": "Config saved. Gateway restart timed out — please restart manually.",
       "error.noKimiBotToken": "Please paste the command or enter your Bot Token.",
       "nav.advanced": "Advanced",
       "advanced.title": "Advanced",
@@ -163,14 +163,14 @@
       "kimi.title": "KimiClaw",
       "kimi.desc": "通过 Kimi 远程遥控 OneClaw",
       "kimi.getGuide": "前往 kimi.com/bot →",
-      "kimi.guideText": '点击"关联已有 OpenClaw" → 复制命令 → 粘贴到下方输入框',
-      "kimi.inputLabel": "粘贴命令或 Bot Token",
+  "kimi.guideText": '点击"关联已有 OpenClaw" → 复制命令 → 粘贴到下方输入框',
+  "kimi.inputLabel": "粘贴 BotToken 或命令(自动解析Token)。",
       "kimi.parsed": "解析到 Token：",
       "kimi.save": "保存",
       "kimi.saving": "保存中…",
-      "kimi.saved": "KimiClaw 配置已保存。",
-      "kimi.status": "已连接: KimiClaw",
-      "kimi.restartHint": "配置已保存，重启 Gateway 生效。",
+      "kimi.restarting": "正在重启…",
+      "kimi.saved": "KimiClaw 配置已保存并生效。",
+      "kimi.savedNoRestart": "配置已保存，但 Gateway 重启超时，请手动重启。",
       "error.noKimiBotToken": "请粘贴命令或输入 Bot Token。",
       "nav.advanced": "高级选项",
       "advanced.title": "高级选项",
@@ -230,15 +230,10 @@
     kimiSettingsParsed: $("#kimiSettingsParsed"),
     kimiSettingsMaskedToken: $("#kimiSettingsMaskedToken"),
     kimiMsgBox: $("#kimiMsgBox"),
-    kimiStatus: $("#kimiStatus"),
     kimiBotPageLink: $("#kimiBotPageLink"),
     btnKimiSave: $("#btnKimiSave"),
     btnKimiSaveText: $("#btnKimiSave .btn-text"),
     btnKimiSaveSpinner: $("#btnKimiSave .btn-spinner"),
-    kimiRestartBanner: $("#kimiRestartBanner"),
-    btnKimiRestart: $("#btnKimiRestart"),
-    btnKimiRestartText: $("#btnKimiRestart .btn-text"),
-    btnKimiRestartSpinner: $("#btnKimiRestart .btn-spinner"),
     // Doctor tab
     btnDoctor: $("#btnDoctor"),
     btnDoctorText: $("#btnDoctor .btn-text"),
@@ -415,7 +410,7 @@
       }
 
       setSaving(false);
-      showMsg(t("provider.saved"), "success");
+      showToast(t("provider.saved"));
     } catch (err) {
       showMsg(t("error.connection") + (err.message || "Unknown error"), "error");
       setSaving(false);
@@ -528,7 +523,7 @@
       }
 
       setChSaving(false);
-      showChMsg(t("channel.saved"), "success");
+      showToast(t("channel.saved"));
       // 更新状态指示
       els.chStatus.textContent = t("channel.status");
       els.chStatus.classList.remove("hidden");
@@ -639,7 +634,7 @@
       });
       setAdvSaving(false);
       if (result.success) {
-        showAdvMsg(t("advanced.saved"), "success");
+        showToast(t("advanced.saved"));
       } else {
         showAdvMsg(result.message || "Save failed", "error");
       }
@@ -716,18 +711,34 @@
         els.kimiSettingsMaskedToken.textContent = maskToken(data.botToken);
         els.kimiSettingsParsed.classList.remove("hidden");
       }
-
-      // 已启用 → 显示连接状态
-      if (data.enabled && data.botToken) {
-        els.kimiStatus.textContent = t("kimi.status");
-        els.kimiStatus.classList.remove("hidden");
-      }
     } catch (err) {
       console.error("[Settings] loadKimiConfig failed:", err);
     }
   }
 
-  // 保存 Kimi 配置
+  // 等待 Gateway 恢复 running 状态
+  function waitForGatewayRunning(maxWait) {
+    var interval = 1000;
+    var elapsed = 0;
+    return new Promise(function (resolve) {
+      var timer = setInterval(function () {
+        elapsed += interval;
+        if (elapsed >= maxWait) {
+          clearInterval(timer);
+          resolve(false);
+          return;
+        }
+        window.oneclaw.getGatewayState().then(function (state) {
+          if (state === "running") {
+            clearInterval(timer);
+            resolve(true);
+          }
+        }).catch(function () {});
+      }, interval);
+    });
+  }
+
+  // 保存 Kimi 配置并重启 Gateway 使其生效
   async function handleKimiSave() {
     if (kimiSaving) return;
 
@@ -742,36 +753,28 @@
 
     try {
       var result = await window.oneclaw.settingsSaveKimiConfig({ botToken: botToken });
-      setKimiSaving(false);
-      if (result.success) {
-        showKimiMsg(t("kimi.saved"), "success");
-        els.kimiStatus.textContent = t("kimi.status");
-        els.kimiStatus.classList.remove("hidden");
-        els.kimiRestartBanner.classList.remove("hidden");
-      } else {
+      if (!result.success) {
         showKimiMsg(result.message || "Save failed", "error");
+        setKimiSaving(false);
+        return;
       }
+
+      // 保存成功后不持久显示“解析到 token”提示
+      els.kimiSettingsParsed.classList.add("hidden");
+      els.kimiSettingsMaskedToken.textContent = "";
+
+      // 保存成功 → 重启 Gateway 加载新插件配置
+      els.btnKimiSaveText.textContent = t("kimi.restarting");
+      window.oneclaw.restartGateway();
+
+      // 轮询等待 Gateway 恢复 running（最多 30s）
+      var ok = await waitForGatewayRunning(30000);
+      setKimiSaving(false);
+
+      showToast(ok ? t("kimi.saved") : t("kimi.savedNoRestart"));
     } catch (err) {
       setKimiSaving(false);
       showKimiMsg(t("error.connection") + (err.message || "Unknown error"), "error");
-    }
-  }
-
-  // Kimi Tab 重启 Gateway
-  async function handleKimiRestart() {
-    els.btnKimiRestart.disabled = true;
-    els.btnKimiRestartSpinner.classList.remove("hidden");
-    try {
-      window.oneclaw.restartGateway();
-      // 短暂延时让用户看到状态变化
-      setTimeout(function () {
-        els.btnKimiRestart.disabled = false;
-        els.btnKimiRestartSpinner.classList.add("hidden");
-        els.kimiRestartBanner.classList.add("hidden");
-      }, 2000);
-    } catch (err) {
-      els.btnKimiRestart.disabled = false;
-      els.btnKimiRestartSpinner.classList.add("hidden");
     }
   }
 
@@ -890,6 +893,16 @@
     el.classList.toggle("hidden", !show);
   }
 
+  // 短暂浮层提示（3s 自动消失）
+  function showToast(msg) {
+    var container = document.getElementById("toastContainer");
+    var el = document.createElement("div");
+    el.className = "toast";
+    el.textContent = msg;
+    container.appendChild(el);
+    setTimeout(function () { el.remove(); }, 3000);
+  }
+
   function showMsg(msg, type) {
     els.msgBox.textContent = msg;
     els.msgBox.className = "msg-box " + type;
@@ -975,8 +988,13 @@
     });
     // Kimi tab
     els.kimiSettingsInput.addEventListener("input", function () {
-      var token = parseBotToken(els.kimiSettingsInput.value);
+      var raw = els.kimiSettingsInput.value;
+      var token = parseBotToken(raw);
       if (token) {
+        // 从命令格式中提取到 token → 替换输入框为纯 token
+        if (raw.indexOf("--bot-token") !== -1 && raw !== token) {
+          els.kimiSettingsInput.value = token;
+        }
         els.kimiSettingsMaskedToken.textContent = maskToken(token);
         els.kimiSettingsParsed.classList.remove("hidden");
       } else {
@@ -984,7 +1002,6 @@
       }
     });
     els.btnKimiSave.addEventListener("click", handleKimiSave);
-    els.btnKimiRestart.addEventListener("click", handleKimiRestart);
     els.kimiBotPageLink.addEventListener("click", function (e) {
       e.preventDefault();
       if (window.oneclaw && window.oneclaw.openExternal) {
