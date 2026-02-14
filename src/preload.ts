@@ -27,7 +27,6 @@ contextBridge.exposeInMainWorld("oneclaw", {
   settingsGetChannelConfig: () => ipcRenderer.invoke("settings:get-channel-config"),
   settingsSaveChannel: (params: Record<string, unknown>) =>
     ipcRenderer.invoke("settings:save-channel", params),
-  settingsRestartGateway: () => ipcRenderer.invoke("settings:restart-gateway"),
   settingsRunDoctor: () => ipcRenderer.invoke("settings:run-doctor"),
   settingsGetAdvanced: () => ipcRenderer.invoke("settings:get-advanced"),
   settingsSaveAdvanced: (params: Record<string, unknown>) =>
