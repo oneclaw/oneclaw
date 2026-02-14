@@ -99,16 +99,22 @@ export function registerSettingsIpc(deps: SettingsIpcDeps): void {
     }
   });
 
-  // ── 保存频道配置 ──
+  // ── 保存频道配置（支持 enabled=false 仅切换开关） ──
   ipcMain.handle("settings:save-channel", async (_event, params) => {
-    const { appId, appSecret } = params;
+    const { appId, appSecret, enabled } = params;
     try {
       const config = readUserConfig();
-
       config.plugins ??= {};
       config.plugins.entries ??= {};
-      config.plugins.entries.feishu = { enabled: true };
 
+      // 仅禁用 → 不校验凭据
+      if (enabled === false) {
+        config.plugins.entries.feishu = { ...(config.plugins.entries.feishu ?? {}), enabled: false };
+        writeUserConfig(config);
+        return { success: true };
+      }
+
+      config.plugins.entries.feishu = { enabled: true };
       config.channels ??= {};
       config.channels.feishu = { appId, appSecret };
 
@@ -129,10 +135,27 @@ export function registerSettingsIpc(deps: SettingsIpcDeps): void {
     }
   });
 
-  // ── 保存 Kimi 插件配置 ──
+  // ── 保存 Kimi 插件配置（支持 enabled=false 仅切换开关） ──
   ipcMain.handle("settings:save-kimi-config", async (_event, params) => {
     const botToken = typeof params?.botToken === "string" ? params.botToken.trim() : "";
+    const enabled = params?.enabled;
     try {
+      const config = readUserConfig();
+      config.plugins ??= {};
+      config.plugins.entries ??= {};
+
+      // 仅禁用 → 不校验 token
+      if (enabled === false) {
+        if (config.plugins.entries["kimi-claw"]) {
+          config.plugins.entries["kimi-claw"].enabled = false;
+        }
+        if (config.plugins.entries["kimi-search"]) {
+          config.plugins.entries["kimi-search"].enabled = false;
+        }
+        writeUserConfig(config);
+        return { success: true };
+      }
+
       if (!botToken) {
         return { success: false, message: "Kimi Bot Token 不能为空。" };
       }
@@ -140,7 +163,6 @@ export function registerSettingsIpc(deps: SettingsIpcDeps): void {
         return { success: false, message: "Kimi Channel 组件缺失，请重新安装 OneClaw。" };
       }
 
-      const config = readUserConfig();
       const gatewayToken = ensureGatewayAuthTokenInConfig(config);
       saveKimiPluginConfig(config, { botToken, gatewayToken, wsURL: DEFAULT_KIMI_BRIDGE_WS_URL });
       writeUserConfig(config);

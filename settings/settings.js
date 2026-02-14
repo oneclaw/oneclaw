@@ -52,7 +52,7 @@
     en: {
       "title": "Settings",
       "nav.provider": "Model",
-      "nav.channels": "Feishu Integration",
+      "nav.feishu": "Feishu Integration",
       "nav.doctor": "Doctor",
       "provider.title": "Model Configuration",
       "provider.desc": "Change your LLM provider, API key, or model.",
@@ -69,15 +69,15 @@
       "provider.saving": "Saving…",
       "provider.saved": "Configuration saved.",
       "provider.currentUsing": "Current: ",
-      "channel.title": "Feishu Integration",
-      "channel.desc": "Connect Feishu to chat with AI directly in your group.",
-      "channel.appId": "Feishu App ID",
-      "channel.appSecret": "App Secret",
-      "channel.getKey": "Open Feishu Console →",
-      "channel.save": "Save",
-      "channel.saving": "Saving…",
-      "channel.saved": "Feishu integration saved.",
-      "channel.status": "Connected: Feishu",
+      "feishu.title": "Feishu Integration",
+      "feishu.desc": "Connect Feishu to chat with AI directly in your group.",
+      "feishu.enabled": "Enable",
+      "feishu.appId": "Feishu App ID",
+      "feishu.appSecret": "App Secret",
+      "feishu.getKey": "Open Feishu Console →",
+      "feishu.save": "Save",
+      "feishu.saving": "Saving…",
+      "feishu.saved": "Feishu integration saved.",
       "error.noAppId": "Please enter the Feishu App ID.",
       "error.noAppSecret": "Please enter the App Secret.",
       "error.noKey": "Please enter your API key.",
@@ -94,15 +94,14 @@
       "nav.kimi": "KimiClaw",
       "kimi.title": "KimiClaw",
       "kimi.desc": "Control OneClaw remotely via Kimi",
+      "kimi.enabled": "Enable",
       "kimi.getGuide": "Go to kimi.com/bot →",
   "kimi.guideText": "Click 'Associate existing OpenClaw' → copy command → paste below",
   "kimi.inputLabel": "Paste BotToken or command (auto parse token)",
-      "kimi.parsed": "Token parsed: ",
+      "kimi.tokenParsed": "Token parsed: ",
       "kimi.save": "Save",
       "kimi.saving": "Saving…",
-      "kimi.restarting": "Restarting…",
       "kimi.saved": "KimiClaw config saved.",
-      "kimi.savedNoRestart": "Config saved. Gateway restart timed out — please restart manually.",
       "error.noKimiBotToken": "Please paste the command or enter your Bot Token.",
       "nav.advanced": "Advanced",
       "advanced.title": "Advanced",
@@ -111,8 +110,6 @@
       "advanced.browserOpenclaw": "Standalone browser instance",
       "advanced.browserChrome": "Chrome extension",
       "advanced.imessage": "iMessage channel",
-      "advanced.imessageOn": "Enable",
-      "advanced.imessageOff": "Disable",
       "advanced.save": "Save",
       "advanced.saving": "Saving…",
       "advanced.saved": "Settings saved.",
@@ -120,7 +117,7 @@
     zh: {
       "title": "设置",
       "nav.provider": "模型配置",
-      "nav.channels": "飞书集成",
+      "nav.feishu": "飞书集成",
       "nav.doctor": "诊断修复",
       "provider.title": "模型配置",
       "provider.desc": "修改 LLM 云厂商、API 密钥或模型。",
@@ -137,15 +134,15 @@
       "provider.saving": "保存中…",
       "provider.saved": "配置已保存。",
       "provider.currentUsing": "当前使用: ",
-      "channel.title": "飞书集成",
-      "channel.desc": "连接飞书，在群聊中直接与 AI 对话。",
-      "channel.appId": "飞书应用 ID",
-      "channel.appSecret": "应用密钥",
-      "channel.getKey": "打开飞书开放平台 →",
-      "channel.save": "保存",
-      "channel.saving": "保存中…",
-      "channel.saved": "飞书集成配置已保存。",
-      "channel.status": "已连接: 飞书",
+      "feishu.title": "飞书集成",
+      "feishu.desc": "连接飞书，在群聊中直接与 AI 对话。",
+      "feishu.enabled": "启用状态",
+      "feishu.appId": "飞书应用 ID",
+      "feishu.appSecret": "应用密钥",
+      "feishu.getKey": "打开飞书开放平台 →",
+      "feishu.save": "保存",
+      "feishu.saving": "保存中…",
+      "feishu.saved": "飞书集成配置已保存。",
       "error.noAppId": "请输入飞书应用 ID。",
       "error.noAppSecret": "请输入应用密钥。",
       "error.noKey": "请输入 API 密钥。",
@@ -162,15 +159,14 @@
       "nav.kimi": "KimiClaw",
       "kimi.title": "KimiClaw",
       "kimi.desc": "通过 Kimi 远程遥控 OneClaw",
+      "kimi.enabled": "启用状态",
       "kimi.getGuide": "前往 kimi.com/bot →",
   "kimi.guideText": '点击"关联已有 OpenClaw" → 复制命令 → 粘贴到下方输入框',
   "kimi.inputLabel": "粘贴 BotToken 或命令(自动解析Token)。",
-      "kimi.parsed": "解析到 Token：",
+      "kimi.tokenParsed": "解析到 Token：",
       "kimi.save": "保存",
       "kimi.saving": "保存中…",
-      "kimi.restarting": "正在重启…",
-      "kimi.saved": "KimiClaw 配置已保存并生效。",
-      "kimi.savedNoRestart": "配置已保存，但 Gateway 重启超时，请手动重启。",
+      "kimi.saved": "KimiClaw 配置已保存。",
       "error.noKimiBotToken": "请粘贴命令或输入 Bot Token。",
       "nav.advanced": "高级选项",
       "advanced.title": "高级选项",
@@ -179,8 +175,6 @@
       "advanced.browserOpenclaw": "独立浏览器(建议)",
       "advanced.browserChrome": "Chrome 扩展",
       "advanced.imessage": "iMessage 频道",
-      "advanced.imessageOn": "启用",
-      "advanced.imessageOff": "禁用",
       "advanced.save": "保存",
       "advanced.saving": "保存中…",
       "advanced.saved": "设置已保存。",
@@ -216,19 +210,21 @@
     btnSaveText: $("#btnSave .btn-text"),
     btnSaveSpinner: $("#btnSave .btn-spinner"),
     // Channels tab
+    chEnabled: $("#chEnabled"),
+    chFields: $("#chFields"),
     chAppId: $("#chAppId"),
     chAppSecret: $("#chAppSecret"),
     btnToggleChSecret: $("#btnToggleChSecret"),
     chConsoleLink: $("#chConsoleLink"),
     chMsgBox: $("#chMsgBox"),
-    chStatus: $("#chStatus"),
     btnChSave: $("#btnChSave"),
     btnChSaveText: $("#btnChSave .btn-text"),
     btnChSaveSpinner: $("#btnChSave .btn-spinner"),
     // Kimi tab
+    kimiEnabled: $("#kimiEnabled"),
+    kimiFields: $("#kimiFields"),
     kimiSettingsInput: $("#kimiSettingsInput"),
-    kimiSettingsParsed: $("#kimiSettingsParsed"),
-    kimiSettingsMaskedToken: $("#kimiSettingsMaskedToken"),
+    btnToggleKimiToken: $("#btnToggleKimiToken"),
     kimiMsgBox: $("#kimiMsgBox"),
     kimiBotPageLink: $("#kimiBotPageLink"),
     btnKimiSave: $("#btnKimiSave"),
@@ -241,6 +237,7 @@
     doctorLog: $("#doctorLog"),
     doctorExit: $("#doctorExit"),
     // Advanced tab
+    imessageEnabled: $("#imessageEnabled"),
     advMsgBox: $("#advMsgBox"),
     btnAdvSave: $("#btnAdvSave"),
     btnAdvSaveText: $("#btnAdvSave .btn-text"),
@@ -363,16 +360,16 @@
     });
   }
 
-  // ── 密码可见性切换 ──
+  // ── 密码可见性切换（通用） ──
 
-  function toggleKeyVisibility() {
-    var input = els.apiKeyInput;
+  function togglePasswordVisibility(e) {
+    var btn = e.currentTarget;
+    var wrap = btn.closest(".input-password-wrap");
+    var input = wrap.querySelector("input");
     var isPassword = input.type === "password";
     input.type = isPassword ? "text" : "password";
-    var eyeOn = els.btnToggleKey.querySelector(".icon-eye");
-    var eyeOff = els.btnToggleKey.querySelector(".icon-eye-off");
-    eyeOn.classList.toggle("hidden", !isPassword);
-    eyeOff.classList.toggle("hidden", isPassword);
+    btn.querySelector(".icon-eye").classList.toggle("hidden", !isPassword);
+    btn.querySelector(".icon-eye-off").classList.toggle("hidden", isPassword);
   }
 
   // ── 保存 Provider 配置 ──
@@ -458,17 +455,6 @@
 
   // ── Channels ──
 
-  // 频道密码可见性切换
-  function toggleChSecretVisibility() {
-    var input = els.chAppSecret;
-    var isPassword = input.type === "password";
-    input.type = isPassword ? "text" : "password";
-    var eyeOn = els.btnToggleChSecret.querySelector(".icon-eye");
-    var eyeOff = els.btnToggleChSecret.querySelector(".icon-eye-off");
-    eyeOn.classList.toggle("hidden", !isPassword);
-    eyeOff.classList.toggle("hidden", isPassword);
-  }
-
   // 频道消息框
   function showChMsg(msg, type) {
     els.chMsgBox.textContent = msg;
@@ -484,14 +470,41 @@
   function setChSaving(loading) {
     chSaving = loading;
     els.btnChSave.disabled = loading;
-    els.btnChSaveText.textContent = loading ? t("channel.saving") : t("channel.save");
+    els.btnChSaveText.textContent = loading ? t("feishu.saving") : t("feishu.save");
     els.btnChSaveSpinner.classList.toggle("hidden", !loading);
+  }
+
+  // 获取飞书启用/禁用状态
+  function isChEnabled() {
+    return els.chEnabled.checked;
   }
 
   // 保存频道配置
   async function handleChSave() {
     if (chSaving) return;
 
+    var enabled = isChEnabled();
+
+    // 禁用 → 直接保存开关状态
+    if (!enabled) {
+      setChSaving(true);
+      hideChMsg();
+      try {
+        var result = await window.oneclaw.settingsSaveChannel({ enabled: false });
+        setChSaving(false);
+        if (result.success) {
+          showToast(t("feishu.saved"));
+        } else {
+          showChMsg(result.message || "Save failed", "error");
+        }
+      } catch (err) {
+        setChSaving(false);
+        showChMsg(t("error.connection") + (err.message || "Unknown error"), "error");
+      }
+      return;
+    }
+
+    // 启用 → 校验凭据
     var appId = els.chAppId.value.trim();
     var appSecret = els.chAppSecret.value.trim();
 
@@ -502,7 +515,6 @@
     hideChMsg();
 
     try {
-      // 先验证飞书凭据
       var verifyResult = await window.oneclaw.settingsVerifyKey({
         provider: "feishu",
         appId: appId,
@@ -514,8 +526,7 @@
         return;
       }
 
-      // 保存配置
-      var saveResult = await window.oneclaw.settingsSaveChannel({ appId: appId, appSecret: appSecret });
+      var saveResult = await window.oneclaw.settingsSaveChannel({ appId: appId, appSecret: appSecret, enabled: true });
       if (!saveResult.success) {
         showChMsg(saveResult.message || "Save failed", "error");
         setChSaving(false);
@@ -523,10 +534,7 @@
       }
 
       setChSaving(false);
-      showToast(t("channel.saved"));
-      // 更新状态指示
-      els.chStatus.textContent = t("channel.status");
-      els.chStatus.classList.remove("hidden");
+      showToast(t("feishu.saved"));
     } catch (err) {
       showChMsg(t("error.connection") + (err.message || "Unknown error"), "error");
       setChSaving(false);
@@ -543,11 +551,10 @@
       if (data.appId) els.chAppId.value = data.appId;
       if (data.appSecret) els.chAppSecret.value = data.appSecret;
 
-      // 有配置且已启用 → 显示连接状态
-      if (data.enabled && data.appId) {
-        els.chStatus.textContent = t("channel.status");
-        els.chStatus.classList.remove("hidden");
-      }
+      // 回填启用状态
+      var enabled = data.enabled && data.appId;
+      els.chEnabled.checked = !!enabled;
+      toggleEl(els.chFields, !!enabled);
     } catch (err) {
       console.error("[Settings] loadChannelConfig failed:", err);
     }
@@ -609,10 +616,8 @@
       // 回填 browser profile radio
       var radio = document.querySelector('input[name="browserProfile"][value="' + data.browserProfile + '"]');
       if (radio) radio.checked = true;
-      // 回填 iMessage radio
-      var imVal = data.imessageEnabled ? "on" : "off";
-      var imRadio = document.querySelector('input[name="imessageEnabled"][value="' + imVal + '"]');
-      if (imRadio) imRadio.checked = true;
+      // 回填 iMessage toggle
+      els.imessageEnabled.checked = !!data.imessageEnabled;
     } catch (err) {
       console.error("[Settings] loadAdvancedConfig failed:", err);
     }
@@ -625,7 +630,7 @@
     hideAdvMsg();
 
     var browserProfile = document.querySelector('input[name="browserProfile"]:checked').value;
-    var imessageEnabled = document.querySelector('input[name="imessageEnabled"]:checked').value === "on";
+    var imessageEnabled = els.imessageEnabled.checked;
 
     try {
       var result = await window.oneclaw.settingsSaveAdvanced({
@@ -698,6 +703,11 @@
     els.btnKimiSaveSpinner.classList.toggle("hidden", !loading);
   }
 
+  // 获取 Kimi 启用/禁用状态
+  function isKimiEnabled() {
+    return els.kimiEnabled.checked;
+  }
+
   // 加载已有 Kimi 配置
   async function loadKimiConfig() {
     try {
@@ -706,42 +716,46 @@
 
       var data = result.data;
       // 回填 token 到输入框
+      // 回填 token
       if (data.botToken) {
         els.kimiSettingsInput.value = data.botToken;
-        els.kimiSettingsMaskedToken.textContent = maskToken(data.botToken);
-        els.kimiSettingsParsed.classList.remove("hidden");
       }
+
+      // 回填启用状态
+      var enabled = data.enabled && data.botToken;
+      els.kimiEnabled.checked = !!enabled;
+      toggleEl(els.kimiFields, !!enabled);
     } catch (err) {
       console.error("[Settings] loadKimiConfig failed:", err);
     }
   }
 
-  // 等待 Gateway 恢复 running 状态
-  function waitForGatewayRunning(maxWait) {
-    var interval = 1000;
-    var elapsed = 0;
-    return new Promise(function (resolve) {
-      var timer = setInterval(function () {
-        elapsed += interval;
-        if (elapsed >= maxWait) {
-          clearInterval(timer);
-          resolve(false);
-          return;
-        }
-        window.oneclaw.getGatewayState().then(function (state) {
-          if (state === "running") {
-            clearInterval(timer);
-            resolve(true);
-          }
-        }).catch(function () {});
-      }, interval);
-    });
-  }
-
-  // 保存 Kimi 配置并重启 Gateway 使其生效
+  // 保存 Kimi 配置（Gateway 通过 chokidar 监听配置文件变更，自动热重载）
   async function handleKimiSave() {
     if (kimiSaving) return;
 
+    var enabled = isKimiEnabled();
+
+    // 禁用 → 直接保存开关状态
+    if (!enabled) {
+      setKimiSaving(true);
+      hideKimiMsg();
+      try {
+        var result = await window.oneclaw.settingsSaveKimiConfig({ enabled: false });
+        setKimiSaving(false);
+        if (result.success) {
+          showToast(t("kimi.saved"));
+        } else {
+          showKimiMsg(result.message || "Save failed", "error");
+        }
+      } catch (err) {
+        setKimiSaving(false);
+        showKimiMsg(t("error.connection") + (err.message || "Unknown error"), "error");
+      }
+      return;
+    }
+
+    // 启用 → 校验 token
     var botToken = parseBotToken(els.kimiSettingsInput.value);
     if (!botToken) {
       showKimiMsg(t("error.noKimiBotToken"), "error");
@@ -752,26 +766,15 @@
     hideKimiMsg();
 
     try {
-      var result = await window.oneclaw.settingsSaveKimiConfig({ botToken: botToken });
+      var result = await window.oneclaw.settingsSaveKimiConfig({ botToken: botToken, enabled: true });
       if (!result.success) {
         showKimiMsg(result.message || "Save failed", "error");
         setKimiSaving(false);
         return;
       }
 
-      // 保存成功后不持久显示“解析到 token”提示
-      els.kimiSettingsParsed.classList.add("hidden");
-      els.kimiSettingsMaskedToken.textContent = "";
-
-      // 保存成功 → 重启 Gateway 加载新插件配置
-      els.btnKimiSaveText.textContent = t("kimi.restarting");
-      window.oneclaw.restartGateway();
-
-      // 轮询等待 Gateway 恢复 running（最多 30s）
-      var ok = await waitForGatewayRunning(30000);
       setKimiSaving(false);
-
-      showToast(ok ? t("kimi.saved") : t("kimi.savedNoRestart"));
+      showToast(t("kimi.saved"));
     } catch (err) {
       setKimiSaving(false);
       showKimiMsg(t("error.connection") + (err.message || "Unknown error"), "error");
@@ -964,7 +967,7 @@
     });
 
     // 密码可见性
-    els.btnToggleKey.addEventListener("click", toggleKeyVisibility);
+    els.btnToggleKey.addEventListener("click", togglePasswordVisibility);
 
     // 保存
     els.btnSave.addEventListener("click", handleSave);
@@ -974,8 +977,9 @@
       if (e.key === "Enter") handleSave();
     });
 
-    // Channels tab
-    els.btnToggleChSecret.addEventListener("click", toggleChSecretVisibility);
+    // Channels tab — 启用/禁用切换
+    els.chEnabled.addEventListener("change", function () { toggleEl(els.chFields, isChEnabled()); });
+    els.btnToggleChSecret.addEventListener("click", togglePasswordVisibility);
     els.chConsoleLink.addEventListener("click", function (e) {
       e.preventDefault();
       if (window.oneclaw && window.oneclaw.openExternal) {
@@ -986,19 +990,16 @@
     els.chAppSecret.addEventListener("keydown", function (e) {
       if (e.key === "Enter") handleChSave();
     });
-    // Kimi tab
+    // Kimi tab — 启用/禁用切换 + Token 可见性
+    els.kimiEnabled.addEventListener("change", function () { toggleEl(els.kimiFields, isKimiEnabled()); });
+    els.btnToggleKimiToken.addEventListener("click", togglePasswordVisibility);
     els.kimiSettingsInput.addEventListener("input", function () {
       var raw = els.kimiSettingsInput.value;
       var token = parseBotToken(raw);
-      if (token) {
-        // 从命令格式中提取到 token → 替换输入框为纯 token
-        if (raw.indexOf("--bot-token") !== -1 && raw !== token) {
-          els.kimiSettingsInput.value = token;
-        }
-        els.kimiSettingsMaskedToken.textContent = maskToken(token);
-        els.kimiSettingsParsed.classList.remove("hidden");
-      } else {
-        els.kimiSettingsParsed.classList.add("hidden");
+      // 从命令格式中提取到 token → 替换输入框 + toast 提示
+      if (token && raw.indexOf("--bot-token") !== -1 && raw !== token) {
+        els.kimiSettingsInput.value = token;
+        showToast(t("kimi.tokenParsed") + maskToken(token));
       }
     });
     els.btnKimiSave.addEventListener("click", handleKimiSave);
