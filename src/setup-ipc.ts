@@ -4,6 +4,7 @@ import { SetupManager } from "./setup-manager";
 import * as analytics from "./analytics";
 import {
   PROVIDER_PRESETS,
+  MOONSHOT_SUB_PLATFORMS,
   verifyProvider,
   buildProviderConfig,
   saveMoonshotConfig,
@@ -54,6 +55,10 @@ export function registerSetupIpc(deps: SetupIpcDeps): void {
       config.gateway ??= {};
       config.gateway.mode = "local";
       ensureGatewayAuthTokenInConfig(config);
+
+      // 默认使用独立浏览器实例，免去用户手动安装 Chrome 扩展
+      config.browser ??= {};
+      config.browser.defaultProfile = "openclaw";
 
       // 标记 Setup 已完成（字段对齐 openclaw config schema，避免每次启动重走 onboarding）
       config.wizard = { lastRunAt: new Date().toISOString() };
@@ -112,13 +117,18 @@ function buildSetupCompletedProps(params: {
   provider: string;
   modelID: string;
   baseURL?: string;
+  subPlatform?: string;
 }, config?: any): Record<string, string> {
-  const { provider, modelID, baseURL } = params;
-  const configBaseUrl = config?.models?.providers?.[provider]?.baseUrl;
+  const { provider, modelID, baseURL, subPlatform } = params;
+
+  // Moonshot 子平台用实际写入的 providerKey 查配置
+  const sub = subPlatform ? MOONSHOT_SUB_PLATFORMS[subPlatform] : undefined;
+  const effectiveKey = sub?.providerKey ?? provider;
+  const configBaseUrl = config?.models?.providers?.[effectiveKey]?.baseUrl;
   const rawBaseUrl =
     typeof configBaseUrl === "string"
       ? configBaseUrl
-      : (PROVIDER_PRESETS[provider]?.baseUrl ?? baseURL ?? "");
+      : (sub?.baseUrl ?? PROVIDER_PRESETS[provider]?.baseUrl ?? baseURL ?? "");
 
   return {
     provider,

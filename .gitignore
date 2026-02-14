@@ -10,6 +10,7 @@ node_modules/
 # 构建产物
 dist/
 out/
+*.tsbuildinfo
 
 # 打包时生成的运行时资源
 resources/runtime/
