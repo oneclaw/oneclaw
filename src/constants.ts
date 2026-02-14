@@ -44,22 +44,37 @@ export function resolveResourcesPath(): string {
   return path.join(app.getAppPath(), "resources", "targets", target);
 }
 
-/** 内嵌 Node.js 二进制 */
+/** dev 模式下的目标产物目录（package:resources 的输出路径） */
+function resolveDevTargetPath(): string {
+  return path.join(app.getAppPath(), "resources", "targets", `${process.platform}-${process.arch}`);
+}
+
+/** Node.js 二进制（dev 模式优先用 package:resources 下载的，无则降级系统 node） */
 export function resolveNodeBin(): string {
+  if (!app.isPackaged) {
+    const exe = IS_WIN ? "node.exe" : "node";
+    const bundled = path.join(resolveDevTargetPath(), "runtime", exe);
+    return fs.existsSync(bundled) ? bundled : "node";
+  }
   return path.join(resolveResourcesPath(), "runtime", IS_WIN ? "node.exe" : "node");
 }
 
-/** 内嵌 npm CLI */
+/** npm CLI（dev 模式优先用 package:resources 下载的，无则降级系统 npm） */
 export function resolveNpmBin(): string {
+  if (!app.isPackaged) {
+    const exe = IS_WIN ? "npm.cmd" : "npm";
+    const bundled = path.join(resolveDevTargetPath(), "runtime", exe);
+    return fs.existsSync(bundled) ? bundled : "npm";
+  }
   return path.join(resolveResourcesPath(), "runtime", IS_WIN ? "npm.cmd" : "npm");
 }
 
-/** Gateway 统一入口（内容固定，不区分 locale） */
+/** Gateway 入口（统一使用 package:resources 从 npm 安装的路径） */
 export function resolveGatewayEntry(): string {
   return path.join(resolveResourcesPath(), "gateway", "gateway-entry.mjs");
 }
 
-/** Gateway 工作目录（路径固定，不区分 locale） */
+/** Gateway 工作目录（统一使用 npm 安装的 openclaw 包路径） */
 export function resolveGatewayCwd(): string {
   return path.join(resolveResourcesPath(), "gateway", "node_modules", "openclaw");
 }

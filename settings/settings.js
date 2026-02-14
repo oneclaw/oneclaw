@@ -91,6 +91,19 @@
       "doctor.running": "Running…",
       "doctor.pass": "All checks passed (exit code: 0)",
       "doctor.fail": "Some checks failed (exit code: {code})",
+      "nav.kimi": "KimiClaw",
+      "kimi.title": "KimiClaw",
+      "kimi.desc": "Control OneClaw remotely via Kimi",
+      "kimi.getGuide": "Go to kimi.com/bot →",
+      "kimi.guideText": "Click 'Associate existing OpenClaw' → copy command → paste below",
+      "kimi.inputLabel": "Paste command or Bot Token",
+      "kimi.parsed": "Token parsed: ",
+      "kimi.save": "Save",
+      "kimi.saving": "Saving…",
+      "kimi.saved": "KimiClaw config saved.",
+      "kimi.status": "Connected: KimiClaw",
+      "kimi.restartHint": "Config saved. Restart gateway to apply.",
+      "error.noKimiBotToken": "Please paste the command or enter your Bot Token.",
       "nav.advanced": "Advanced",
       "advanced.title": "Advanced",
       "advanced.desc": "Browser tool and messaging channel settings.",
@@ -146,6 +159,19 @@
       "doctor.running": "运行中…",
       "doctor.pass": "全部检查通过（退出码：0）",
       "doctor.fail": "部分检查未通过（退出码：{code}）",
+      "nav.kimi": "KimiClaw",
+      "kimi.title": "KimiClaw",
+      "kimi.desc": "通过 Kimi 远程遥控 OneClaw",
+      "kimi.getGuide": "前往 kimi.com/bot →",
+      "kimi.guideText": '点击"关联已有 OpenClaw" → 复制命令 → 粘贴到下方输入框',
+      "kimi.inputLabel": "粘贴命令或 Bot Token",
+      "kimi.parsed": "解析到 Token：",
+      "kimi.save": "保存",
+      "kimi.saving": "保存中…",
+      "kimi.saved": "KimiClaw 配置已保存。",
+      "kimi.status": "已连接: KimiClaw",
+      "kimi.restartHint": "配置已保存，重启 Gateway 生效。",
+      "error.noKimiBotToken": "请粘贴命令或输入 Bot Token。",
       "nav.advanced": "高级选项",
       "advanced.title": "高级选项",
       "advanced.desc": "浏览器工具与消息频道设置。",
@@ -199,6 +225,20 @@
     btnChSave: $("#btnChSave"),
     btnChSaveText: $("#btnChSave .btn-text"),
     btnChSaveSpinner: $("#btnChSave .btn-spinner"),
+    // Kimi tab
+    kimiSettingsInput: $("#kimiSettingsInput"),
+    kimiSettingsParsed: $("#kimiSettingsParsed"),
+    kimiSettingsMaskedToken: $("#kimiSettingsMaskedToken"),
+    kimiMsgBox: $("#kimiMsgBox"),
+    kimiStatus: $("#kimiStatus"),
+    kimiBotPageLink: $("#kimiBotPageLink"),
+    btnKimiSave: $("#btnKimiSave"),
+    btnKimiSaveText: $("#btnKimiSave .btn-text"),
+    btnKimiSaveSpinner: $("#btnKimiSave .btn-spinner"),
+    kimiRestartBanner: $("#kimiRestartBanner"),
+    btnKimiRestart: $("#btnKimiRestart"),
+    btnKimiRestartText: $("#btnKimiRestart .btn-text"),
+    btnKimiRestartSpinner: $("#btnKimiRestart .btn-spinner"),
     // Doctor tab
     btnDoctor: $("#btnDoctor"),
     btnDoctorText: $("#btnDoctor .btn-text"),
@@ -217,6 +257,7 @@
   let currentProvider = "anthropic";
   let saving = false;
   let chSaving = false;
+  let kimiSaving = false;
   let doctorRunning = false;
   let advSaving = false;
   let currentLang = "en";
@@ -626,6 +667,114 @@
     els.btnAdvSaveSpinner.classList.toggle("hidden", !loading);
   }
 
+  // ── Kimi Tab ──
+
+  // 从 install.sh 命令或直接输入解析 bot token
+  function parseBotToken(input) {
+    var match = input.match(/--bot-token\s+(\S+)/);
+    if (match) return match[1];
+    var trimmed = input.trim();
+    if (trimmed && !/\s/.test(trimmed)) return trimmed;
+    return "";
+  }
+
+  // 掩码 token（保留首尾各 4 字符）
+  function maskToken(token) {
+    if (!token || token.length <= 8) return token || "";
+    return token.slice(0, 4) + "..." + token.slice(-4);
+  }
+
+  // Kimi 消息框
+  function showKimiMsg(msg, type) {
+    els.kimiMsgBox.textContent = msg;
+    els.kimiMsgBox.className = "msg-box " + type;
+  }
+
+  function hideKimiMsg() {
+    els.kimiMsgBox.classList.add("hidden");
+    els.kimiMsgBox.textContent = "";
+    els.kimiMsgBox.className = "msg-box hidden";
+  }
+
+  function setKimiSaving(loading) {
+    kimiSaving = loading;
+    els.btnKimiSave.disabled = loading;
+    els.btnKimiSaveText.textContent = loading ? t("kimi.saving") : t("kimi.save");
+    els.btnKimiSaveSpinner.classList.toggle("hidden", !loading);
+  }
+
+  // 加载已有 Kimi 配置
+  async function loadKimiConfig() {
+    try {
+      var result = await window.oneclaw.settingsGetKimiConfig();
+      if (!result.success || !result.data) return;
+
+      var data = result.data;
+      // 回填 token 到输入框
+      if (data.botToken) {
+        els.kimiSettingsInput.value = data.botToken;
+        els.kimiSettingsMaskedToken.textContent = maskToken(data.botToken);
+        els.kimiSettingsParsed.classList.remove("hidden");
+      }
+
+      // 已启用 → 显示连接状态
+      if (data.enabled && data.botToken) {
+        els.kimiStatus.textContent = t("kimi.status");
+        els.kimiStatus.classList.remove("hidden");
+      }
+    } catch (err) {
+      console.error("[Settings] loadKimiConfig failed:", err);
+    }
+  }
+
+  // 保存 Kimi 配置
+  async function handleKimiSave() {
+    if (kimiSaving) return;
+
+    var botToken = parseBotToken(els.kimiSettingsInput.value);
+    if (!botToken) {
+      showKimiMsg(t("error.noKimiBotToken"), "error");
+      return;
+    }
+
+    setKimiSaving(true);
+    hideKimiMsg();
+
+    try {
+      var result = await window.oneclaw.settingsSaveKimiConfig({ botToken: botToken });
+      setKimiSaving(false);
+      if (result.success) {
+        showKimiMsg(t("kimi.saved"), "success");
+        els.kimiStatus.textContent = t("kimi.status");
+        els.kimiStatus.classList.remove("hidden");
+        els.kimiRestartBanner.classList.remove("hidden");
+      } else {
+        showKimiMsg(result.message || "Save failed", "error");
+      }
+    } catch (err) {
+      setKimiSaving(false);
+      showKimiMsg(t("error.connection") + (err.message || "Unknown error"), "error");
+    }
+  }
+
+  // Kimi Tab 重启 Gateway
+  async function handleKimiRestart() {
+    els.btnKimiRestart.disabled = true;
+    els.btnKimiRestartSpinner.classList.remove("hidden");
+    try {
+      window.oneclaw.restartGateway();
+      // 短暂延时让用户看到状态变化
+      setTimeout(function () {
+        els.btnKimiRestart.disabled = false;
+        els.btnKimiRestartSpinner.classList.add("hidden");
+        els.kimiRestartBanner.classList.add("hidden");
+      }, 2000);
+    } catch (err) {
+      els.btnKimiRestart.disabled = false;
+      els.btnKimiRestartSpinner.classList.add("hidden");
+    }
+  }
+
   // ── 从配置 + 预设合并出模型列表（配置优先，预设补充） ──
 
   function buildMergedModelList(configuredModels, provider, subPlatform) {
@@ -824,6 +973,25 @@
     els.chAppSecret.addEventListener("keydown", function (e) {
       if (e.key === "Enter") handleChSave();
     });
+    // Kimi tab
+    els.kimiSettingsInput.addEventListener("input", function () {
+      var token = parseBotToken(els.kimiSettingsInput.value);
+      if (token) {
+        els.kimiSettingsMaskedToken.textContent = maskToken(token);
+        els.kimiSettingsParsed.classList.remove("hidden");
+      } else {
+        els.kimiSettingsParsed.classList.add("hidden");
+      }
+    });
+    els.btnKimiSave.addEventListener("click", handleKimiSave);
+    els.btnKimiRestart.addEventListener("click", handleKimiRestart);
+    els.kimiBotPageLink.addEventListener("click", function (e) {
+      e.preventDefault();
+      if (window.oneclaw && window.oneclaw.openExternal) {
+        window.oneclaw.openExternal("https://www.kimi.com/bot");
+      }
+    });
+
     // Doctor
     els.btnDoctor.addEventListener("click", handleDoctor);
 
@@ -848,6 +1016,7 @@
     switchProvider("anthropic");
     loadCurrentConfig();
     loadChannelConfig();
+    loadKimiConfig();
     loadAdvancedConfig();
   }
 

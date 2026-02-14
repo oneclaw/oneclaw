@@ -106,6 +106,13 @@ export class GatewayProcess {
       return;
     }
 
+    // 启动前探测端口，若有旧 gateway 则自动停止
+    const portBusy = await this.probeHealth();
+    if (portBusy) {
+      diagLog(`WARN: 端口 ${this.port} 已有服务响应，尝试自动停止旧 gateway`);
+      await this.stopExistingGateway(nodeBin, entry, cwd);
+    }
+
     // 组装 PATH，内嵌 runtime 优先
     const runtimeDir = path.join(resolveResourcesPath(), "runtime");
     const envPath = runtimeDir + path.delimiter + (process.env.PATH ?? "");
@@ -147,11 +154,16 @@ export class GatewayProcess {
 
     // 退出处理
     this.proc.on("exit", (code, signal) => {
-      diagLog(`exit code=${code} signal=${signal}`);
+      diagLog(`child exit: code=${code} signal=${signal} prevState=${this.state}`);
       if (this.state === "stopping") {
         this.setState("stopped");
+      } else if (this.state === "running") {
+        // 运行中非预期退出 = 崩溃
+        diagLog("WARN: gateway 运行中意外退出");
+        this.lastCrashTime = Date.now();
+        this.setState("stopped");
       } else {
-        // 非预期退出 = 崩溃
+        // starting 阶段退出（如端口冲突）
         this.lastCrashTime = Date.now();
         this.setState("stopped");
       }
@@ -161,8 +173,15 @@ export class GatewayProcess {
     // 轮询健康检查
     const healthy = await this.waitForHealth(HEALTH_TIMEOUT_MS, childPid);
     if (healthy) {
-      diagLog("health check passed");
-      this.setState("running");
+      // 健康探测通过后，等一小段时间确认子进程没有立刻退出（排除旧进程误判）
+      await sleep(300);
+      if (this.isChildAlive(childPid)) {
+        diagLog("health check passed, child alive");
+        this.setState("running");
+      } else {
+        diagLog("WARN: health check passed 但子进程已退出（端口可能被旧 gateway 占用）");
+        this.setState("stopped");
+      }
     } else {
       diagLog("FATAL: health check timeout");
       this.stop();
@@ -184,6 +203,33 @@ export class GatewayProcess {
         this.setState("stopped");
       }
     }, 5000);
+  }
+
+  // 停止已存在的旧 gateway（端口冲突时自动调用）
+  private async stopExistingGateway(nodeBin: string, entry: string, cwd: string): Promise<void> {
+    try {
+      const { execFileSync } = require("child_process") as typeof import("child_process");
+      diagLog("exec: gateway stop");
+      execFileSync(nodeBin, [entry, "gateway", "stop"], {
+        cwd,
+        timeout: 10_000,
+        stdio: "pipe",
+        env: { ...process.env, OPENCLAW_LENIENT_CONFIG: "1" },
+      });
+      diagLog("旧 gateway 已停止");
+    } catch (err: any) {
+      diagLog(`旧 gateway stop 失败: ${err.message ?? err}`);
+    }
+
+    // 等端口释放
+    for (let i = 0; i < 10; i++) {
+      await sleep(500);
+      if (!(await this.probeHealth())) {
+        diagLog("端口已释放");
+        return;
+      }
+    }
+    diagLog("WARN: 等待端口释放超时，继续尝试启动");
   }
 
   // 重启
@@ -230,7 +276,9 @@ export class GatewayProcess {
   }
 
   private setState(s: GatewayState): void {
+    const prev = this.state;
     this.state = s;
+    diagLog(`state: ${prev} → ${s}`);
     this.onStateChange?.(s);
   }
 }

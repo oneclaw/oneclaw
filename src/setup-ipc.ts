@@ -11,6 +11,7 @@ import {
   readUserConfig,
   writeUserConfig,
 } from "./provider-config";
+import { saveKimiPluginConfig, isKimiPluginBundled, DEFAULT_KIMI_BRIDGE_WS_URL } from "./kimi-config";
 
 interface SetupIpcDeps {
   setupManager: SetupManager;
@@ -29,7 +30,15 @@ export function registerSetupIpc(deps: SetupIpcDeps): void {
 
   // ── 保存配置到 ~/.openclaw/openclaw.json ──
   ipcMain.handle("setup:save-config", async (_event, params) => {
-    const { provider, apiKey, modelID, baseURL, api, subPlatform, supportImage } = params;
+    const {
+      provider,
+      apiKey,
+      modelID,
+      baseURL,
+      api,
+      subPlatform,
+      supportImage,
+    } = params;
     try {
       // 读取现有配置
       const config = readUserConfig();
@@ -103,6 +112,33 @@ export function registerSetupIpc(deps: SetupIpcDeps): void {
     }
   });
 
+  // ── 保存 Kimi Channel 配置（Step 3 中独立保存） ──
+  ipcMain.handle("setup:save-kimi-channel", async (_event, params) => {
+    const botToken = toNonEmptyString(params?.botToken);
+    try {
+      if (!botToken) {
+        return { success: false, message: "Kimi Bot Token 不能为空。" };
+      }
+      if (!isKimiPluginBundled()) {
+        return { success: false, message: "Kimi Channel 组件缺失，请重新安装 OneClaw。" };
+      }
+
+      const config = readUserConfig();
+      const gatewayToken = ensureGatewayAuthTokenInConfig(config);
+      saveKimiPluginConfig(config, { botToken, gatewayToken, wsURL: DEFAULT_KIMI_BRIDGE_WS_URL });
+      writeUserConfig(config);
+
+      // 追加频道信息到 analytics 上下文
+      if (latestSetupCompletedProps) {
+        latestSetupCompletedProps.kimi_channel = "enabled";
+      }
+
+      return { success: true };
+    } catch (err: any) {
+      return { success: false, message: err.message || String(err) };
+    }
+  });
+
   // ── Setup 完成（Gateway 启动 + 窗口切换由 setOnComplete 回调统一处理） ──
   ipcMain.handle("setup:complete", async () => {
     const ok = await setupManager.complete();
@@ -140,4 +176,20 @@ function buildSetupCompletedProps(params: {
     model: modelID,
     base_url: rawBaseUrl.trim().replace(/\/+$/, ""),
   };
+}
+
+
+// 读取非空字符串（空则返回空串）
+function toNonEmptyString(value: unknown): string {
+  return typeof value === "string" ? value.trim() : "";
+}
+
+// 宽松解析布尔值（支持 "1"/"true"/"yes"/"on"）
+function toBool(value: unknown): boolean {
+  if (typeof value === "boolean") return value;
+  if (typeof value === "string") {
+    const v = value.trim().toLowerCase();
+    return v === "1" || v === "true" || v === "yes" || v === "on";
+  }
+  return false;
 }

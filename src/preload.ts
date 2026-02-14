@@ -16,6 +16,8 @@ contextBridge.exposeInMainWorld("oneclaw", {
     ipcRenderer.invoke("setup:save-config", params),
   saveChannelConfig: (params: Record<string, unknown>) =>
     ipcRenderer.invoke("setup:save-channel", params),
+  saveKimiChannelConfig: (params: Record<string, unknown>) =>
+    ipcRenderer.invoke("setup:save-kimi-channel", params),
   completeSetup: () => ipcRenderer.invoke("setup:complete"),
 
   // Settings 相关
@@ -27,6 +29,9 @@ contextBridge.exposeInMainWorld("oneclaw", {
   settingsGetChannelConfig: () => ipcRenderer.invoke("settings:get-channel-config"),
   settingsSaveChannel: (params: Record<string, unknown>) =>
     ipcRenderer.invoke("settings:save-channel", params),
+  settingsGetKimiConfig: () => ipcRenderer.invoke("settings:get-kimi-config"),
+  settingsSaveKimiConfig: (params: Record<string, unknown>) =>
+    ipcRenderer.invoke("settings:save-kimi-config", params),
   settingsRunDoctor: () => ipcRenderer.invoke("settings:run-doctor"),
   settingsGetAdvanced: () => ipcRenderer.invoke("settings:get-advanced"),
   settingsSaveAdvanced: (params: Record<string, unknown>) =>

@@ -21,6 +21,9 @@ const {
 // ─── 项目根目录 ───
 const ROOT = path.resolve(__dirname, "..");
 const TARGETS_ROOT = path.join(ROOT, "resources", "targets");
+const KIMI_CLAW_DEFAULT_TGZ_URL =
+  "https://kimi-web-img.moonshot.cn/demo/kimi_claw/kimi-claw-latest.tgz";
+const KIMI_CLAW_CACHE_FILE = "kimi-claw-latest.tgz";
 
 // 计算目标产物的唯一标识
 function getTargetId(platform, arch) {
@@ -761,6 +764,120 @@ function installDependencies(opts, gatewayDir) {
   log("node_modules 裁剪完成");
 }
 
+// ─── Step 2.5: 注入 kimi-claw 插件（bundled extension） ───
+
+// 解析 kimi-claw 包来源（优先本地 tgz，其次远程 URL）
+function resolveKimiClawPackageSource() {
+  const localTgz = readEnvText("ONECLAW_KIMI_CLAW_TGZ_PATH");
+  if (localTgz) {
+    const resolved = path.resolve(localTgz);
+    if (!fs.existsSync(resolved)) {
+      die(`ONECLAW_KIMI_CLAW_TGZ_PATH 指向的文件不存在: ${resolved}`);
+    }
+    return {
+      archivePath: resolved,
+      sourceLabel: `local:${resolved}`,
+    };
+  }
+
+  const cacheDir = path.join(ROOT, ".cache", "kimi-claw");
+  ensureDir(cacheDir);
+  const archivePath = path.join(cacheDir, KIMI_CLAW_CACHE_FILE);
+  const sourceURL = readEnvText("ONECLAW_KIMI_CLAW_TGZ_URL") || KIMI_CLAW_DEFAULT_TGZ_URL;
+  const refresh = readEnvText("ONECLAW_KIMI_CLAW_REFRESH").toLowerCase();
+  const forceRefresh = refresh === "1" || refresh === "true" || refresh === "yes";
+
+  return {
+    archivePath,
+    sourceURL,
+    sourceLabel: sourceURL,
+    forceRefresh,
+  };
+}
+
+// 下载（或复用缓存）kimi-claw 打包产物
+async function ensureKimiClawArchive() {
+  const source = resolveKimiClawPackageSource();
+  const { archivePath } = source;
+
+  // 本地文件模式：直接复用
+  if (!source.sourceURL) {
+    log(`使用本地 kimi-claw 包: ${path.relative(ROOT, archivePath)}`);
+    return source;
+  }
+
+  if (source.forceRefresh || !fs.existsSync(archivePath)) {
+    log(`下载 kimi-claw 插件包: ${source.sourceURL}`);
+    safeUnlink(archivePath);
+    await downloadFileWithFallback([source.sourceURL], archivePath);
+  } else {
+    log(`使用缓存的 kimi-claw 包: ${path.relative(ROOT, archivePath)}`);
+  }
+
+  return source;
+}
+
+// 将 kimi-claw 插件注入 openclaw/extensions/kimi-claw
+async function bundleKimiClawPlugin(gatewayDir, targetId) {
+  const source = await ensureKimiClawArchive();
+  const openclawDir = path.join(gatewayDir, "node_modules", "openclaw");
+  if (!fs.existsSync(openclawDir)) {
+    die(`openclaw 依赖目录不存在，无法注入 kimi-claw: ${openclawDir}`);
+  }
+
+  const extRoot = path.join(openclawDir, "extensions");
+  const pluginDir = path.join(extRoot, "kimi-claw");
+  ensureDir(extRoot);
+
+  const tmpDir = createExtractTmpDir(path.dirname(source.archivePath), `${targetId}_kimi_claw`);
+  let extracted = false;
+  for (let attempt = 1; attempt <= 2; attempt++) {
+    try {
+      execSync(`tar xzf "${source.archivePath}" -C "${tmpDir}"`, { stdio: "inherit" });
+      extracted = true;
+      break;
+    } catch (err) {
+      if (attempt === 1 && source.sourceURL) {
+        log("检测到 kimi-claw 缓存包可能损坏，重新下载后重试...");
+        rmDir(tmpDir);
+        ensureDir(tmpDir);
+        safeUnlink(source.archivePath);
+        await downloadFileWithFallback([source.sourceURL], source.archivePath);
+        continue;
+      }
+      rmDir(tmpDir);
+      die(`解压 kimi-claw 包失败: ${err.message || String(err)}`);
+    }
+  }
+
+  if (!extracted) {
+    rmDir(tmpDir);
+    die("解压 kimi-claw 包失败（未知原因）");
+  }
+
+  const extractedPkgDir = path.join(tmpDir, "package");
+  const pkgJson = path.join(extractedPkgDir, "package.json");
+  const pluginJson = path.join(extractedPkgDir, "openclaw.plugin.json");
+  if (!fs.existsSync(pkgJson) || !fs.existsSync(pluginJson)) {
+    rmDir(tmpDir);
+    die("kimi-claw 包内容无效（缺少 package/package.json 或 openclaw.plugin.json）");
+  }
+
+  rmDir(pluginDir);
+  copyDirSync(extractedPkgDir, pluginDir);
+  rmDir(tmpDir);
+
+  const stamp = {
+    source: source.sourceLabel,
+    bundledAt: new Date().toISOString(),
+  };
+  fs.writeFileSync(
+    path.join(pluginDir, ".oneclaw-kimi-claw-stamp.json"),
+    JSON.stringify(stamp, null, 2)
+  );
+  log(`已注入 kimi-claw 插件到 ${path.relative(ROOT, pluginDir)}`);
+}
+
 // 裁剪 node_modules，删除无用文件以减小体积
 function pruneNodeModules(nmDir) {
   if (!fs.existsSync(nmDir)) return;
@@ -965,6 +1082,16 @@ function verifyOutput(targetPaths, platform) {
     path.join(targetRel, "gateway", "gateway-entry.mjs"),
     path.join(targetRel, "gateway", "node_modules", "openclaw", "dist", "entry.js"),
     path.join(targetRel, "gateway", "node_modules", "openclaw", "dist", "control-ui", "index.html"),
+    path.join(targetRel, "gateway", "node_modules", "openclaw", "extensions", "kimi-claw", "index.ts"),
+    path.join(
+      targetRel,
+      "gateway",
+      "node_modules",
+      "openclaw",
+      "extensions",
+      "kimi-claw",
+      "openclaw.plugin.json"
+    ),
     path.join(targetRel, "analytics-config.json"),
     path.join(targetRel, "app-icon.png"),
   ];
@@ -1014,6 +1141,12 @@ async function main() {
   // Step 2: 安装 openclaw 生产依赖
   log("Step 2: 安装 openclaw 生产依赖");
   installDependencies(opts, targetPaths.gatewayDir);
+
+  console.log();
+
+  // Step 2.5: 注入 kimi-claw 插件（bundled extension）
+  log("Step 2.5: 注入 kimi-claw 插件");
+  await bundleKimiClawPlugin(targetPaths.gatewayDir, targetPaths.targetId);
 
   console.log();
 
