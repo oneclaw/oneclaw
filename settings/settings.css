@@ -550,6 +550,29 @@ select option {
   cursor: not-allowed;
 }
 
+/* ── Kimi Tab ── */
+
+.parsed-token {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background: var(--accent-dim);
+  border-radius: var(--radius-sm);
+  font-size: 12.5px;
+  color: var(--text-primary);
+}
+
+.parsed-token code {
+  font-family: "SF Mono", Menlo, monospace;
+}
+
+.kimi-guide-text {
+  font-size: 12.5px;
+  color: var(--text-secondary);
+  line-height: 1.5;
+}
+
 /* ── Doctor Tab ── */
 
 .doctor-log {

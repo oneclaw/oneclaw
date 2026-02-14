@@ -11,6 +11,8 @@ import {
   readUserConfig,
   writeUserConfig,
 } from "./provider-config";
+import { extractKimiConfig, saveKimiPluginConfig, isKimiPluginBundled, DEFAULT_KIMI_BRIDGE_WS_URL } from "./kimi-config";
+import { ensureGatewayAuthTokenInConfig } from "./gateway-auth";
 import * as path from "path";
 
 interface SettingsIpcDeps {
@@ -110,6 +112,37 @@ export function registerSettingsIpc(deps: SettingsIpcDeps): void {
       config.channels ??= {};
       config.channels.feishu = { appId, appSecret };
 
+      writeUserConfig(config);
+      return { success: true };
+    } catch (err: any) {
+      return { success: false, message: err.message || String(err) };
+    }
+  });
+
+  // ── 读取 Kimi 插件配置 ──
+  ipcMain.handle("settings:get-kimi-config", async () => {
+    try {
+      const config = readUserConfig();
+      return { success: true, data: extractKimiConfig(config) };
+    } catch (err: any) {
+      return { success: false, message: err.message };
+    }
+  });
+
+  // ── 保存 Kimi 插件配置 ──
+  ipcMain.handle("settings:save-kimi-config", async (_event, params) => {
+    const botToken = typeof params?.botToken === "string" ? params.botToken.trim() : "";
+    try {
+      if (!botToken) {
+        return { success: false, message: "Kimi Bot Token 不能为空。" };
+      }
+      if (!isKimiPluginBundled()) {
+        return { success: false, message: "Kimi Channel 组件缺失，请重新安装 OneClaw。" };
+      }
+
+      const config = readUserConfig();
+      const gatewayToken = ensureGatewayAuthTokenInConfig(config);
+      saveKimiPluginConfig(config, { botToken, gatewayToken, wsURL: DEFAULT_KIMI_BRIDGE_WS_URL });
       writeUserConfig(config);
       return { success: true };
     } catch (err: any) {

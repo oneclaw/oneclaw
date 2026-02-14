@@ -28,6 +28,13 @@
           </svg>
           <span data-i18n="nav.channels">Feishu Integration</span>
         </li>
+        <li class="nav-item" data-tab="kimi">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+            <circle cx="8" cy="8" r="6" stroke="currentColor" stroke-width="1.3"/>
+            <path d="M5 8L7 10L11 6" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+          <span data-i18n="nav.kimi">KimiClaw</span>
+        </li>
         <li class="nav-item" data-tab="doctor">
           <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
             <path d="M8 2V14M2 8H14" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
@@ -210,6 +217,50 @@
             </button>
           </div>
         </div><!-- /channelFeishu -->
+      </section>
+
+      <!-- Kimi Tab -->
+      <section class="tab-panel" id="tabKimi">
+        <h2 data-i18n="kimi.title">KimiClaw</h2>
+        <div class="channel-desc-row">
+          <p class="desc" data-i18n="kimi.desc">Control OneClaw remotely via Kimi</p>
+          <a href="#" class="platform-link" id="kimiBotPageLink" data-i18n="kimi.getGuide">Go to kimi.com/bot →</a>
+        </div>
+
+        <div class="current-provider-status hidden" id="kimiStatus"></div>
+
+        <p class="kimi-guide-text" data-i18n="kimi.guideText">
+          Click 'Associate existing OpenClaw' → copy command → paste below
+        </p>
+
+        <div class="field-group">
+          <label for="kimiSettingsInput" data-i18n="kimi.inputLabel">Paste command or Bot Token</label>
+          <input type="text" id="kimiSettingsInput"
+            placeholder="bash &lt;(curl ...) --bot-token YOUR_TOKEN"
+            autocomplete="off" spellcheck="false">
+        </div>
+
+        <div class="parsed-token hidden" id="kimiSettingsParsed">
+          <span data-i18n="kimi.parsed">Token parsed: </span>
+          <code id="kimiSettingsMaskedToken"></code>
+        </div>
+
+        <div class="msg-box hidden" id="kimiMsgBox"></div>
+
+        <div class="restart-banner hidden" id="kimiRestartBanner">
+          <span data-i18n="kimi.restartHint">Config saved. Restart gateway to apply.</span>
+          <button class="btn-restart" id="btnKimiRestart">
+            <span class="btn-text" data-i18n="provider.restart">Restart Gateway</span>
+            <span class="btn-spinner hidden"></span>
+          </button>
+        </div>
+
+        <div class="btn-row bottom-actions">
+          <button class="btn-primary" id="btnKimiSave">
+            <span class="btn-text" data-i18n="kimi.save">Save</span>
+            <span class="btn-spinner hidden"></span>
+          </button>
+        </div>
       </section>
 
       <!-- Doctor Tab -->
