@@ -125,7 +125,7 @@ ipcMain.handle("gateway:state", () => gateway.getState());
 ipcMain.on("app:check-updates", () => checkForUpdates(true));
 ipcMain.handle("app:open-external", (_e, url: string) => shell.openExternal(url));
 registerSetupIpc({ setupManager });
-registerSettingsIpc({ settingsManager, gateway });
+registerSettingsIpc({ settingsManager });
 
 // ── 退出 ──
 

@@ -1,9 +1,7 @@
 import { ipcMain } from "electron";
 import { ChildProcess, spawn } from "child_process";
-import { GatewayProcess } from "./gateway-process";
 import { SettingsManager } from "./settings-manager";
 import { resolveNodeBin, resolveGatewayEntry, resolveGatewayCwd, resolveResourcesPath } from "./constants";
-import { resolveGatewayAuthToken } from "./gateway-auth";
 import {
   PROVIDER_PRESETS,
   MOONSHOT_SUB_PLATFORMS,
@@ -17,14 +15,13 @@ import * as path from "path";
 
 interface SettingsIpcDeps {
   settingsManager: SettingsManager;
-  gateway: GatewayProcess;
 }
 
 let doctorProc: ChildProcess | null = null;
 
 // 注册 Settings 相关 IPC
 export function registerSettingsIpc(deps: SettingsIpcDeps): void {
-  const { settingsManager, gateway } = deps;
+  const { settingsManager } = deps;
 
   // ── 读取当前 provider/model 配置（apiKey 掩码返回） ──
   ipcMain.handle("settings:get-config", async () => {
@@ -117,18 +114,6 @@ export function registerSettingsIpc(deps: SettingsIpcDeps): void {
       return { success: true };
     } catch (err: any) {
       return { success: false, message: err.message || String(err) };
-    }
-  });
-
-  // ── 重启 gateway ──
-  ipcMain.handle("settings:restart-gateway", async () => {
-    try {
-      gateway.setToken(resolveGatewayAuthToken());
-      await gateway.restart();
-      const running = gateway.getState() === "running";
-      return { success: running, message: running ? undefined : "Gateway 重启失败" };
-    } catch (err: any) {
-      return { success: false, message: err.message };
     }
   });
 

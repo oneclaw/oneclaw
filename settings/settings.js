@@ -68,11 +68,6 @@
       "provider.save": "Save",
       "provider.saving": "Saving…",
       "provider.saved": "Configuration saved.",
-      "provider.restartHint": "Configuration saved. Restart gateway to apply changes.",
-      "provider.restart": "Restart Gateway",
-      "provider.restarting": "Restarting…",
-      "provider.restarted": "Gateway restarted successfully.",
-      "provider.restartFailed": "Gateway restart failed.",
       "provider.currentUsing": "Current: ",
       "channel.title": "Feishu Integration",
       "channel.desc": "Connect Feishu to chat with AI directly in your group.",
@@ -83,7 +78,6 @@
       "channel.saving": "Saving…",
       "channel.saved": "Feishu integration saved.",
       "channel.status": "Connected: Feishu",
-      "channel.restartHint": "Feishu integration saved. Restart gateway to apply.",
       "error.noAppId": "Please enter the Feishu App ID.",
       "error.noAppSecret": "Please enter the App Secret.",
       "error.noKey": "Please enter your API key.",
@@ -109,7 +103,6 @@
       "advanced.save": "Save",
       "advanced.saving": "Saving…",
       "advanced.saved": "Settings saved.",
-      "advanced.restartHint": "Settings saved. Restart gateway to apply changes.",
     },
     zh: {
       "title": "设置",
@@ -130,11 +123,6 @@
       "provider.save": "保存",
       "provider.saving": "保存中…",
       "provider.saved": "配置已保存。",
-      "provider.restartHint": "配置已保存，重启 Gateway 生效。",
-      "provider.restart": "重启 Gateway",
-      "provider.restarting": "重启中…",
-      "provider.restarted": "Gateway 重启成功。",
-      "provider.restartFailed": "Gateway 重启失败。",
       "provider.currentUsing": "当前使用: ",
       "channel.title": "飞书集成",
       "channel.desc": "连接飞书，在群聊中直接与 AI 对话。",
@@ -145,7 +133,6 @@
       "channel.saving": "保存中…",
       "channel.saved": "飞书集成配置已保存。",
       "channel.status": "已连接: 飞书",
-      "channel.restartHint": "飞书集成配置已保存，重启 Gateway 生效。",
       "error.noAppId": "请输入飞书应用 ID。",
       "error.noAppSecret": "请输入应用密钥。",
       "error.noKey": "请输入 API 密钥。",
@@ -171,7 +158,6 @@
       "advanced.save": "保存",
       "advanced.saving": "保存中…",
       "advanced.saved": "设置已保存。",
-      "advanced.restartHint": "设置已保存，重启 Gateway 生效。",
     },
   };
 
@@ -203,10 +189,6 @@
     btnSave: $("#btnSave"),
     btnSaveText: $("#btnSave .btn-text"),
     btnSaveSpinner: $("#btnSave .btn-spinner"),
-    restartBanner: $("#restartBanner"),
-    btnRestart: $("#btnRestart"),
-    btnRestartText: $("#btnRestart .btn-text"),
-    btnRestartSpinner: $("#btnRestart .btn-spinner"),
     // Channels tab
     chAppId: $("#chAppId"),
     chAppSecret: $("#chAppSecret"),
@@ -217,10 +199,6 @@
     btnChSave: $("#btnChSave"),
     btnChSaveText: $("#btnChSave .btn-text"),
     btnChSaveSpinner: $("#btnChSave .btn-spinner"),
-    chRestartBanner: $("#chRestartBanner"),
-    btnChRestart: $("#btnChRestart"),
-    btnChRestartText: $("#btnChRestart .btn-text"),
-    btnChRestartSpinner: $("#btnChRestart .btn-spinner"),
     // Doctor tab
     btnDoctor: $("#btnDoctor"),
     btnDoctorText: $("#btnDoctor .btn-text"),
@@ -229,25 +207,18 @@
     doctorExit: $("#doctorExit"),
     // Advanced tab
     advMsgBox: $("#advMsgBox"),
-    advRestartBanner: $("#advRestartBanner"),
     btnAdvSave: $("#btnAdvSave"),
     btnAdvSaveText: $("#btnAdvSave .btn-text"),
     btnAdvSaveSpinner: $("#btnAdvSave .btn-spinner"),
-    btnAdvRestart: $("#btnAdvRestart"),
-    btnAdvRestartText: $("#btnAdvRestart .btn-text"),
-    btnAdvRestartSpinner: $("#btnAdvRestart .btn-spinner"),
   };
 
   // ── 状态 ──
 
   let currentProvider = "anthropic";
   let saving = false;
-  let restarting = false;
   let chSaving = false;
-  let chRestarting = false;
   let doctorRunning = false;
   let advSaving = false;
-  let advRestarting = false;
   let currentLang = "en";
 
   // ── 语言 ──
@@ -403,8 +374,6 @@
 
       setSaving(false);
       showMsg(t("provider.saved"), "success");
-      // 显示重启 banner
-      els.restartBanner.classList.remove("hidden");
     } catch (err) {
       showMsg(t("error.connection") + (err.message || "Unknown error"), "error");
       setSaving(false);
@@ -450,27 +419,6 @@
     return payload;
   }
 
-  // ── 重启 Gateway ──
-
-  async function handleRestart() {
-    if (restarting) return;
-    setRestarting(true);
-
-    try {
-      var result = await window.oneclaw.settingsRestartGateway();
-      setRestarting(false);
-      if (result.success) {
-        els.restartBanner.classList.add("hidden");
-        showMsg(t("provider.restarted"), "success");
-      } else {
-        showMsg(result.message || t("provider.restartFailed"), "error");
-      }
-    } catch (err) {
-      setRestarting(false);
-      showMsg(t("provider.restartFailed"), "error");
-    }
-  }
-
   // ── Channels ──
 
   // 频道密码可见性切换
@@ -501,13 +449,6 @@
     els.btnChSave.disabled = loading;
     els.btnChSaveText.textContent = loading ? t("channel.saving") : t("channel.save");
     els.btnChSaveSpinner.classList.toggle("hidden", !loading);
-  }
-
-  function setChRestarting(loading) {
-    chRestarting = loading;
-    els.btnChRestart.disabled = loading;
-    els.btnChRestartText.textContent = loading ? t("provider.restarting") : t("provider.restart");
-    els.btnChRestartSpinner.classList.toggle("hidden", !loading);
   }
 
   // 保存频道配置
@@ -549,8 +490,6 @@
       // 更新状态指示
       els.chStatus.textContent = t("channel.status");
       els.chStatus.classList.remove("hidden");
-      // 显示重启 banner
-      els.chRestartBanner.classList.remove("hidden");
     } catch (err) {
       showChMsg(t("error.connection") + (err.message || "Unknown error"), "error");
       setChSaving(false);
@@ -574,26 +513,6 @@
       }
     } catch (err) {
       console.error("[Settings] loadChannelConfig failed:", err);
-    }
-  }
-
-  // 频道 tab 的重启按钮
-  async function handleChRestart() {
-    if (chRestarting) return;
-    setChRestarting(true);
-
-    try {
-      var result = await window.oneclaw.settingsRestartGateway();
-      setChRestarting(false);
-      if (result.success) {
-        els.chRestartBanner.classList.add("hidden");
-        showChMsg(t("provider.restarted"), "success");
-      } else {
-        showChMsg(result.message || t("provider.restartFailed"), "error");
-      }
-    } catch (err) {
-      setChRestarting(false);
-      showChMsg(t("provider.restartFailed"), "error");
     }
   }
 
@@ -679,33 +598,12 @@
       setAdvSaving(false);
       if (result.success) {
         showAdvMsg(t("advanced.saved"), "success");
-        els.advRestartBanner.classList.remove("hidden");
       } else {
         showAdvMsg(result.message || "Save failed", "error");
       }
     } catch (err) {
       setAdvSaving(false);
       showAdvMsg(t("error.connection") + (err.message || "Unknown error"), "error");
-    }
-  }
-
-  // Advanced 重启
-  async function handleAdvRestart() {
-    if (advRestarting) return;
-    setAdvRestarting(true);
-
-    try {
-      var result = await window.oneclaw.settingsRestartGateway();
-      setAdvRestarting(false);
-      if (result.success) {
-        els.advRestartBanner.classList.add("hidden");
-        showAdvMsg(t("provider.restarted"), "success");
-      } else {
-        showAdvMsg(result.message || t("provider.restartFailed"), "error");
-      }
-    } catch (err) {
-      setAdvRestarting(false);
-      showAdvMsg(t("provider.restartFailed"), "error");
     }
   }
 
@@ -725,13 +623,6 @@
     els.btnAdvSave.disabled = loading;
     els.btnAdvSaveText.textContent = loading ? t("advanced.saving") : t("advanced.save");
     els.btnAdvSaveSpinner.classList.toggle("hidden", !loading);
-  }
-
-  function setAdvRestarting(loading) {
-    advRestarting = loading;
-    els.btnAdvRestart.disabled = loading;
-    els.btnAdvRestartText.textContent = loading ? t("provider.restarting") : t("provider.restart");
-    els.btnAdvRestartSpinner.classList.toggle("hidden", !loading);
   }
 
   // ── 从配置 + 预设合并出模型列表（配置优先，预设补充） ──
@@ -867,13 +758,6 @@
     els.btnSaveSpinner.classList.toggle("hidden", !loading);
   }
 
-  function setRestarting(loading) {
-    restarting = loading;
-    els.btnRestart.disabled = loading;
-    els.btnRestartText.textContent = loading ? t("provider.restarting") : t("provider.restart");
-    els.btnRestartSpinner.classList.toggle("hidden", !loading);
-  }
-
   function setDoctorRunning(loading) {
     doctorRunning = loading;
     els.btnDoctor.disabled = loading;
@@ -927,9 +811,6 @@
       if (e.key === "Enter") handleSave();
     });
 
-    // 重启
-    els.btnRestart.addEventListener("click", handleRestart);
-
     // Channels tab
     els.btnToggleChSecret.addEventListener("click", toggleChSecretVisibility);
     els.chConsoleLink.addEventListener("click", function (e) {
@@ -942,14 +823,11 @@
     els.chAppSecret.addEventListener("keydown", function (e) {
       if (e.key === "Enter") handleChSave();
     });
-    els.btnChRestart.addEventListener("click", handleChRestart);
-
     // Doctor
     els.btnDoctor.addEventListener("click", handleDoctor);
 
     // Advanced
     els.btnAdvSave.addEventListener("click", handleAdvSave);
-    els.btnAdvRestart.addEventListener("click", handleAdvRestart);
 
     // Doctor 流式输出监听
     if (window.oneclaw && window.oneclaw.onDoctorOutput) {
