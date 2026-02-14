@@ -15,7 +15,7 @@ export class SettingsManager {
 
     // 标题本地化
     const lang = app.getLocale().startsWith("zh") ? "zh" : "en";
-    const title = lang === "zh" ? "OneClaw 设置" : "OneClaw Settings";
+    const title = lang === "zh" ? "设置" : "Settings";
 
     this.win = new BrowserWindow({
       width: 700,
@@ -29,6 +29,10 @@ export class SettingsManager {
         nodeIntegration: false,
         preload: path.join(__dirname, "preload.js"),
       },
+    });
+    this.win.on("page-title-updated", (event) => {
+      event.preventDefault();
+      this.win?.setTitle(title);
     });
     // 隐藏默认菜单栏
     this.win.setMenuBarVisibility(false);

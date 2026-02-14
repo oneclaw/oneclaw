@@ -1,4 +1,4 @@
-import { BrowserWindow } from "electron";
+import { BrowserWindow, app } from "electron";
 import * as path from "path";
 import * as log from "./logger";
 import { shouldHideWindowOnClose } from "./window-close-policy";
@@ -35,13 +35,18 @@ export class WindowManager {
       minWidth: WINDOW_MIN_WIDTH,
       minHeight: WINDOW_MIN_HEIGHT,
       show: false,
-      title: "OneClaw",
+      title: "OpenClaw",
       autoHideMenuBar: true,
       webPreferences: {
         contextIsolation: true,
         nodeIntegration: false,
         preload: path.join(__dirname, "preload.js"),
       },
+    });
+    const title = app.getLocale().startsWith("zh") ? "OpenClaw" : "OpenClaw";
+    this.win.on("page-title-updated", (event) => {
+      event.preventDefault();
+      this.win?.setTitle(title);
     });
     // 主窗口隐藏菜单栏（File/Edit/View...）
     this.win.setMenuBarVisibility(false);

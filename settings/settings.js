@@ -150,7 +150,7 @@
       "advanced.title": "高级选项",
       "advanced.desc": "浏览器工具与消息频道设置。",
       "advanced.browserProfile": "浏览器配置",
-      "advanced.browserOpenclaw": "独立浏览器实例",
+      "advanced.browserOpenclaw": "独立浏览器(建议)",
       "advanced.browserChrome": "Chrome 扩展",
       "advanced.imessage": "iMessage 频道",
       "advanced.imessageOn": "启用",
@@ -234,6 +234,7 @@
   }
 
   function applyI18n() {
+    document.title = t("title");
     document.querySelectorAll("[data-i18n]").forEach((el) => {
       el.textContent = t(el.getAttribute("data-i18n"));
     });

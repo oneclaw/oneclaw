@@ -33,8 +33,8 @@ const I18N: Record<string, TrayStrings> = {
     stateStopped: "Gateway: Stopped",
     openDashboard: "Open Dashboard",
     restartGateway: "Restart Gateway",
-    settings: "Settings…",
-    checkUpdates: "Check for Updates…",
+    settings: "Settings",
+    checkUpdates: "Check for Updates",
     quit: "Quit OneClaw",
   },
   zh: {
@@ -44,8 +44,8 @@ const I18N: Record<string, TrayStrings> = {
     stateStopped: "Gateway: 已停止",
     openDashboard: "打开 OneClaw",
     restartGateway: "重启 Gateway",
-    settings: "设置…",
-    checkUpdates: "检查更新…",
+    settings: "设置",
+    checkUpdates: "检查更新",
     quit: "退出 OneClaw",
   },
 };

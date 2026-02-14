@@ -51,6 +51,7 @@
   // ---- 国际化文案 ----
   const I18N = {
     en: {
+      title: "OneClaw Setup",
       "welcome.title": "Welcome to OneClaw",
       "welcome.subtitle": "Your intelligent desktop assistant powered by large language models. Let's get you set up in just a few steps.",
       "welcome.security.title": "Your keys stay local",
@@ -95,6 +96,7 @@
       "error.noAppSecret": "Please enter the App Secret.",
     },
     zh: {
+      title: "OneClaw 安装引导",
       "welcome.title": "欢迎使用 OneClaw",
       "welcome.subtitle": "基于大语言模型的智能桌面助手，只需几步即可完成配置。",
       "welcome.security.title": "密钥安全存储",
@@ -206,6 +208,7 @@
 
   // 遍历 data-i18n 属性，替换文本
   function applyI18n() {
+    document.title = t("title");
     document.querySelectorAll("[data-i18n]").forEach((el) => {
       el.textContent = t(el.getAttribute("data-i18n"));
     });

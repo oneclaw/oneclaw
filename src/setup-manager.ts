@@ -16,7 +16,7 @@ export class SetupManager {
   showSetup(): void {
     // 标题本地化
     const lang = app.getLocale().startsWith("zh") ? "zh" : "en";
-    const title = lang === "zh" ? "OneClaw 设置向导" : "OneClaw Setup";
+    const title = lang === "zh" ? "OneClaw 安装引导" : "OneClaw Setup";
 
     this.setupWin = new BrowserWindow({
       width: 580,
@@ -29,6 +29,10 @@ export class SetupManager {
         nodeIntegration: false,
         preload: path.join(__dirname, "preload.js"),
       },
+    });
+    this.setupWin.on("page-title-updated", (event) => {
+      event.preventDefault();
+      this.setupWin?.setTitle(title);
     });
     // Windows/Linux 隐藏窗口菜单栏（File/Edit/View...）
     this.setupWin.setMenuBarVisibility(false);
