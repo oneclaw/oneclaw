@@ -120,7 +120,9 @@ button, input, select, label, a {
 
 .content {
   flex: 1;
-  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
   padding: 28px 32px;
 }
 
@@ -128,10 +130,13 @@ button, input, select, label, a {
   display: none;
   flex-direction: column;
   gap: 16px;
+  min-height: 0;
 }
 
 .tab-panel.active {
   display: flex;
+  flex: 1;
+  overflow-y: auto;
 }
 
 .content h2 {
@@ -144,6 +149,29 @@ button, input, select, label, a {
   color: var(--text-secondary);
   font-size: 13px;
   margin-bottom: 4px;
+}
+
+.channel-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  flex: 1;
+  min-height: 0;
+}
+
+.channel-desc-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.channel-desc-row .desc {
+  margin-bottom: 0;
+}
+
+.channel-desc-row .platform-link {
+  white-space: nowrap;
 }
 
 /* ── 当前 provider 状态指示 ── */
@@ -457,8 +485,14 @@ select option {
 .btn-row {
   display: flex;
   align-items: center;
+  justify-content: flex-end;
   gap: 12px;
   margin-top: 4px;
+}
+
+.btn-row.bottom-actions {
+  margin-top: auto;
+  padding-top: 16px;
 }
 
 .btn-spinner {
@@ -566,6 +600,23 @@ select option {
 ::-webkit-scrollbar-thumb {
   background: var(--border);
   border-radius: 3px;
+}
+
+/* ── 小屏布局 ── */
+@media (max-width: 720px) {
+  .content {
+    padding: 20px 18px;
+  }
+
+  .channel-desc-row {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .restart-banner {
+    flex-direction: column;
+    align-items: flex-start;
+  }
 }
 
 /* ── 浅色主题适配 ── */
