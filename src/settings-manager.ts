@@ -13,12 +13,16 @@ export class SettingsManager {
       return;
     }
 
+    // 标题本地化
+    const lang = app.getLocale().startsWith("zh") ? "zh" : "en";
+    const title = lang === "zh" ? "OneClaw 设置" : "OneClaw Settings";
+
     this.win = new BrowserWindow({
       width: 700,
       height: 550,
       minWidth: 600,
       minHeight: 450,
-      title: "Settings",
+      title,
       autoHideMenuBar: true,
       webPreferences: {
         contextIsolation: true,
@@ -35,8 +39,6 @@ export class SettingsManager {
       this.win = null;
     });
 
-    // 传递系统语言
-    const lang = app.getLocale().startsWith("zh") ? "zh" : "en";
     this.win.loadFile(path.join(__dirname, "..", "settings", "index.html"), {
       query: { lang },
     });

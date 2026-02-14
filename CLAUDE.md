@@ -207,6 +207,14 @@ Electron 40 defaults to sandbox mode. 15 IPC methods + 2 event listeners are exp
   └── gateway.log       # Gateway child process diagnostic log
 ```
 
+## Design Rules
+
+1. **Theme color is red, not blue or green.** Use OpenClaw's signature red (`#c0392b`) as the accent/theme color. Never use blue (`#3b82f6`) or green as accent colors. Semantic status colors (error red, warning amber) are separate from the accent.
+
+2. **No `text-transform: uppercase` on labels.** Labels should display as written — respect the original casing of brand names (Chrome, iMessage) and CJK text.
+
+3. **Use radio buttons for boolean toggles**, not checkboxes. Pattern: label on one line, radio group on the next line.
+
 ## Common Gotchas
 
 1. **`npm install file:` creates symlinks, not copies.** Always use `--install-links` for physical copy. This is critical for electron-builder packaging.

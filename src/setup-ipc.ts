@@ -60,6 +60,11 @@ export function registerSetupIpc(deps: SetupIpcDeps): void {
       config.browser ??= {};
       config.browser.defaultProfile = "openclaw";
 
+      // 显式禁用 iMessage 频道（openclaw 默认启用，会因 macOS 权限拒绝产生大量错误日志）
+      config.channels ??= {};
+      config.channels.imessage ??= {};
+      config.channels.imessage.enabled = false;
+
       // 标记 Setup 已完成（字段对齐 openclaw config schema，避免每次启动重走 onboarding）
       config.wizard = { lastRunAt: new Date().toISOString() };
 

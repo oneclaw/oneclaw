@@ -29,6 +29,9 @@ contextBridge.exposeInMainWorld("oneclaw", {
     ipcRenderer.invoke("settings:save-channel", params),
   settingsRestartGateway: () => ipcRenderer.invoke("settings:restart-gateway"),
   settingsRunDoctor: () => ipcRenderer.invoke("settings:run-doctor"),
+  settingsGetAdvanced: () => ipcRenderer.invoke("settings:get-advanced"),
+  settingsSaveAdvanced: (params: Record<string, unknown>) =>
+    ipcRenderer.invoke("settings:save-advanced", params),
 
   // Doctor 流式事件监听
   onDoctorOutput: (cb: (text: string) => void) => {

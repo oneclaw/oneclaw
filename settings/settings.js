@@ -97,10 +97,23 @@
       "doctor.running": "Running…",
       "doctor.pass": "All checks passed (exit code: 0)",
       "doctor.fail": "Some checks failed (exit code: {code})",
+      "nav.advanced": "Advanced",
+      "advanced.title": "Advanced",
+      "advanced.desc": "Browser tool and messaging channel settings.",
+      "advanced.browserProfile": "Browser Profile",
+      "advanced.browserOpenclaw": "Standalone browser instance",
+      "advanced.browserChrome": "Chrome extension",
+      "advanced.imessage": "iMessage channel",
+      "advanced.imessageOn": "Enable",
+      "advanced.imessageOff": "Disable",
+      "advanced.save": "Save",
+      "advanced.saving": "Saving…",
+      "advanced.saved": "Settings saved.",
+      "advanced.restartHint": "Settings saved. Restart gateway to apply changes.",
     },
     zh: {
       "title": "设置",
-      "nav.provider": "模型",
+      "nav.provider": "模型配置",
       "nav.channels": "飞书集成",
       "nav.doctor": "诊断修复",
       "provider.title": "模型配置",
@@ -146,6 +159,19 @@
       "doctor.running": "运行中…",
       "doctor.pass": "全部检查通过（退出码：0）",
       "doctor.fail": "部分检查未通过（退出码：{code}）",
+      "nav.advanced": "高级选项",
+      "advanced.title": "高级选项",
+      "advanced.desc": "浏览器工具与消息频道设置。",
+      "advanced.browserProfile": "浏览器配置",
+      "advanced.browserOpenclaw": "独立浏览器实例",
+      "advanced.browserChrome": "Chrome 扩展",
+      "advanced.imessage": "iMessage 频道",
+      "advanced.imessageOn": "启用",
+      "advanced.imessageOff": "禁用",
+      "advanced.save": "保存",
+      "advanced.saving": "保存中…",
+      "advanced.saved": "设置已保存。",
+      "advanced.restartHint": "设置已保存，重启 Gateway 生效。",
     },
   };
 
@@ -201,6 +227,15 @@
     btnDoctorSpinner: $("#btnDoctor .btn-spinner"),
     doctorLog: $("#doctorLog"),
     doctorExit: $("#doctorExit"),
+    // Advanced tab
+    advMsgBox: $("#advMsgBox"),
+    advRestartBanner: $("#advRestartBanner"),
+    btnAdvSave: $("#btnAdvSave"),
+    btnAdvSaveText: $("#btnAdvSave .btn-text"),
+    btnAdvSaveSpinner: $("#btnAdvSave .btn-spinner"),
+    btnAdvRestart: $("#btnAdvRestart"),
+    btnAdvRestartText: $("#btnAdvRestart .btn-text"),
+    btnAdvRestartSpinner: $("#btnAdvRestart .btn-spinner"),
   };
 
   // ── 状态 ──
@@ -211,6 +246,8 @@
   let chSaving = false;
   let chRestarting = false;
   let doctorRunning = false;
+  let advSaving = false;
+  let advRestarting = false;
   let currentLang = "en";
 
   // ── 语言 ──
@@ -604,6 +641,99 @@
     }
   }
 
+  // ── Advanced ──
+
+  // 加载高级配置
+  async function loadAdvancedConfig() {
+    try {
+      var result = await window.oneclaw.settingsGetAdvanced();
+      if (!result.success || !result.data) return;
+
+      var data = result.data;
+      // 回填 browser profile radio
+      var radio = document.querySelector('input[name="browserProfile"][value="' + data.browserProfile + '"]');
+      if (radio) radio.checked = true;
+      // 回填 iMessage radio
+      var imVal = data.imessageEnabled ? "on" : "off";
+      var imRadio = document.querySelector('input[name="imessageEnabled"][value="' + imVal + '"]');
+      if (imRadio) imRadio.checked = true;
+    } catch (err) {
+      console.error("[Settings] loadAdvancedConfig failed:", err);
+    }
+  }
+
+  // 保存高级配置
+  async function handleAdvSave() {
+    if (advSaving) return;
+    setAdvSaving(true);
+    hideAdvMsg();
+
+    var browserProfile = document.querySelector('input[name="browserProfile"]:checked').value;
+    var imessageEnabled = document.querySelector('input[name="imessageEnabled"]:checked').value === "on";
+
+    try {
+      var result = await window.oneclaw.settingsSaveAdvanced({
+        browserProfile: browserProfile,
+        imessageEnabled: imessageEnabled,
+      });
+      setAdvSaving(false);
+      if (result.success) {
+        showAdvMsg(t("advanced.saved"), "success");
+        els.advRestartBanner.classList.remove("hidden");
+      } else {
+        showAdvMsg(result.message || "Save failed", "error");
+      }
+    } catch (err) {
+      setAdvSaving(false);
+      showAdvMsg(t("error.connection") + (err.message || "Unknown error"), "error");
+    }
+  }
+
+  // Advanced 重启
+  async function handleAdvRestart() {
+    if (advRestarting) return;
+    setAdvRestarting(true);
+
+    try {
+      var result = await window.oneclaw.settingsRestartGateway();
+      setAdvRestarting(false);
+      if (result.success) {
+        els.advRestartBanner.classList.add("hidden");
+        showAdvMsg(t("provider.restarted"), "success");
+      } else {
+        showAdvMsg(result.message || t("provider.restartFailed"), "error");
+      }
+    } catch (err) {
+      setAdvRestarting(false);
+      showAdvMsg(t("provider.restartFailed"), "error");
+    }
+  }
+
+  function showAdvMsg(msg, type) {
+    els.advMsgBox.textContent = msg;
+    els.advMsgBox.className = "msg-box " + type;
+  }
+
+  function hideAdvMsg() {
+    els.advMsgBox.classList.add("hidden");
+    els.advMsgBox.textContent = "";
+    els.advMsgBox.className = "msg-box hidden";
+  }
+
+  function setAdvSaving(loading) {
+    advSaving = loading;
+    els.btnAdvSave.disabled = loading;
+    els.btnAdvSaveText.textContent = loading ? t("advanced.saving") : t("advanced.save");
+    els.btnAdvSaveSpinner.classList.toggle("hidden", !loading);
+  }
+
+  function setAdvRestarting(loading) {
+    advRestarting = loading;
+    els.btnAdvRestart.disabled = loading;
+    els.btnAdvRestartText.textContent = loading ? t("provider.restarting") : t("provider.restart");
+    els.btnAdvRestartSpinner.classList.toggle("hidden", !loading);
+  }
+
   // ── 从配置 + 预设合并出模型列表（配置优先，预设补充） ──
 
   function buildMergedModelList(configuredModels, provider, subPlatform) {
@@ -817,6 +947,10 @@
     // Doctor
     els.btnDoctor.addEventListener("click", handleDoctor);
 
+    // Advanced
+    els.btnAdvSave.addEventListener("click", handleAdvSave);
+    els.btnAdvRestart.addEventListener("click", handleAdvRestart);
+
     // Doctor 流式输出监听
     if (window.oneclaw && window.oneclaw.onDoctorOutput) {
       window.oneclaw.onDoctorOutput(onDoctorOutput);
@@ -835,6 +969,7 @@
     switchProvider("anthropic");
     loadCurrentConfig();
     loadChannelConfig();
+    loadAdvancedConfig();
   }
 
   init();

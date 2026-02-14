@@ -132,6 +132,42 @@ export function registerSettingsIpc(deps: SettingsIpcDeps): void {
     }
   });
 
+  // ── 读取高级配置（browser profile + iMessage） ──
+  ipcMain.handle("settings:get-advanced", async () => {
+    try {
+      const config = readUserConfig();
+      return {
+        success: true,
+        data: {
+          browserProfile: config?.browser?.defaultProfile ?? "openclaw",
+          imessageEnabled: config?.channels?.imessage?.enabled !== false,
+        },
+      };
+    } catch (err: any) {
+      return { success: false, message: err.message };
+    }
+  });
+
+  // ── 保存高级配置 ──
+  ipcMain.handle("settings:save-advanced", async (_event, params) => {
+    const { browserProfile, imessageEnabled } = params;
+    try {
+      const config = readUserConfig();
+
+      config.browser ??= {};
+      config.browser.defaultProfile = browserProfile;
+
+      config.channels ??= {};
+      config.channels.imessage ??= {};
+      config.channels.imessage.enabled = imessageEnabled;
+
+      writeUserConfig(config);
+      return { success: true };
+    } catch (err: any) {
+      return { success: false, message: err.message || String(err) };
+    }
+  });
+
   // ── Doctor 子进程 ──
   ipcMain.handle("settings:run-doctor", async () => {
     // 防止并发

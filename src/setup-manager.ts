@@ -14,11 +14,15 @@ export class SetupManager {
 
   // 显示 Setup 窗口
   showSetup(): void {
+    // 标题本地化
+    const lang = app.getLocale().startsWith("zh") ? "zh" : "en";
+    const title = lang === "zh" ? "OneClaw 设置向导" : "OneClaw Setup";
+
     this.setupWin = new BrowserWindow({
       width: 580,
       height: 680,
       resizable: false,
-      title: "OneClaw Setup",
+      title,
       autoHideMenuBar: true,
       webPreferences: {
         contextIsolation: true,
@@ -35,8 +39,6 @@ export class SetupManager {
       app.quit();
     });
 
-    // 根据系统语言传递 lang 参数，zh 开头用中文，其余 fallback 英文
-    const lang = app.getLocale().startsWith("zh") ? "zh" : "en";
     this.setupWin.loadFile(path.join(__dirname, "..", "setup", "index.html"), {
       query: { lang },
     });

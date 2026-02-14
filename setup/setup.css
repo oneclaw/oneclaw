@@ -2,23 +2,23 @@
    OneClaw Setup — 中性深色主题向导样式
    ============================================ */
 
-/* 基础变量 — 中性黑白灰 */
+/* 基础变量 — 中性黑白灰 + OpenClaw 红色主题 */
 :root {
   --bg-primary: #1a1a1a;
   --bg-secondary: #151515;
   --bg-card: #222222;
   --bg-input: #111111;
   --border: #303030;
-  --border-focus: #3b82f6;
+  --border-focus: #c0392b;
   --text-primary: #e8e8e8;
   --text-secondary: #999999;
   --text-muted: #666666;
-  --accent: #3b82f6;
-  --accent-hover: #60a5fa;
-  --accent-dim: rgba(59, 130, 246, 0.12);
-  --success: #22c55e;
-  --error: #ef4444;
-  --error-bg: rgba(239, 68, 68, 0.1);
+  --accent: #c0392b;
+  --accent-hover: #d94a3c;
+  --accent-dim: rgba(192, 57, 43, 0.12);
+  --success: #d4776a;
+  --error: #c0392b;
+  --error-bg: rgba(192, 57, 43, 0.1);
   --radius-sm: 6px;
   --radius-md: 10px;
   --radius-lg: 14px;
@@ -156,7 +156,7 @@ h2 {
   gap: 12px;
   padding: 14px 16px;
   background: var(--accent-dim);
-  border: 1px solid rgba(59, 130, 246, 0.2);
+  border: 1px solid rgba(192, 57, 43, 0.2);
   border-radius: var(--radius-md);
   width: 100%;
   max-width: 380px;
@@ -231,8 +231,6 @@ h2 {
   font-size: 12px;
   font-weight: 500;
   color: var(--text-secondary);
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
 }
 
 /* Label 行（label + 平台链接） */
@@ -423,7 +421,7 @@ select option {
   font-size: 12.5px;
   color: var(--error);
   background: var(--error-bg);
-  border: 1px solid rgba(239, 68, 68, 0.25);
+  border: 1px solid rgba(192, 57, 43, 0.25);
   border-radius: var(--radius-sm);
   line-height: 1.4;
 }
@@ -575,11 +573,11 @@ select option {
     --text-primary: #1a1a1a;
     --text-secondary: #555555;
     --text-muted: #888888;
-    --accent-dim: rgba(59, 130, 246, 0.08);
-    --error-bg: rgba(239, 68, 68, 0.06);
+    --accent-dim: rgba(192, 57, 43, 0.08);
+    --error-bg: rgba(192, 57, 43, 0.06);
   }
 
-  /* 分段选择器激活态：蓝底强制白字 */
+  /* 分段选择器激活态：红底强制白字 */
   .provider-tab.active {
     color: #fff;
   }
