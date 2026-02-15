@@ -44,7 +44,7 @@ export class SettingsManager {
     });
 
     this.win.loadFile(path.join(__dirname, "..", "settings", "index.html"), {
-      query: { lang },
+      query: { lang, platform: process.platform },
     });
     this.win.show();
   }
