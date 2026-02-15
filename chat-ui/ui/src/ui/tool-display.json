@@ -1,0 +1,124 @@
+{
+  "version": 1,
+  "fallback": {
+    "icon": "puzzle",
+    "detailKeys": ["path", "command", "query", "url"]
+  },
+  "tools": {
+    "read": {
+      "icon": "file-text",
+      "title": "Read",
+      "label": "read",
+      "detailKeys": ["path"]
+    },
+    "write": {
+      "icon": "file-plus",
+      "title": "Write",
+      "label": "write",
+      "detailKeys": ["path"]
+    },
+    "edit": {
+      "icon": "file-edit",
+      "title": "Edit",
+      "label": "edit",
+      "detailKeys": ["path"]
+    },
+    "apply_patch": {
+      "icon": "file-edit",
+      "title": "Apply Patch",
+      "label": "apply_patch",
+      "detailKeys": ["path"]
+    },
+    "exec": {
+      "icon": "terminal",
+      "title": "Execute",
+      "label": "exec",
+      "detailKeys": ["command", "cmd"]
+    },
+    "process": {
+      "icon": "cpu",
+      "title": "Process",
+      "label": "process",
+      "detailKeys": ["command"]
+    },
+    "web_search": {
+      "icon": "search",
+      "title": "Web Search",
+      "label": "web_search",
+      "detailKeys": ["query", "q"]
+    },
+    "web_fetch": {
+      "icon": "globe",
+      "title": "Web Fetch",
+      "label": "web_fetch",
+      "detailKeys": ["url"]
+    },
+    "memory_search": {
+      "icon": "database",
+      "title": "Memory Search",
+      "label": "memory_search",
+      "detailKeys": ["query"]
+    },
+    "memory_get": {
+      "icon": "database",
+      "title": "Memory Get",
+      "label": "memory_get",
+      "detailKeys": ["path", "key"]
+    },
+    "browser": {
+      "icon": "monitor",
+      "title": "Browser",
+      "label": "browser",
+      "detailKeys": ["url", "action"]
+    },
+    "message": {
+      "icon": "message-circle",
+      "title": "Message",
+      "label": "message",
+      "detailKeys": ["to", "channel"]
+    },
+    "image": {
+      "icon": "image",
+      "title": "Image",
+      "label": "image",
+      "detailKeys": ["path", "url"]
+    },
+    "sessions_list": {
+      "icon": "list",
+      "title": "Sessions List",
+      "label": "sessions_list"
+    },
+    "sessions_history": {
+      "icon": "clock",
+      "title": "Sessions History",
+      "label": "sessions_history",
+      "detailKeys": ["key"]
+    },
+    "sessions_send": {
+      "icon": "send",
+      "title": "Sessions Send",
+      "label": "sessions_send",
+      "detailKeys": ["key"]
+    },
+    "sessions_spawn": {
+      "icon": "git-branch",
+      "title": "Sessions Spawn",
+      "label": "sessions_spawn"
+    },
+    "cron": {
+      "icon": "clock",
+      "title": "Cron",
+      "label": "cron"
+    },
+    "gateway": {
+      "icon": "server",
+      "title": "Gateway",
+      "label": "gateway"
+    },
+    "canvas": {
+      "icon": "layout",
+      "title": "Canvas",
+      "label": "canvas"
+    }
+  }
+}

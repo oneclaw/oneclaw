@@ -124,6 +124,15 @@ ipcMain.on("gateway:restart", () => gateway.restart());
 ipcMain.handle("gateway:state", () => gateway.getState());
 ipcMain.on("app:check-updates", () => checkForUpdates(true));
 ipcMain.handle("app:open-external", (_e, url: string) => shell.openExternal(url));
+
+// Chat UI 侧边栏 IPC
+ipcMain.on("app:open-settings", () => settingsManager.show());
+ipcMain.on("app:open-webui", () => {
+  const port = gateway.getPort();
+  shell.openExternal(`http://127.0.0.1:${port}/`);
+});
+ipcMain.handle("gateway:port", () => gateway.getPort());
+
 registerSetupIpc({ setupManager });
 registerSettingsIpc({ settingsManager });
 

@@ -1,0 +1,21 @@
+{
+  "name": "oneclaw-chat-ui",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@noble/ed25519": "^2.2.3",
+    "dompurify": "^3.2.6",
+    "lit": "^3.3.0",
+    "marked": "^17.0.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.3",
+    "vite": "^7.0.0"
+  }
+}
