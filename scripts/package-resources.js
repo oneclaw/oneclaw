@@ -847,10 +847,13 @@ async function bundlePlugin(plugin, gatewayDir, targetId) {
 
   const safeId = plugin.id.replace(/-/g, "_");
   const tmpDir = createExtractTmpDir(path.dirname(source.archivePath), `${targetId}_${safeId}`);
+  // Windows 上 GNU tar 会将路径中的驱动器号冒号（如 D:）误认为远程主机分隔符，
+  // 加 --force-local 强制视为本地文件
+  const forceLocal = process.platform === "win32" ? " --force-local" : "";
   let extracted = false;
   for (let attempt = 1; attempt <= 2; attempt++) {
     try {
-      execSync(`tar xzf "${source.archivePath}" -C "${tmpDir}"`, { stdio: "inherit" });
+      execSync(`tar xzf${forceLocal} "${source.archivePath}" -C "${tmpDir}"`, { stdio: "inherit" });
       extracted = true;
       break;
     } catch (err) {
