@@ -1,4 +1,4 @@
-import { BrowserWindow, app } from "electron";
+import { BrowserWindow, app, globalShortcut } from "electron";
 import * as path from "path";
 import * as log from "./logger";
 import { shouldHideWindowOnClose } from "./window-close-policy";
@@ -50,6 +50,17 @@ export class WindowManager {
     // 主窗口隐藏菜单栏（File/Edit/View...）
     this.win.setMenuBarVisibility(false);
     this.win.removeMenu();
+
+    // DevTools 快捷键: F12 / Cmd+Shift+I / Ctrl+Shift+I
+    this.win.webContents.on("before-input-event", (_event, input) => {
+      if (
+        input.key === "F12" ||
+        (input.control && input.shift && input.key.toLowerCase() === "i") ||
+        (input.meta && input.shift && input.key.toLowerCase() === "i")
+      ) {
+        this.win?.webContents.toggleDevTools();
+      }
+    });
 
     // 渲染进程崩溃 / 无响应监控
     this.win.webContents.on("render-process-gone", (_e, details) => {
