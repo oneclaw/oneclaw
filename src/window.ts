@@ -72,6 +72,8 @@ export class WindowManager {
     });
 
     // 加载本地 chat-ui/dist/index.html
+    // 分两步：先加载页面建立 file:// 源，注入 localStorage，再 reload 让 app 读到正确配置。
+    // 窗口此时 show=false，用户看不到中间态。
     const chatUiIndex = resolveChatUiPath();
     try {
       await this.win.loadFile(chatUiIndex);
@@ -82,9 +84,14 @@ export class WindowManager {
       return;
     }
 
-    // 注入 gateway 连接信息到 localStorage（与原版 token 注入逻辑一致）
+    // 注入 gateway 连接信息到 localStorage，然后 reload 让 app 重新初始化
     if (opts.token) {
       await this.injectGatewaySettings(opts.port, opts.token);
+      try {
+        await this.win.loadFile(chatUiIndex);
+      } catch (err) {
+        log.error(`Chat UI reload 失败: ${err}`);
+      }
     }
 
     this.win.show();
