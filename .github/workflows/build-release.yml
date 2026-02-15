@@ -7,6 +7,7 @@ name: Build & Release
 on:
   push:
     tags: ["v*"]
+  pull_request:       # PR 触发构建验证（不发布）
   workflow_dispatch:  # 允许在任意分支上手动触发构建（不发布）
 
 # package-resources.js 每次构建自动从 npm 拉取 openclaw latest stable
