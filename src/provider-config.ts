@@ -75,6 +75,9 @@ export function saveMoonshotConfig(
   };
 
   config.agents.defaults.model.primary = `${providerKey}/${modelID}`;
+
+  // Moonshot 模型默认开启 thinking（low 级别），对齐 openclaw 官方配置行为
+  config.agents.defaults.thinkingDefault ??= "low";
 }
 
 // ── 用户配置读写（薄封装） ──
