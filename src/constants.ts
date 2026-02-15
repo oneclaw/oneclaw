@@ -96,6 +96,16 @@ export function resolveGatewayLogPath(): string {
   return path.join(resolveUserStateDir(), "gateway.log");
 }
 
+// ── Chat UI 路径 ──
+
+/** Chat UI 的 index.html（dev 模式在 chat-ui/dist/，打包后在 app 资源中） */
+export function resolveChatUiPath(): string {
+  if (app.isPackaged) {
+    return path.join(process.resourcesPath, "app.asar", "chat-ui", "dist", "index.html");
+  }
+  return path.join(app.getAppPath(), "chat-ui", "dist", "index.html");
+}
+
 // ── Setup 完成判断 ──
 
 /** 检查 Setup 是否已完成（配置文件存在且有效） */

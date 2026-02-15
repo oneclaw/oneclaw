@@ -43,4 +43,9 @@ contextBridge.exposeInMainWorld("oneclaw", {
 
   // 打开外部链接（走 IPC 到主进程，sandbox 下 shell 不可用）
   openExternal: (url: string) => ipcRenderer.invoke("app:open-external", url),
+
+  // Chat UI 侧边栏操作
+  openSettings: () => ipcRenderer.send("app:open-settings"),
+  openWebUI: () => ipcRenderer.send("app:open-webui"),
+  getGatewayPort: () => ipcRenderer.invoke("gateway:port"),
 });
