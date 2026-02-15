@@ -21,7 +21,7 @@ The main process spawns a gateway subprocess, waits for its health check, then o
 | Shell | Electron 40.2.1 |
 | Language | TypeScript → CommonJS (no ESM) |
 | Packager | electron-builder 26.7.0 |
-| Updater | electron-updater (generic provider, CDN at `claw.ver0.cn`) |
+| Updater | electron-updater (generic provider, CDN at `oneclaw.cn`) |
 | Targets | macOS DMG + ZIP (arm64/x64), Windows NSIS (x64/arm64) |
 | Version scheme | Calendar-based: `2026.2.13` (auto-fetched from openclaw npm at build time) |
 

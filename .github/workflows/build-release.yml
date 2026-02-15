@@ -252,15 +252,13 @@ jobs:
       - name: 二次清理 blockmap（release）
         run: find out -type f -name "*.blockmap" -delete
 
-      # 安装阿里云 ossutil（install.sh 需要 sudo 写入 /usr/bin/）
+      # 预上传二进制产物到 OSS（不含 latest yml，用户不会收到更新推送）
       - name: 安装 ossutil
         continue-on-error: true
         id: ossutil
-        run: |
-          curl -fsSL https://gosspublic.alicdn.com/ossutil/install.sh | sudo bash
+        run: curl -fsSL https://gosspublic.alicdn.com/ossutil/install.sh | sudo bash
 
-      # 上传到阿里云 OSS（OSS 失败不阻塞 release）
-      - name: 上传到 OSS
+      - name: 预上传产物到 OSS（不含 latest yml）
         if: steps.ossutil.outcome == 'success'
         continue-on-error: true
         env:
@@ -268,29 +266,11 @@ jobs:
           ALIYUN_ACCESS_KEY_SECRET: ${{ secrets.ALIYUN_ACCESS_KEY_SECRET }}
         run: |
           ossutil config -e oss-cn-beijing.aliyuncs.com -i "$ALIYUN_ACCESS_KEY_ID" -k "$ALIYUN_ACCESS_KEY_SECRET"
-          ossutil cp -r out/release/ oss://oneclaw/releases/ --force
-          echo "OSS 上传完成"
-
-      # 安装阿里云 CLI 并刷新 CDN 缓存（CDN 失败不阻塞 release）
-      - name: 刷新 CDN 缓存
-        continue-on-error: true
-        env:
-          ALIYUN_ACCESS_KEY_ID: ${{ secrets.ALIYUN_ACCESS_KEY_ID }}
-          ALIYUN_ACCESS_KEY_SECRET: ${{ secrets.ALIYUN_ACCESS_KEY_SECRET }}
-        run: |
-          curl -fsSL https://aliyuncli.alicdn.com/aliyun-cli-linux-latest-amd64.tgz | tar xz
-          chmod +x aliyun
-          ./aliyun configure set \
-            --access-key-id "$ALIYUN_ACCESS_KEY_ID" \
-            --access-key-secret "$ALIYUN_ACCESS_KEY_SECRET" \
-            --region cn-beijing
-          ./aliyun cdn RefreshObjectCaches \
-            --ObjectType File \
-            --ObjectPath "https://claw.ver0.cn/releases/latest-mac.yml
-          https://claw.ver0.cn/releases/latest.yml"
-          echo "CDN 缓存刷新已提交"
+          ossutil cp -r out/release/ oss://oneclaw/releases/ --force --exclude "*.yml"
+          echo "产物预上传完成（不含 latest yml）"
 
       # 创建 GitHub Release（草稿模式，手动确认后发布）
+      # 发布 Release 后由 publish-release.yml 上传 latest yml + 刷新 CDN
       - name: 创建 GitHub Release
         uses: softprops/action-gh-release@v2
         with:

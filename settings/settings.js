@@ -96,8 +96,8 @@
       "kimi.desc": "Control OneClaw remotely via Kimi",
       "kimi.enabled": "Enable",
       "kimi.getGuide": "Go to kimi.com/bot →",
-  "kimi.guideText": "Click 'Associate existing OpenClaw' → copy command → paste below",
-  "kimi.inputLabel": "Paste BotToken or command (auto parse token)",
+      "kimi.guideText": "Click 'Associate existing OpenClaw' → copy command → paste below",
+      "kimi.inputLabel": "Paste BotToken or command (auto parse token)",
       "kimi.tokenParsed": "Token parsed: ",
       "kimi.save": "Save",
       "kimi.saving": "Saving…",
@@ -161,8 +161,8 @@
       "kimi.desc": "通过 Kimi 远程遥控 OneClaw",
       "kimi.enabled": "启用状态",
       "kimi.getGuide": "前往 kimi.com/bot →",
-  "kimi.guideText": '点击"关联已有 OpenClaw" → 复制命令 → 粘贴到下方输入框',
-  "kimi.inputLabel": "粘贴 BotToken 或命令(自动解析Token)。",
+      "kimi.guideText": '点击"关联已有 OpenClaw" → 复制命令 → 粘贴到下方输入框',
+      "kimi.inputLabel": "粘贴 BotToken 或命令(自动解析Token)。",
       "kimi.tokenParsed": "解析到 Token：",
       "kimi.save": "保存",
       "kimi.saving": "保存中…",
@@ -1006,7 +1006,7 @@
     els.kimiBotPageLink.addEventListener("click", function (e) {
       e.preventDefault();
       if (window.oneclaw && window.oneclaw.openExternal) {
-        window.oneclaw.openExternal("https://www.kimi.com/bot");
+        window.oneclaw.openExternal("https://www.kimi.com/bot?utm_source=oneclaw");
       }
     });
 

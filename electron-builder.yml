@@ -33,7 +33,7 @@ mac:
 # 自动更新：指向阿里云 CDN
 publish:
   provider: generic
-  url: https://claw.ver0.cn/releases/
+  url: https://oneclaw.cn/releases/
 
 dmg:
   sign: false
