@@ -12,6 +12,10 @@ dist/
 out/
 *.tsbuildinfo
 
+# Chat UI 构建产物和依赖
+chat-ui/dist/
+chat-ui/ui/node_modules/
+
 # 打包时生成的运行时资源
 resources/runtime/
 resources/gateway/
