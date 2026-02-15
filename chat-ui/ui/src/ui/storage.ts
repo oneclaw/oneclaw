@@ -17,6 +17,11 @@ export type UiSettings = {
 
 export function loadSettings(): UiSettings {
   const defaultUrl = (() => {
+    // file:// protocol (Electron loadFile) → location.host is empty.
+    // Fall back to the default gateway loopback address.
+    if (!location.host) {
+      return "ws://127.0.0.1:18789";
+    }
     const proto = location.protocol === "https:" ? "wss" : "ws";
     return `${proto}://${location.host}`;
   })();
