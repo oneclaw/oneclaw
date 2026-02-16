@@ -291,11 +291,11 @@ function extractProviderInfo(config: any): any {
     return prov.models.map((m: any) => (typeof m === "string" ? m : m?.id)).filter(Boolean);
   };
 
-  // Kimi Code 特殊路径：provider key = kimi-coding，apiKey 在 env 中
+  // Kimi Code 特殊路径：provider key = kimi-coding
   if (providerKey === "kimi-coding") {
     provider = "moonshot";
     subPlatform = "kimi-code";
-    apiKey = env.KIMI_API_KEY ?? "";
+    apiKey = providers["kimi-coding"]?.apiKey ?? "";
     configuredModels = extractModelIds(providers["kimi-coding"]);
   } else if (providerKey === "moonshot") {
     provider = "moonshot";
