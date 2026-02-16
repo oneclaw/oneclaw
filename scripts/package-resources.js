@@ -850,9 +850,12 @@ async function bundlePlugin(plugin, gatewayDir, targetId) {
   let extracted = false;
   for (let attempt = 1; attempt <= 2; attempt++) {
     try {
-      // --force-local: Windows 上 GNU tar 会把路径中的冒号（D:\...）误认为远程主机分隔符
-      const forceLocal = process.platform === "win32" ? " --force-local" : "";
-      execSync(`tar${forceLocal} -xzf "${source.archivePath}" -C "${tmpDir}"`, { stdio: "inherit" });
+      // Windows: --force-local 防止冒号被当作远程主机分隔符；路径转正斜杠防止 GNU tar 解析失败
+      const isWin = process.platform === "win32";
+      const forceLocal = isWin ? " --force-local" : "";
+      const archivePath = isWin ? source.archivePath.replace(/\\/g, "/") : source.archivePath;
+      const extractDir = isWin ? tmpDir.replace(/\\/g, "/") : tmpDir;
+      execSync(`tar${forceLocal} -xzf "${archivePath}" -C "${extractDir}"`, { stdio: "inherit" });
       extracted = true;
       break;
     } catch (err) {
