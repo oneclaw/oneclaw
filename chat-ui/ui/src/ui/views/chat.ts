@@ -407,13 +407,19 @@ export function renderChat(props: ChatProps) {
             ></textarea>
           </label>
           <div class="chat-compose__actions">
-            <button
-              class="btn"
-              ?disabled=${!props.connected || (!canAbort && props.sending)}
-              @click=${canAbort ? props.onAbort : props.onNewSession}
-            >
-              ${canAbort ? t("chat.stop") : t("chat.newSession")}
-            </button>
+            ${
+              canAbort
+                ? html`
+                  <button
+                    class="btn"
+                    ?disabled=${!props.connected}
+                    @click=${props.onAbort}
+                  >
+                    ${t("chat.stop")}
+                  </button>
+                `
+                : nothing
+            }
             <button
               class="btn primary"
               ?disabled=${!props.connected}

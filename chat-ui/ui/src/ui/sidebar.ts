@@ -9,7 +9,7 @@
 import { html } from "lit";
 import { t } from "./i18n.ts";
 import { icons } from "./icons.ts";
-import oneClawLogo from "../../../../assets/icon.png";
+import oneClawLogo from "../assets/openclaw-favicon.svg";
 
 export type SidebarProps = {
   connected: boolean;
