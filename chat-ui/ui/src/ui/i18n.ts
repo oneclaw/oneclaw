@@ -30,6 +30,12 @@ const dict: Record<Locale, Record<string, string>> = {
     "chat.queued": "排队中",
     "chat.compacting": "正在压缩上下文…",
     "chat.compacted": "上下文已压缩",
+    "chat.exitFocus": "退出专注模式",
+    "chat.messageLabel": "消息",
+    "chat.image": "图片",
+    "chat.removeAttachment": "移除图片",
+    "chat.removeQueuedMessage": "移除排队消息",
+    "chat.attachmentPreview": "图片预览",
 
     // Senders
     "sender.you": "你",
@@ -72,6 +78,12 @@ const dict: Record<Locale, Record<string, string>> = {
     "chat.queued": "Queued",
     "chat.compacting": "Compacting context...",
     "chat.compacted": "Context compacted",
+    "chat.exitFocus": "Exit focus mode",
+    "chat.messageLabel": "Message",
+    "chat.image": "Image",
+    "chat.removeAttachment": "Remove attachment",
+    "chat.removeQueuedMessage": "Remove queued message",
+    "chat.attachmentPreview": "Attachment preview",
 
     // Senders
     "sender.you": "You",
