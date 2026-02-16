@@ -287,6 +287,26 @@ export class OpenClawApp extends LitElement {
     chatNewMessagesBelow: { state: true },
   };
 
+  // 兼容 class field 的 define 语义：回灌实例字段到 Lit accessor，恢复响应式更新。
+  constructor() {
+    super();
+    this.rebindReactiveFieldsForLit();
+  }
+
+  // 将实例自有字段删除并通过 setter 重新赋值，避免覆盖原型上的响应式访问器。
+  private rebindReactiveFieldsForLit() {
+    const propertyDefs = (this.constructor as typeof OpenClawApp).properties ?? {};
+    const keys = Object.keys(propertyDefs);
+    for (const key of keys) {
+      if (!Object.prototype.hasOwnProperty.call(this, key)) {
+        continue;
+      }
+      const value = (this as unknown as Record<string, unknown>)[key];
+      delete (this as unknown as Record<string, unknown>)[key];
+      (this as unknown as Record<string, unknown>)[key] = value;
+    }
+  }
+
   settings: UiSettings = loadSettings();
   password = "";
   tab: Tab = "chat";
