@@ -13,9 +13,24 @@ const dict: Record<Locale, Record<string, string>> = {
     "sidebar.newChat": "新对话",
     "sidebar.settings": "设置",
     "sidebar.openWebUI": "打开 Web UI",
+    "sidebar.agent": "Agent",
+    "sidebar.preferences": "偏好设置",
+    "sidebar.appearance": "外观",
+    "sidebar.theme": "主题",
+    "sidebar.showThinking": "显示思考过程",
+    "sidebar.on": "开启",
+    "sidebar.off": "关闭",
+    "sidebar.refresh": "刷新",
+    "sidebar.collapse": "折叠菜单",
+    "sidebar.expand": "展开菜单",
     "sidebar.connected": "已连接",
     "sidebar.disconnected": "未连接",
     "sidebar.connecting": "连接中…",
+
+    // OneClaw settings page
+    "settings.title": "设置",
+    "settings.subtitle": "管理外观与聊天展示偏好",
+    "settings.backToChat": "返回对话",
 
     // Chat
     "chat.placeholder": "输入消息（↩ 发送，Shift+↩ 换行，粘贴图片）",
@@ -61,9 +76,24 @@ const dict: Record<Locale, Record<string, string>> = {
     "sidebar.newChat": "New Chat",
     "sidebar.settings": "Settings",
     "sidebar.openWebUI": "Open Web UI",
+    "sidebar.agent": "Agent",
+    "sidebar.preferences": "Preferences",
+    "sidebar.appearance": "Appearance",
+    "sidebar.theme": "Theme",
+    "sidebar.showThinking": "Show thinking output",
+    "sidebar.on": "On",
+    "sidebar.off": "Off",
+    "sidebar.refresh": "Refresh",
+    "sidebar.collapse": "Collapse sidebar",
+    "sidebar.expand": "Expand sidebar",
     "sidebar.connected": "Connected",
     "sidebar.disconnected": "Disconnected",
     "sidebar.connecting": "Connecting…",
+
+    // OneClaw settings page
+    "settings.title": "Settings",
+    "settings.subtitle": "Manage appearance and chat display preferences",
+    "settings.backToChat": "Back to chat",
 
     // Chat
     "chat.placeholder": "Message (↩ to send, Shift+↩ for line breaks, paste images)",
