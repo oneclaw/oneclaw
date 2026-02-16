@@ -1030,6 +1030,7 @@
   function init() {
     detectLang();
     applyI18n();
+
     bindEvents();
     switchProvider("anthropic");
     loadCurrentConfig();

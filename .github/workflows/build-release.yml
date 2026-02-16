@@ -7,6 +7,8 @@ name: Build & Release
 on:
   push:
     tags: ["v*"]
+  pull_request:       # PR 触发构建验证（不发布）
+  workflow_dispatch:  # 允许在任意分支上手动触发构建（不发布）
 
 # package-resources.js 每次构建自动从 npm 拉取 openclaw latest stable
 env:
@@ -210,6 +212,7 @@ jobs:
 
   # ── 合并 + 上传 OSS + 刷新 CDN + 创建 GitHub Release ──
   release:
+    if: github.event_name == 'push'  # 仅 tag 推送时发布，手动触发只构建不发布
     needs: [build-mac-arm64, build-mac-x64, build-win-x64, build-win-arm64]
     runs-on: ubuntu-latest
     permissions:
