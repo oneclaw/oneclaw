@@ -850,7 +850,9 @@ async function bundlePlugin(plugin, gatewayDir, targetId) {
   let extracted = false;
   for (let attempt = 1; attempt <= 2; attempt++) {
     try {
-      execSync(`tar xzf "${source.archivePath}" -C "${tmpDir}"`, { stdio: "inherit" });
+      // --force-local: Windows 上 GNU tar 会把路径中的冒号（D:\...）误认为远程主机分隔符
+      const forceLocal = process.platform === "win32" ? " --force-local" : "";
+      execSync(`tar xzf${forceLocal} "${source.archivePath}" -C "${tmpDir}"`, { stdio: "inherit" });
       extracted = true;
       break;
     } catch (err) {
@@ -1108,13 +1110,10 @@ function verifyOutput(targetPaths, platform) {
     path.join(targetRel, "app-icon.png"),
   ];
 
-  // 插件仅 macOS 打包，Windows 跳过校验
-  if (platform !== "win32") {
-    required.push(
-      path.join(targetRel, "gateway", "node_modules", "openclaw", "extensions", "kimi-claw", "openclaw.plugin.json"),
-      path.join(targetRel, "gateway", "node_modules", "openclaw", "extensions", "kimi-search", "openclaw.plugin.json"),
-    );
-  }
+  required.push(
+    path.join(targetRel, "gateway", "node_modules", "openclaw", "extensions", "kimi-claw", "openclaw.plugin.json"),
+    path.join(targetRel, "gateway", "node_modules", "openclaw", "extensions", "kimi-search", "openclaw.plugin.json"),
+  );
 
   let allOk = true;
   for (const rel of required) {
@@ -1164,13 +1163,9 @@ async function main() {
 
   console.log();
 
-  // Step 2.5: 注入 bundled 插件（kimi-claw + kimi-search）— 仅 macOS
-  if (opts.platform === "win32") {
-    log("Step 2.5: 跳过 bundled 插件（Windows 暂不支持）");
-  } else {
-    log("Step 2.5: 注入 bundled 插件");
-    await bundleAllPlugins(targetPaths.gatewayDir, targetPaths.targetId);
-  }
+  // Step 2.5: 注入 bundled 插件（kimi-claw + kimi-search）
+  log("Step 2.5: 注入 bundled 插件");
+  await bundleAllPlugins(targetPaths.gatewayDir, targetPaths.targetId);
 
   console.log();
 
