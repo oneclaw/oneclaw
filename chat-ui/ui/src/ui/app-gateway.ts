@@ -116,6 +116,7 @@ function applySessionDefaults(host: GatewayHost, defaults?: SessionDefaultsSnaps
 }
 
 export function connectGateway(host: GatewayHost) {
+  console.info("[gateway] connectGateway start");
   host.lastError = null;
   host.hello = null;
   host.connected = false;
@@ -130,6 +131,7 @@ export function connectGateway(host: GatewayHost) {
     clientName: "openclaw-control-ui",
     mode: "webchat",
     onHello: (hello) => {
+      console.info("[gateway] onHello", hello.type, hello.protocol);
       if (host.client !== client) {
         return;
       }
@@ -150,6 +152,7 @@ export function connectGateway(host: GatewayHost) {
       void refreshActiveTab(host as unknown as Parameters<typeof refreshActiveTab>[0]);
     },
     onClose: ({ code, reason }) => {
+      console.warn(`[gateway] onClose code=${code} reason=${reason}`);
       if (host.client !== client) {
         return;
       }
@@ -163,12 +166,14 @@ export function connectGateway(host: GatewayHost) {
       if (host.client !== client) {
         return;
       }
+      console.debug("[gateway] onEvent", evt.event, evt.seq, evt.type);
       handleGatewayEvent(host, evt);
     },
     onGap: ({ expected, received }) => {
       if (host.client !== client) {
         return;
       }
+      console.warn(`[gateway] onGap expected=${expected} received=${received}`);
       host.lastError = `event gap detected (expected seq ${expected}, got ${received}); refresh recommended`;
     },
   });

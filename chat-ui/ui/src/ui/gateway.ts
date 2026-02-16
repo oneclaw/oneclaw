@@ -81,6 +81,10 @@ export class GatewayBrowserClient {
 
   stop() {
     this.closed = true;
+    this.connectSent = false;
+    this.connectNonce = null;
+    this.lastSeq = null;
+    this.pending.clear();
     this.ws?.close();
     this.ws = null;
     this.flushPending(new Error("gateway client stopped"));
@@ -94,18 +98,23 @@ export class GatewayBrowserClient {
     if (this.closed) {
       return;
     }
+    console.info(`[gateway] websocket opening ${this.opts.url}`);
     this.ws = new WebSocket(this.opts.url);
-    this.ws.addEventListener("open", () => this.queueConnect());
+    this.ws.addEventListener("open", () => {
+      console.info("[gateway] websocket opened");
+      this.queueConnect();
+    });
     this.ws.addEventListener("message", (ev) => this.handleMessage(String(ev.data ?? "")));
     this.ws.addEventListener("close", (ev) => {
       const reason = String(ev.reason ?? "");
       this.ws = null;
+      console.warn(`[gateway] websocket closed code=${ev.code} reason=${reason}`);
       this.flushPending(new Error(`gateway closed (${ev.code}): ${reason}`));
       this.opts.onClose?.({ code: ev.code, reason });
       this.scheduleReconnect();
     });
-    this.ws.addEventListener("error", () => {
-      // ignored; close handler will fire
+    this.ws.addEventListener("error", (ev) => {
+      console.error("[gateway] websocket error", ev);
     });
   }
 
@@ -115,6 +124,7 @@ export class GatewayBrowserClient {
     }
     const delay = this.backoffMs;
     this.backoffMs = Math.min(this.backoffMs * 1.7, 15_000);
+    console.warn(`[gateway] scheduling reconnect in ${delay}ms`);
     window.setTimeout(() => this.connect(), delay);
   }
 
@@ -145,6 +155,12 @@ export class GatewayBrowserClient {
     let deviceIdentity: Awaited<ReturnType<typeof loadOrCreateDeviceIdentity>> | null = null;
     let canFallbackToShared = false;
     let authToken = this.opts.token;
+    console.debug("[gateway] begin sendConnect", {
+      hasSecureContext: isSecureContext,
+      hasToken: Boolean(authToken),
+      hasPassword: Boolean(this.opts.password),
+      role,
+    });
 
     if (isSecureContext) {
       deviceIdentity = await loadOrCreateDeviceIdentity();
@@ -216,6 +232,7 @@ export class GatewayBrowserClient {
 
     void this.request<GatewayHelloOk>("connect", params)
       .then((hello) => {
+        console.info("[gateway] connect response ok");
         if (hello?.auth?.deviceToken && deviceIdentity) {
           storeDeviceAuthToken({
             deviceId: deviceIdentity.deviceId,
@@ -227,7 +244,8 @@ export class GatewayBrowserClient {
         this.backoffMs = 800;
         this.opts.onHello?.(hello);
       })
-      .catch(() => {
+      .catch((err) => {
+        console.error("[gateway] connect request failed", err);
         if (canFallbackToShared && deviceIdentity) {
           clearDeviceAuthToken({ deviceId: deviceIdentity.deviceId, role });
         }
@@ -240,6 +258,7 @@ export class GatewayBrowserClient {
     try {
       parsed = JSON.parse(raw);
     } catch {
+      console.error("[gateway] message parse error", raw);
       return;
     }
 
@@ -251,6 +270,7 @@ export class GatewayBrowserClient {
         const nonce = payload && typeof payload.nonce === "string" ? payload.nonce : null;
         if (nonce) {
           this.connectNonce = nonce;
+          console.debug("[gateway] challenge recv nonce", nonce);
           void this.sendConnect();
         }
         return;
@@ -288,6 +308,7 @@ export class GatewayBrowserClient {
 
   request<T = unknown>(method: string, params?: unknown): Promise<T> {
     if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
+      console.error("[gateway] request with closed socket", method);
       return Promise.reject(new Error("gateway not connected"));
     }
     const id = generateUUID();
@@ -296,6 +317,7 @@ export class GatewayBrowserClient {
       this.pending.set(id, { resolve: (v) => resolve(v as T), reject });
     });
     this.ws.send(JSON.stringify(frame));
+    console.debug("[gateway] request sent", method);
     return p;
   }
 
@@ -306,6 +328,7 @@ export class GatewayBrowserClient {
       window.clearTimeout(this.connectTimer);
     }
     this.connectTimer = window.setTimeout(() => {
+      console.debug("[gateway] queueConnect timeout fire");
       void this.sendConnect();
     }, 750);
   }

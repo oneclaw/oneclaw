@@ -1,5 +1,5 @@
 import { LitElement } from "lit";
-import { customElement, state } from "lit/decorators.js";
+import { customElement } from "lit/decorators.js";
 import type { EventLogEntry } from "./app-events.ts";
 import type { AppViewState } from "./app-view-state.ts";
 import type { DevicePairingList } from "./controllers/devices.ts";
@@ -104,166 +104,349 @@ function resolveOnboardingMode(): boolean {
 
 @customElement("openclaw-app")
 export class OpenClawApp extends LitElement {
-  @state() settings: UiSettings = loadSettings();
-  @state() password = "";
-  @state() tab: Tab = "chat";
-  @state() onboarding = resolveOnboardingMode();
-  @state() connected = false;
-  @state() theme: ThemeMode = this.settings.theme ?? "system";
-  @state() themeResolved: ResolvedTheme = "dark";
-  @state() hello: GatewayHelloOk | null = null;
-  @state() lastError: string | null = null;
-  @state() eventLog: EventLogEntry[] = [];
+  static properties = {
+    settings: { state: true },
+    password: { state: true },
+    tab: { state: true },
+    onboarding: { state: true },
+    connected: { state: true },
+    theme: { state: true },
+    themeResolved: { state: true },
+    hello: { state: true },
+    lastError: { state: true },
+    eventLog: { state: true },
+    assistantName: { state: true },
+    assistantAvatar: { state: true },
+    assistantAgentId: { state: true },
+    sessionKey: { state: true },
+    chatLoading: { state: true },
+    chatSending: { state: true },
+    chatMessage: { state: true },
+    chatMessages: { state: true },
+    chatToolMessages: { state: true },
+    chatStream: { state: true },
+    chatStreamStartedAt: { state: true },
+    chatRunId: { state: true },
+    compactionStatus: { state: true },
+    chatAvatarUrl: { state: true },
+    chatThinkingLevel: { state: true },
+    chatQueue: { state: true },
+    chatAttachments: { state: true },
+    chatManualRefreshInFlight: { state: true },
+    sidebarOpen: { state: true },
+    sidebarContent: { state: true },
+    sidebarError: { state: true },
+    splitRatio: { state: true },
+    nodesLoading: { state: true },
+    nodes: { state: true },
+    devicesLoading: { state: true },
+    devicesError: { state: true },
+    devicesList: { state: true },
+    execApprovalsLoading: { state: true },
+    execApprovalsSaving: { state: true },
+    execApprovalsDirty: { state: true },
+    execApprovalsSnapshot: { state: true },
+    execApprovalsForm: { state: true },
+    execApprovalsSelectedAgent: { state: true },
+    execApprovalsTarget: { state: true },
+    execApprovalsTargetNodeId: { state: true },
+    execApprovalQueue: { state: true },
+    execApprovalBusy: { state: true },
+    execApprovalError: { state: true },
+    pendingGatewayUrl: { state: true },
+    configLoading: { state: true },
+    configRaw: { state: true },
+    configRawOriginal: { state: true },
+    configValid: { state: true },
+    configIssues: { state: true },
+    configSaving: { state: true },
+    configApplying: { state: true },
+    updateRunning: { state: true },
+    applySessionKey: { state: true },
+    configSnapshot: { state: true },
+    configSchema: { state: true },
+    configSchemaVersion: { state: true },
+    configSchemaLoading: { state: true },
+    configUiHints: { state: true },
+    configForm: { state: true },
+    configFormOriginal: { state: true },
+    configFormDirty: { state: true },
+    configFormMode: { state: true },
+    configSearchQuery: { state: true },
+    configActiveSection: { state: true },
+    configActiveSubsection: { state: true },
+    channelsLoading: { state: true },
+    channelsSnapshot: { state: true },
+    channelsError: { state: true },
+    channelsLastSuccess: { state: true },
+    whatsappLoginMessage: { state: true },
+    whatsappLoginQrDataUrl: { state: true },
+    whatsappLoginConnected: { state: true },
+    whatsappBusy: { state: true },
+    nostrProfileFormState: { state: true },
+    nostrProfileAccountId: { state: true },
+    presenceLoading: { state: true },
+    presenceEntries: { state: true },
+    presenceError: { state: true },
+    presenceStatus: { state: true },
+    agentsLoading: { state: true },
+    agentsList: { state: true },
+    agentsError: { state: true },
+    agentsSelectedId: { state: true },
+    agentsPanel: { state: true },
+    agentFilesLoading: { state: true },
+    agentFilesError: { state: true },
+    agentFilesList: { state: true },
+    agentFileContents: { state: true },
+    agentFileDrafts: { state: true },
+    agentFileActive: { state: true },
+    agentFileSaving: { state: true },
+    agentIdentityLoading: { state: true },
+    agentIdentityError: { state: true },
+    agentIdentityById: { state: true },
+    agentSkillsLoading: { state: true },
+    agentSkillsError: { state: true },
+    agentSkillsReport: { state: true },
+    agentSkillsAgentId: { state: true },
+    sessionsLoading: { state: true },
+    sessionsResult: { state: true },
+    sessionsError: { state: true },
+    sessionsFilterActive: { state: true },
+    sessionsFilterLimit: { state: true },
+    sessionsIncludeGlobal: { state: true },
+    sessionsIncludeUnknown: { state: true },
+    usageLoading: { state: true },
+    usageResult: { state: true },
+    usageCostSummary: { state: true },
+    usageError: { state: true },
+    usageStartDate: { state: true },
+    usageEndDate: { state: true },
+    usageSelectedSessions: { state: true },
+    usageSelectedDays: { state: true },
+    usageSelectedHours: { state: true },
+    usageChartMode: { state: true },
+    usageDailyChartMode: { state: true },
+    usageTimeSeriesMode: { state: true },
+    usageTimeSeriesBreakdownMode: { state: true },
+    usageTimeSeries: { state: true },
+    usageTimeSeriesLoading: { state: true },
+    usageSessionLogs: { state: true },
+    usageSessionLogsLoading: { state: true },
+    usageSessionLogsExpanded: { state: true },
+    usageQuery: { state: true },
+    usageQueryDraft: { state: true },
+    usageSessionSort: { state: true },
+    usageSessionSortDir: { state: true },
+    usageRecentSessions: { state: true },
+    usageTimeZone: { state: true },
+    usageContextExpanded: { state: true },
+    usageHeaderPinned: { state: true },
+    usageSessionsTab: { state: true },
+    usageVisibleColumns: { state: true },
+    usageLogFilterRoles: { state: true },
+    usageLogFilterTools: { state: true },
+    usageLogFilterHasTools: { state: true },
+    usageLogFilterQuery: { state: true },
+    cronLoading: { state: true },
+    cronJobs: { state: true },
+    cronStatus: { state: true },
+    cronError: { state: true },
+    cronForm: { state: true },
+    cronRunsJobId: { state: true },
+    cronRuns: { state: true },
+    cronBusy: { state: true },
+    skillsLoading: { state: true },
+    skillsReport: { state: true },
+    skillsError: { state: true },
+    skillsFilter: { state: true },
+    skillEdits: { state: true },
+    skillsBusyKey: { state: true },
+    skillMessages: { state: true },
+    debugLoading: { state: true },
+    debugStatus: { state: true },
+    debugHealth: { state: true },
+    debugModels: { state: true },
+    debugHeartbeat: { state: true },
+    debugCallMethod: { state: true },
+    debugCallParams: { state: true },
+    debugCallResult: { state: true },
+    debugCallError: { state: true },
+    logsLoading: { state: true },
+    logsError: { state: true },
+    logsFile: { state: true },
+    logsEntries: { state: true },
+    logsFilterText: { state: true },
+    logsLevelFilters: { state: true },
+    logsAutoFollow: { state: true },
+    logsTruncated: { state: true },
+    logsCursor: { state: true },
+    logsLastFetchAt: { state: true },
+    logsLimit: { state: true },
+    logsMaxBytes: { state: true },
+    logsAtBottom: { state: true },
+    chatNewMessagesBelow: { state: true },
+  };
+
+  settings: UiSettings = loadSettings();
+  password = "";
+  tab: Tab = "chat";
+  onboarding = resolveOnboardingMode();
+  connected = false;
+  theme: ThemeMode = this.settings.theme ?? "system";
+  themeResolved: ResolvedTheme = "dark";
+  hello: GatewayHelloOk | null = null;
+  lastError: string | null = null;
+  eventLog: EventLogEntry[] = [];
   private eventLogBuffer: EventLogEntry[] = [];
   private toolStreamSyncTimer: number | null = null;
   private sidebarCloseTimer: number | null = null;
 
-  @state() assistantName = injectedAssistantIdentity.name;
-  @state() assistantAvatar = injectedAssistantIdentity.avatar;
-  @state() assistantAgentId = injectedAssistantIdentity.agentId ?? null;
+  assistantName = injectedAssistantIdentity.name;
+  assistantAvatar = injectedAssistantIdentity.avatar;
+  assistantAgentId = injectedAssistantIdentity.agentId ?? null;
 
-  @state() sessionKey = this.settings.sessionKey;
-  @state() chatLoading = false;
-  @state() chatSending = false;
-  @state() chatMessage = "";
-  @state() chatMessages: unknown[] = [];
-  @state() chatToolMessages: unknown[] = [];
-  @state() chatStream: string | null = null;
-  @state() chatStreamStartedAt: number | null = null;
-  @state() chatRunId: string | null = null;
-  @state() compactionStatus: CompactionStatus | null = null;
-  @state() chatAvatarUrl: string | null = null;
-  @state() chatThinkingLevel: string | null = null;
-  @state() chatQueue: ChatQueueItem[] = [];
-  @state() chatAttachments: ChatAttachment[] = [];
-  @state() chatManualRefreshInFlight = false;
+  sessionKey = this.settings.sessionKey;
+  chatLoading = false;
+  chatSending = false;
+  chatMessage = "";
+  chatMessages: unknown[] = [];
+  chatToolMessages: unknown[] = [];
+  chatStream: string | null = null;
+  chatStreamStartedAt: number | null = null;
+  chatRunId: string | null = null;
+  compactionStatus: CompactionStatus | null = null;
+  chatAvatarUrl: string | null = null;
+  chatThinkingLevel: string | null = null;
+  chatQueue: ChatQueueItem[] = [];
+  chatAttachments: ChatAttachment[] = [];
+  chatManualRefreshInFlight = false;
   // Sidebar state for tool output viewing
-  @state() sidebarOpen = false;
-  @state() sidebarContent: string | null = null;
-  @state() sidebarError: string | null = null;
-  @state() splitRatio = this.settings.splitRatio;
+  sidebarOpen = false;
+  sidebarContent: string | null = null;
+  sidebarError: string | null = null;
+  splitRatio = this.settings.splitRatio;
 
-  @state() nodesLoading = false;
-  @state() nodes: Array<Record<string, unknown>> = [];
-  @state() devicesLoading = false;
-  @state() devicesError: string | null = null;
-  @state() devicesList: DevicePairingList | null = null;
-  @state() execApprovalsLoading = false;
-  @state() execApprovalsSaving = false;
-  @state() execApprovalsDirty = false;
-  @state() execApprovalsSnapshot: ExecApprovalsSnapshot | null = null;
-  @state() execApprovalsForm: ExecApprovalsFile | null = null;
-  @state() execApprovalsSelectedAgent: string | null = null;
-  @state() execApprovalsTarget: "gateway" | "node" = "gateway";
-  @state() execApprovalsTargetNodeId: string | null = null;
-  @state() execApprovalQueue: ExecApprovalRequest[] = [];
-  @state() execApprovalBusy = false;
-  @state() execApprovalError: string | null = null;
-  @state() pendingGatewayUrl: string | null = null;
+  nodesLoading = false;
+  nodes: Array<Record<string, unknown>> = [];
+  devicesLoading = false;
+  devicesError: string | null = null;
+  devicesList: DevicePairingList | null = null;
+  execApprovalsLoading = false;
+  execApprovalsSaving = false;
+  execApprovalsDirty = false;
+  execApprovalsSnapshot: ExecApprovalsSnapshot | null = null;
+  execApprovalsForm: ExecApprovalsFile | null = null;
+  execApprovalsSelectedAgent: string | null = null;
+  execApprovalsTarget: "gateway" | "node" = "gateway";
+  execApprovalsTargetNodeId: string | null = null;
+  execApprovalQueue: ExecApprovalRequest[] = [];
+  execApprovalBusy = false;
+  execApprovalError: string | null = null;
+  pendingGatewayUrl: string | null = null;
 
-  @state() configLoading = false;
-  @state() configRaw = "{\n}\n";
-  @state() configRawOriginal = "";
-  @state() configValid: boolean | null = null;
-  @state() configIssues: unknown[] = [];
-  @state() configSaving = false;
-  @state() configApplying = false;
-  @state() updateRunning = false;
-  @state() applySessionKey = this.settings.lastActiveSessionKey;
-  @state() configSnapshot: ConfigSnapshot | null = null;
-  @state() configSchema: unknown = null;
-  @state() configSchemaVersion: string | null = null;
-  @state() configSchemaLoading = false;
-  @state() configUiHints: ConfigUiHints = {};
-  @state() configForm: Record<string, unknown> | null = null;
-  @state() configFormOriginal: Record<string, unknown> | null = null;
-  @state() configFormDirty = false;
-  @state() configFormMode: "form" | "raw" = "form";
-  @state() configSearchQuery = "";
-  @state() configActiveSection: string | null = null;
-  @state() configActiveSubsection: string | null = null;
+  configLoading = false;
+  configRaw = "{\n}\n";
+  configRawOriginal = "";
+  configValid: boolean | null = null;
+  configIssues: unknown[] = [];
+  configSaving = false;
+  configApplying = false;
+  updateRunning = false;
+  applySessionKey = this.settings.lastActiveSessionKey;
+  configSnapshot: ConfigSnapshot | null = null;
+  configSchema: unknown = null;
+  configSchemaVersion: string | null = null;
+  configSchemaLoading = false;
+  configUiHints: ConfigUiHints = {};
+  configForm: Record<string, unknown> | null = null;
+  configFormOriginal: Record<string, unknown> | null = null;
+  configFormDirty = false;
+  configFormMode: "form" | "raw" = "form";
+  configSearchQuery = "";
+  configActiveSection: string | null = null;
+  configActiveSubsection: string | null = null;
 
-  @state() channelsLoading = false;
-  @state() channelsSnapshot: ChannelsStatusSnapshot | null = null;
-  @state() channelsError: string | null = null;
-  @state() channelsLastSuccess: number | null = null;
-  @state() whatsappLoginMessage: string | null = null;
-  @state() whatsappLoginQrDataUrl: string | null = null;
-  @state() whatsappLoginConnected: boolean | null = null;
-  @state() whatsappBusy = false;
-  @state() nostrProfileFormState: NostrProfileFormState | null = null;
-  @state() nostrProfileAccountId: string | null = null;
+  channelsLoading = false;
+  channelsSnapshot: ChannelsStatusSnapshot | null = null;
+  channelsError: string | null = null;
+  channelsLastSuccess: number | null = null;
+  whatsappLoginMessage: string | null = null;
+  whatsappLoginQrDataUrl: string | null = null;
+  whatsappLoginConnected: boolean | null = null;
+  whatsappBusy = false;
+  nostrProfileFormState: NostrProfileFormState | null = null;
+  nostrProfileAccountId: string | null = null;
 
-  @state() presenceLoading = false;
-  @state() presenceEntries: PresenceEntry[] = [];
-  @state() presenceError: string | null = null;
-  @state() presenceStatus: string | null = null;
+  presenceLoading = false;
+  presenceEntries: PresenceEntry[] = [];
+  presenceError: string | null = null;
+  presenceStatus: string | null = null;
 
-  @state() agentsLoading = false;
-  @state() agentsList: AgentsListResult | null = null;
-  @state() agentsError: string | null = null;
-  @state() agentsSelectedId: string | null = null;
-  @state() agentsPanel: "overview" | "files" | "tools" | "skills" | "channels" | "cron" =
+  agentsLoading = false;
+  agentsList: AgentsListResult | null = null;
+  agentsError: string | null = null;
+  agentsSelectedId: string | null = null;
+  agentsPanel: "overview" | "files" | "tools" | "skills" | "channels" | "cron" =
     "overview";
-  @state() agentFilesLoading = false;
-  @state() agentFilesError: string | null = null;
-  @state() agentFilesList: AgentsFilesListResult | null = null;
-  @state() agentFileContents: Record<string, string> = {};
-  @state() agentFileDrafts: Record<string, string> = {};
-  @state() agentFileActive: string | null = null;
-  @state() agentFileSaving = false;
-  @state() agentIdentityLoading = false;
-  @state() agentIdentityError: string | null = null;
-  @state() agentIdentityById: Record<string, AgentIdentityResult> = {};
-  @state() agentSkillsLoading = false;
-  @state() agentSkillsError: string | null = null;
-  @state() agentSkillsReport: SkillStatusReport | null = null;
-  @state() agentSkillsAgentId: string | null = null;
+  agentFilesLoading = false;
+  agentFilesError: string | null = null;
+  agentFilesList: AgentsFilesListResult | null = null;
+  agentFileContents: Record<string, string> = {};
+  agentFileDrafts: Record<string, string> = {};
+  agentFileActive: string | null = null;
+  agentFileSaving = false;
+  agentIdentityLoading = false;
+  agentIdentityError: string | null = null;
+  agentIdentityById: Record<string, AgentIdentityResult> = {};
+  agentSkillsLoading = false;
+  agentSkillsError: string | null = null;
+  agentSkillsReport: SkillStatusReport | null = null;
+  agentSkillsAgentId: string | null = null;
 
-  @state() sessionsLoading = false;
-  @state() sessionsResult: SessionsListResult | null = null;
-  @state() sessionsError: string | null = null;
-  @state() sessionsFilterActive = "";
-  @state() sessionsFilterLimit = "120";
-  @state() sessionsIncludeGlobal = true;
-  @state() sessionsIncludeUnknown = false;
+  sessionsLoading = false;
+  sessionsResult: SessionsListResult | null = null;
+  sessionsError: string | null = null;
+  sessionsFilterActive = "";
+  sessionsFilterLimit = "120";
+  sessionsIncludeGlobal = true;
+  sessionsIncludeUnknown = false;
 
-  @state() usageLoading = false;
-  @state() usageResult: import("./types.js").SessionsUsageResult | null = null;
-  @state() usageCostSummary: import("./types.js").CostUsageSummary | null = null;
-  @state() usageError: string | null = null;
-  @state() usageStartDate = (() => {
+  usageLoading = false;
+  usageResult: import("./types.js").SessionsUsageResult | null = null;
+  usageCostSummary: import("./types.js").CostUsageSummary | null = null;
+  usageError: string | null = null;
+  usageStartDate = (() => {
     const d = new Date();
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
   })();
-  @state() usageEndDate = (() => {
+  usageEndDate = (() => {
     const d = new Date();
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
   })();
-  @state() usageSelectedSessions: string[] = [];
-  @state() usageSelectedDays: string[] = [];
-  @state() usageSelectedHours: number[] = [];
-  @state() usageChartMode: "tokens" | "cost" = "tokens";
-  @state() usageDailyChartMode: "total" | "by-type" = "by-type";
-  @state() usageTimeSeriesMode: "cumulative" | "per-turn" = "per-turn";
-  @state() usageTimeSeriesBreakdownMode: "total" | "by-type" = "by-type";
-  @state() usageTimeSeries: import("./types.js").SessionUsageTimeSeries | null = null;
-  @state() usageTimeSeriesLoading = false;
-  @state() usageSessionLogs: import("./views/usage.js").SessionLogEntry[] | null = null;
-  @state() usageSessionLogsLoading = false;
-  @state() usageSessionLogsExpanded = false;
+  usageSelectedSessions: string[] = [];
+  usageSelectedDays: string[] = [];
+  usageSelectedHours: number[] = [];
+  usageChartMode: "tokens" | "cost" = "tokens";
+  usageDailyChartMode: "total" | "by-type" = "by-type";
+  usageTimeSeriesMode: "cumulative" | "per-turn" = "per-turn";
+  usageTimeSeriesBreakdownMode: "total" | "by-type" = "by-type";
+  usageTimeSeries: import("./types.js").SessionUsageTimeSeries | null = null;
+  usageTimeSeriesLoading = false;
+  usageSessionLogs: import("./views/usage.js").SessionLogEntry[] | null = null;
+  usageSessionLogsLoading = false;
+  usageSessionLogsExpanded = false;
   // Applied query (used to filter the already-loaded sessions list client-side).
-  @state() usageQuery = "";
+  usageQuery = "";
   // Draft query text (updates immediately as the user types; applied via debounce or "Search").
-  @state() usageQueryDraft = "";
-  @state() usageSessionSort: "tokens" | "cost" | "recent" | "messages" | "errors" = "recent";
-  @state() usageSessionSortDir: "desc" | "asc" = "desc";
-  @state() usageRecentSessions: string[] = [];
-  @state() usageTimeZone: "local" | "utc" = "local";
-  @state() usageContextExpanded = false;
-  @state() usageHeaderPinned = false;
-  @state() usageSessionsTab: "all" | "recent" = "all";
-  @state() usageVisibleColumns: string[] = [
+  usageQueryDraft = "";
+  usageSessionSort: "tokens" | "cost" | "recent" | "messages" | "errors" = "recent";
+  usageSessionSortDir: "desc" | "asc" = "desc";
+  usageRecentSessions: string[] = [];
+  usageTimeZone: "local" | "utc" = "local";
+  usageContextExpanded = false;
+  usageHeaderPinned = false;
+  usageSessionsTab: "all" | "recent" = "all";
+  usageVisibleColumns: string[] = [
     "channel",
     "agent",
     "provider",
@@ -273,63 +456,63 @@ export class OpenClawApp extends LitElement {
     "errors",
     "duration",
   ];
-  @state() usageLogFilterRoles: import("./views/usage.js").SessionLogRole[] = [];
-  @state() usageLogFilterTools: string[] = [];
-  @state() usageLogFilterHasTools = false;
-  @state() usageLogFilterQuery = "";
+  usageLogFilterRoles: import("./views/usage.js").SessionLogRole[] = [];
+  usageLogFilterTools: string[] = [];
+  usageLogFilterHasTools = false;
+  usageLogFilterQuery = "";
 
   // Non-reactive (don’t trigger renders just for timer bookkeeping).
   usageQueryDebounceTimer: number | null = null;
 
-  @state() cronLoading = false;
-  @state() cronJobs: CronJob[] = [];
-  @state() cronStatus: CronStatus | null = null;
-  @state() cronError: string | null = null;
-  @state() cronForm: CronFormState = { ...DEFAULT_CRON_FORM };
-  @state() cronRunsJobId: string | null = null;
-  @state() cronRuns: CronRunLogEntry[] = [];
-  @state() cronBusy = false;
+  cronLoading = false;
+  cronJobs: CronJob[] = [];
+  cronStatus: CronStatus | null = null;
+  cronError: string | null = null;
+  cronForm: CronFormState = { ...DEFAULT_CRON_FORM };
+  cronRunsJobId: string | null = null;
+  cronRuns: CronRunLogEntry[] = [];
+  cronBusy = false;
 
-  @state() skillsLoading = false;
-  @state() skillsReport: SkillStatusReport | null = null;
-  @state() skillsError: string | null = null;
-  @state() skillsFilter = "";
-  @state() skillEdits: Record<string, string> = {};
-  @state() skillsBusyKey: string | null = null;
-  @state() skillMessages: Record<string, SkillMessage> = {};
+  skillsLoading = false;
+  skillsReport: SkillStatusReport | null = null;
+  skillsError: string | null = null;
+  skillsFilter = "";
+  skillEdits: Record<string, string> = {};
+  skillsBusyKey: string | null = null;
+  skillMessages: Record<string, SkillMessage> = {};
 
-  @state() debugLoading = false;
-  @state() debugStatus: StatusSummary | null = null;
-  @state() debugHealth: HealthSnapshot | null = null;
-  @state() debugModels: unknown[] = [];
-  @state() debugHeartbeat: unknown = null;
-  @state() debugCallMethod = "";
-  @state() debugCallParams = "{}";
-  @state() debugCallResult: string | null = null;
-  @state() debugCallError: string | null = null;
+  debugLoading = false;
+  debugStatus: StatusSummary | null = null;
+  debugHealth: HealthSnapshot | null = null;
+  debugModels: unknown[] = [];
+  debugHeartbeat: unknown = null;
+  debugCallMethod = "";
+  debugCallParams = "{}";
+  debugCallResult: string | null = null;
+  debugCallError: string | null = null;
 
-  @state() logsLoading = false;
-  @state() logsError: string | null = null;
-  @state() logsFile: string | null = null;
-  @state() logsEntries: LogEntry[] = [];
-  @state() logsFilterText = "";
-  @state() logsLevelFilters: Record<LogLevel, boolean> = {
+  logsLoading = false;
+  logsError: string | null = null;
+  logsFile: string | null = null;
+  logsEntries: LogEntry[] = [];
+  logsFilterText = "";
+  logsLevelFilters: Record<LogLevel, boolean> = {
     ...DEFAULT_LOG_LEVEL_FILTERS,
   };
-  @state() logsAutoFollow = true;
-  @state() logsTruncated = false;
-  @state() logsCursor: number | null = null;
-  @state() logsLastFetchAt: number | null = null;
-  @state() logsLimit = 500;
-  @state() logsMaxBytes = 250_000;
-  @state() logsAtBottom = true;
+  logsAutoFollow = true;
+  logsTruncated = false;
+  logsCursor: number | null = null;
+  logsLastFetchAt: number | null = null;
+  logsLimit = 500;
+  logsMaxBytes = 250_000;
+  logsAtBottom = true;
 
   client: GatewayBrowserClient | null = null;
   private chatScrollFrame: number | null = null;
   private chatScrollTimeout: number | null = null;
   private chatHasAutoScrolled = false;
   private chatUserNearBottom = true;
-  @state() chatNewMessagesBelow = false;
+  chatNewMessagesBelow = false;
   private nodesPollInterval: number | null = null;
   private logsPollInterval: number | null = null;
   private debugPollInterval: number | null = null;

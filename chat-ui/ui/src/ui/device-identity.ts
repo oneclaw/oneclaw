@@ -47,7 +47,11 @@ async function fingerprintPublicKey(publicKey: Uint8Array): Promise<string> {
 }
 
 async function generateIdentity(): Promise<DeviceIdentity> {
-  const privateKey = utils.randomSecretKey();
+  const gen = utils.randomPrivateKey ?? (utils as unknown as { randomSecretKey?: () => Uint8Array }).randomSecretKey;
+  if (!gen || typeof gen !== "function") {
+    throw new Error("ed25519 key generator not available");
+  }
+  const privateKey = gen();
   const publicKey = await getPublicKeyAsync(privateKey);
   const deviceId = await fingerprintPublicKey(publicKey);
   return {
