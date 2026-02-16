@@ -253,7 +253,6 @@
   let doctorRunning = false;
   let advSaving = false;
   let currentLang = "en";
-  let currentPlatform = "";
 
   // ── 语言 ──
 
@@ -261,7 +260,6 @@
     const params = new URLSearchParams(window.location.search);
     const lang = params.get("lang");
     currentLang = lang && I18N[lang] ? lang : "en";
-    currentPlatform = params.get("platform") || "";
   }
 
   function t(key) {
@@ -1033,19 +1031,11 @@
     detectLang();
     applyI18n();
 
-    // Windows 不支持 KimiClaw 插件，隐藏对应 tab
-    if (currentPlatform === "win32") {
-      var kimiNav = document.querySelector('.nav-item[data-tab="kimi"]');
-      if (kimiNav) kimiNav.style.display = "none";
-    }
-
     bindEvents();
     switchProvider("anthropic");
     loadCurrentConfig();
     loadChannelConfig();
-    if (currentPlatform !== "win32") {
-      loadKimiConfig();
-    }
+    loadKimiConfig();
     loadAdvancedConfig();
   }
 
