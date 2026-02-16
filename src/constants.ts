@@ -91,6 +91,16 @@ export function resolveUserConfigPath(): string {
   return path.join(resolveUserStateDir(), "openclaw.json");
 }
 
+/** 用户配置备份目录 */
+export function resolveConfigBackupDir(): string {
+  return path.join(resolveUserStateDir(), "config-backups");
+}
+
+/** 最近一次可启动配置快照 */
+export function resolveLastKnownGoodConfigPath(): string {
+  return path.join(resolveUserStateDir(), "openclaw.last-known-good.json");
+}
+
 /** Gateway 诊断日志（固定写入 ~/.openclaw/gateway.log） */
 export function resolveGatewayLogPath(): string {
   return path.join(resolveUserStateDir(), "gateway.log");

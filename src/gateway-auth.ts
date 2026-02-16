@@ -1,6 +1,7 @@
 import * as crypto from "crypto";
 import * as fs from "fs";
 import { resolveUserConfigPath } from "./constants";
+import { backupCurrentUserConfig } from "./config-backup";
 
 type GatewayConfig = Record<string, any>;
 interface ResolveTokenOptions {
@@ -83,6 +84,8 @@ export function resolveGatewayAuthToken(opts: ResolveTokenOptions = {}): string 
 
   if (before !== after) {
     try {
+      // 自动补全 token 前先备份旧配置，保证每次变更都可回退。
+      backupCurrentUserConfig();
       fs.writeFileSync(configPath, JSON.stringify(config, null, 2), "utf-8");
     } catch {}
   }

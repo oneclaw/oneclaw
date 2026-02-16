@@ -42,6 +42,10 @@ contextBridge.exposeInMainWorld("oneclaw", {
   settingsGetAdvanced: () => ipcRenderer.invoke("settings:get-advanced"),
   settingsSaveAdvanced: (params: Record<string, unknown>) =>
     ipcRenderer.invoke("settings:save-advanced", params),
+  settingsListConfigBackups: () => ipcRenderer.invoke("settings:list-config-backups"),
+  settingsRestoreConfigBackup: (params: Record<string, unknown>) =>
+    ipcRenderer.invoke("settings:restore-config-backup", params),
+  settingsRestoreLastKnownGood: () => ipcRenderer.invoke("settings:restore-last-known-good"),
 
   // Doctor 流式事件监听
   onDoctorOutput: (cb: (text: string) => void) => {
@@ -49,6 +53,9 @@ contextBridge.exposeInMainWorld("oneclaw", {
   },
   onDoctorExit: (cb: (code: number) => void) => {
     ipcRenderer.on("settings:doctor-exit", (_e, code) => cb(code));
+  },
+  onSettingsNavigate: (cb: (payload: { tab: string; notice: string }) => void) => {
+    ipcRenderer.on("settings:navigate", (_e, payload) => cb(payload));
   },
 
   // 打开外部链接（走 IPC 到主进程，sandbox 下 shell 不可用）

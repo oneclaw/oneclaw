@@ -59,6 +59,13 @@
           </svg>
           <span data-i18n="nav.advanced">Advanced</span>
         </li>
+        <li class="nav-item" data-tab="backup">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+            <path d="M8 1.8V8.2M8 8.2L5.8 6M8 8.2L10.2 6" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M3 9.5V12.5C3 13.3 3.7 14 4.5 14H11.5C12.3 14 13 13.3 13 12.5V9.5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
+          </svg>
+          <span data-i18n="nav.backup">Backup & Restore</span>
+        </li>
       </ul>
     </nav>
 
@@ -457,6 +464,34 @@
             <span class="btn-spinner hidden"></span>
           </button>
         </div>
+      </section>
+
+      <!-- Backup Tab -->
+      <section class="tab-panel" id="tabBackup">
+        <h2 data-i18n="backup.title">Backup & Restore</h2>
+        <p class="desc" data-i18n="backup.desc">Restore openclaw.json when config changes break startup.</p>
+
+        <div class="backup-card">
+          <div class="backup-card-title" data-i18n="backup.lastKnownGoodTitle">Last known good config</div>
+          <div class="backup-last-known-good" id="backupLastKnownGood"></div>
+          <div class="btn-row">
+            <button class="btn-primary" id="btnRestoreLastKnownGood">
+              <span class="btn-text" data-i18n="backup.restoreLastKnownGood">Restore Last Known Good</span>
+              <span class="btn-spinner hidden"></span>
+            </button>
+          </div>
+        </div>
+
+        <div class="backup-card">
+          <div class="backup-card-title" data-i18n="backup.historyTitle">Backup history</div>
+          <div class="backup-meta" id="backupMeta"></div>
+          <div class="backup-empty hidden" id="backupEmpty" data-i18n="backup.empty">
+            No backup found yet. Save settings once to create one.
+          </div>
+          <div class="backup-list" id="backupList"></div>
+        </div>
+
+        <div class="msg-box hidden" id="backupMsgBox"></div>
       </section>
 
     </main>

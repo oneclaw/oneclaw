@@ -149,6 +149,7 @@
       "doctor.fail": "Some checks failed (exit code: {code})",
       "nav.kimi": "KimiClaw",
       "nav.appearance": "Appearance",
+      "nav.backup": "Backup & Restore",
       "kimi.title": "KimiClaw",
       "kimi.desc": "Control OneClaw remotely via Kimi",
       "kimi.enabled": "Enable",
@@ -180,6 +181,23 @@
       "appearance.save": "Save",
       "appearance.saving": "Saving…",
       "appearance.saved": "Appearance settings saved.",
+      "backup.title": "Backup & Restore",
+      "backup.desc": "Restore openclaw.json when config changes break startup.",
+      "backup.lastKnownGoodTitle": "Last known good config",
+      "backup.restoreLastKnownGood": "Restore Last Known Good",
+      "backup.historyTitle": "Backup history",
+      "backup.empty": "No backup found yet. Save settings once to create one.",
+      "backup.restore": "Restore",
+      "backup.restoring": "Restoring…",
+      "backup.lastKnownGoodAt": "Last successful startup snapshot: ",
+      "backup.noLastKnownGood": "No last known good snapshot found yet.",
+      "backup.meta": "Config path: {configPath}\nBackup dir: {backupDir}",
+      "backup.confirmRestore": "Restore this backup and overwrite current openclaw.json?",
+      "backup.confirmRestoreLastKnownGood": "Restore last known good config and overwrite current openclaw.json?",
+      "backup.restored": "Configuration restored. Gateway restart triggered.",
+      "backup.noticeInvalidJson": "Detected invalid openclaw.json. Restore a previous backup.",
+      "backup.noticeGatewayFailed": "Gateway startup failed. Restore a previous backup and retry.",
+      "backup.noticeGatewayRecoverFailed": "Auto recovery failed. Please select a backup manually.",
     },
     zh: {
       "title": "设置",
@@ -272,6 +290,7 @@
       "doctor.fail": "部分检查未通过（退出码：{code}）",
       "nav.kimi": "KimiClaw",
       "nav.appearance": "外观",
+      "nav.backup": "备份与恢复",
       "kimi.title": "KimiClaw",
       "kimi.desc": "通过 Kimi 远程遥控 OneClaw",
       "kimi.enabled": "启用状态",
@@ -303,6 +322,23 @@
       "appearance.save": "保存",
       "appearance.saving": "保存中…",
       "appearance.saved": "外观设置已保存。",
+      "backup.title": "备份与恢复",
+      "backup.desc": "当配置改坏导致无法启动时，可在这里回退 openclaw.json。",
+      "backup.lastKnownGoodTitle": "最近一次可启动配置",
+      "backup.restoreLastKnownGood": "恢复最近可用配置",
+      "backup.historyTitle": "备份历史",
+      "backup.empty": "暂无备份。先保存一次设置即可生成。",
+      "backup.restore": "恢复",
+      "backup.restoring": "恢复中…",
+      "backup.lastKnownGoodAt": "最近成功启动快照时间：",
+      "backup.noLastKnownGood": "暂无“最近可用配置”快照。",
+      "backup.meta": "配置文件：{configPath}\n备份目录：{backupDir}",
+      "backup.confirmRestore": "确认恢复该备份并覆盖当前 openclaw.json 吗？",
+      "backup.confirmRestoreLastKnownGood": "确认恢复“最近可用配置”并覆盖当前 openclaw.json 吗？",
+      "backup.restored": "配置已恢复，已触发 Gateway 重启。",
+      "backup.noticeInvalidJson": "检测到 openclaw.json 无法解析，请恢复历史备份。",
+      "backup.noticeGatewayFailed": "Gateway 启动失败，建议恢复历史备份后重试。",
+      "backup.noticeGatewayRecoverFailed": "自动回退失败，请手动选择备份恢复。",
     },
   };
 
@@ -385,6 +421,15 @@
     btnAppearanceSave: $("#btnAppearanceSave"),
     btnAppearanceSaveText: $("#btnAppearanceSave .btn-text"),
     btnAppearanceSaveSpinner: $("#btnAppearanceSave .btn-spinner"),
+    // Backup tab
+    backupLastKnownGood: $("#backupLastKnownGood"),
+    backupMeta: $("#backupMeta"),
+    backupEmpty: $("#backupEmpty"),
+    backupList: $("#backupList"),
+    backupMsgBox: $("#backupMsgBox"),
+    btnRestoreLastKnownGood: $("#btnRestoreLastKnownGood"),
+    btnRestoreLastKnownGoodText: $("#btnRestoreLastKnownGood .btn-text"),
+    btnRestoreLastKnownGoodSpinner: $("#btnRestoreLastKnownGood .btn-spinner"),
   };
 
   // ── 状态 ──
@@ -403,7 +448,11 @@
   let doctorRunning = false;
   let advSaving = false;
   let appearanceSaving = false;
+  let backupRestoring = false;
+  let backupHasLastKnownGood = false;
   let currentLang = "en";
+  let initialTab = "provider";
+  let startupNotice = "";
 
   // ── 语言 ──
 
@@ -412,10 +461,14 @@
     const lang = params.get("lang");
     if (lang && I18N[lang]) {
       currentLang = lang;
-      return;
+    } else {
+      const browserLang = String(navigator.language || "").toLowerCase();
+      currentLang = browserLang.startsWith("zh") ? "zh" : "en";
     }
-    const browserLang = String(navigator.language || "").toLowerCase();
-    currentLang = browserLang.startsWith("zh") ? "zh" : "en";
+    const tab = params.get("tab");
+    const notice = params.get("notice");
+    initialTab = tab || "provider";
+    startupNotice = notice || "";
   }
 
   function t(key) {
@@ -440,12 +493,23 @@
   // ── Tab 切换 ──
 
   function switchTab(tabName) {
+    var target = tabName;
+    var found = false;
     els.navItems.forEach((item) => {
-      item.classList.toggle("active", item.dataset.tab === tabName);
+      if (item.dataset.tab === target) found = true;
+    });
+    if (!found) target = "provider";
+
+    els.navItems.forEach((item) => {
+      item.classList.toggle("active", item.dataset.tab === target);
     });
     els.tabPanels.forEach((panel) => {
-      panel.classList.toggle("active", panel.id === "tab" + capitalize(tabName));
+      panel.classList.toggle("active", panel.id === "tab" + capitalize(target));
     });
+
+    if (target === "backup") {
+      loadBackupData();
+    }
   }
 
   function capitalize(s) {
@@ -1605,6 +1669,183 @@
     }
   }
 
+  // ── Backup Tab ──
+
+  // 加载备份与恢复数据并渲染列表。
+  async function loadBackupData() {
+    if (!window.oneclaw || !window.oneclaw.settingsListConfigBackups) return;
+
+    try {
+      var result = await window.oneclaw.settingsListConfigBackups();
+      if (!result.success || !result.data) {
+        showBackupMsg(result.message || "Load backup data failed", "error");
+        return;
+      }
+      renderBackupData(result.data);
+    } catch (err) {
+      showBackupMsg(t("error.connection") + (err.message || "Unknown error"), "error");
+    }
+  }
+
+  // 渲染备份页：最近可用快照信息、备份目录信息和历史备份条目。
+  function renderBackupData(data) {
+    if (!els.backupMeta || !els.backupList) return;
+
+    var metaText = t("backup.meta")
+      .replace("{configPath}", data.configPath || "")
+      .replace("{backupDir}", data.backupDir || "");
+    els.backupMeta.textContent = metaText;
+
+    backupHasLastKnownGood = !!data.hasLastKnownGood;
+    if (backupHasLastKnownGood && data.lastKnownGoodUpdatedAt) {
+      els.backupLastKnownGood.textContent = t("backup.lastKnownGoodAt") + formatDateTime(data.lastKnownGoodUpdatedAt);
+    } else {
+      els.backupLastKnownGood.textContent = t("backup.noLastKnownGood");
+    }
+
+    if (els.btnRestoreLastKnownGood) {
+      els.btnRestoreLastKnownGood.disabled = !backupHasLastKnownGood || backupRestoring;
+    }
+
+    var backups = Array.isArray(data.backups) ? data.backups : [];
+    els.backupList.innerHTML = "";
+    toggleEl(els.backupEmpty, backups.length === 0);
+
+    backups.forEach(function (item) {
+      var row = document.createElement("div");
+      row.className = "backup-item";
+
+      var main = document.createElement("div");
+      main.className = "backup-item-main";
+
+      var time = document.createElement("div");
+      time.className = "backup-item-time";
+      time.textContent = formatDateTime(item.createdAt) + " · " + formatBytes(item.size || 0);
+
+      var name = document.createElement("div");
+      name.className = "backup-item-name";
+      name.textContent = item.fileName || "";
+
+      var btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "btn-ghost";
+      btn.dataset.fileName = item.fileName || "";
+      btn.textContent = t("backup.restore");
+
+      main.appendChild(time);
+      main.appendChild(name);
+      row.appendChild(main);
+      row.appendChild(btn);
+      els.backupList.appendChild(row);
+    });
+  }
+
+  // 恢复指定历史备份并触发 Gateway 重启。
+  async function handleRestoreBackup(fileName) {
+    if (backupRestoring) return;
+    if (!fileName) return;
+    if (!window.confirm(t("backup.confirmRestore"))) return;
+
+    setBackupRestoring(true);
+    hideBackupMsg();
+
+    try {
+      var result = await window.oneclaw.settingsRestoreConfigBackup({ fileName: fileName });
+      if (!result.success) {
+        showBackupMsg(result.message || "Restore failed", "error");
+        setBackupRestoring(false);
+        return;
+      }
+
+      if (window.oneclaw && window.oneclaw.restartGateway) {
+        window.oneclaw.restartGateway();
+      }
+      showToast(t("backup.restored"));
+      await loadBackupData();
+    } catch (err) {
+      showBackupMsg(t("error.connection") + (err.message || "Unknown error"), "error");
+    }
+
+    setBackupRestoring(false);
+  }
+
+  // 一键恢复最近可用配置并触发 Gateway 重启。
+  async function handleRestoreLastKnownGood() {
+    if (backupRestoring) return;
+    if (!window.confirm(t("backup.confirmRestoreLastKnownGood"))) return;
+
+    setBackupRestoring(true);
+    hideBackupMsg();
+
+    try {
+      var result = await window.oneclaw.settingsRestoreLastKnownGood();
+      if (!result.success) {
+        showBackupMsg(result.message || "Restore failed", "error");
+        setBackupRestoring(false);
+        return;
+      }
+
+      if (window.oneclaw && window.oneclaw.restartGateway) {
+        window.oneclaw.restartGateway();
+      }
+      showToast(t("backup.restored"));
+      await loadBackupData();
+    } catch (err) {
+      showBackupMsg(t("error.connection") + (err.message || "Unknown error"), "error");
+    }
+
+    setBackupRestoring(false);
+  }
+
+  // 根据主进程传入的 notice code，在恢复页顶部展示上下文提示。
+  function applyRecoveryNotice(notice) {
+    if (!notice) return;
+    if (notice === "config-invalid-json") {
+      showBackupMsg(t("backup.noticeInvalidJson"), "error");
+      return;
+    }
+    if (notice === "gateway-start-failed") {
+      showBackupMsg(t("backup.noticeGatewayFailed"), "error");
+      return;
+    }
+    if (notice === "gateway-recovery-failed" || notice === "gateway-recovery-exception") {
+      showBackupMsg(t("backup.noticeGatewayRecoverFailed"), "error");
+    }
+  }
+
+  function showBackupMsg(msg, type) {
+    if (!els.backupMsgBox) return;
+    els.backupMsgBox.textContent = msg;
+    els.backupMsgBox.className = "msg-box " + type;
+  }
+
+  function hideBackupMsg() {
+    if (!els.backupMsgBox) return;
+    els.backupMsgBox.classList.add("hidden");
+    els.backupMsgBox.textContent = "";
+    els.backupMsgBox.className = "msg-box hidden";
+  }
+
+  function setBackupRestoring(loading) {
+    backupRestoring = loading;
+    if (!els.btnRestoreLastKnownGoodText || !els.btnRestoreLastKnownGoodSpinner) return;
+    els.btnRestoreLastKnownGood.disabled = loading || !backupHasLastKnownGood;
+    els.btnRestoreLastKnownGoodText.textContent = loading ? t("backup.restoring") : t("backup.restoreLastKnownGood");
+    els.btnRestoreLastKnownGoodSpinner.classList.toggle("hidden", !loading);
+  }
+
+  function formatDateTime(iso) {
+    var d = new Date(iso);
+    if (isNaN(d.getTime())) return String(iso || "");
+    return d.toLocaleString(currentLang === "zh" ? "zh-CN" : "en-US", { hour12: false });
+  }
+
+  function formatBytes(size) {
+    if (!size || size < 1024) return size + " B";
+    if (size < 1024 * 1024) return (size / 1024).toFixed(1) + " KB";
+    return (size / (1024 * 1024)).toFixed(2) + " MB";
+  }
+
   // ── UI 辅助 ──
 
   function toggleEl(el, show) {
@@ -1811,12 +2052,31 @@
     // Appearance
     els.btnAppearanceSave.addEventListener("click", handleAppearanceSave);
 
+    // Backup
+    if (els.btnRestoreLastKnownGood) {
+      els.btnRestoreLastKnownGood.addEventListener("click", handleRestoreLastKnownGood);
+    }
+    if (els.backupList) {
+      els.backupList.addEventListener("click", function (e) {
+        var btn = e.target.closest("button[data-file-name]");
+        if (!btn) return;
+        handleRestoreBackup(btn.dataset.fileName || "");
+      });
+    }
+
     // Doctor 流式输出监听
     if (window.oneclaw && window.oneclaw.onDoctorOutput) {
       window.oneclaw.onDoctorOutput(onDoctorOutput);
     }
     if (window.oneclaw && window.oneclaw.onDoctorExit) {
       window.oneclaw.onDoctorExit(onDoctorExit);
+    }
+    if (window.oneclaw && window.oneclaw.onSettingsNavigate) {
+      window.oneclaw.onSettingsNavigate(function (payload) {
+        if (!payload || !payload.tab) return;
+        switchTab(payload.tab);
+        applyRecoveryNotice(payload.notice || "");
+      });
     }
   }
 
@@ -1828,6 +2088,8 @@
 
     bindEvents();
     switchProvider("anthropic");
+    switchTab(initialTab || "provider");
+    applyRecoveryNotice(startupNotice);
     loadCurrentConfig();
     loadChannelConfig();
     loadKimiConfig();
