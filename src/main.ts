@@ -15,6 +15,12 @@ import {
 } from "./auto-updater";
 import { isSetupComplete, DEFAULT_PORT, resolveGatewayLogPath } from "./constants";
 import { resolveGatewayAuthToken } from "./gateway-auth";
+import {
+  getConfigRecoveryData,
+  inspectUserConfigHealth,
+  recordLastKnownGoodConfigSnapshot,
+  restoreLastKnownGoodConfigSnapshot,
+} from "./config-backup";
 import * as log from "./logger";
 import * as analytics from "./analytics";
 
@@ -116,17 +122,85 @@ function openSettingsInMainWindow(): Promise<void> {
   });
 }
 
+function openRecoverySettings(notice: string): void {
+  openSettingsInMainWindow().catch((err) => {
+    log.error(`恢复流程打开设置失败(${notice}): ${err}`);
+  });
+}
+
 // ── Gateway 启动失败提示（避免静默失败） ──
 
-function reportGatewayStartFailure(source: string): void {
+type RecoveryAction = "open-settings" | "restore-last-known-good" | "dismiss";
+
+// 统一弹出配置恢复提示，避免用户在配置损坏时无从下手。
+function promptConfigRecovery(opts: {
+  title: string;
+  message: string;
+  detail: string;
+}): RecoveryAction {
+  const locale = app.getLocale();
+  const isZh = locale.startsWith("zh");
+  const { hasLastKnownGood } = getConfigRecoveryData();
+
+  const buttons = hasLastKnownGood
+    ? [
+        isZh ? "一键回退上次可用配置" : "Restore last known good",
+        isZh ? "打开设置恢复" : "Open Settings",
+        isZh ? "稍后处理" : "Later",
+      ]
+    : [isZh ? "打开设置恢复" : "Open Settings", isZh ? "稍后处理" : "Later"];
+
+  const index = dialog.showMessageBoxSync({
+    type: "error",
+    title: opts.title,
+    message: opts.message,
+    detail: opts.detail,
+    buttons,
+    defaultId: 0,
+    cancelId: buttons.length - 1,
+    noLink: true,
+  });
+
+  if (hasLastKnownGood) {
+    if (index === 0) return "restore-last-known-good";
+    if (index === 1) return "open-settings";
+    return "dismiss";
+  }
+  if (index === 0) return "open-settings";
+  return "dismiss";
+}
+
+// Gateway 启动失败时提示用户进入备份恢复，避免反复重启无效。
+function reportGatewayStartFailure(source: string): RecoveryAction {
   const logPath = resolveGatewayLogPath();
   const title = "OneClaw Gateway 启动失败";
   const detail =
     `来源: ${source}\n` +
-    `请检查托盘菜单中的 Restart Gateway，或查看日志:\n${logPath}`;
+    `建议先前往设置 → 备份与恢复，回退到最近可用配置。\n` +
+    `诊断日志:\n${logPath}`;
   log.error(`${title} (${source})`);
   log.error(`诊断日志: ${logPath}`);
-  dialog.showErrorBox(title, detail);
+  return promptConfigRecovery({
+    title,
+    message: "Gateway 未能成功启动，可能是配置错误导致。",
+    detail,
+  });
+}
+
+// 配置 JSON 结构损坏时，直接给出恢复入口，避免误导用户重新 Setup。
+function reportConfigInvalidFailure(parseError?: string): RecoveryAction {
+  const recovery = getConfigRecoveryData();
+  const detail =
+    `配置文件: ${recovery.configPath}\n` +
+    `解析错误: ${parseError ?? "unknown"}\n` +
+    `建议前往设置 → 备份与恢复，回退到可用版本。`;
+
+  log.error(`配置文件损坏，JSON 解析失败: ${parseError ?? "unknown"}`);
+  return promptConfigRecovery({
+    title: "OneClaw 配置文件损坏",
+    message: "检测到 openclaw.json 不是有效 JSON，Gateway 无法启动。",
+    detail,
+  });
 }
 
 // ── 统一启动链路：启动 Gateway → 打开主窗口 ──
@@ -152,6 +226,8 @@ async function ensureGatewayRunning(source: string): Promise<boolean> {
     }
 
     if (gateway.getState() === "running") {
+      // 仅在真正启动成功后刷新“最近可用快照”，保证一键回退目标可启动。
+      recordLastKnownGoodConfigSnapshot();
       log.info(`Gateway 启动成功（第 ${attempt} 次尝试）: ${source}`);
       return true;
     }
@@ -168,7 +244,23 @@ async function startGatewayAndShowMain(source: string, opts: StartMainOptions = 
   const running = await ensureGatewayRunning(source);
   if (!running) {
     if (reportFailure) {
-      reportGatewayStartFailure(source);
+      const action = reportGatewayStartFailure(source);
+      if (action === "open-settings") {
+        openRecoverySettings("gateway-start-failed");
+      } else if (action === "restore-last-known-good") {
+        try {
+          restoreLastKnownGoodConfigSnapshot();
+          const recovered = await ensureGatewayRunning("recovery:last-known-good");
+          if (recovered) {
+            await showMainWindow();
+            return true;
+          }
+          openRecoverySettings("gateway-recovery-failed");
+        } catch (err: any) {
+          log.error(`回退 last-known-good 失败: ${err?.message ?? err}`);
+          openRecoverySettings("gateway-recovery-exception");
+        }
+      }
     } else {
       log.error(`Gateway 启动失败（静默模式）: ${source}`);
     }
@@ -310,6 +402,27 @@ app.whenReady().then(async () => {
     onQuit: quit,
     onCheckUpdates: () => checkForUpdates(true),
   });
+
+  const configHealth = inspectUserConfigHealth();
+  if (configHealth.exists && !configHealth.validJson) {
+    const action = reportConfigInvalidFailure(configHealth.parseError);
+    if (action === "restore-last-known-good") {
+      try {
+        restoreLastKnownGoodConfigSnapshot();
+        await startGatewayAndShowMain("startup:restore-last-known-good");
+        return;
+      } catch (err: any) {
+        log.error(`启动前恢复 last-known-good 失败: ${err?.message ?? err}`);
+        openRecoverySettings("gateway-recovery-failed");
+        return;
+      }
+    }
+    if (action === "open-settings") {
+      openRecoverySettings("config-invalid-json");
+      return;
+    }
+    return;
+  }
 
   if (!isSetupComplete()) {
     // 无配置 → 先走 Setup，Gateway 在 Setup 完成回调里启动

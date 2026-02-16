@@ -2,6 +2,7 @@ import * as https from "https";
 import * as http from "http";
 import * as fs from "fs";
 import { resolveUserConfigPath, resolveUserStateDir } from "./constants";
+import { backupCurrentUserConfig } from "./config-backup";
 
 // ── Provider 配置预设（与 kimiclaw ProviderSetupView.swift 对齐） ──
 
@@ -92,6 +93,8 @@ export function readUserConfig(): any {
 export function writeUserConfig(config: any): void {
   const stateDir = resolveUserStateDir();
   fs.mkdirSync(stateDir, { recursive: true });
+  // 覆盖写入前先保留一份当前可解析配置，便于用户在设置页回退。
+  backupCurrentUserConfig();
   const configPath = resolveUserConfigPath();
   fs.writeFileSync(configPath, JSON.stringify(config, null, 2), "utf-8");
 }

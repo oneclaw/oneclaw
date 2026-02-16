@@ -8,6 +8,11 @@ import {
   resolveUserStateDir,
 } from "./constants";
 import {
+  getConfigRecoveryData,
+  restoreLastKnownGoodConfigSnapshot,
+  restoreUserConfigBackup,
+} from "./config-backup";
+import {
   PROVIDER_PRESETS,
   MOONSHOT_SUB_PLATFORMS,
   verifyProvider,
@@ -468,6 +473,39 @@ export function registerSettingsIpc(): void {
       config.channels.imessage.enabled = imessageEnabled;
 
       writeUserConfig(config);
+      return { success: true };
+    } catch (err: any) {
+      return { success: false, message: err.message || String(err) };
+    }
+  });
+
+  // ── 列出配置备份与恢复元数据 ──
+  ipcMain.handle("settings:list-config-backups", async () => {
+    try {
+      return { success: true, data: getConfigRecoveryData() };
+    } catch (err: any) {
+      return { success: false, message: err.message || String(err) };
+    }
+  });
+
+  // ── 从指定备份文件恢复配置 ──
+  ipcMain.handle("settings:restore-config-backup", async (_event, params) => {
+    const fileName = typeof params?.fileName === "string" ? params.fileName : "";
+    try {
+      if (!fileName) {
+        return { success: false, message: "请选择要恢复的备份文件。" };
+      }
+      restoreUserConfigBackup(fileName);
+      return { success: true };
+    } catch (err: any) {
+      return { success: false, message: err.message || String(err) };
+    }
+  });
+
+  // ── 一键恢复最近一次可启动快照 ──
+  ipcMain.handle("settings:restore-last-known-good", async () => {
+    try {
+      restoreLastKnownGoodConfigSnapshot();
       return { success: true };
     } catch (err: any) {
       return { success: false, message: err.message || String(err) };
