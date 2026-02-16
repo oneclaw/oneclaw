@@ -852,7 +852,7 @@ async function bundlePlugin(plugin, gatewayDir, targetId) {
     try {
       // --force-local: Windows 上 GNU tar 会把路径中的冒号（D:\...）误认为远程主机分隔符
       const forceLocal = process.platform === "win32" ? " --force-local" : "";
-      execSync(`tar xzf${forceLocal} "${source.archivePath}" -C "${tmpDir}"`, { stdio: "inherit" });
+      execSync(`tar${forceLocal} -xzf "${source.archivePath}" -C "${tmpDir}"`, { stdio: "inherit" });
       extracted = true;
       break;
     } catch (err) {
