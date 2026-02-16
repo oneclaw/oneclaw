@@ -16,6 +16,13 @@ interface ShowOptions {
   onboarding?: boolean;
 }
 
+function maskToken(token: string): string {
+  if (token.length <= 8) {
+    return "***";
+  }
+  return `${token.slice(0, 4)}...${token.slice(-4)}`;
+}
+
 export class WindowManager {
   private win: BrowserWindow | null = null;
   private allowAppQuit = false;
@@ -23,10 +30,15 @@ export class WindowManager {
   // 显示主窗口（加载 Chat UI）
   async show(opts: ShowOptions): Promise<void> {
     if (this.win && !this.win.isDestroyed()) {
+      log.info(`复用主窗口: id=${this.win.id}`);
       this.win.show();
       this.win.focus();
       return;
     }
+
+    log.info(
+      `创建主窗口: port=${opts.port} onboarding=${Boolean(opts.onboarding)} token=${opts.token ? maskToken(opts.token) : "none"}`,
+    );
 
     this.win = new BrowserWindow({
       width: WINDOW_WIDTH,
@@ -66,6 +78,24 @@ export class WindowManager {
     this.win.webContents.on("render-process-gone", (_e, details) => {
       log.error(`render-process-gone: reason=${details.reason} exitCode=${details.exitCode}`);
     });
+    this.win.webContents.on("did-start-loading", () => {
+      log.info("WebContents 开始加载");
+    });
+    this.win.webContents.on("did-fail-load", (_event, code, description, url, isMainFrame) => {
+      if (!isMainFrame) {
+        return;
+      }
+      log.error(`WebContents 主帧加载失败: code=${code} description=${description} url=${url}`);
+    });
+    this.win.webContents.on("did-finish-load", () => {
+      log.info("WebContents 加载完成");
+    });
+    this.win.webContents.on("dom-ready", () => {
+      log.info("WebContents DOM 就绪");
+    });
+    this.win.webContents.on("did-stop-loading", () => {
+      log.info("WebContents 停止加载");
+    });
     this.win.on("unresponsive", () => {
       log.warn("窗口无响应");
     });
@@ -86,10 +116,11 @@ export class WindowManager {
     // 分两步：先加载页面建立 file:// 源，注入 localStorage，再 reload 让 app 读到正确配置。
     // 窗口此时 show=false，用户看不到中间态。
     const chatUiIndex = resolveChatUiPath();
+    log.info(`准备加载 Chat UI 路径: ${chatUiIndex}`);
     try {
       await this.win.loadFile(chatUiIndex);
     } catch (err) {
-      log.error(`Chat UI 加载失败: ${err}`);
+      log.error(`Chat UI 加载失败: path=${chatUiIndex} err=${err}`);
       await this.loadChatUiErrorPage();
       this.win.show();
       return;
@@ -97,8 +128,10 @@ export class WindowManager {
 
     // 注入 gateway 连接信息到 localStorage，然后 reload 让 app 重新初始化
     if (opts.token) {
+      log.info(`准备注入 Gateway 设置: url=ws://127.0.0.1:${opts.port} token=${maskToken(opts.token)}`);
       await this.injectGatewaySettings(opts.port, opts.token);
       try {
+        log.info(`注入后重载 Chat UI: ${chatUiIndex}`);
         await this.win.loadFile(chatUiIndex);
       } catch (err) {
         log.error(`Chat UI reload 失败: ${err}`);
@@ -106,6 +139,10 @@ export class WindowManager {
     }
 
     this.win.show();
+    if (process.env.ONECLAW_DEBUG || process.env.OPENCLAW_DEBUG) {
+      this.win.webContents.openDevTools();
+    }
+    log.info("主窗口显示");
   }
 
   // 标记应用进入退出流程（例如手动退出/更新安装）
@@ -136,6 +173,9 @@ export class WindowManager {
           localStorage.setItem(key, JSON.stringify(s));
         })();
       `);
+      log.info(
+        `gateway settings 已注入: key=openclaw.control.settings.v1 token=${maskToken(token)} url=${gatewayUrl}`,
+      );
     } catch (err) {
       log.error(`gateway settings 注入失败: ${err}`);
     }

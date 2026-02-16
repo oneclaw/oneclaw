@@ -19,6 +19,49 @@ import { resolveGatewayAuthToken } from "./gateway-auth";
 import * as log from "./logger";
 import * as analytics from "./analytics";
 
+function formatConsoleLevel(level: number): string {
+  const map = ["LOG", "WARNING", "ERROR", "DEBUG", "INFO", "??"];
+  return map[level] ?? `LEVEL_${level}`;
+}
+
+function attachRendererDebugHandlers(label: string, webContents: Electron.WebContents): void {
+  webContents.on("console-message", (_event, level, message, lineNumber, sourceId) => {
+    const tag = `[renderer:${label}] console.${formatConsoleLevel(level)}`;
+    if (level >= 2) {
+      log.error(`${tag}: ${message} (${sourceId}:${lineNumber})`);
+      return;
+    }
+    log.info(`${tag}: ${message} (${sourceId}:${lineNumber})`);
+  });
+
+  webContents.on("preload-error", (_event, path, error) => {
+    log.error(`[renderer:${label}] preload-error: ${path} -> ${error.message || String(error)}`);
+  });
+
+  webContents.on("did-fail-load", (_event, code, description, validatedURL, isMainFrame) => {
+    if (!isMainFrame) {
+      return;
+    }
+    log.error(
+      `[renderer:${label}] did-fail-load: code=${code}, description=${description}, url=${validatedURL}`,
+    );
+  });
+
+  webContents.on("did-finish-load", () => {
+    log.info(`[renderer:${label}] did-finish-load`);
+  });
+
+  webContents.on("dom-ready", () => {
+    log.info(`[renderer:${label}] dom-ready`);
+  });
+
+  webContents.on("render-process-gone", (_event, details) => {
+    log.error(
+      `[renderer:${label}] render-process-gone: reason=${details.reason}, exitCode=${details.exitCode}`,
+    );
+  });
+}
+
 // ── 单实例锁 ──
 
 if (!app.requestSingleInstanceLock()) {
@@ -256,6 +299,13 @@ app.on("second-instance", () => {
       log.error(`second-instance 打开主窗口失败: ${err}`);
     });
   }
+});
+
+app.on("web-contents-created", (_event, webContents) => {
+  if (webContents.getType() !== "window") {
+    return;
+  }
+  attachRendererDebugHandlers(`id=${webContents.id}`, webContents);
 });
 
 // ── macOS: 点击 Dock 图标时恢复窗口 ──

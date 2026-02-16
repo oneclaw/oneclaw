@@ -1,5 +1,5 @@
 import { LitElement, css, nothing } from "lit";
-import { customElement, property } from "lit/decorators.js";
+import { customElement } from "lit/decorators.js";
 
 /**
  * A draggable divider for resizable split views.
@@ -7,9 +7,15 @@ import { customElement, property } from "lit/decorators.js";
  */
 @customElement("resizable-divider")
 export class ResizableDivider extends LitElement {
-  @property({ type: Number }) splitRatio = 0.6;
-  @property({ type: Number }) minRatio = 0.4;
-  @property({ type: Number }) maxRatio = 0.7;
+  static properties = {
+    splitRatio: { type: Number },
+    minRatio: { type: Number },
+    maxRatio: { type: Number },
+  };
+
+  splitRatio = 0.6;
+  minRatio = 0.4;
+  maxRatio = 0.7;
 
   private isDragging = false;
   private startX = 0;
