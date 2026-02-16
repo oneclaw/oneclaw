@@ -7,6 +7,7 @@
   "scripts": {
     "build:chat": "cd chat-ui/ui && npm install --prefer-offline && npx vite build",
     "build": "npm run build:chat && tsc -p tsconfig.json",
+    "predev": "npm run build",
     "dev": "electron .",
     "package:resources": "node scripts/run-with-env.js node scripts/package-resources.js",
     "dist:mac": "npm run dist:mac:arm64",

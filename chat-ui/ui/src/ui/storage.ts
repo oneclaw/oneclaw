@@ -7,6 +7,7 @@ export type UiSettings = {
   token: string;
   sessionKey: string;
   lastActiveSessionKey: string;
+  oneclawView: "chat" | "settings";
   theme: ThemeMode;
   chatFocusMode: boolean;
   chatShowThinking: boolean;
@@ -31,6 +32,7 @@ export function loadSettings(): UiSettings {
     token: "",
     sessionKey: "main",
     lastActiveSessionKey: "main",
+    oneclawView: "chat",
     theme: "system",
     chatFocusMode: false,
     chatShowThinking: true,
@@ -60,6 +62,10 @@ export function loadSettings(): UiSettings {
           ? parsed.lastActiveSessionKey.trim()
           : (typeof parsed.sessionKey === "string" && parsed.sessionKey.trim()) ||
             defaults.lastActiveSessionKey,
+      oneclawView:
+        parsed.oneclawView === "settings" || parsed.oneclawView === "chat"
+          ? parsed.oneclawView
+          : defaults.oneclawView,
       theme:
         parsed.theme === "light" || parsed.theme === "dark" || parsed.theme === "system"
           ? parsed.theme
