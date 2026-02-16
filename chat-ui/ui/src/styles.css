@@ -115,13 +115,11 @@
   justify-content: center;
   width: 28px;
   height: 28px;
-  color: var(--accent);
 }
-.oneclaw-sidebar__logo svg {
+.oneclaw-sidebar__logo img {
   width: 28px;
   height: 28px;
-  stroke: currentColor;
-  fill: none;
+  object-fit: contain;
 }
 
 .oneclaw-sidebar__title {
