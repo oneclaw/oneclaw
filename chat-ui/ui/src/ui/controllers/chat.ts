@@ -31,22 +31,31 @@ export async function loadChatHistory(state: ChatState) {
   if (!state.client || !state.connected) {
     return;
   }
+  const requestSessionKey = state.sessionKey;
   state.chatLoading = true;
   state.lastError = null;
   try {
     const res = await state.client.request<{ messages?: Array<unknown>; thinkingLevel?: string }>(
       "chat.history",
       {
-        sessionKey: state.sessionKey,
+        sessionKey: requestSessionKey,
         limit: 200,
       },
     );
+    if (state.sessionKey !== requestSessionKey) {
+      return;
+    }
     state.chatMessages = Array.isArray(res.messages) ? res.messages : [];
     state.chatThinkingLevel = res.thinkingLevel ?? null;
   } catch (err) {
+    if (state.sessionKey !== requestSessionKey) {
+      return;
+    }
     state.lastError = String(err);
   } finally {
-    state.chatLoading = false;
+    if (state.sessionKey === requestSessionKey) {
+      state.chatLoading = false;
+    }
   }
 }
 

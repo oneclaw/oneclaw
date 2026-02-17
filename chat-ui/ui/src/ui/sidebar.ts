@@ -3,6 +3,7 @@
  * Replaces the upstream 13-tab navigation with a compact chat sidebar.
  */
 import { html } from "lit";
+import { repeat } from "lit/directives/repeat.js";
 import { t } from "./i18n.ts";
 import { icons } from "./icons.ts";
 import oneClawLogo from "../assets/openclaw-favicon.svg";
@@ -110,7 +111,9 @@ export function renderSidebar(props: SidebarProps) {
                 props.onSelectSession(nextSessionKey);
               }}
             >
-              ${props.sessionOptions.map(
+              ${repeat(
+                props.sessionOptions,
+                (session) => session.key,
                 (session) => html`<option value=${session.key}>${session.label}</option>`,
               )}
             </select>

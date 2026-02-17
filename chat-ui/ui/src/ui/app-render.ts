@@ -91,9 +91,34 @@ function resolveSessionOptionLabel(
   return key;
 }
 
+type SessionDefaultsSnapshot = {
+  mainSessionKey?: string;
+  mainKey?: string;
+};
+
+function resolveMainSessionKey(state: AppViewState): string | null {
+  const snapshot = state.hello?.snapshot as { sessionDefaults?: SessionDefaultsSnapshot } | undefined;
+  const mainSessionKey = snapshot?.sessionDefaults?.mainSessionKey?.trim();
+  if (mainSessionKey) {
+    return mainSessionKey;
+  }
+  const mainKey = snapshot?.sessionDefaults?.mainKey?.trim();
+  if (mainKey) {
+    return mainKey;
+  }
+  if (state.sessionsResult?.sessions?.some((row) => row.key === "main")) {
+    return "main";
+  }
+  return null;
+}
+
 function resolveSessionOptions(state: AppViewState): Array<{ key: string; label: string }> {
   const sessions = state.sessionsResult?.sessions ?? [];
   const current = state.sessionKey?.trim() || "main";
+  const mainSessionKey = resolveMainSessionKey(state);
+  const mainSession = mainSessionKey
+    ? sessions.find((entry) => entry.key === mainSessionKey)
+    : undefined;
   const currentSession = sessions.find((entry) => entry.key === current);
   const seen = new Set<string>();
   const options: Array<{ key: string; label: string }> = [];
@@ -113,10 +138,13 @@ function resolveSessionOptions(state: AppViewState): Array<{ key: string; label:
     });
   };
 
-  // 当前会话置顶，保证切换后立即可见。
+  // 与原版 Web UI 保持一致：优先展示 main 会话，然后展示当前会话。
+  if (mainSessionKey) {
+    pushOption(mainSessionKey, mainSession);
+  }
   pushOption(current, currentSession);
 
-  // 补齐 sessions.list 中的其他会话。
+  // 最后补齐 sessions.list 返回的其他会话。
   for (const session of sessions) {
     pushOption(session.key, session);
   }
