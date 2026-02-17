@@ -87,6 +87,15 @@
       "feishu.save": "Save",
       "feishu.saving": "Saving…",
       "feishu.saved": "Feishu integration saved.",
+      "feishu.pairingTitle": "Pending Pairing Requests",
+      "feishu.refreshPairing": "Refresh",
+      "feishu.refreshingPairing": "Refreshing…",
+      "feishu.noPairingPending": "No pending pairing requests.",
+      "feishu.approvePairing": "Approve",
+      "feishu.approvingPairing": "Approving…",
+      "feishu.pairingApproved": "Pairing request approved.",
+      "error.noPairingCode": "Invalid pairing code.",
+      "error.loadPairingFailed": "Failed to load pairing requests.",
       "error.noAppId": "Please enter the Feishu App ID.",
       "error.noAppSecret": "Please enter the App Secret.",
       "error.noKey": "Please enter your API key.",
@@ -163,6 +172,15 @@
       "feishu.save": "保存",
       "feishu.saving": "保存中…",
       "feishu.saved": "飞书集成配置已保存。",
+      "feishu.pairingTitle": "待审批配对请求",
+      "feishu.refreshPairing": "刷新",
+      "feishu.refreshingPairing": "刷新中…",
+      "feishu.noPairingPending": "当前没有待审批请求。",
+      "feishu.approvePairing": "批准",
+      "feishu.approvingPairing": "批准中…",
+      "feishu.pairingApproved": "配对请求已批准。",
+      "error.noPairingCode": "配对码无效。",
+      "error.loadPairingFailed": "读取待审批请求失败。",
       "error.noAppId": "请输入飞书应用 ID。",
       "error.noAppSecret": "请输入应用密钥。",
       "error.noKey": "请输入 API 密钥。",
@@ -251,6 +269,9 @@
     btnChSave: $("#btnChSave"),
     btnChSaveText: $("#btnChSave .btn-text"),
     btnChSaveSpinner: $("#btnChSave .btn-spinner"),
+    btnChPairingRefresh: $("#btnChPairingRefresh"),
+    chPairingEmpty: $("#chPairingEmpty"),
+    chPairingList: $("#chPairingList"),
     // Kimi tab
     kimiEnabled: $("#kimiEnabled"),
     kimiFields: $("#kimiFields"),
@@ -286,6 +307,9 @@
   let currentProvider = "anthropic";
   let saving = false;
   let chSaving = false;
+  let chPairingLoading = false;
+  let chPairingApprovingCode = "";
+  let chPairingRequests = [];
   let kimiSaving = false;
   let doctorRunning = false;
   let advSaving = false;
@@ -512,6 +536,133 @@
     els.btnChSaveSpinner.classList.toggle("hidden", !loading);
   }
 
+  // 转义文本，避免将外部内容直接插入 HTML。
+  function escapeHtml(value) {
+    return String(value)
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#39;");
+  }
+
+  // 将 ISO 时间转换为本地可读时间，异常时回退原始字符串。
+  function formatLocalTime(value) {
+    if (!value) return "";
+    var date = new Date(value);
+    if (isNaN(date.getTime())) return String(value);
+    return date.toLocaleString();
+  }
+
+  // 切换飞书配对列表刷新状态。
+  function setChPairingLoading(loading) {
+    chPairingLoading = loading;
+    if (!els.btnChPairingRefresh) return;
+    els.btnChPairingRefresh.disabled = loading || !!chPairingApprovingCode;
+    els.btnChPairingRefresh.textContent = loading
+      ? t("feishu.refreshingPairing")
+      : t("feishu.refreshPairing");
+  }
+
+  // 渲染飞书待审批配对列表。
+  function renderChPairingRequests() {
+    var listEl = els.chPairingList;
+    var emptyEl = els.chPairingEmpty;
+    if (!listEl || !emptyEl) return;
+
+    if (!Array.isArray(chPairingRequests) || chPairingRequests.length === 0) {
+      listEl.innerHTML = "";
+      toggleEl(listEl, false);
+      toggleEl(emptyEl, true);
+      return;
+    }
+
+    toggleEl(emptyEl, false);
+    toggleEl(listEl, true);
+
+    listEl.innerHTML = chPairingRequests.map(function (item) {
+      var code = String(item.code || "");
+      var isApproving = chPairingApprovingCode === code;
+      var buttonText = isApproving ? t("feishu.approvingPairing") : t("feishu.approvePairing");
+      var name = String(item.name || "");
+      var nameText = name ? " · " + escapeHtml(name) : "";
+      var createdAt = formatLocalTime(item.createdAt);
+      var createdText = createdAt ? " · " + escapeHtml(createdAt) : "";
+      return [
+        '<div class="pairing-item">',
+        '  <div class="pairing-item-main">',
+        '    <div class="pairing-id">' + escapeHtml(item.id || "") + nameText + "</div>",
+        '    <div class="pairing-meta"><span class="pairing-code">' + escapeHtml(code) + "</span>" + createdText + "</div>",
+        "  </div>",
+        '  <button type="button" class="btn-secondary" data-pairing-approve="' + escapeHtml(code) + '"' + (isApproving ? " disabled" : "") + ">",
+        "    " + buttonText,
+        "  </button>",
+        "</div>",
+      ].join("");
+    }).join("");
+  }
+
+  // 读取飞书待审批列表（仅在飞书开关启用后展示）。
+  async function loadChPairingRequests(options) {
+    var silent = !!(options && options.silent);
+    if (!isChEnabled()) {
+      chPairingRequests = [];
+      chPairingApprovingCode = "";
+      renderChPairingRequests();
+      return;
+    }
+
+    setChPairingLoading(true);
+    if (!silent) hideChMsg();
+    try {
+      var result = await window.oneclaw.settingsListFeishuPairing();
+      if (!result.success) {
+        if (!silent) showChMsg(result.message || t("error.loadPairingFailed"), "error");
+        chPairingRequests = [];
+      } else {
+        chPairingRequests = (result.data && result.data.requests) || [];
+      }
+      renderChPairingRequests();
+    } catch (err) {
+      chPairingRequests = [];
+      renderChPairingRequests();
+      if (!silent) showChMsg(t("error.connection") + (err.message || "Unknown error"), "error");
+    } finally {
+      setChPairingLoading(false);
+    }
+  }
+
+  // 批准指定飞书配对码，并自动刷新列表。
+  async function handleChPairingApprove(code) {
+    var trimmed = String(code || "").trim();
+    if (!trimmed) {
+      showChMsg(t("error.noPairingCode"), "error");
+      return;
+    }
+    if (chPairingApprovingCode) return;
+
+    chPairingApprovingCode = trimmed;
+    renderChPairingRequests();
+    setChPairingLoading(chPairingLoading);
+    hideChMsg();
+
+    try {
+      var result = await window.oneclaw.settingsApproveFeishuPairing({ code: trimmed });
+      if (!result.success) {
+        showChMsg(result.message || t("error.verifyFailed"), "error");
+      } else {
+        showToast(t("feishu.pairingApproved"));
+        await loadChPairingRequests({ silent: true });
+      }
+    } catch (err) {
+      showChMsg(t("error.connection") + (err.message || "Unknown error"), "error");
+    } finally {
+      chPairingApprovingCode = "";
+      renderChPairingRequests();
+      setChPairingLoading(false);
+    }
+  }
+
   // 获取飞书启用/禁用状态
   function isChEnabled() {
     return els.chEnabled.checked;
@@ -532,6 +683,7 @@
         setChSaving(false);
         if (result.success) {
           showToast(t("feishu.saved"));
+          loadChPairingRequests({ silent: true });
         } else {
           showChMsg(result.message || "Save failed", "error");
         }
@@ -573,6 +725,7 @@
 
       setChSaving(false);
       showToast(t("feishu.saved"));
+      loadChPairingRequests({ silent: true });
     } catch (err) {
       showChMsg(t("error.connection") + (err.message || "Unknown error"), "error");
       setChSaving(false);
@@ -593,6 +746,7 @@
       var enabled = data.enabled && data.appId;
       els.chEnabled.checked = !!enabled;
       toggleEl(els.chFields, !!enabled);
+      loadChPairingRequests({ silent: true });
     } catch (err) {
       console.error("[Settings] loadChannelConfig failed:", err);
     }
@@ -1157,7 +1311,10 @@
     });
 
     // Channels tab — 启用/禁用切换
-    els.chEnabled.addEventListener("change", function () { toggleEl(els.chFields, isChEnabled()); });
+    els.chEnabled.addEventListener("change", function () {
+      toggleEl(els.chFields, isChEnabled());
+      loadChPairingRequests({ silent: true });
+    });
     els.btnToggleChSecret.addEventListener("click", togglePasswordVisibility);
     els.chConsoleLink.addEventListener("click", function (e) {
       e.preventDefault();
@@ -1166,6 +1323,18 @@
       }
     });
     els.btnChSave.addEventListener("click", handleChSave);
+    if (els.btnChPairingRefresh) {
+      els.btnChPairingRefresh.addEventListener("click", function () {
+        loadChPairingRequests();
+      });
+    }
+    if (els.chPairingList) {
+      els.chPairingList.addEventListener("click", function (e) {
+        var btn = e.target.closest("[data-pairing-approve]");
+        if (!btn) return;
+        handleChPairingApprove(btn.getAttribute("data-pairing-approve"));
+      });
+    }
     els.chAppSecret.addEventListener("keydown", function (e) {
       if (e.key === "Enter") handleChSave();
     });

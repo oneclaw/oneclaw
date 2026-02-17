@@ -19,6 +19,20 @@ interface SettingsIpcDeps {
   settingsManager: SettingsManager;
 }
 
+type CliRunResult = {
+  code: number;
+  stdout: string;
+  stderr: string;
+};
+
+type FeishuPairingRequestView = {
+  code: string;
+  id: string;
+  name: string;
+  createdAt: string;
+  lastSeenAt: string;
+};
+
 let doctorProc: ChildProcess | null = null;
 
 // 注册 Settings 相关 IPC
@@ -137,6 +151,60 @@ export function registerSettingsIpc(deps: SettingsIpcDeps): void {
       }
 
       writeUserConfig(config);
+      return { success: true };
+    } catch (err: any) {
+      return { success: false, message: err.message || String(err) };
+    }
+  });
+
+  // ── 列出飞书待审批配对请求（走 openclaw pairing list，避免重复实现存储协议） ──
+  ipcMain.handle("settings:list-feishu-pairing", async () => {
+    try {
+      const run = await runGatewayCli(["pairing", "list", "feishu", "--json"]);
+      if (run.code !== 0) {
+        return {
+          success: false,
+          message: compactCliError(run, "读取飞书待审批列表失败"),
+        };
+      }
+
+      const parsed = parseJsonSafe(run.stdout);
+      if (!parsed || !Array.isArray(parsed?.requests)) {
+        return {
+          success: false,
+          message: compactCliError(run, "解析飞书待审批列表失败"),
+        };
+      }
+      const rawRequests = Array.isArray(parsed?.requests) ? parsed.requests : [];
+      const requests: FeishuPairingRequestView[] = rawRequests.map((item: any) => ({
+        code: String(item?.code ?? ""),
+        id: String(item?.id ?? ""),
+        name: String(item?.meta?.name ?? ""),
+        createdAt: String(item?.createdAt ?? ""),
+        lastSeenAt: String(item?.lastSeenAt ?? ""),
+      }));
+
+      return { success: true, data: { requests } };
+    } catch (err: any) {
+      return { success: false, message: err.message || String(err) };
+    }
+  });
+
+  // ── 批准飞书配对请求（走 openclaw pairing approve，统一写入 allowlist store） ──
+  ipcMain.handle("settings:approve-feishu-pairing", async (_event, params) => {
+    const code = typeof params?.code === "string" ? params.code.trim() : "";
+    if (!code) {
+      return { success: false, message: "配对码不能为空。" };
+    }
+
+    try {
+      const run = await runGatewayCli(["pairing", "approve", "feishu", code, "--notify"]);
+      if (run.code !== 0) {
+        return {
+          success: false,
+          message: compactCliError(run, `批准配对码失败: ${code}`),
+        };
+      }
       return { success: true };
     } catch (err: any) {
       return { success: false, message: err.message || String(err) };
@@ -281,6 +349,71 @@ export function registerSettingsIpc(deps: SettingsIpcDeps): void {
 
     return { success: true, pid: doctorProc.pid };
   });
+}
+
+// 统一运行 openclaw CLI 子命令，复用 OneClaw 内嵌 runtime 与网关入口。
+async function runGatewayCli(args: string[]): Promise<CliRunResult> {
+  const nodeBin = resolveNodeBin();
+  const entry = resolveGatewayEntry();
+  const cwd = resolveGatewayCwd();
+  const runtimeDir = path.join(resolveResourcesPath(), "runtime");
+  const envPath = runtimeDir + path.delimiter + (process.env.PATH ?? "");
+
+  return new Promise((resolve, reject) => {
+    const child = spawn(nodeBin, [entry, ...args], {
+      cwd,
+      env: {
+        ...process.env,
+        PATH: envPath,
+        FORCE_COLOR: "0",
+      },
+      stdio: ["ignore", "pipe", "pipe"],
+      windowsHide: true,
+    });
+
+    let stdout = "";
+    let stderr = "";
+    child.stdout?.on("data", (chunk: Buffer) => {
+      stdout += chunk.toString();
+    });
+    child.stderr?.on("data", (chunk: Buffer) => {
+      stderr += chunk.toString();
+    });
+    child.on("error", reject);
+    child.on("close", (code) => {
+      resolve({
+        code: typeof code === "number" ? code : -1,
+        stdout,
+        stderr,
+      });
+    });
+  });
+}
+
+// 安全解析 JSON，失败时返回 null，避免界面因格式波动崩溃。
+function parseJsonSafe(text: string): any | null {
+  const trimmed = text.trim();
+  if (!trimmed) return null;
+  try {
+    return JSON.parse(trimmed);
+  } catch {
+    // CLI 可能在 JSON 前打印插件日志，这里回退到“提取末尾 JSON 对象”策略。
+    const match = trimmed.match(/\{[\s\S]*\}\s*$/);
+    if (!match) return null;
+    try {
+      return JSON.parse(match[0]);
+    } catch {
+      return null;
+    }
+  }
+}
+
+// 压缩 CLI 错误信息，优先保留有用输出并附带兜底描述。
+function compactCliError(run: CliRunResult, fallback: string): string {
+  const out = run.stderr.trim() || run.stdout.trim();
+  if (!out) return fallback;
+  const firstLine = out.split(/\r?\n/).find((line) => line.trim().length > 0);
+  return firstLine ? firstLine.trim() : fallback;
 }
 
 // ── 从配置中提取当前 provider 信息（apiKey 掩码） ──

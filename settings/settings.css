@@ -494,6 +494,33 @@ select option {
   cursor: not-allowed;
 }
 
+.btn-secondary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 6px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-primary);
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: border-color var(--transition), color var(--transition), background var(--transition);
+  font-family: inherit;
+}
+
+.btn-secondary:hover:not(:disabled) {
+  border-color: var(--accent);
+  color: #fff;
+}
+
+.btn-secondary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 .btn-row {
   display: flex;
   align-items: center;
@@ -629,6 +656,77 @@ select option {
   display: flex;
   flex-direction: column;
   gap: 16px;
+}
+
+.pairing-panel {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: rgba(255, 255, 255, 0.02);
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.pairing-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.pairing-title {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.pairing-empty {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.pairing-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.pairing-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: var(--radius-sm);
+  padding: 10px;
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.pairing-item-main {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.pairing-id {
+  font-size: 12.5px;
+  color: var(--text-primary);
+  font-family: "SF Mono", Menlo, Monaco, monospace;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.pairing-meta {
+  font-size: 11.5px;
+  color: var(--text-muted);
+}
+
+.pairing-code {
+  font-family: "SF Mono", Menlo, Monaco, monospace;
+  color: var(--text-secondary);
 }
 
 .kimi-guide-text {
