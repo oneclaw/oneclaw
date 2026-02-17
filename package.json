@@ -1,6 +1,6 @@
 {
-  "name": "oneclaw",
-  "version": "2026.2.14",
+  "name": "OneClaw",
+  "version": "2026.2.17",
   "private": true,
   "description": "OneClaw desktop app — cross-platform Electron shell for openclaw",
   "main": "dist/main.js",
