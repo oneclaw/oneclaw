@@ -62,10 +62,7 @@ export function loadSettings(): UiSettings {
           ? parsed.lastActiveSessionKey.trim()
           : (typeof parsed.sessionKey === "string" && parsed.sessionKey.trim()) ||
             defaults.lastActiveSessionKey,
-      oneclawView:
-        parsed.oneclawView === "settings" || parsed.oneclawView === "chat"
-          ? parsed.oneclawView
-          : defaults.oneclawView,
+      oneclawView: defaults.oneclawView,
       theme:
         parsed.theme === "light" || parsed.theme === "dark" || parsed.theme === "system"
           ? parsed.theme

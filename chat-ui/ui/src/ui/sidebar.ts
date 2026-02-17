@@ -11,9 +11,11 @@ export type SidebarProps = {
   connected: boolean;
   currentAgentId: string;
   agentOptions: Array<{ id: string; label: string }>;
+  chatActive: boolean;
   settingsActive: boolean;
   refreshDisabled: boolean;
   onToggleSidebar: () => void;
+  onOpenChat: () => void;
   onSelectAgent: (agentId: string) => void;
   onRefresh: () => void;
   onNewChat: () => void;
@@ -62,6 +64,16 @@ export function renderSidebar(props: SidebarProps) {
       </div>
 
       <nav class="oneclaw-sidebar__nav">
+        <button
+          class="oneclaw-sidebar__item ${props.chatActive ? "active" : ""}"
+          type="button"
+          @click=${props.onOpenChat}
+          title=${t("sidebar.chat")}
+        >
+          <span class="oneclaw-sidebar__icon">${icons.messageSquare}</span>
+          <span class="oneclaw-sidebar__label">${t("sidebar.chat")}</span>
+        </button>
+
         <button
           class="oneclaw-sidebar__item"
           type="button"

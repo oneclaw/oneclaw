@@ -10,6 +10,7 @@ const dict: Record<Locale, Record<string, string>> = {
   zh: {
     // Sidebar
     "sidebar.brand": "OneClaw",
+    "sidebar.chat": "对话",
     "sidebar.newChat": "新对话",
     "sidebar.settings": "设置",
     "sidebar.openWebUI": "打开 Web UI",
@@ -73,6 +74,7 @@ const dict: Record<Locale, Record<string, string>> = {
   en: {
     // Sidebar
     "sidebar.brand": "OneClaw",
+    "sidebar.chat": "Chat",
     "sidebar.newChat": "New Chat",
     "sidebar.settings": "Settings",
     "sidebar.openWebUI": "Open Web UI",
