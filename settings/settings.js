@@ -87,6 +87,19 @@
       "feishu.save": "Save",
       "feishu.saving": "Saving…",
       "feishu.saved": "Feishu integration saved.",
+      "feishu.dmPolicy": "DM Access Mode",
+      "feishu.dmPolicyPairing": "Access after pairing.",
+      "feishu.dmPolicyOpen": "Everyone can access.",
+      "feishu.groupPolicy": "Group Access Mode",
+      "feishu.groupPolicyOpen": "All groups can access.",
+      "feishu.groupPolicyAllowlist": "Only allowlisted groups can access.",
+      "feishu.groupPolicyDisabled": "Ignore all group messages.",
+      "feishu.groupAllowFrom": "Group Allowlist",
+      "feishu.groupAllowFromHint": "One group ID per line. Only effective when Group Access Mode is Allowlist.",
+      "feishu.topicSessionMode": "Topic Session Mode",
+      "feishu.topicSessionModeDisabled": "Shared session per group.",
+      "feishu.topicSessionModeEnabled": "Separate session per topic.",
+      "feishu.accessTitle": "Pending & Authorized",
       "feishu.pairingTitle": "Pending Pairing Requests",
       "feishu.refreshPairing": "Refresh",
       "feishu.refreshingPairing": "Refreshing…",
@@ -94,15 +107,24 @@
       "feishu.approvePairing": "Approve",
       "feishu.approvingPairing": "Approving…",
       "feishu.pairingApproved": "Pairing request approved.",
-      "feishu.dmPolicyOpen": "Open authorization (no pairing required)",
-      "feishu.dmPolicyHint": "When enabled, all DM users can start chatting directly.",
-      "feishu.approvedTitle": "Approved Accounts",
+      "feishu.approvedTitle": "Authorized Users & Groups",
       "feishu.refreshApproved": "Refresh",
       "feishu.refreshingApproved": "Refreshing…",
-      "feishu.noApproved": "No approved accounts yet.",
+      "feishu.noApproved": "No authorized users or groups yet.",
+      "feishu.noAccessEntries": "No pending or authorized entries.",
+      "feishu.statusPending": "Pending",
+      "feishu.statusApprovedUser": "Authorized User",
+      "feishu.statusApprovedGroup": "Authorized Group",
+      "feishu.removeApproved": "Remove",
+      "feishu.removingApproved": "Removing…",
+      "feishu.approvedRemoved": "Authorization removed.",
+      "feishu.kindUser": "User",
+      "feishu.kindGroup": "Group",
       "error.noPairingCode": "Invalid pairing code.",
       "error.loadPairingFailed": "Failed to load pairing requests.",
       "error.loadApprovedFailed": "Failed to load approved accounts.",
+      "error.removeApprovedFailed": "Failed to remove authorization.",
+      "error.invalidGroupAllowFrom": "Group allowlist only accepts group IDs that start with oc_.",
       "error.noAppId": "Please enter the Feishu App ID.",
       "error.noAppSecret": "Please enter the App Secret.",
       "error.noKey": "Please enter your API key.",
@@ -179,6 +201,19 @@
       "feishu.save": "保存",
       "feishu.saving": "保存中…",
       "feishu.saved": "飞书集成配置已保存。",
+      "feishu.dmPolicy": "私聊访问模式",
+      "feishu.dmPolicyPairing": "配对后可访问",
+      "feishu.dmPolicyOpen": "所有人可访问",
+      "feishu.groupPolicy": "群聊访问模式",
+      "feishu.groupPolicyOpen": "所有群可访问",
+      "feishu.groupPolicyAllowlist": "仅白名单可访问",
+      "feishu.groupPolicyDisabled": "不接收群消息",
+      "feishu.groupAllowFrom": "群聊白名单",
+      "feishu.groupAllowFromHint": "每行一个群 ID。仅在群聊模式为仅白名单可访问时生效。",
+      "feishu.topicSessionMode": "话题会话模式",
+      "feishu.topicSessionModeDisabled": "同群共享会话",
+      "feishu.topicSessionModeEnabled": "按话题独立会话",
+      "feishu.accessTitle": "待审批与已授权",
       "feishu.pairingTitle": "待审批配对请求",
       "feishu.refreshPairing": "刷新",
       "feishu.refreshingPairing": "刷新中…",
@@ -186,15 +221,24 @@
       "feishu.approvePairing": "批准",
       "feishu.approvingPairing": "批准中…",
       "feishu.pairingApproved": "配对请求已批准。",
-      "feishu.dmPolicyOpen": "开放授权（无需配对）",
-      "feishu.dmPolicyHint": "开启后，所有飞书私聊用户可直接发起对话。",
-      "feishu.approvedTitle": "已配对账号",
+      "feishu.approvedTitle": "已授权用户与群聊",
       "feishu.refreshApproved": "刷新",
       "feishu.refreshingApproved": "刷新中…",
-      "feishu.noApproved": "当前没有已配对账号。",
+      "feishu.noApproved": "当前没有已授权的用户或群聊。",
+      "feishu.noAccessEntries": "当前没有待审批或已授权条目。",
+      "feishu.statusPending": "待审批",
+      "feishu.statusApprovedUser": "已授权用户",
+      "feishu.statusApprovedGroup": "已授权群聊",
+      "feishu.removeApproved": "删除",
+      "feishu.removingApproved": "删除中…",
+      "feishu.approvedRemoved": "已移除授权。",
+      "feishu.kindUser": "用户",
+      "feishu.kindGroup": "群聊",
       "error.noPairingCode": "配对码无效。",
       "error.loadPairingFailed": "读取待审批请求失败。",
-      "error.loadApprovedFailed": "读取已配对账号失败。",
+      "error.loadApprovedFailed": "读取已授权列表失败。",
+      "error.removeApprovedFailed": "移除授权失败。",
+      "error.invalidGroupAllowFrom": "群聊白名单只能填写以 oc_ 开头的群 ID。",
       "error.noAppId": "请输入飞书应用 ID。",
       "error.noAppSecret": "请输入应用密钥。",
       "error.noKey": "请输入 API 密钥。",
@@ -277,19 +321,21 @@
     chFields: $("#chFields"),
     chAppId: $("#chAppId"),
     chAppSecret: $("#chAppSecret"),
-    chDmPolicyOpen: $("#chDmPolicyOpen"),
+    chDmPolicy: $("#chDmPolicy"),
+    chGroupPolicy: $("#chGroupPolicy"),
+    chGroupAllowFromField: $("#chGroupAllowFromField"),
+    chGroupAllowFrom: $("#chGroupAllowFrom"),
+    chTopicSessionMode: $("#chTopicSessionMode"),
+    chPairingSection: $("#chPairingSection"),
     btnToggleChSecret: $("#btnToggleChSecret"),
     chConsoleLink: $("#chConsoleLink"),
     chMsgBox: $("#chMsgBox"),
     btnChSave: $("#btnChSave"),
     btnChSaveText: $("#btnChSave .btn-text"),
     btnChSaveSpinner: $("#btnChSave .btn-spinner"),
-    btnChPairingRefresh: $("#btnChPairingRefresh"),
-    chPairingEmpty: $("#chPairingEmpty"),
-    chPairingList: $("#chPairingList"),
-    btnChApprovedRefresh: $("#btnChApprovedRefresh"),
-    chApprovedEmpty: $("#chApprovedEmpty"),
-    chApprovedList: $("#chApprovedList"),
+    btnChAccessRefresh: $("#btnChAccessRefresh"),
+    chAccessEmpty: $("#chAccessEmpty"),
+    chAccessList: $("#chAccessList"),
     // Kimi tab
     kimiEnabled: $("#kimiEnabled"),
     kimiFields: $("#kimiFields"),
@@ -328,6 +374,7 @@
   let chPairingLoading = false;
   let chApprovedLoading = false;
   let chPairingApprovingCode = "";
+  let chApprovedRemovingKey = "";
   let chPairingRequests = [];
   let chApprovedEntries = [];
   let kimiSaving = false;
@@ -566,41 +613,77 @@
       .replace(/'/g, "&#39;");
   }
 
-  // 将 ISO 时间转换为本地可读时间，异常时回退原始字符串。
-  function formatLocalTime(value) {
-    if (!value) return "";
-    var date = new Date(value);
-    if (isNaN(date.getTime())) return String(value);
-    return date.toLocaleString();
-  }
-
-  // 切换飞书配对列表刷新状态。
-  function setChPairingLoading(loading) {
-    chPairingLoading = loading;
-    if (!els.btnChPairingRefresh) return;
-    els.btnChPairingRefresh.disabled = loading || !!chPairingApprovingCode;
-    els.btnChPairingRefresh.textContent = loading
+  // 同步待审批/已授权刷新按钮状态。
+  function updateChAccessRefreshState() {
+    if (!els.btnChAccessRefresh) return;
+    var loading = chPairingLoading || chApprovedLoading;
+    var busy = loading || !!chPairingApprovingCode || !!chApprovedRemovingKey;
+    els.btnChAccessRefresh.disabled = busy;
+    els.btnChAccessRefresh.textContent = loading
       ? t("feishu.refreshingPairing")
       : t("feishu.refreshPairing");
   }
 
-  // 切换飞书已配对列表刷新状态。
-  function setChApprovedLoading(loading) {
-    chApprovedLoading = loading;
-    if (!els.btnChApprovedRefresh) return;
-    els.btnChApprovedRefresh.disabled = loading;
-    els.btnChApprovedRefresh.textContent = loading
-      ? t("feishu.refreshingApproved")
-      : t("feishu.refreshApproved");
+  // 切换待审批列表加载状态。
+  function setChPairingLoading(loading) {
+    chPairingLoading = loading;
+    updateChAccessRefreshState();
   }
 
-  // 渲染飞书待审批配对列表。
-  function renderChPairingRequests() {
-    var listEl = els.chPairingList;
-    var emptyEl = els.chPairingEmpty;
+  // 切换已授权列表加载状态。
+  function setChApprovedLoading(loading) {
+    chApprovedLoading = loading;
+    updateChAccessRefreshState();
+  }
+
+  // 单行展示名称：有名字就只显示名字，否则显示 ID。
+  function formatChEntryDisplay(name, id) {
+    var trimmedName = String(name || "").trim();
+    var trimmedId = String(id || "").trim();
+    return trimmedName || trimmedId;
+  }
+
+  // 渲染合并后的待审批+已授权列表（待审批固定在顶部）。
+  function renderChAccessEntries() {
+    var listEl = els.chAccessList;
+    var emptyEl = els.chAccessEmpty;
     if (!listEl || !emptyEl) return;
 
-    if (!Array.isArray(chPairingRequests) || chPairingRequests.length === 0) {
+    var pendingRows = (Array.isArray(chPairingRequests) ? chPairingRequests : []).map(function (item) {
+      var code = String(item.code || "");
+      var isApproving = chPairingApprovingCode === code;
+      return {
+        type: "pending",
+        display: formatChEntryDisplay(item.name, item.id),
+        meta: t("feishu.statusPending"),
+        buttonText: isApproving ? t("feishu.approvingPairing") : t("feishu.approvePairing"),
+        buttonAttr:
+          'data-pairing-approve="' + escapeHtml(code) + '"' +
+          ' data-pairing-id="' + escapeHtml(String(item.id || "")) + '"' +
+          ' data-pairing-name="' + escapeHtml(String(item.name || "")) + '"',
+        disabled: isApproving,
+      };
+    });
+    var approvedRows = (Array.isArray(chApprovedEntries) ? chApprovedEntries : []).map(function (entry) {
+      var kind = String(entry.kind || "user");
+      var id = String(entry.id || "");
+      var key = kind + ":" + id;
+      var isRemoving = chApprovedRemovingKey === key;
+      var statusText = kind === "group" ? t("feishu.statusApprovedGroup") : t("feishu.statusApprovedUser");
+      return {
+        type: "approved",
+        display: formatChEntryDisplay(entry.name, entry.id),
+        meta: statusText,
+        buttonText: isRemoving ? t("feishu.removingApproved") : t("feishu.removeApproved"),
+        buttonAttr:
+          'data-approved-remove-kind="' + escapeHtml(kind) + '"' +
+          ' data-approved-remove-id="' + escapeHtml(id) + '"',
+        disabled: isRemoving,
+      };
+    });
+    var rows = pendingRows.concat(approvedRows);
+
+    if (rows.length === 0) {
       listEl.innerHTML = "";
       toggleEl(listEl, false);
       toggleEl(emptyEl, true);
@@ -610,51 +693,17 @@
     toggleEl(emptyEl, false);
     toggleEl(listEl, true);
 
-    listEl.innerHTML = chPairingRequests.map(function (item) {
-      var code = String(item.code || "");
-      var isApproving = chPairingApprovingCode === code;
-      var buttonText = isApproving ? t("feishu.approvingPairing") : t("feishu.approvePairing");
-      var name = String(item.name || "");
-      var nameText = name ? " · " + escapeHtml(name) : "";
-      var createdAt = formatLocalTime(item.createdAt);
-      var createdText = createdAt ? " · " + escapeHtml(createdAt) : "";
+    listEl.innerHTML = rows.map(function (row) {
       return [
         '<div class="pairing-item">',
         '  <div class="pairing-item-main">',
-        '    <div class="pairing-id">' + escapeHtml(item.id || "") + nameText + "</div>",
-        '    <div class="pairing-meta"><span class="pairing-code">' + escapeHtml(code) + "</span>" + createdText + "</div>",
+        '    <div class="pairing-id">' +
+          escapeHtml(row.display) +
+          '<span class="pairing-meta-inline">' + escapeHtml(row.meta) + "</span></div>",
         "  </div>",
-        '  <button type="button" class="btn-secondary" data-pairing-approve="' + escapeHtml(code) + '"' + (isApproving ? " disabled" : "") + ">",
-        "    " + buttonText,
+        '  <button type="button" class="btn-secondary" ' + row.buttonAttr + (row.disabled ? " disabled" : "") + ">",
+        "    " + row.buttonText,
         "  </button>",
-        "</div>",
-      ].join("");
-    }).join("");
-  }
-
-  // 渲染飞书已配对账号列表。
-  function renderChApprovedEntries() {
-    var listEl = els.chApprovedList;
-    var emptyEl = els.chApprovedEmpty;
-    if (!listEl || !emptyEl) return;
-
-    if (!Array.isArray(chApprovedEntries) || chApprovedEntries.length === 0) {
-      listEl.innerHTML = "";
-      toggleEl(listEl, false);
-      toggleEl(emptyEl, true);
-      return;
-    }
-
-    toggleEl(emptyEl, false);
-    toggleEl(listEl, true);
-
-    listEl.innerHTML = chApprovedEntries.map(function (entry) {
-      var id = String(entry || "");
-      return [
-        '<div class="pairing-item pairing-item-readonly">',
-        '  <div class="pairing-item-main">',
-        '    <div class="pairing-id">' + escapeHtml(id) + "</div>",
-        "  </div>",
         "</div>",
       ].join("");
     }).join("");
@@ -663,10 +712,10 @@
   // 读取飞书待审批列表（仅在飞书开关启用后展示）。
   async function loadChPairingRequests(options) {
     var silent = !!(options && options.silent);
-    if (!isChEnabled()) {
+    if (!isChEnabled() || !isChPairingMode()) {
       chPairingRequests = [];
       chPairingApprovingCode = "";
-      renderChPairingRequests();
+      renderChAccessEntries();
       return;
     }
 
@@ -680,10 +729,10 @@
       } else {
         chPairingRequests = (result.data && result.data.requests) || [];
       }
-      renderChPairingRequests();
+      renderChAccessEntries();
     } catch (err) {
       chPairingRequests = [];
-      renderChPairingRequests();
+      renderChAccessEntries();
       if (!silent) showChMsg(t("error.connection") + (err.message || "Unknown error"), "error");
     } finally {
       setChPairingLoading(false);
@@ -693,9 +742,9 @@
   // 读取飞书已配对账号列表（仅在飞书开关启用后展示）。
   async function loadChApprovedEntries(options) {
     var silent = !!(options && options.silent);
-    if (!isChEnabled()) {
+    if (!isChEnabled() || !isChPairingMode()) {
       chApprovedEntries = [];
-      renderChApprovedEntries();
+      renderChAccessEntries();
       return;
     }
 
@@ -709,10 +758,10 @@
       } else {
         chApprovedEntries = (result.data && result.data.entries) || [];
       }
-      renderChApprovedEntries();
+      renderChAccessEntries();
     } catch (err) {
       chApprovedEntries = [];
-      renderChApprovedEntries();
+      renderChAccessEntries();
       if (!silent) showChMsg(t("error.connection") + (err.message || "Unknown error"), "error");
     } finally {
       setChApprovedLoading(false);
@@ -721,6 +770,7 @@
 
   // 同步刷新飞书待审批与已配对两个列表。
   function refreshChPairingPanels(options) {
+    updateChPairingSectionVisibility();
     return Promise.all([
       loadChPairingRequests(options),
       loadChApprovedEntries(options),
@@ -728,7 +778,7 @@
   }
 
   // 批准指定飞书配对码，并自动刷新列表。
-  async function handleChPairingApprove(code) {
+  async function handleChPairingApprove(code, id, name) {
     var trimmed = String(code || "").trim();
     if (!trimmed) {
       showChMsg(t("error.noPairingCode"), "error");
@@ -737,12 +787,16 @@
     if (chPairingApprovingCode) return;
 
     chPairingApprovingCode = trimmed;
-    renderChPairingRequests();
-    setChPairingLoading(chPairingLoading);
+    renderChAccessEntries();
+    updateChAccessRefreshState();
     hideChMsg();
 
     try {
-      var result = await window.oneclaw.settingsApproveFeishuPairing({ code: trimmed });
+      var result = await window.oneclaw.settingsApproveFeishuPairing({
+        code: trimmed,
+        id: String(id || "").trim(),
+        name: String(name || "").trim(),
+      });
       if (!result.success) {
         showChMsg(result.message || t("error.verifyFailed"), "error");
       } else {
@@ -753,14 +807,98 @@
       showChMsg(t("error.connection") + (err.message || "Unknown error"), "error");
     } finally {
       chPairingApprovingCode = "";
-      renderChPairingRequests();
-      setChPairingLoading(false);
+      renderChAccessEntries();
+      updateChAccessRefreshState();
+    }
+  }
+
+  // 删除已授权用户/群聊，并刷新列表。
+  async function handleChApprovedRemove(kind, id) {
+    var entryKind = String(kind || "").trim() === "group" ? "group" : "user";
+    var entryId = String(id || "").trim();
+    if (!entryId) {
+      showChMsg(t("error.removeApprovedFailed"), "error");
+      return;
+    }
+    if (chApprovedRemovingKey) return;
+
+    chApprovedRemovingKey = entryKind + ":" + entryId;
+    renderChAccessEntries();
+    updateChAccessRefreshState();
+    hideChMsg();
+
+    try {
+      var result = await window.oneclaw.settingsRemoveFeishuApproved({
+        kind: entryKind,
+        id: entryId,
+      });
+      if (!result.success) {
+        showChMsg(result.message || t("error.removeApprovedFailed"), "error");
+      } else {
+        showToast(t("feishu.approvedRemoved"));
+        await refreshChPairingPanels({ silent: true });
+      }
+    } catch (err) {
+      showChMsg(t("error.connection") + (err.message || "Unknown error"), "error");
+    } finally {
+      chApprovedRemovingKey = "";
+      renderChAccessEntries();
+      updateChAccessRefreshState();
     }
   }
 
   // 获取飞书启用/禁用状态
   function isChEnabled() {
     return els.chEnabled.checked;
+  }
+
+  // 读取当前私聊模式（open/pairing）。
+  function getChDmPolicy() {
+    var value = els.chDmPolicy ? String(els.chDmPolicy.value || "").trim() : "";
+    return value === "open" ? "open" : "pairing";
+  }
+
+  // 当前是否为配对模式（仅该模式下展示配对相关面板）。
+  function isChPairingMode() {
+    return getChDmPolicy() === "pairing";
+  }
+
+  // 读取群聊策略（open/allowlist/disabled）。
+  function getChGroupPolicy() {
+    var value = els.chGroupPolicy ? String(els.chGroupPolicy.value || "").trim() : "";
+    if (value === "open" || value === "disabled" || value === "allowlist") return value;
+    return "allowlist";
+  }
+
+  // 校验是否为飞书群 ID（chat_id）。
+  function isFeishuGroupId(value) {
+    return /^oc_[A-Za-z0-9]+$/.test(String(value || "").trim());
+  }
+
+  // 解析群聊白名单输入（仅允许群 ID；支持换行或逗号分隔）。
+  function parseChGroupAllowFrom() {
+    var raw = els.chGroupAllowFrom ? String(els.chGroupAllowFrom.value || "") : "";
+    var parts = raw.split(/[\n,]/g).map(function (item) { return item.trim(); }).filter(Boolean);
+    var entries = Array.from(new Set(parts));
+    var invalidEntries = entries.filter(function (entry) { return !isFeishuGroupId(entry); });
+    return {
+      entries: entries.filter(function (entry) { return isFeishuGroupId(entry); }),
+      invalidEntries: invalidEntries,
+    };
+  }
+
+  // 根据模式切换配对面板可见性。
+  function updateChPairingSectionVisibility() {
+    if (!els.chPairingSection) return;
+    toggleEl(els.chPairingSection, isChEnabled() && isChPairingMode());
+  }
+
+  // 仅在群聊白名单模式下允许编辑群聊白名单。
+  function updateChGroupAllowFromState() {
+    if (!els.chGroupAllowFrom || !els.chGroupAllowFromField) return;
+    var show = getChGroupPolicy() === "allowlist";
+    toggleEl(els.chGroupAllowFromField, show);
+    els.chGroupAllowFrom.disabled = !show;
   }
 
   // 保存频道配置
@@ -795,6 +933,11 @@
 
     if (!appId) { showChMsg(t("error.noAppId"), "error"); return; }
     if (!appSecret) { showChMsg(t("error.noAppSecret"), "error"); return; }
+    var parsedGroupAllowFrom = parseChGroupAllowFrom();
+    if (getChGroupPolicy() === "allowlist" && parsedGroupAllowFrom.invalidEntries.length > 0) {
+      showChMsg(t("error.invalidGroupAllowFrom"), "error");
+      return;
+    }
 
     setChSaving(true);
     hideChMsg();
@@ -815,7 +958,10 @@
         appId: appId,
         appSecret: appSecret,
         enabled: true,
-        dmPolicyOpen: !!(els.chDmPolicyOpen && els.chDmPolicyOpen.checked),
+        dmPolicy: getChDmPolicy(),
+        groupPolicy: getChGroupPolicy(),
+        groupAllowFrom: parsedGroupAllowFrom.entries,
+        topicSessionMode: els.chTopicSessionMode ? els.chTopicSessionMode.value : "disabled",
       });
       if (!saveResult.success) {
         showChMsg(saveResult.message || "Save failed", "error");
@@ -845,10 +991,23 @@
       // 回填启用状态
       var enabled = data.enabled && data.appId;
       els.chEnabled.checked = !!enabled;
-      if (els.chDmPolicyOpen) {
-        els.chDmPolicyOpen.checked = !!data.dmPolicyOpen;
+      var dmPolicy = data.dmPolicy === "open" ? "open" : "pairing";
+      if (els.chDmPolicy) {
+        els.chDmPolicy.value = dmPolicy;
+      }
+      if (els.chGroupPolicy && data.groupPolicy) {
+        els.chGroupPolicy.value = data.groupPolicy;
+      }
+      if (els.chGroupAllowFrom) {
+        var groupAllowFrom = Array.isArray(data.groupAllowFrom) ? data.groupAllowFrom : [];
+        els.chGroupAllowFrom.value = groupAllowFrom.join("\n");
+      }
+      if (els.chTopicSessionMode && data.topicSessionMode) {
+        els.chTopicSessionMode.value = data.topicSessionMode;
       }
       toggleEl(els.chFields, !!enabled);
+      updateChPairingSectionVisibility();
+      updateChGroupAllowFromState();
       refreshChPairingPanels({ silent: true });
     } catch (err) {
       console.error("[Settings] loadChannelConfig failed:", err);
@@ -1416,8 +1575,21 @@
     // Channels tab — 启用/禁用切换
     els.chEnabled.addEventListener("change", function () {
       toggleEl(els.chFields, isChEnabled());
+      updateChPairingSectionVisibility();
+      updateChGroupAllowFromState();
       refreshChPairingPanels({ silent: true });
     });
+    if (els.chDmPolicy) {
+      els.chDmPolicy.addEventListener("change", function () {
+        updateChPairingSectionVisibility();
+        refreshChPairingPanels({ silent: true });
+      });
+    }
+    if (els.chGroupPolicy) {
+      els.chGroupPolicy.addEventListener("change", function () {
+        updateChGroupAllowFromState();
+      });
+    }
     els.btnToggleChSecret.addEventListener("click", togglePasswordVisibility);
     els.chConsoleLink.addEventListener("click", function (e) {
       e.preventDefault();
@@ -1426,21 +1598,28 @@
       }
     });
     els.btnChSave.addEventListener("click", handleChSave);
-    if (els.btnChPairingRefresh) {
-      els.btnChPairingRefresh.addEventListener("click", function () {
-        loadChPairingRequests();
+    if (els.btnChAccessRefresh) {
+      els.btnChAccessRefresh.addEventListener("click", function () {
+        refreshChPairingPanels();
       });
     }
-    if (els.btnChApprovedRefresh) {
-      els.btnChApprovedRefresh.addEventListener("click", function () {
-        loadChApprovedEntries();
-      });
-    }
-    if (els.chPairingList) {
-      els.chPairingList.addEventListener("click", function (e) {
+    if (els.chAccessList) {
+      els.chAccessList.addEventListener("click", function (e) {
         var btn = e.target.closest("[data-pairing-approve]");
-        if (!btn) return;
-        handleChPairingApprove(btn.getAttribute("data-pairing-approve"));
+        if (btn) {
+          handleChPairingApprove(
+            btn.getAttribute("data-pairing-approve"),
+            btn.getAttribute("data-pairing-id"),
+            btn.getAttribute("data-pairing-name")
+          );
+          return;
+        }
+        var removeBtn = e.target.closest("[data-approved-remove-kind][data-approved-remove-id]");
+        if (!removeBtn) return;
+        handleChApprovedRemove(
+          removeBtn.getAttribute("data-approved-remove-kind"),
+          removeBtn.getAttribute("data-approved-remove-id")
+        );
       });
     }
     els.chAppSecret.addEventListener("keydown", function (e) {

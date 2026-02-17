@@ -40,8 +40,21 @@ type FeishuPairingRequestView = {
   lastSeenAt: string;
 };
 
+type FeishuAuthorizedEntryView = {
+  kind: "user" | "group";
+  id: string;
+  name: string;
+};
+
+type FeishuAliasStore = {
+  version: 1;
+  users: Record<string, string>;
+  groups: Record<string, string>;
+};
+
 const FEISHU_CHANNEL = "feishu";
 const WILDCARD_ALLOW_ENTRY = "*";
+const FEISHU_ALIAS_STORE_FILE = "feishu-allowFrom-aliases.json";
 
 let doctorProc: ChildProcess | null = null;
 
@@ -110,16 +123,23 @@ export function registerSettingsIpc(deps: SettingsIpcDeps): void {
       const config = readUserConfig();
       const feishu = config?.channels?.feishu ?? {};
       const enabled = config?.plugins?.entries?.feishu?.enabled === true;
-      const dmPolicy = typeof feishu?.dmPolicy === "string" ? feishu.dmPolicy.trim() : "";
+      const dmPolicy = normalizeDmPolicy(feishu?.dmPolicy, "pairing");
       const allowFrom = normalizeAllowFromEntries(feishu?.allowFrom);
       const dmPolicyOpen = dmPolicy === "open" || allowFrom.includes(WILDCARD_ALLOW_ENTRY);
+      const groupPolicy = normalizeGroupPolicy(feishu?.groupPolicy, "allowlist");
+      const groupAllowFrom = normalizeAllowFromEntries(feishu?.groupAllowFrom);
+      const topicSessionMode = normalizeTopicSessionMode(feishu?.topicSessionMode, "disabled");
       return {
         success: true,
         data: {
           appId: feishu.appId ?? "",
           appSecret: feishu.appSecret ?? "",
           enabled,
+          dmPolicy,
           dmPolicyOpen,
+          groupPolicy,
+          groupAllowFrom,
+          topicSessionMode,
         },
       };
     } catch (err: any) {
@@ -130,7 +150,19 @@ export function registerSettingsIpc(deps: SettingsIpcDeps): void {
   // ── 保存频道配置（支持 enabled=false 仅切换开关） ──
   ipcMain.handle("settings:save-channel", async (_event, params) => {
     const { appId, appSecret, enabled } = params;
-    const dmPolicyOpen = params?.dmPolicyOpen === true;
+    const dmPolicy = normalizeDmPolicy(
+      params?.dmPolicy,
+      params?.dmPolicyOpen === true ? "open" : "pairing"
+    );
+    const groupPolicy = normalizeGroupPolicy(params?.groupPolicy, "allowlist");
+    const groupAllowFrom = normalizeAllowFromEntries(params?.groupAllowFrom);
+    if (groupPolicy === "allowlist") {
+      const hasInvalidGroupId = groupAllowFrom.some((entry) => !looksLikeFeishuGroupId(entry));
+      if (hasInvalidGroupId) {
+        return { success: false, message: "群聊白名单只能填写以 oc_ 开头的群 ID。" };
+      }
+    }
+    const topicSessionMode = normalizeTopicSessionMode(params?.topicSessionMode, "disabled");
     try {
       const config = readUserConfig();
       config.plugins ??= {};
@@ -159,20 +191,27 @@ export function registerSettingsIpc(deps: SettingsIpcDeps): void {
       const currentAllowFrom = normalizeAllowFromEntries(config.channels.feishu.allowFrom);
       const allowFromWithoutWildcard = currentAllowFrom.filter((entry) => entry !== WILDCARD_ALLOW_ENTRY);
 
-      if (dmPolicyOpen) {
+      if (dmPolicy === "open") {
         config.channels.feishu.dmPolicy = "open";
         config.channels.feishu.allowFrom = dedupeEntries([
           ...allowFromWithoutWildcard,
           WILDCARD_ALLOW_ENTRY,
         ]);
       } else {
-        config.channels.feishu.dmPolicy = "pairing";
+        config.channels.feishu.dmPolicy = dmPolicy;
         if (allowFromWithoutWildcard.length > 0) {
           config.channels.feishu.allowFrom = allowFromWithoutWildcard;
         } else {
           delete config.channels.feishu.allowFrom;
         }
       }
+      config.channels.feishu.groupPolicy = groupPolicy;
+      if (groupAllowFrom.length > 0) {
+        config.channels.feishu.groupAllowFrom = groupAllowFrom;
+      } else {
+        delete config.channels.feishu.groupAllowFrom;
+      }
+      config.channels.feishu.topicSessionMode = topicSessionMode;
 
       writeUserConfig(config);
       return { success: true };
@@ -214,15 +253,25 @@ export function registerSettingsIpc(deps: SettingsIpcDeps): void {
     }
   });
 
-  // ── 列出飞书已批准配对账号（合并 allowFrom store + config.allowFrom） ──
+  // ── 列出飞书已授权列表（用户 + 群聊，优先展示可读名称） ──
   ipcMain.handle("settings:list-feishu-approved", async () => {
     try {
       const config = readUserConfig();
-      const configEntries = normalizeAllowFromEntries(config?.channels?.feishu?.allowFrom);
+      const feishuConfig = config?.channels?.feishu ?? {};
+      const configEntries = normalizeAllowFromEntries(feishuConfig?.allowFrom);
       const storeEntries = readFeishuAllowFromStore();
-      const entries = dedupeEntries([...storeEntries, ...configEntries])
+      const aliases = readFeishuAliasStore();
+
+      const userEntries = dedupeEntries([...storeEntries, ...configEntries])
         .filter((entry) => entry !== WILDCARD_ALLOW_ENTRY)
-        .sort((a, b) => a.localeCompare(b, "en"));
+        .map((id) => toAuthorizedEntryView("user", id, aliases))
+        .sort((a, b) => compareAuthorizedEntry(a, b));
+
+      const groupEntries = normalizeAllowFromEntries(feishuConfig?.groupAllowFrom)
+        .map((id) => toAuthorizedEntryView("group", id, aliases))
+        .sort((a, b) => compareAuthorizedEntry(a, b));
+
+      const entries: FeishuAuthorizedEntryView[] = [...userEntries, ...groupEntries];
       return { success: true, data: { entries } };
     } catch (err: any) {
       return { success: false, message: err.message || String(err) };
@@ -232,6 +281,8 @@ export function registerSettingsIpc(deps: SettingsIpcDeps): void {
   // ── 批准飞书配对请求（走 openclaw pairing approve，统一写入 allowlist store） ──
   ipcMain.handle("settings:approve-feishu-pairing", async (_event, params) => {
     const code = typeof params?.code === "string" ? params.code.trim() : "";
+    const id = typeof params?.id === "string" ? params.id.trim() : "";
+    const name = typeof params?.name === "string" ? params.name.trim() : "";
     if (!code) {
       return { success: false, message: "配对码不能为空。" };
     }
@@ -244,6 +295,53 @@ export function registerSettingsIpc(deps: SettingsIpcDeps): void {
           message: compactCliError(run, `批准配对码失败: ${code}`),
         };
       }
+      if (id && name) {
+        saveFeishuAlias("user", id, name);
+      }
+      return { success: true };
+    } catch (err: any) {
+      return { success: false, message: err.message || String(err) };
+    }
+  });
+
+  // ── 删除飞书已授权条目（用户/群聊） ──
+  ipcMain.handle("settings:remove-feishu-approved", async (_event, params) => {
+    const kind = String(params?.kind ?? "").trim().toLowerCase() === "group" ? "group" : "user";
+    const id = String(params?.id ?? "").trim();
+    if (!id) {
+      return { success: false, message: "授权条目标识不能为空。" };
+    }
+
+    try {
+      const config = readUserConfig();
+      config.channels ??= {};
+      config.channels.feishu ??= {};
+
+      if (kind === "group") {
+        const nextGroupAllowFrom = normalizeAllowFromEntries(config.channels.feishu.groupAllowFrom)
+          .filter((entry) => entry !== id);
+        if (nextGroupAllowFrom.length > 0) {
+          config.channels.feishu.groupAllowFrom = nextGroupAllowFrom;
+        } else {
+          delete config.channels.feishu.groupAllowFrom;
+        }
+        removeFeishuAlias("group", id);
+        writeUserConfig(config);
+        return { success: true };
+      }
+
+      const nextAllowFrom = normalizeAllowFromEntries(config.channels.feishu.allowFrom)
+        .filter((entry) => entry !== id);
+      if (nextAllowFrom.length > 0) {
+        config.channels.feishu.allowFrom = nextAllowFrom;
+      } else {
+        delete config.channels.feishu.allowFrom;
+      }
+
+      const nextStoreAllowFrom = readFeishuAllowFromStore().filter((entry) => entry !== id);
+      writeFeishuAllowFromStore(nextStoreAllowFrom);
+      removeFeishuAlias("user", id);
+      writeUserConfig(config);
       return { success: true };
     } catch (err: any) {
       return { success: false, message: err.message || String(err) };
@@ -481,6 +579,165 @@ function readFeishuAllowFromStore(): string[] {
   } catch {
     return [];
   }
+}
+
+// 写入飞书 allowFrom store 文件（兼容保留原有字段）。
+function writeFeishuAllowFromStore(entries: string[]): void {
+  const normalized = normalizeAllowFromEntries(entries);
+  const dir = path.join(resolveUserStateDir(), "credentials");
+  const filePath = path.join(dir, `${FEISHU_CHANNEL}-allowFrom.json`);
+  if (normalized.length === 0) {
+    if (fs.existsSync(filePath)) {
+      fs.unlinkSync(filePath);
+    }
+    return;
+  }
+
+  fs.mkdirSync(dir, { recursive: true });
+  let payload: Record<string, unknown> = {};
+  if (fs.existsSync(filePath)) {
+    try {
+      const raw = fs.readFileSync(filePath, "utf-8");
+      const parsed = parseJsonSafe(raw);
+      if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+        payload = { ...(parsed as Record<string, unknown>) };
+      }
+    } catch {
+      payload = {};
+    }
+  }
+  payload.allowFrom = normalized;
+  if (typeof payload.channel !== "string" || !payload.channel) {
+    payload.channel = FEISHU_CHANNEL;
+  }
+  fs.writeFileSync(filePath, JSON.stringify(payload, null, 2), "utf-8");
+}
+
+// 归一化 DM 策略，非法值回退为默认值。
+function normalizeDmPolicy(input: unknown, fallback: "open" | "pairing" | "allowlist"): "open" | "pairing" | "allowlist" {
+  const value = String(input ?? "").trim().toLowerCase();
+  if (value === "open" || value === "pairing" || value === "allowlist") {
+    return value;
+  }
+  return fallback;
+}
+
+// 归一化群聊策略，非法值回退为默认值。
+function normalizeGroupPolicy(input: unknown, fallback: "open" | "allowlist" | "disabled"): "open" | "allowlist" | "disabled" {
+  const value = String(input ?? "").trim().toLowerCase();
+  if (value === "open" || value === "allowlist" || value === "disabled") {
+    return value;
+  }
+  return fallback;
+}
+
+// 归一化话题会话策略，非法值回退为默认值。
+function normalizeTopicSessionMode(input: unknown, fallback: "enabled" | "disabled"): "enabled" | "disabled" {
+  const value = String(input ?? "").trim().toLowerCase();
+  if (value === "enabled" || value === "disabled") {
+    return value;
+  }
+  return fallback;
+}
+
+// 判断字符串是否像飞书用户 open_id。
+function looksLikeFeishuUserId(value: string): boolean {
+  return /^ou_[A-Za-z0-9]/.test(value);
+}
+
+// 判断字符串是否像飞书群聊 chat_id。
+function looksLikeFeishuGroupId(value: string): boolean {
+  return /^oc_[A-Za-z0-9]/.test(value);
+}
+
+// 将授权条目转换为前端展示模型，优先返回可读名称。
+function toAuthorizedEntryView(kind: "user" | "group", id: string, aliases: FeishuAliasStore): FeishuAuthorizedEntryView {
+  const trimmedId = String(id ?? "").trim();
+  const aliasName = kind === "user" ? aliases.users[trimmedId] : aliases.groups[trimmedId];
+  if (aliasName) {
+    return { kind, id: trimmedId, name: aliasName };
+  }
+
+  if (kind === "user" && !looksLikeFeishuUserId(trimmedId)) {
+    return { kind, id: trimmedId, name: trimmedId };
+  }
+  if (kind === "group" && !looksLikeFeishuGroupId(trimmedId)) {
+    return { kind, id: trimmedId, name: trimmedId };
+  }
+  return { kind, id: trimmedId, name: "" };
+}
+
+// 授权条目排序：优先按可读名称，再按原始 ID。
+function compareAuthorizedEntry(a: FeishuAuthorizedEntryView, b: FeishuAuthorizedEntryView): number {
+  const aLabel = (a.name || a.id).toLowerCase();
+  const bLabel = (b.name || b.id).toLowerCase();
+  const byLabel = aLabel.localeCompare(bLabel, "en");
+  if (byLabel !== 0) return byLabel;
+  return a.id.localeCompare(b.id, "en");
+}
+
+// 读取飞书授权别名（用于把 ID 显示成用户/群聊名称）。
+function readFeishuAliasStore(): FeishuAliasStore {
+  const filePath = path.join(resolveUserStateDir(), "credentials", FEISHU_ALIAS_STORE_FILE);
+  if (!fs.existsSync(filePath)) {
+    return { version: 1, users: {}, groups: {} };
+  }
+  try {
+    const raw = fs.readFileSync(filePath, "utf-8");
+    const parsed = parseJsonSafe(raw);
+    const users = parsed && typeof parsed.users === "object" && !Array.isArray(parsed.users)
+      ? Object.fromEntries(
+          Object.entries(parsed.users).map(([id, name]) => [String(id).trim(), String(name ?? "").trim()])
+        )
+      : {};
+    const groups = parsed && typeof parsed.groups === "object" && !Array.isArray(parsed.groups)
+      ? Object.fromEntries(
+          Object.entries(parsed.groups).map(([id, name]) => [String(id).trim(), String(name ?? "").trim()])
+        )
+      : {};
+    return {
+      version: 1,
+      users: Object.fromEntries(Object.entries(users).filter(([id, name]) => id && name)),
+      groups: Object.fromEntries(Object.entries(groups).filter(([id, name]) => id && name)),
+    };
+  } catch {
+    return { version: 1, users: {}, groups: {} };
+  }
+}
+
+// 写入飞书授权别名存储。
+function writeFeishuAliasStore(store: FeishuAliasStore): void {
+  const dir = path.join(resolveUserStateDir(), "credentials");
+  fs.mkdirSync(dir, { recursive: true });
+  const filePath = path.join(dir, FEISHU_ALIAS_STORE_FILE);
+  fs.writeFileSync(filePath, JSON.stringify(store, null, 2), "utf-8");
+}
+
+// 保存单条飞书授权别名，供列表展示优先使用名称。
+function saveFeishuAlias(kind: "user" | "group", id: string, name: string): void {
+  const trimmedId = String(id ?? "").trim();
+  const trimmedName = String(name ?? "").trim();
+  if (!trimmedId || !trimmedName) return;
+  const store = readFeishuAliasStore();
+  if (kind === "user") {
+    store.users[trimmedId] = trimmedName;
+  } else {
+    store.groups[trimmedId] = trimmedName;
+  }
+  writeFeishuAliasStore(store);
+}
+
+// 删除单条飞书授权别名。
+function removeFeishuAlias(kind: "user" | "group", id: string): void {
+  const trimmedId = String(id ?? "").trim();
+  if (!trimmedId) return;
+  const store = readFeishuAliasStore();
+  if (kind === "user") {
+    delete store.users[trimmedId];
+  } else {
+    delete store.groups[trimmedId];
+  }
+  writeFeishuAliasStore(store);
 }
 
 // ── 从配置中提取当前 provider 信息（apiKey 掩码） ──

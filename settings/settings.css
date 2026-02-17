@@ -294,6 +294,7 @@ button, input, select, label, a {
 input[type="text"],
 input[type="password"],
 input[type="url"],
+textarea,
 select {
   width: 100%;
   padding: 9px 12px;
@@ -312,9 +313,16 @@ input::placeholder {
 }
 
 input:focus,
+textarea:focus,
 select:focus {
   border-color: var(--border-focus);
   box-shadow: 0 0 0 3px var(--accent-dim);
+}
+
+textarea {
+  resize: vertical;
+  min-height: 84px;
+  line-height: 1.5;
 }
 
 select {
@@ -710,34 +718,28 @@ select option {
   background: rgba(255, 255, 255, 0.02);
 }
 
-.pairing-item-readonly {
-  justify-content: flex-start;
+.pairing-item .btn-secondary {
+  flex-shrink: 0;
 }
 
 .pairing-item-main {
+  flex: 1;
   min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
 }
 
 .pairing-id {
   font-size: 12.5px;
   color: var(--text-primary);
-  font-family: "SF Mono", Menlo, Monaco, monospace;
+  font-family: inherit;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
-.pairing-meta {
-  font-size: 11.5px;
+.pairing-meta-inline {
+  margin-left: 8px;
+  font-size: 11px;
   color: var(--text-muted);
-}
-
-.pairing-code {
-  font-family: "SF Mono", Menlo, Monaco, monospace;
-  color: var(--text-secondary);
 }
 
 .kimi-guide-text {
