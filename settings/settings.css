@@ -677,10 +677,10 @@ select option {
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
   background: rgba(255, 255, 255, 0.02);
-  padding: 12px;
+  padding: 10px 12px;
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 6px;
 }
 
 .pairing-header {
@@ -704,22 +704,18 @@ select option {
 .pairing-list {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 4px;
 }
 
 .pairing-item {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 10px;
+  gap: 8px;
   border: 1px solid rgba(255, 255, 255, 0.06);
   border-radius: var(--radius-sm);
-  padding: 10px;
+  padding: 6px 10px;
   background: rgba(255, 255, 255, 0.02);
-}
-
-.pairing-item .btn-secondary {
-  flex-shrink: 0;
 }
 
 .pairing-item-main {
@@ -740,6 +736,50 @@ select option {
   margin-left: 8px;
   font-size: 11px;
   color: var(--text-muted);
+}
+
+/* 图标按钮（刷新、删除、批准等） */
+.btn-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg-input);
+  color: var(--text-muted);
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: border-color var(--transition), color var(--transition), background var(--transition);
+}
+
+.btn-icon:hover:not(:disabled) {
+  border-color: var(--accent);
+  color: var(--text-primary);
+}
+
+.btn-icon:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.btn-icon svg {
+  width: 14px;
+  height: 14px;
+}
+
+/* 危险操作图标按钮（删除） */
+.btn-icon.danger:hover:not(:disabled) {
+  border-color: var(--error);
+  color: var(--error);
+}
+
+/* 成功操作图标按钮（批准） */
+.btn-icon.success:hover:not(:disabled) {
+  border-color: #4caf50;
+  color: #4caf50;
 }
 
 .kimi-guide-text {

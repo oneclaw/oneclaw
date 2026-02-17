@@ -619,9 +619,6 @@
     var loading = chPairingLoading || chApprovedLoading;
     var busy = loading || !!chPairingApprovingCode || !!chApprovedRemovingKey;
     els.btnChAccessRefresh.disabled = busy;
-    els.btnChAccessRefresh.textContent = loading
-      ? t("feishu.refreshingPairing")
-      : t("feishu.refreshPairing");
   }
 
   // 切换待审批列表加载状态。
@@ -649,6 +646,11 @@
     var emptyEl = els.chAccessEmpty;
     if (!listEl || !emptyEl) return;
 
+    // 批准图标（勾号）
+    var approveIcon = '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8.5L6.5 12L13 4"/></svg>';
+    // 删除图标（垃圾桶）
+    var removeIcon = '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 4.5h10M6 4.5V3a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1v1.5M4.5 4.5L5 13.5a1 1 0 0 0 1 1h4a1 1 0 0 0 1-1l.5-9"/></svg>';
+
     var pendingRows = (Array.isArray(chPairingRequests) ? chPairingRequests : []).map(function (item) {
       var code = String(item.code || "");
       var isApproving = chPairingApprovingCode === code;
@@ -656,7 +658,9 @@
         type: "pending",
         display: formatChEntryDisplay(item.name, item.id),
         meta: t("feishu.statusPending"),
-        buttonText: isApproving ? t("feishu.approvingPairing") : t("feishu.approvePairing"),
+        buttonIcon: approveIcon,
+        buttonClass: "btn-icon success",
+        buttonTitle: t("feishu.approvePairing"),
         buttonAttr:
           'data-pairing-approve="' + escapeHtml(code) + '"' +
           ' data-pairing-id="' + escapeHtml(String(item.id || "")) + '"' +
@@ -674,7 +678,9 @@
         type: "approved",
         display: formatChEntryDisplay(entry.name, entry.id),
         meta: statusText,
-        buttonText: isRemoving ? t("feishu.removingApproved") : t("feishu.removeApproved"),
+        buttonIcon: removeIcon,
+        buttonClass: "btn-icon danger",
+        buttonTitle: t("feishu.removeApproved"),
         buttonAttr:
           'data-approved-remove-kind="' + escapeHtml(kind) + '"' +
           ' data-approved-remove-id="' + escapeHtml(id) + '"',
@@ -701,8 +707,8 @@
           escapeHtml(row.display) +
           '<span class="pairing-meta-inline">' + escapeHtml(row.meta) + "</span></div>",
         "  </div>",
-        '  <button type="button" class="btn-secondary" ' + row.buttonAttr + (row.disabled ? " disabled" : "") + ">",
-        "    " + row.buttonText,
+        '  <button type="button" class="' + row.buttonClass + '" title="' + escapeHtml(row.buttonTitle) + '" ' + row.buttonAttr + (row.disabled ? " disabled" : "") + ">",
+        "    " + row.buttonIcon,
         "  </button>",
         "</div>",
       ].join("");
