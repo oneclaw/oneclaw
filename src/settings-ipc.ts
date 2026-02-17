@@ -116,7 +116,25 @@ export function registerSettingsIpc(deps: SettingsIpcDeps): void {
 
       config.plugins.entries.feishu = { enabled: true };
       config.channels ??= {};
-      config.channels.feishu = { appId, appSecret };
+      // 保留已有飞书策略字段，避免每次保存凭据都把 dmPolicy/allowFrom 覆盖丢失
+      const prevFeishu =
+        config.channels.feishu && typeof config.channels.feishu === "object"
+          ? config.channels.feishu
+          : {};
+      config.channels.feishu = {
+        ...prevFeishu,
+        appId,
+        appSecret,
+      };
+
+      // OneClaw 当前未提供 pairing 审批入口，首次配置时默认放开 DM 以避免“有配对码但无处审批”死锁
+      if (!("dmPolicy" in config.channels.feishu)) {
+        config.channels.feishu.dmPolicy = "open";
+      }
+      const hasAllowFrom = Array.isArray(config.channels.feishu.allowFrom);
+      if (!hasAllowFrom || config.channels.feishu.allowFrom.length === 0) {
+        config.channels.feishu.allowFrom = ["*"];
+      }
 
       writeUserConfig(config);
       return { success: true };
