@@ -9,14 +9,14 @@ import oneClawLogo from "../assets/openclaw-favicon.svg";
 
 export type SidebarProps = {
   connected: boolean;
-  currentAgentId: string;
-  agentOptions: Array<{ id: string; label: string }>;
+  currentSessionKey: string;
+  sessionOptions: Array<{ key: string; label: string }>;
   chatActive: boolean;
   settingsActive: boolean;
   refreshDisabled: boolean;
   onToggleSidebar: () => void;
   onOpenChat: () => void;
-  onSelectAgent: (agentId: string) => void;
+  onSelectSession: (sessionKey: string) => void;
   onRefresh: () => void;
   onNewChat: () => void;
   onOpenSettings: () => void;
@@ -97,21 +97,21 @@ export function renderSidebar(props: SidebarProps) {
         <div class="oneclaw-sidebar__divider"></div>
 
         <div class="oneclaw-sidebar__section oneclaw-sidebar__section--agent">
-          <label class="oneclaw-sidebar__section-title" for="oneclaw-agent-select">
+          <label class="oneclaw-sidebar__section-title" for="oneclaw-session-select">
             ${t("sidebar.agent")}
           </label>
           <div class="oneclaw-sidebar__select-wrap">
             <select
-              id="oneclaw-agent-select"
+              id="oneclaw-session-select"
               class="oneclaw-sidebar__select"
-              .value=${props.currentAgentId}
+              .value=${props.currentSessionKey}
               @change=${(event: Event) => {
-                const nextAgentId = (event.target as HTMLSelectElement).value;
-                props.onSelectAgent(nextAgentId);
+                const nextSessionKey = (event.target as HTMLSelectElement).value;
+                props.onSelectSession(nextSessionKey);
               }}
             >
-              ${props.agentOptions.map(
-                (agent) => html`<option value=${agent.id}>${agent.label}</option>`,
+              ${props.sessionOptions.map(
+                (session) => html`<option value=${session.key}>${session.label}</option>`,
               )}
             </select>
           </div>
