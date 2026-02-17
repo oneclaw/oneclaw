@@ -1,6 +1,5 @@
 import { ipcMain } from "electron";
 import { ChildProcess, spawn } from "child_process";
-import { SettingsManager } from "./settings-manager";
 import {
   resolveNodeBin,
   resolveGatewayEntry,
@@ -21,10 +20,6 @@ import { extractKimiConfig, saveKimiPluginConfig, isKimiPluginBundled, DEFAULT_K
 import { ensureGatewayAuthTokenInConfig } from "./gateway-auth";
 import * as path from "path";
 import * as fs from "fs";
-
-interface SettingsIpcDeps {
-  settingsManager: SettingsManager;
-}
 
 type CliRunResult = {
   code: number;
@@ -69,9 +64,7 @@ let doctorProc: ChildProcess | null = null;
 let feishuTenantTokenCache: FeishuTenantTokenCache | null = null;
 
 // 注册 Settings 相关 IPC
-export function registerSettingsIpc(deps: SettingsIpcDeps): void {
-  const { settingsManager } = deps;
-
+export function registerSettingsIpc(): void {
   // ── 读取当前 provider/model 配置（apiKey 掩码返回） ──
   ipcMain.handle("settings:get-config", async () => {
     try {
@@ -482,7 +475,7 @@ export function registerSettingsIpc(deps: SettingsIpcDeps): void {
   });
 
   // ── Doctor 子进程 ──
-  ipcMain.handle("settings:run-doctor", async () => {
+  ipcMain.handle("settings:run-doctor", async (event) => {
     // 防止并发
     if (doctorProc && doctorProc.exitCode == null) {
       return { success: false, message: "Doctor 正在运行中" };
@@ -507,11 +500,11 @@ export function registerSettingsIpc(deps: SettingsIpcDeps): void {
       windowsHide: true,
     });
 
-    const wc = settingsManager.getWebContents();
+    const wc = event.sender;
 
     // 流式推送 stdout/stderr
     const pushOutput = (data: Buffer) => {
-      if (wc && !wc.isDestroyed()) {
+      if (!wc.isDestroyed()) {
         wc.send("settings:doctor-output", data.toString());
       }
     };
@@ -520,14 +513,14 @@ export function registerSettingsIpc(deps: SettingsIpcDeps): void {
 
     // 完成时推送退出码
     doctorProc.on("exit", (code) => {
-      if (wc && !wc.isDestroyed()) {
+      if (!wc.isDestroyed()) {
         wc.send("settings:doctor-exit", code ?? -1);
       }
       doctorProc = null;
     });
 
     doctorProc.on("error", (err) => {
-      if (wc && !wc.isDestroyed()) {
+      if (!wc.isDestroyed()) {
         wc.send("settings:doctor-output", `Error: ${err.message}\n`);
         wc.send("settings:doctor-exit", -1);
       }

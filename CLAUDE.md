@@ -41,7 +41,6 @@ oneclaw/
 │   ├── provider-config.ts  # Provider presets, verification, config R/W
 │   ├── setup-manager.ts    # Setup wizard window lifecycle
 │   ├── setup-ipc.ts        # Setup validation + config write + Feishu channel
-│   ├── settings-manager.ts # Settings window lifecycle
 │   ├── settings-ipc.ts     # Settings provider/channel CRUD, Doctor runner
 │   ├── analytics.ts        # Telemetry (PostHog-style, retry + fallback URL)
 │   ├── auto-updater.ts     # electron-updater wrapper + progress callback
@@ -154,7 +153,7 @@ Post-setup configuration management with:
 - **Doctor** — Run `openclaw doctor --non-interactive --repair` with streamed output
 - **Restart Gateway** — Apply config changes without app restart
 
-Opened via tray menu "Settings" or macOS `Cmd+,` keyboard shortcut.
+Opened inside the main Chat UI (embedded settings view) via tray menu "Settings" or macOS `Cmd+,` keyboard shortcut.
 
 ### macOS Dock Visibility (`main.ts`)
 
@@ -252,7 +251,7 @@ Electron 40 defaults to sandbox mode. 15 IPC methods + 2 event listeners are exp
 │     ├── tray.ts   (system tray + i18n menu)              │
 │     ├── provider-config.ts (presets + verify + config)   │
 │     ├── setup-manager.ts + setup-ipc.ts (wizard)         │
-│     ├── settings-manager.ts + settings-ipc.ts (settings) │
+│     ├── settings-ipc.ts + settings/ (embedded settings)  │
 │     ├── analytics.ts (telemetry + retry + fallback)      │
 │     ├── auto-updater.ts (CDN updates + progress)         │
 │     ├── gateway-auth.ts (token management)               │

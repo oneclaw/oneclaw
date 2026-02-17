@@ -546,6 +546,7 @@ export class OpenClawApp extends LitElement {
   private themeMedia: MediaQueryList | null = null;
   private themeMediaHandler: ((event: MediaQueryListEvent) => void) | null = null;
   private topbarObserver: ResizeObserver | null = null;
+  private appNavigateCleanup: (() => void) | null = null;
 
   createRenderRoot() {
     return this;
@@ -554,6 +555,7 @@ export class OpenClawApp extends LitElement {
   connectedCallback() {
     super.connectedCallback();
     handleConnected(this as unknown as Parameters<typeof handleConnected>[0]);
+    this.bindAppNavigation();
   }
 
   protected firstUpdated() {
@@ -561,6 +563,8 @@ export class OpenClawApp extends LitElement {
   }
 
   disconnectedCallback() {
+    this.appNavigateCleanup?.();
+    this.appNavigateCleanup = null;
     handleDisconnected(this as unknown as Parameters<typeof handleDisconnected>[0]);
     super.disconnectedCallback();
   }
@@ -614,6 +618,33 @@ export class OpenClawApp extends LitElement {
 
   applySettings(next: UiSettings) {
     applySettingsInternal(this as unknown as Parameters<typeof applySettingsInternal>[0], next);
+  }
+
+  private bindAppNavigation() {
+    if (this.appNavigateCleanup) {
+      return;
+    }
+    const bridge = (window as unknown as {
+      oneclaw?: {
+        onNavigate?: (
+          cb: (payload: { view: "settings" }) => void,
+        ) => (() => void) | void;
+      };
+    }).oneclaw;
+    if (!bridge?.onNavigate) {
+      return;
+    }
+    const unsubscribe = bridge.onNavigate((payload) => {
+      if (payload?.view !== "settings") {
+        return;
+      }
+      this.applySettings({
+        ...this.settings,
+        oneclawView: "settings",
+        navCollapsed: false,
+      });
+    });
+    this.appNavigateCleanup = typeof unsubscribe === "function" ? unsubscribe : null;
   }
 
   setTab(next: Tab) {

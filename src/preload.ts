@@ -58,4 +58,11 @@ contextBridge.exposeInMainWorld("oneclaw", {
   openSettings: () => ipcRenderer.send("app:open-settings"),
   openWebUI: () => ipcRenderer.send("app:open-webui"),
   getGatewayPort: () => ipcRenderer.invoke("gateway:port"),
+  onNavigate: (cb: (payload: { view: "settings" }) => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, payload: { view: "settings" }) => {
+      cb(payload);
+    };
+    ipcRenderer.on("app:navigate", listener);
+    return () => ipcRenderer.removeListener("app:navigate", listener);
+  },
 });
