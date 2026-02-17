@@ -239,32 +239,24 @@
               </select>
             </div>
 
-            <div class="field-group" id="chGroupAllowFromField">
-              <label for="chGroupAllowFrom" data-i18n="feishu.groupAllowFrom">Group Allowlist</label>
-              <textarea id="chGroupAllowFrom" rows="4" placeholder="oc_xxx&#10;oc_yyy"></textarea>
-              <p class="field-hint" data-i18n="feishu.groupAllowFromHint">One group ID per line. Only effective when Group Access Mode is Allowlist.</p>
-            </div>
-
-            <div class="field-group">
-              <label for="chTopicSessionMode" data-i18n="feishu.topicSessionMode">Topic Session Mode</label>
-              <select id="chTopicSessionMode">
-                <option value="disabled" data-i18n="feishu.topicSessionModeDisabled">Shared session per group.</option>
-                <option value="enabled" data-i18n="feishu.topicSessionModeEnabled">Separate session per topic.</option>
-              </select>
-            </div>
-
             <div id="chPairingSection">
               <div class="pairing-panel">
                 <div class="pairing-header">
                   <span class="pairing-title" data-i18n="feishu.accessTitle">Pending & Authorized</span>
-                  <button type="button" class="btn-icon" id="btnChAccessRefresh" title="Refresh">
-                    <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-                      <path d="M2.5 8a5.5 5.5 0 0 1 9.3-4"/>
-                      <path d="M13.5 8a5.5 5.5 0 0 1-9.3 4"/>
-                      <path d="M11.5 2v2.5H14"/>
-                      <path d="M4.5 14v-2.5H2"/>
-                    </svg>
-                  </button>
+                  <div class="pairing-actions">
+                    <button type="button" class="btn-icon" id="btnChAccessAddGroup" title="Add Group ID" aria-label="Add Group ID">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M12 5v14"></path>
+                        <path d="M5 12h14"></path>
+                      </svg>
+                    </button>
+                    <button type="button" class="btn-icon" id="btnChAccessRefresh" title="Refresh" aria-label="Refresh">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"></path>
+                        <path d="M21 3v5h-5"></path>
+                      </svg>
+                    </button>
+                  </div>
                 </div>
                 <div class="pairing-empty hidden" id="chAccessEmpty" data-i18n="feishu.noAccessEntries">
                   No pending or authorized entries.
@@ -276,6 +268,24 @@
 
           <!-- 错误 / 成功信息 -->
           <div class="msg-box hidden" id="chMsgBox"></div>
+
+          <div class="dialog-backdrop hidden" id="chGroupDialog">
+            <div class="dialog-card" role="dialog" aria-modal="true" aria-labelledby="chGroupDialogTitle">
+              <div class="dialog-title" id="chGroupDialogTitle" data-i18n="feishu.addGroup">Add Group ID</div>
+              <div class="dialog-guide">
+                <ol class="dialog-guide-list">
+                  <li class="dialog-guide-line" data-i18n="feishu.groupIdGuideStep1"></li>
+                  <li class="dialog-guide-line" data-i18n="feishu.groupIdGuideStep2"></li>
+                  <li class="dialog-guide-line" data-i18n="feishu.groupIdGuideStep3"></li>
+                </ol>
+              </div>
+              <input type="text" id="chGroupDialogInput" placeholder="oc_xxx" autocomplete="off" spellcheck="false">
+              <div class="dialog-actions">
+                <button type="button" class="btn-secondary" id="btnChGroupDialogCancel" data-i18n="common.cancel">Cancel</button>
+                <button type="button" class="btn-primary" id="btnChGroupDialogConfirm" data-i18n="common.confirm">Confirm</button>
+              </div>
+            </div>
+          </div>
 
           <!-- 保存按钮 -->
           <div class="btn-row bottom-actions">

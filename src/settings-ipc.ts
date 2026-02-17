@@ -55,8 +55,18 @@ type FeishuAliasStore = {
 const FEISHU_CHANNEL = "feishu";
 const WILDCARD_ALLOW_ENTRY = "*";
 const FEISHU_ALIAS_STORE_FILE = "feishu-allowFrom-aliases.json";
+const FEISHU_OPEN_API_BASE = "https://open.feishu.cn/open-apis";
+const FEISHU_TOKEN_SAFETY_MS = 60_000;
+
+type FeishuTenantTokenCache = {
+  appId: string;
+  appSecret: string;
+  token: string;
+  expireAt: number;
+};
 
 let doctorProc: ChildProcess | null = null;
+let feishuTenantTokenCache: FeishuTenantTokenCache | null = null;
 
 // 注册 Settings 相关 IPC
 export function registerSettingsIpc(deps: SettingsIpcDeps): void {
@@ -162,7 +172,6 @@ export function registerSettingsIpc(deps: SettingsIpcDeps): void {
         return { success: false, message: "群聊白名单只能填写以 oc_ 开头的群 ID。" };
       }
     }
-    const topicSessionMode = normalizeTopicSessionMode(params?.topicSessionMode, "disabled");
     try {
       const config = readUserConfig();
       config.plugins ??= {};
@@ -211,8 +220,6 @@ export function registerSettingsIpc(deps: SettingsIpcDeps): void {
       } else {
         delete config.channels.feishu.groupAllowFrom;
       }
-      config.channels.feishu.topicSessionMode = topicSessionMode;
-
       writeUserConfig(config);
       return { success: true };
     } catch (err: any) {
@@ -272,7 +279,9 @@ export function registerSettingsIpc(deps: SettingsIpcDeps): void {
         .sort((a, b) => compareAuthorizedEntry(a, b));
 
       const entries: FeishuAuthorizedEntryView[] = [...userEntries, ...groupEntries];
-      return { success: true, data: { entries } };
+      const enrichedEntries = await enrichFeishuEntryNames(entries, feishuConfig);
+      enrichedEntries.sort((a, b) => compareAuthorizedEntry(a, b));
+      return { success: true, data: { entries: enrichedEntries } };
     } catch (err: any) {
       return { success: false, message: err.message || String(err) };
     }
@@ -298,6 +307,29 @@ export function registerSettingsIpc(deps: SettingsIpcDeps): void {
       if (id && name) {
         saveFeishuAlias("user", id, name);
       }
+      return { success: true };
+    } catch (err: any) {
+      return { success: false, message: err.message || String(err) };
+    }
+  });
+
+  // ── 添加群聊白名单条目（仅允许群 ID） ──
+  ipcMain.handle("settings:add-feishu-group-allow-from", async (_event, params) => {
+    const id = String(params?.id ?? "").trim();
+    if (!looksLikeFeishuGroupId(id)) {
+      return { success: false, message: "仅允许填写以 oc_ 开头的群 ID。" };
+    }
+
+    try {
+      const config = readUserConfig();
+      config.channels ??= {};
+      config.channels.feishu ??= {};
+      const nextGroupAllowFrom = dedupeEntries([
+        ...normalizeAllowFromEntries(config.channels.feishu.groupAllowFrom),
+        id,
+      ]);
+      config.channels.feishu.groupAllowFrom = nextGroupAllowFrom;
+      writeUserConfig(config);
       return { success: true };
     } catch (err: any) {
       return { success: false, message: err.message || String(err) };
@@ -611,6 +643,134 @@ function writeFeishuAllowFromStore(entries: string[]): void {
     payload.channel = FEISHU_CHANNEL;
   }
   fs.writeFileSync(filePath, JSON.stringify(payload, null, 2), "utf-8");
+}
+
+// 补全授权条目的可读名称：用户/群聊优先查缓存，未命中则实时查询并回写缓存。
+async function enrichFeishuEntryNames(
+  entries: FeishuAuthorizedEntryView[],
+  feishuConfig: Record<string, unknown>,
+): Promise<FeishuAuthorizedEntryView[]> {
+  const appId = String(feishuConfig?.appId ?? "").trim();
+  const appSecret = String(feishuConfig?.appSecret ?? "").trim();
+  if (!appId || !appSecret || entries.length === 0) {
+    return entries;
+  }
+
+  const userTargets = entries.filter(
+    (entry) => entry.kind === "user" && !entry.name && looksLikeFeishuUserId(entry.id)
+  );
+  const groupTargets = entries.filter(
+    (entry) => entry.kind === "group" && !entry.name && looksLikeFeishuGroupId(entry.id)
+  );
+  if (userTargets.length === 0 && groupTargets.length === 0) {
+    return entries;
+  }
+
+  const token = await resolveFeishuTenantAccessToken(appId, appSecret);
+  if (!token) {
+    return entries;
+  }
+
+  await Promise.all(
+    userTargets.map(async (entry) => {
+      const name = await fetchFeishuUserNameByOpenId(token, entry.id);
+      if (name) {
+        entry.name = name;
+        saveFeishuAlias("user", entry.id, name);
+      }
+    })
+  );
+
+  await Promise.all(
+    groupTargets.map(async (entry) => {
+      const name = await fetchFeishuChatNameById(token, entry.id);
+      if (name) {
+        entry.name = name;
+        saveFeishuAlias("group", entry.id, name);
+      }
+    })
+  );
+
+  return entries;
+}
+
+// 获取 tenant_access_token（内存缓存，过期前一分钟自动刷新）。
+async function resolveFeishuTenantAccessToken(appId: string, appSecret: string): Promise<string> {
+  const now = Date.now();
+  if (
+    feishuTenantTokenCache &&
+    feishuTenantTokenCache.appId === appId &&
+    feishuTenantTokenCache.appSecret === appSecret &&
+    feishuTenantTokenCache.expireAt > now + FEISHU_TOKEN_SAFETY_MS
+  ) {
+    return feishuTenantTokenCache.token;
+  }
+
+  const payload = await fetchJsonWithTimeout(`${FEISHU_OPEN_API_BASE}/auth/v3/tenant_access_token/internal`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json; charset=utf-8" },
+    body: JSON.stringify({ app_id: appId, app_secret: appSecret }),
+  });
+  const code = Number(payload?.code ?? -1);
+  const token = String(payload?.tenant_access_token ?? "").trim();
+  const expire = Number(payload?.expire ?? 0);
+  if (code !== 0 || !token || !Number.isFinite(expire) || expire <= 0) {
+    return "";
+  }
+
+  feishuTenantTokenCache = {
+    appId,
+    appSecret,
+    token,
+    expireAt: now + expire * 1000,
+  };
+  return token;
+}
+
+// 根据 open_id 查询用户名。
+async function fetchFeishuUserNameByOpenId(token: string, openId: string): Promise<string> {
+  const encodedId = encodeURIComponent(openId);
+  const url = `${FEISHU_OPEN_API_BASE}/contact/v3/users/${encodedId}?user_id_type=open_id`;
+  const payload = await fetchJsonWithTimeout(url, {
+    method: "GET",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json; charset=utf-8",
+    },
+  });
+  if (Number(payload?.code ?? -1) !== 0) return "";
+  return String(payload?.data?.user?.name ?? payload?.data?.name ?? "").trim();
+}
+
+// 根据 chat_id 查询群名称。
+async function fetchFeishuChatNameById(token: string, chatId: string): Promise<string> {
+  const encodedId = encodeURIComponent(chatId);
+  const url = `${FEISHU_OPEN_API_BASE}/im/v1/chats/${encodedId}`;
+  const payload = await fetchJsonWithTimeout(url, {
+    method: "GET",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json; charset=utf-8",
+    },
+  });
+  if (Number(payload?.code ?? -1) !== 0) return "";
+  return String(payload?.data?.chat?.name ?? payload?.data?.name ?? "").trim();
+}
+
+// 带超时的 JSON 请求；失败返回 null，不阻塞主流程。
+async function fetchJsonWithTimeout(url: string, init: RequestInit): Promise<any | null> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 5000);
+  try {
+    const response = await fetch(url, { ...init, signal: controller.signal });
+    if (!response.ok) return null;
+    const text = await response.text();
+    return parseJsonSafe(text);
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 // 归一化 DM 策略，非法值回退为默认值。

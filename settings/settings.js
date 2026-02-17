@@ -74,6 +74,8 @@
       "provider.modelId": "Model ID",
       "provider.apiType": "API Type",
       "provider.supportImage": "Supports image input",
+      "common.cancel": "Cancel",
+      "common.confirm": "Confirm",
       "provider.save": "Save",
       "provider.saving": "Saving…",
       "provider.saved": "Configuration saved.",
@@ -94,11 +96,6 @@
       "feishu.groupPolicyOpen": "All groups can access.",
       "feishu.groupPolicyAllowlist": "Only allowlisted groups can access.",
       "feishu.groupPolicyDisabled": "Ignore all group messages.",
-      "feishu.groupAllowFrom": "Group Allowlist",
-      "feishu.groupAllowFromHint": "One group ID per line. Only effective when Group Access Mode is Allowlist.",
-      "feishu.topicSessionMode": "Topic Session Mode",
-      "feishu.topicSessionModeDisabled": "Shared session per group.",
-      "feishu.topicSessionModeEnabled": "Separate session per topic.",
       "feishu.accessTitle": "Pending & Authorized",
       "feishu.pairingTitle": "Pending Pairing Requests",
       "feishu.refreshPairing": "Refresh",
@@ -115,6 +112,13 @@
       "feishu.statusPending": "Pending",
       "feishu.statusApprovedUser": "Authorized User",
       "feishu.statusApprovedGroup": "Authorized Group",
+      "feishu.addGroup": "Add Group ID",
+      "feishu.addingGroup": "Adding…",
+      "feishu.groupAdded": "Group ID added.",
+      "feishu.groupIdPrompt": "Enter group ID (must start with oc_):",
+      "feishu.groupIdGuideStep1": "Open the target group chat in Feishu, then click the group avatar to open the Group Info page.",
+      "feishu.groupIdGuideStep2": "Scroll down to the bottom of the Group Info page.",
+      "feishu.groupIdGuideStep3": "At the bottom of Group Info, find the Conversation ID (starting with oc_) right above the \"Leave Group Chat\" button, then copy it and paste it here.",
       "feishu.removeApproved": "Remove",
       "feishu.removingApproved": "Removing…",
       "feishu.approvedRemoved": "Authorization removed.",
@@ -124,7 +128,7 @@
       "error.loadPairingFailed": "Failed to load pairing requests.",
       "error.loadApprovedFailed": "Failed to load approved accounts.",
       "error.removeApprovedFailed": "Failed to remove authorization.",
-      "error.invalidGroupAllowFrom": "Group allowlist only accepts group IDs that start with oc_.",
+      "error.invalidGroupId": "Only group IDs starting with oc_ are allowed.",
       "error.noAppId": "Please enter the Feishu App ID.",
       "error.noAppSecret": "Please enter the App Secret.",
       "error.noKey": "Please enter your API key.",
@@ -188,6 +192,8 @@
       "provider.modelId": "模型 ID",
       "provider.apiType": "接口类型",
       "provider.supportImage": "支持图像输入",
+      "common.cancel": "取消",
+      "common.confirm": "确认",
       "provider.save": "保存",
       "provider.saving": "保存中…",
       "provider.saved": "配置已保存。",
@@ -208,11 +214,6 @@
       "feishu.groupPolicyOpen": "所有群可访问",
       "feishu.groupPolicyAllowlist": "仅白名单可访问",
       "feishu.groupPolicyDisabled": "不接收群消息",
-      "feishu.groupAllowFrom": "群聊白名单",
-      "feishu.groupAllowFromHint": "每行一个群 ID。仅在群聊模式为仅白名单可访问时生效。",
-      "feishu.topicSessionMode": "话题会话模式",
-      "feishu.topicSessionModeDisabled": "同群共享会话",
-      "feishu.topicSessionModeEnabled": "按话题独立会话",
       "feishu.accessTitle": "待审批与已授权",
       "feishu.pairingTitle": "待审批配对请求",
       "feishu.refreshPairing": "刷新",
@@ -229,6 +230,13 @@
       "feishu.statusPending": "待审批",
       "feishu.statusApprovedUser": "已授权用户",
       "feishu.statusApprovedGroup": "已授权群聊",
+      "feishu.addGroup": "添加群 ID",
+      "feishu.addingGroup": "添加中…",
+      "feishu.groupAdded": "群 ID 已添加。",
+      "feishu.groupIdPrompt": "请输入群 ID（必须以 oc_ 开头）：",
+      "feishu.groupIdGuideStep1": "在飞书中打开目标群聊，点击群头像进入群信息页面。",
+      "feishu.groupIdGuideStep2": "在群信息页面向下滚动至底部。",
+      "feishu.groupIdGuideStep3": "在群信息底部的“退出群聊”按钮上方找到会话 ID（以 oc_ 开头），然后点击复制并粘贴到此处。",
       "feishu.removeApproved": "删除",
       "feishu.removingApproved": "删除中…",
       "feishu.approvedRemoved": "已移除授权。",
@@ -238,7 +246,7 @@
       "error.loadPairingFailed": "读取待审批请求失败。",
       "error.loadApprovedFailed": "读取已授权列表失败。",
       "error.removeApprovedFailed": "移除授权失败。",
-      "error.invalidGroupAllowFrom": "群聊白名单只能填写以 oc_ 开头的群 ID。",
+      "error.invalidGroupId": "仅允许填写以 oc_ 开头的群 ID。",
       "error.noAppId": "请输入飞书应用 ID。",
       "error.noAppSecret": "请输入应用密钥。",
       "error.noKey": "请输入 API 密钥。",
@@ -323,9 +331,6 @@
     chAppSecret: $("#chAppSecret"),
     chDmPolicy: $("#chDmPolicy"),
     chGroupPolicy: $("#chGroupPolicy"),
-    chGroupAllowFromField: $("#chGroupAllowFromField"),
-    chGroupAllowFrom: $("#chGroupAllowFrom"),
-    chTopicSessionMode: $("#chTopicSessionMode"),
     chPairingSection: $("#chPairingSection"),
     btnToggleChSecret: $("#btnToggleChSecret"),
     chConsoleLink: $("#chConsoleLink"),
@@ -333,9 +338,14 @@
     btnChSave: $("#btnChSave"),
     btnChSaveText: $("#btnChSave .btn-text"),
     btnChSaveSpinner: $("#btnChSave .btn-spinner"),
+    btnChAccessAddGroup: $("#btnChAccessAddGroup"),
     btnChAccessRefresh: $("#btnChAccessRefresh"),
     chAccessEmpty: $("#chAccessEmpty"),
     chAccessList: $("#chAccessList"),
+    chGroupDialog: $("#chGroupDialog"),
+    chGroupDialogInput: $("#chGroupDialogInput"),
+    btnChGroupDialogCancel: $("#btnChGroupDialogCancel"),
+    btnChGroupDialogConfirm: $("#btnChGroupDialogConfirm"),
     // Kimi tab
     kimiEnabled: $("#kimiEnabled"),
     kimiFields: $("#kimiFields"),
@@ -373,6 +383,7 @@
   let chSaving = false;
   let chPairingLoading = false;
   let chApprovedLoading = false;
+  let chGroupAdding = false;
   let chPairingApprovingCode = "";
   let chApprovedRemovingKey = "";
   let chPairingRequests = [];
@@ -388,7 +399,12 @@
   function detectLang() {
     const params = new URLSearchParams(window.location.search);
     const lang = params.get("lang");
-    currentLang = lang && I18N[lang] ? lang : "en";
+    if (lang && I18N[lang]) {
+      currentLang = lang;
+      return;
+    }
+    const browserLang = String(navigator.language || "").toLowerCase();
+    currentLang = browserLang.startsWith("zh") ? "zh" : "en";
   }
 
   function t(key) {
@@ -400,6 +416,14 @@
     document.querySelectorAll("[data-i18n]").forEach((el) => {
       el.textContent = t(el.getAttribute("data-i18n"));
     });
+    if (els.btnChAccessRefresh) {
+      els.btnChAccessRefresh.setAttribute("title", t("feishu.refreshPairing"));
+      els.btnChAccessRefresh.setAttribute("aria-label", t("feishu.refreshPairing"));
+    }
+    if (els.btnChAccessAddGroup) {
+      els.btnChAccessAddGroup.setAttribute("title", t("feishu.addGroup"));
+      els.btnChAccessAddGroup.setAttribute("aria-label", t("feishu.addGroup"));
+    }
   }
 
   // ── Tab 切换 ──
@@ -615,10 +639,15 @@
 
   // 同步待审批/已授权刷新按钮状态。
   function updateChAccessRefreshState() {
-    if (!els.btnChAccessRefresh) return;
     var loading = chPairingLoading || chApprovedLoading;
-    var busy = loading || !!chPairingApprovingCode || !!chApprovedRemovingKey;
-    els.btnChAccessRefresh.disabled = busy;
+    var busy = loading || chGroupAdding || !!chPairingApprovingCode || !!chApprovedRemovingKey;
+    if (els.btnChAccessRefresh) {
+      els.btnChAccessRefresh.disabled = busy;
+    }
+    if (els.btnChAccessAddGroup) {
+      var allowAdd = isChEnabled() && isChGroupAllowlistMode() && !busy;
+      els.btnChAccessAddGroup.disabled = !allowAdd;
+    }
   }
 
   // 切换待审批列表加载状态。
@@ -655,7 +684,6 @@
       var code = String(item.code || "");
       var isApproving = chPairingApprovingCode === code;
       return {
-        type: "pending",
         display: formatChEntryDisplay(item.name, item.id),
         meta: t("feishu.statusPending"),
         buttonIcon: approveIcon,
@@ -675,7 +703,6 @@
       var isRemoving = chApprovedRemovingKey === key;
       var statusText = kind === "group" ? t("feishu.statusApprovedGroup") : t("feishu.statusApprovedUser");
       return {
-        type: "approved",
         display: formatChEntryDisplay(entry.name, entry.id),
         meta: statusText,
         buttonIcon: removeIcon,
@@ -748,7 +775,7 @@
   // 读取飞书已配对账号列表（仅在飞书开关启用后展示）。
   async function loadChApprovedEntries(options) {
     var silent = !!(options && options.silent);
-    if (!isChEnabled() || !isChPairingMode()) {
+    if (!isChEnabled() || !isChAccessPanelMode()) {
       chApprovedEntries = [];
       renderChAccessEntries();
       return;
@@ -777,6 +804,7 @@
   // 同步刷新飞书待审批与已配对两个列表。
   function refreshChPairingPanels(options) {
     updateChPairingSectionVisibility();
+    updateChGroupAllowFromState();
     return Promise.all([
       loadChPairingRequests(options),
       loadChApprovedEntries(options),
@@ -869,6 +897,16 @@
     return getChDmPolicy() === "pairing";
   }
 
+  // 当前是否为群聊白名单模式。
+  function isChGroupAllowlistMode() {
+    return getChGroupPolicy() === "allowlist";
+  }
+
+  // 访问列表面板展示条件：私聊配对或群聊白名单任一开启。
+  function isChAccessPanelMode() {
+    return isChPairingMode() || isChGroupAllowlistMode();
+  }
+
   // 读取群聊策略（open/allowlist/disabled）。
   function getChGroupPolicy() {
     var value = els.chGroupPolicy ? String(els.chGroupPolicy.value || "").trim() : "";
@@ -881,30 +919,90 @@
     return /^oc_[A-Za-z0-9]+$/.test(String(value || "").trim());
   }
 
-  // 解析群聊白名单输入（仅允许群 ID；支持换行或逗号分隔）。
-  function parseChGroupAllowFrom() {
-    var raw = els.chGroupAllowFrom ? String(els.chGroupAllowFrom.value || "") : "";
-    var parts = raw.split(/[\n,]/g).map(function (item) { return item.trim(); }).filter(Boolean);
-    var entries = Array.from(new Set(parts));
-    var invalidEntries = entries.filter(function (entry) { return !isFeishuGroupId(entry); });
-    return {
-      entries: entries.filter(function (entry) { return isFeishuGroupId(entry); }),
-      invalidEntries: invalidEntries,
-    };
+  // 从当前合并列表提取群聊白名单 ID（仅保留合法 oc_ 群 ID）。
+  function getChGroupAllowFromEntries() {
+    return Array.from(
+      new Set(
+        (Array.isArray(chApprovedEntries) ? chApprovedEntries : [])
+          .filter(function (entry) { return String(entry.kind || "") === "group"; })
+          .map(function (entry) { return String(entry.id || "").trim(); })
+          .filter(function (entry) { return isFeishuGroupId(entry); })
+      )
+    );
   }
 
   // 根据模式切换配对面板可见性。
   function updateChPairingSectionVisibility() {
     if (!els.chPairingSection) return;
-    toggleEl(els.chPairingSection, isChEnabled() && isChPairingMode());
+    toggleEl(els.chPairingSection, isChEnabled() && isChAccessPanelMode());
+    updateChAccessRefreshState();
   }
 
-  // 仅在群聊白名单模式下允许编辑群聊白名单。
+  // 仅在群聊白名单模式下显示“添加群 ID”按钮。
   function updateChGroupAllowFromState() {
-    if (!els.chGroupAllowFrom || !els.chGroupAllowFromField) return;
-    var show = getChGroupPolicy() === "allowlist";
-    toggleEl(els.chGroupAllowFromField, show);
-    els.chGroupAllowFrom.disabled = !show;
+    if (!els.btnChAccessAddGroup) return;
+    toggleEl(els.btnChAccessAddGroup, isChGroupAllowlistMode());
+    updateChAccessRefreshState();
+  }
+
+  // 打开添加群 ID 弹窗。
+  function openChGroupDialog() {
+    if (!els.chGroupDialog || !els.chGroupDialogInput) return;
+    els.chGroupDialogInput.value = "oc_";
+    toggleEl(els.chGroupDialog, true);
+    setTimeout(function () {
+      els.chGroupDialogInput.focus();
+      els.chGroupDialogInput.select();
+    }, 0);
+  }
+
+  // 关闭添加群 ID 弹窗。
+  function closeChGroupDialog() {
+    if (!els.chGroupDialog) return;
+    toggleEl(els.chGroupDialog, false);
+  }
+
+  // 触发添加入口（仅打开弹窗，不直接请求）。
+  function handleChAccessAddGroup() {
+    if (!isChEnabled() || !isChGroupAllowlistMode() || chGroupAdding) return;
+    hideChMsg();
+    openChGroupDialog();
+  }
+
+  // 提交添加群 ID 到白名单（立即持久化并刷新列表）。
+  async function handleChGroupDialogConfirm() {
+    if (chGroupAdding || !els.chGroupDialogInput) return;
+    var groupId = String(els.chGroupDialogInput.value || "").trim();
+    if (!isFeishuGroupId(groupId)) {
+      showChMsg(t("error.invalidGroupId"), "error");
+      els.chGroupDialogInput.focus();
+      return;
+    }
+
+    chGroupAdding = true;
+    updateChAccessRefreshState();
+    if (els.btnChGroupDialogConfirm) els.btnChGroupDialogConfirm.disabled = true;
+    if (els.btnChGroupDialogCancel) els.btnChGroupDialogCancel.disabled = true;
+    els.chGroupDialogInput.disabled = true;
+    hideChMsg();
+    try {
+      var result = await window.oneclaw.settingsAddFeishuGroupAllowFrom({ id: groupId });
+      if (!result.success) {
+        showChMsg(result.message || t("error.invalidGroupId"), "error");
+      } else {
+        showToast(t("feishu.groupAdded"));
+        closeChGroupDialog();
+        await refreshChPairingPanels({ silent: true });
+      }
+    } catch (err) {
+      showChMsg(t("error.connection") + (err.message || "Unknown error"), "error");
+    } finally {
+      chGroupAdding = false;
+      if (els.btnChGroupDialogConfirm) els.btnChGroupDialogConfirm.disabled = false;
+      if (els.btnChGroupDialogCancel) els.btnChGroupDialogCancel.disabled = false;
+      if (els.chGroupDialogInput) els.chGroupDialogInput.disabled = false;
+      updateChAccessRefreshState();
+    }
   }
 
   // 保存频道配置
@@ -939,11 +1037,7 @@
 
     if (!appId) { showChMsg(t("error.noAppId"), "error"); return; }
     if (!appSecret) { showChMsg(t("error.noAppSecret"), "error"); return; }
-    var parsedGroupAllowFrom = parseChGroupAllowFrom();
-    if (getChGroupPolicy() === "allowlist" && parsedGroupAllowFrom.invalidEntries.length > 0) {
-      showChMsg(t("error.invalidGroupAllowFrom"), "error");
-      return;
-    }
+    var groupAllowFromEntries = getChGroupAllowFromEntries();
 
     setChSaving(true);
     hideChMsg();
@@ -966,8 +1060,7 @@
         enabled: true,
         dmPolicy: getChDmPolicy(),
         groupPolicy: getChGroupPolicy(),
-        groupAllowFrom: parsedGroupAllowFrom.entries,
-        topicSessionMode: els.chTopicSessionMode ? els.chTopicSessionMode.value : "disabled",
+        groupAllowFrom: groupAllowFromEntries,
       });
       if (!saveResult.success) {
         showChMsg(saveResult.message || "Save failed", "error");
@@ -1003,13 +1096,6 @@
       }
       if (els.chGroupPolicy && data.groupPolicy) {
         els.chGroupPolicy.value = data.groupPolicy;
-      }
-      if (els.chGroupAllowFrom) {
-        var groupAllowFrom = Array.isArray(data.groupAllowFrom) ? data.groupAllowFrom : [];
-        els.chGroupAllowFrom.value = groupAllowFrom.join("\n");
-      }
-      if (els.chTopicSessionMode && data.topicSessionMode) {
-        els.chTopicSessionMode.value = data.topicSessionMode;
       }
       toggleEl(els.chFields, !!enabled);
       updateChPairingSectionVisibility();
@@ -1593,7 +1679,9 @@
     }
     if (els.chGroupPolicy) {
       els.chGroupPolicy.addEventListener("change", function () {
+        updateChPairingSectionVisibility();
         updateChGroupAllowFromState();
+        refreshChPairingPanels({ silent: true });
       });
     }
     els.btnToggleChSecret.addEventListener("click", togglePasswordVisibility);
@@ -1604,6 +1692,41 @@
       }
     });
     els.btnChSave.addEventListener("click", handleChSave);
+    if (els.btnChAccessAddGroup) {
+      els.btnChAccessAddGroup.addEventListener("click", function () {
+        handleChAccessAddGroup();
+      });
+    }
+    if (els.btnChGroupDialogCancel) {
+      els.btnChGroupDialogCancel.addEventListener("click", function () {
+        if (chGroupAdding) return;
+        closeChGroupDialog();
+      });
+    }
+    if (els.btnChGroupDialogConfirm) {
+      els.btnChGroupDialogConfirm.addEventListener("click", function () {
+        handleChGroupDialogConfirm();
+      });
+    }
+    if (els.chGroupDialog) {
+      els.chGroupDialog.addEventListener("click", function (e) {
+        if (chGroupAdding) return;
+        if (e.target === els.chGroupDialog) {
+          closeChGroupDialog();
+        }
+      });
+    }
+    if (els.chGroupDialogInput) {
+      els.chGroupDialogInput.addEventListener("keydown", function (e) {
+        if (e.key === "Enter") {
+          e.preventDefault();
+          handleChGroupDialogConfirm();
+        } else if (e.key === "Escape" && !chGroupAdding) {
+          e.preventDefault();
+          closeChGroupDialog();
+        }
+      });
+    }
     if (els.btnChAccessRefresh) {
       els.btnChAccessRefresh.addEventListener("click", function () {
         refreshChPairingPanels();

@@ -690,6 +690,12 @@ select option {
   gap: 10px;
 }
 
+.pairing-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
 .pairing-title {
   font-size: 12.5px;
   font-weight: 600;
@@ -743,16 +749,16 @@ select option {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 28px;
-  height: 28px;
+  width: 30px;
+  height: 30px;
   padding: 0;
   border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
+  border-radius: 8px;
   background: var(--bg-input);
   color: var(--text-muted);
   cursor: pointer;
   flex-shrink: 0;
-  transition: border-color var(--transition), color var(--transition), background var(--transition);
+  transition: border-color var(--transition), color var(--transition), background var(--transition), box-shadow var(--transition);
 }
 
 .btn-icon:hover:not(:disabled) {
@@ -766,8 +772,8 @@ select option {
 }
 
 .btn-icon svg {
-  width: 14px;
-  height: 14px;
+  width: 16px;
+  height: 16px;
 }
 
 /* 危险操作图标按钮（删除） */
@@ -780,6 +786,68 @@ select option {
 .btn-icon.success:hover:not(:disabled) {
   border-color: #4caf50;
   color: #4caf50;
+}
+
+.dialog-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1200;
+  background: rgba(0, 0, 0, 0.42);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 18px;
+}
+
+.dialog-card {
+  width: 100%;
+  max-width: 560px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--bg-card);
+  box-shadow: 0 12px 24px rgba(0, 0, 0, 0.22);
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.dialog-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.dialog-guide {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg-input);
+}
+
+.dialog-guide-list {
+  margin: 0;
+  padding-left: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.dialog-guide-line {
+  margin: 0;
+  font-size: 12px;
+  color: var(--text-secondary);
+  line-height: 1.55;
+}
+
+.dialog-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
 }
 
 .kimi-guide-text {
