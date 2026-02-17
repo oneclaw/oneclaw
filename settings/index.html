@@ -231,6 +231,16 @@
             </div>
 
             <div class="field-group">
+              <label for="chDmScope" data-i18n="feishu.dmScope">DM Session Scope</label>
+              <select id="chDmScope">
+                <option value="main" data-i18n="feishu.dmScopeMain">All DMs share one session.</option>
+                <option value="per-peer" data-i18n="feishu.dmScopePerPeer">Per user session.</option>
+                <option value="per-channel-peer" data-i18n="feishu.dmScopePerChannelPeer">Per channel + user session.</option>
+                <option value="per-account-channel-peer" data-i18n="feishu.dmScopePerAccountChannelPeer">Per account + channel + user session.</option>
+              </select>
+            </div>
+
+            <div class="field-group">
               <label for="chGroupPolicy" data-i18n="feishu.groupPolicy">Group Access Mode</label>
               <select id="chGroupPolicy">
                 <option value="allowlist" data-i18n="feishu.groupPolicyAllowlist">Only allowlisted groups can access.</option>
