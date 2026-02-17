@@ -1,54 +1,89 @@
 import * as fs from "fs";
+import * as os from "os";
 import * as path from "path";
 import { execFile } from "child_process";
 import { resolveNodeBin, resolveGatewayEntry, resolveUserStateDir, IS_WIN } from "./constants";
 import * as log from "./logger";
 
-// CLI 安装结果
+// CLI 安装结果，供 Setup 流程统一显示与埋点。
 interface CliResult {
   success: boolean;
   message: string;
 }
 
-// wrapper 脚本中的标记字符串，用于识别由 OneClaw 生成的文件
+// Wrapper 脚本中的标记字符串，用于识别由 OneClaw 生成的文件。
 const CLI_MARKER = "OneClaw CLI";
 
-// rc 文件中的 PATH 注入标记
-const RC_MARKER = "/.openclaw/bin";
-const RC_COMMENT = "# OneClaw CLI";
-const RC_EXPORT = 'export PATH="$HOME/.openclaw/bin:$PATH"';
+// rc 注入块标记，安装可幂等覆盖，卸载可精确移除。
+const RC_BLOCK_START = "# >>> oneclaw-cli >>>";
+const RC_BLOCK_END = "# <<< oneclaw-cli <<<";
 
-// ── macOS: wrapper 脚本和 bin 目录 ──
+// 将错误统一格式化成可展示文本，避免在 catch 中到处写类型判断。
+function errorMessage(err: unknown): string {
+  return err instanceof Error ? err.message : String(err);
+}
 
-function getMacBinDir(): string {
+// 解析 POSIX 平台的 CLI 安装目录，与应用状态目录保持一致。
+function getPosixBinDir(): string {
   return path.join(resolveUserStateDir(), "bin");
 }
 
-function getMacWrapperPath(): string {
-  return path.join(getMacBinDir(), "openclaw");
+// 解析 POSIX 平台 wrapper 路径。
+function getPosixWrapperPath(): string {
+  return path.join(getPosixBinDir(), "openclaw");
 }
 
-// ── Windows: wrapper 脚本和 bin 目录 ──
+// 解析 Windows 用户 LocalAppData 根目录，不依赖单一环境变量。
+function getWinLocalAppDataDir(): string {
+  if (process.env.LOCALAPPDATA && process.env.LOCALAPPDATA.trim()) {
+    return process.env.LOCALAPPDATA;
+  }
+  return path.join(os.homedir(), "AppData", "Local");
+}
 
+// 解析 Windows 平台的 CLI 安装目录。
 function getWinBinDir(): string {
-  return path.join(process.env.LOCALAPPDATA || "", "OneClaw", "bin");
+  return path.join(getWinLocalAppDataDir(), "OneClaw", "bin");
 }
 
+// 解析 Windows 平台 wrapper 路径。
 function getWinWrapperPath(): string {
   return path.join(getWinBinDir(), "openclaw.cmd");
 }
 
-// ── 生成 macOS wrapper 脚本 ──
-function buildMacWrapper(): string {
+// POSIX shell 双引号转义，保证路径中包含空格、$、`、" 时仍安全。
+function escapeForPosixDoubleQuoted(value: string): string {
+  return value.replace(/(["\\$`])/g, "\\$1");
+}
+
+// cmd 的 set "KEY=VALUE" 语法只需处理双引号转义。
+function escapeForCmdSetValue(value: string): string {
+  return value.replace(/"/g, '""');
+}
+
+// PowerShell 单引号字符串转义。
+function escapeForPowerShellSingleQuoted(value: string): string {
+  return value.replace(/'/g, "''");
+}
+
+// 生成 POSIX wrapper 脚本，直接转发到应用内置 Node + gateway entry。
+function buildPosixWrapper(): string {
   const nodeBin = resolveNodeBin();
   const entry = resolveGatewayEntry();
+  const safeNodeBin = escapeForPosixDoubleQuoted(nodeBin);
+  const safeEntry = escapeForPosixDoubleQuoted(entry);
+
   return [
-    "#!/bin/bash",
-    `# ${CLI_MARKER} — auto-generated, do not edit`,
-    `APP_NODE="${nodeBin}"`,
-    `APP_ENTRY="${entry}"`,
+    "#!/usr/bin/env bash",
+    `# ${CLI_MARKER} - auto-generated, do not edit`,
+    `APP_NODE="${safeNodeBin}"`,
+    `APP_ENTRY="${safeEntry}"`,
     'if [ ! -f "$APP_NODE" ]; then',
     '  echo "Error: OneClaw not found at $APP_NODE" >&2',
+    "  exit 127",
+    "fi",
+    'if [ ! -f "$APP_ENTRY" ]; then',
+    '  echo "Error: OneClaw entry not found at $APP_ENTRY" >&2',
     "  exit 127",
     "fi",
     'exec "$APP_NODE" "$APP_ENTRY" "$@"',
@@ -56,18 +91,25 @@ function buildMacWrapper(): string {
   ].join("\n");
 }
 
-// ── 生成 Windows wrapper 脚本 ──
+// 生成 Windows wrapper 脚本，直接转发到应用内置 Node + gateway entry。
 function buildWinWrapper(): string {
   const nodeBin = resolveNodeBin();
   const entry = resolveGatewayEntry();
+  const safeNodeBin = escapeForCmdSetValue(nodeBin);
+  const safeEntry = escapeForCmdSetValue(entry);
+
   return [
     "@echo off",
-    `REM ${CLI_MARKER} — auto-generated, do not edit`,
+    `REM ${CLI_MARKER} - auto-generated, do not edit`,
     "setlocal",
-    `set "APP_NODE=${nodeBin}"`,
-    `set "APP_ENTRY=${entry}"`,
+    `set "APP_NODE=${safeNodeBin}"`,
+    `set "APP_ENTRY=${safeEntry}"`,
     'if not exist "%APP_NODE%" (',
-    "  echo Error: OneClaw not found. 1>&2",
+    "  echo Error: OneClaw Node runtime not found. 1>&2",
+    "  exit /b 127",
+    ")",
+    'if not exist "%APP_ENTRY%" (',
+    "  echo Error: OneClaw entry not found. 1>&2",
     "  exit /b 127",
     ")",
     '"%APP_NODE%" "%APP_ENTRY%" %*',
@@ -75,61 +117,153 @@ function buildWinWrapper(): string {
   ].join("\r\n");
 }
 
-// ── macOS: 向 shell rc 文件追加 PATH ──
-function injectPathToRcFile(rcPath: string): void {
-  let content = "";
-  try {
-    content = fs.readFileSync(rcPath, "utf-8");
-  } catch {
-    // 文件不存在，后续 appendFileSync 会自动创建
+// 返回用户 home 目录，优先 HOME，回退 os.homedir()，失败时返回 null。
+function resolveHomeDir(): string | null {
+  if (process.env.HOME && process.env.HOME.trim()) {
+    return process.env.HOME;
+  }
+  const home = os.homedir();
+  return home && home.trim() ? home : null;
+}
+
+// 返回需要注入 PATH 的 shell rc 文件列表。
+function resolvePosixRcPaths(): string[] {
+  const home = resolveHomeDir();
+  if (!home) return [];
+  return [path.join(home, ".zshrc"), path.join(home, ".bashrc")];
+}
+
+// 构建 OneClaw 管理的 rc 注入块，使用绝对路径避免与状态目录配置脱节。
+function buildRcBlock(binDir: string): string {
+  const safeBinDir = escapeForPosixDoubleQuoted(binDir);
+  return [RC_BLOCK_START, `export PATH="${safeBinDir}:$PATH"`, RC_BLOCK_END].join("\n");
+}
+
+// 从 rc 文本移除 OneClaw 管理块，仅删除带完整标记的块，避免误伤用户自定义行。
+function stripManagedRcBlock(content: string): { text: string; removed: boolean } {
+  const lines = content.split(/\r?\n/);
+  const output: string[] = [];
+  const pendingBlock: string[] = [];
+  let removed = false;
+  let inBlock = false;
+
+  for (const rawLine of lines) {
+    const line = rawLine.trim();
+    if (!inBlock && line === RC_BLOCK_START) {
+      inBlock = true;
+      pendingBlock.push(rawLine);
+      continue;
+    }
+    if (inBlock) {
+      pendingBlock.push(rawLine);
+      if (line === RC_BLOCK_END) {
+        inBlock = false;
+        removed = true;
+        pendingBlock.length = 0;
+      }
+      continue;
+    }
+    output.push(rawLine);
   }
 
-  // 已注入则跳过
-  if (content.includes(RC_MARKER)) return;
+  // 仅删除完整块；如果块损坏（缺少结束标记），保留原文避免截断用户配置。
+  if (inBlock && pendingBlock.length > 0) {
+    output.push(...pendingBlock);
+  }
 
-  const block = `\n${RC_COMMENT}\n${RC_EXPORT}\n`;
-  fs.appendFileSync(rcPath, block, "utf-8");
-  log.info(`[cli] PATH injected into ${rcPath}`);
+  return { text: output.join("\n"), removed };
 }
 
-// ── macOS: 从 shell rc 文件移除 PATH ──
-function removePathFromRcFile(rcPath: string): void {
+// 统一 rc 文件换行风格，避免无意义 diff。
+function detectEol(text: string): "\n" | "\r\n" {
+  return text.includes("\r\n") ? "\r\n" : "\n";
+}
+
+// 向 rc 文件幂等写入 OneClaw 管理块，重复安装不会产生重复内容。
+function upsertRcBlock(rcPath: string, binDir: string): void {
+  const current = fs.existsSync(rcPath) ? fs.readFileSync(rcPath, "utf-8") : "";
+  const eol = detectEol(current);
+
+  const { text: stripped } = stripManagedRcBlock(current);
+  const block = buildRcBlock(binDir);
+  const base = stripped.trimEnd();
+  const nextUnix = base ? `${base}\n\n${block}\n` : `${block}\n`;
+  const next = eol === "\r\n" ? nextUnix.replace(/\n/g, "\r\n") : nextUnix;
+
+  if (next !== current) {
+    fs.writeFileSync(rcPath, next, "utf-8");
+    log.info(`[cli] PATH block written to ${rcPath}`);
+  }
+}
+
+// 从 rc 文件移除 OneClaw 管理块，仅处理本程序写入的标记块。
+function removeRcBlock(rcPath: string): void {
   if (!fs.existsSync(rcPath)) return;
 
-  const content = fs.readFileSync(rcPath, "utf-8");
-  if (!content.includes(RC_MARKER)) return;
+  const current = fs.readFileSync(rcPath, "utf-8");
+  const eol = detectEol(current);
+  const { text: stripped, removed } = stripManagedRcBlock(current);
+  if (!removed) return;
 
-  // 移除 comment + export 两行
-  const cleaned = content
-    .split("\n")
-    .filter((line) => line !== RC_COMMENT && line !== RC_EXPORT)
-    .join("\n");
-
-  fs.writeFileSync(rcPath, cleaned, "utf-8");
-  log.info(`[cli] PATH removed from ${rcPath}`);
+  const base = stripped.trimEnd();
+  const nextUnix = base ? `${base}\n` : "";
+  const next = eol === "\r\n" ? nextUnix.replace(/\n/g, "\r\n") : nextUnix;
+  fs.writeFileSync(rcPath, next, "utf-8");
+  log.info(`[cli] PATH block removed from ${rcPath}`);
 }
 
-// ── Windows: PowerShell 修改用户级 PATH ──
+// 用 PowerShell 精确修改用户级 PATH，按路径项去重，避免子串误判。
 function winModifyPath(action: "add" | "remove", binDir: string): Promise<void> {
-  const script =
-    action === "add"
-      ? `$d="${binDir}";$c=[Environment]::GetEnvironmentVariable('Path','User');if($c -notlike "*$d*"){[Environment]::SetEnvironmentVariable('Path',"$c;$d",'User')}`
-      : `$d="${binDir}";$c=[Environment]::GetEnvironmentVariable('Path','User');$n=($c -split ';'|?{$_ -ne $d}) -join ';';[Environment]::SetEnvironmentVariable('Path',$n,'User')`;
+  const safeDir = escapeForPowerShellSingleQuoted(binDir);
+  const script = [
+    `$target='${safeDir}'`,
+    "function Normalize([string]$p) {",
+    "  if ([string]::IsNullOrWhiteSpace($p)) { return '' }",
+    "  try { return ([System.IO.Path]::GetFullPath($p)).TrimEnd('\\\\').ToLowerInvariant() }",
+    "  catch { return $p.Trim().TrimEnd('\\\\').ToLowerInvariant() }",
+    "}",
+    "$current=[Environment]::GetEnvironmentVariable('Path','User')",
+    "$parts=@()",
+    "if ($current) {",
+    "  $parts=$current -split ';' | ForEach-Object { $_.Trim() } | Where-Object { $_ -ne '' }",
+    "}",
+    "$targetNorm=Normalize $target",
+    "$unique=@()",
+    "$seen=@{}",
+    "foreach ($p in $parts) {",
+    "  $n=Normalize $p",
+    "  if (-not $seen.ContainsKey($n)) {",
+    "    $seen[$n]=$true",
+    "    $unique += $p",
+    "  }",
+    "}",
+    `if ('${action}' -eq 'add') {`,
+    "  if (-not $seen.ContainsKey($targetNorm)) {",
+    "    $unique += $target",
+    "  }",
+    "} else {",
+    "  $unique = $unique | Where-Object { (Normalize $_) -ne $targetNorm }",
+    "}",
+    "[Environment]::SetEnvironmentVariable('Path', ($unique -join ';'), 'User')",
+  ].join(";");
 
   return new Promise((resolve, reject) => {
     execFile(
       "powershell.exe",
       ["-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", script],
-      { timeout: 10_000 },
+      { timeout: 15_000 },
       (err) => {
-        if (err) reject(err);
-        else resolve();
+        if (err) {
+          reject(err);
+          return;
+        }
+        resolve();
       }
     );
   });
 }
 
-// ── 安装 CLI ──
+// 安装 CLI：生成 wrapper 并注入 PATH，失败仅返回结果，不抛出到 Setup 主流程。
 export async function installCli(): Promise<CliResult> {
   try {
     if (IS_WIN) {
@@ -141,26 +275,53 @@ export async function installCli(): Promise<CliResult> {
       return { success: true, message: "CLI installed. Please reopen your terminal." };
     }
 
-    // macOS / Linux
-    const binDir = getMacBinDir();
+    const binDir = getPosixBinDir();
     fs.mkdirSync(binDir, { recursive: true });
-    const wrapperPath = getMacWrapperPath();
-    fs.writeFileSync(wrapperPath, buildMacWrapper(), { mode: 0o755, encoding: "utf-8" });
+    const wrapperPath = getPosixWrapperPath();
+    fs.writeFileSync(wrapperPath, buildPosixWrapper(), "utf-8");
+    fs.chmodSync(wrapperPath, 0o755);
 
-    // 向 ~/.zshrc 和 ~/.bashrc 注入 PATH
-    const home = process.env.HOME || "";
-    injectPathToRcFile(path.join(home, ".zshrc"));
-    injectPathToRcFile(path.join(home, ".bashrc"));
+    const rcPaths = resolvePosixRcPaths();
+    if (rcPaths.length === 0) {
+      return { success: false, message: "Failed to resolve home directory for PATH injection." };
+    }
 
-    log.info("[cli] macOS CLI installed");
+    const errors: string[] = [];
+    let injected = 0;
+    for (const rcPath of rcPaths) {
+      try {
+        upsertRcBlock(rcPath, binDir);
+        injected += 1;
+      } catch (err) {
+        const msg = errorMessage(err);
+        errors.push(`${path.basename(rcPath)}: ${msg}`);
+        log.error(`[cli] Failed to update ${rcPath}: ${msg}`);
+      }
+    }
+
+    if (injected === 0) {
+      return {
+        success: false,
+        message: `CLI wrapper created, but PATH injection failed (${errors.join("; ")})`,
+      };
+    }
+
+    log.info("[cli] POSIX CLI installed");
+    if (errors.length > 0) {
+      return {
+        success: true,
+        message: `CLI installed with partial PATH update (${errors.join("; ")}).`,
+      };
+    }
     return { success: true, message: "CLI installed." };
-  } catch (err: any) {
-    log.error(`[cli] install failed: ${err.message}`);
-    return { success: false, message: err.message || String(err) };
+  } catch (err) {
+    const msg = errorMessage(err);
+    log.error(`[cli] install failed: ${msg}`);
+    return { success: false, message: msg };
   }
 }
 
-// ── 卸载 CLI ──
+// 卸载 CLI：删除 wrapper 和 PATH 注入块，过程尽量容错。
 export async function uninstallCli(): Promise<CliResult> {
   try {
     if (IS_WIN) {
@@ -171,25 +332,30 @@ export async function uninstallCli(): Promise<CliResult> {
       return { success: true, message: "CLI uninstalled." };
     }
 
-    // macOS / Linux
-    const wrapperPath = getMacWrapperPath();
+    const wrapperPath = getPosixWrapperPath();
     if (fs.existsSync(wrapperPath)) fs.unlinkSync(wrapperPath);
 
-    const home = process.env.HOME || "";
-    removePathFromRcFile(path.join(home, ".zshrc"));
-    removePathFromRcFile(path.join(home, ".bashrc"));
+    const rcPaths = resolvePosixRcPaths();
+    for (const rcPath of rcPaths) {
+      try {
+        removeRcBlock(rcPath);
+      } catch (err) {
+        log.error(`[cli] Failed to clean ${rcPath}: ${errorMessage(err)}`);
+      }
+    }
 
-    log.info("[cli] macOS CLI uninstalled");
+    log.info("[cli] POSIX CLI uninstalled");
     return { success: true, message: "CLI uninstalled." };
-  } catch (err: any) {
-    log.error(`[cli] uninstall failed: ${err.message}`);
-    return { success: false, message: err.message || String(err) };
+  } catch (err) {
+    const msg = errorMessage(err);
+    log.error(`[cli] uninstall failed: ${msg}`);
+    return { success: false, message: msg };
   }
 }
 
-// ── 检测 CLI 是否已安装 ──
+// 判断 CLI 是否安装：只识别由 OneClaw 生成且带标记的 wrapper。
 export function isCliInstalled(): boolean {
-  const wrapperPath = IS_WIN ? getWinWrapperPath() : getMacWrapperPath();
+  const wrapperPath = IS_WIN ? getWinWrapperPath() : getPosixWrapperPath();
   if (!fs.existsSync(wrapperPath)) return false;
 
   try {
