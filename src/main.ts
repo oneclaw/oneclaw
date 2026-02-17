@@ -24,8 +24,16 @@ function formatConsoleLevel(level: number): string {
   return map[level] ?? `LEVEL_${level}`;
 }
 
+// 过滤渲染层高频请求日志，避免 node.list 等轮询刷屏污染主日志。
+function isNoisyRendererConsoleMessage(message: string): boolean {
+  return message.startsWith("[gateway] request sent ");
+}
+
 function attachRendererDebugHandlers(label: string, webContents: Electron.WebContents): void {
   webContents.on("console-message", (_event, level, message, lineNumber, sourceId) => {
+    if (isNoisyRendererConsoleMessage(message)) {
+      return;
+    }
     const tag = `[renderer:${label}] console.${formatConsoleLevel(level)}`;
     if (level >= 2) {
       log.error(`${tag}: ${message} (${sourceId}:${lineNumber})`);

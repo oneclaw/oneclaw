@@ -7,6 +7,29 @@ interface ResolveTokenOptions {
   persist?: boolean;
 }
 
+const FILE_ORIGIN_NULL = "null";
+
+// 为 Electron file:// 页面补全 Control UI 的 null origin 白名单。
+function ensureControlUiAllowedOriginsInConfig(config: GatewayConfig): void {
+  config.gateway ??= {};
+  config.gateway.controlUi ??= {};
+
+  const controlUi = config.gateway.controlUi as GatewayConfig;
+  const rawAllowedOrigins = Array.isArray(controlUi.allowedOrigins) ? controlUi.allowedOrigins : [];
+
+  const normalized = rawAllowedOrigins
+    .filter((value): value is string => typeof value === "string")
+    .map((value) => value.trim())
+    .filter(Boolean);
+
+  const hasNullOrigin = normalized.some((value) => value.toLowerCase() === FILE_ORIGIN_NULL);
+  if (!hasNullOrigin) {
+    normalized.push(FILE_ORIGIN_NULL);
+  }
+
+  controlUi.allowedOrigins = normalized;
+}
+
 /**
  * 统一整理 gateway.auth：确保 mode=token 且 token 存在。
  */
@@ -25,6 +48,7 @@ export function ensureGatewayAuthTokenInConfig(config: GatewayConfig): string {
   if (typeof config.gateway.mode !== "string" || !config.gateway.mode.trim()) {
     config.gateway.mode = "local";
   }
+  ensureControlUiAllowedOriginsInConfig(config);
 
   return resolvedToken;
 }
