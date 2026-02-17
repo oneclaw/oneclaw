@@ -94,8 +94,15 @@
       "feishu.approvePairing": "Approve",
       "feishu.approvingPairing": "Approving…",
       "feishu.pairingApproved": "Pairing request approved.",
+      "feishu.dmPolicyOpen": "Open authorization (no pairing required)",
+      "feishu.dmPolicyHint": "When enabled, all DM users can start chatting directly.",
+      "feishu.approvedTitle": "Approved Accounts",
+      "feishu.refreshApproved": "Refresh",
+      "feishu.refreshingApproved": "Refreshing…",
+      "feishu.noApproved": "No approved accounts yet.",
       "error.noPairingCode": "Invalid pairing code.",
       "error.loadPairingFailed": "Failed to load pairing requests.",
+      "error.loadApprovedFailed": "Failed to load approved accounts.",
       "error.noAppId": "Please enter the Feishu App ID.",
       "error.noAppSecret": "Please enter the App Secret.",
       "error.noKey": "Please enter your API key.",
@@ -179,8 +186,15 @@
       "feishu.approvePairing": "批准",
       "feishu.approvingPairing": "批准中…",
       "feishu.pairingApproved": "配对请求已批准。",
+      "feishu.dmPolicyOpen": "开放授权（无需配对）",
+      "feishu.dmPolicyHint": "开启后，所有飞书私聊用户可直接发起对话。",
+      "feishu.approvedTitle": "已配对账号",
+      "feishu.refreshApproved": "刷新",
+      "feishu.refreshingApproved": "刷新中…",
+      "feishu.noApproved": "当前没有已配对账号。",
       "error.noPairingCode": "配对码无效。",
       "error.loadPairingFailed": "读取待审批请求失败。",
+      "error.loadApprovedFailed": "读取已配对账号失败。",
       "error.noAppId": "请输入飞书应用 ID。",
       "error.noAppSecret": "请输入应用密钥。",
       "error.noKey": "请输入 API 密钥。",
@@ -263,6 +277,7 @@
     chFields: $("#chFields"),
     chAppId: $("#chAppId"),
     chAppSecret: $("#chAppSecret"),
+    chDmPolicyOpen: $("#chDmPolicyOpen"),
     btnToggleChSecret: $("#btnToggleChSecret"),
     chConsoleLink: $("#chConsoleLink"),
     chMsgBox: $("#chMsgBox"),
@@ -272,6 +287,9 @@
     btnChPairingRefresh: $("#btnChPairingRefresh"),
     chPairingEmpty: $("#chPairingEmpty"),
     chPairingList: $("#chPairingList"),
+    btnChApprovedRefresh: $("#btnChApprovedRefresh"),
+    chApprovedEmpty: $("#chApprovedEmpty"),
+    chApprovedList: $("#chApprovedList"),
     // Kimi tab
     kimiEnabled: $("#kimiEnabled"),
     kimiFields: $("#kimiFields"),
@@ -308,8 +326,10 @@
   let saving = false;
   let chSaving = false;
   let chPairingLoading = false;
+  let chApprovedLoading = false;
   let chPairingApprovingCode = "";
   let chPairingRequests = [];
+  let chApprovedEntries = [];
   let kimiSaving = false;
   let doctorRunning = false;
   let advSaving = false;
@@ -564,6 +584,16 @@
       : t("feishu.refreshPairing");
   }
 
+  // 切换飞书已配对列表刷新状态。
+  function setChApprovedLoading(loading) {
+    chApprovedLoading = loading;
+    if (!els.btnChApprovedRefresh) return;
+    els.btnChApprovedRefresh.disabled = loading;
+    els.btnChApprovedRefresh.textContent = loading
+      ? t("feishu.refreshingApproved")
+      : t("feishu.refreshApproved");
+  }
+
   // 渲染飞书待审批配对列表。
   function renderChPairingRequests() {
     var listEl = els.chPairingList;
@@ -602,6 +632,34 @@
     }).join("");
   }
 
+  // 渲染飞书已配对账号列表。
+  function renderChApprovedEntries() {
+    var listEl = els.chApprovedList;
+    var emptyEl = els.chApprovedEmpty;
+    if (!listEl || !emptyEl) return;
+
+    if (!Array.isArray(chApprovedEntries) || chApprovedEntries.length === 0) {
+      listEl.innerHTML = "";
+      toggleEl(listEl, false);
+      toggleEl(emptyEl, true);
+      return;
+    }
+
+    toggleEl(emptyEl, false);
+    toggleEl(listEl, true);
+
+    listEl.innerHTML = chApprovedEntries.map(function (entry) {
+      var id = String(entry || "");
+      return [
+        '<div class="pairing-item pairing-item-readonly">',
+        '  <div class="pairing-item-main">',
+        '    <div class="pairing-id">' + escapeHtml(id) + "</div>",
+        "  </div>",
+        "</div>",
+      ].join("");
+    }).join("");
+  }
+
   // 读取飞书待审批列表（仅在飞书开关启用后展示）。
   async function loadChPairingRequests(options) {
     var silent = !!(options && options.silent);
@@ -632,6 +690,43 @@
     }
   }
 
+  // 读取飞书已配对账号列表（仅在飞书开关启用后展示）。
+  async function loadChApprovedEntries(options) {
+    var silent = !!(options && options.silent);
+    if (!isChEnabled()) {
+      chApprovedEntries = [];
+      renderChApprovedEntries();
+      return;
+    }
+
+    setChApprovedLoading(true);
+    if (!silent) hideChMsg();
+    try {
+      var result = await window.oneclaw.settingsListFeishuApproved();
+      if (!result.success) {
+        if (!silent) showChMsg(result.message || t("error.loadApprovedFailed"), "error");
+        chApprovedEntries = [];
+      } else {
+        chApprovedEntries = (result.data && result.data.entries) || [];
+      }
+      renderChApprovedEntries();
+    } catch (err) {
+      chApprovedEntries = [];
+      renderChApprovedEntries();
+      if (!silent) showChMsg(t("error.connection") + (err.message || "Unknown error"), "error");
+    } finally {
+      setChApprovedLoading(false);
+    }
+  }
+
+  // 同步刷新飞书待审批与已配对两个列表。
+  function refreshChPairingPanels(options) {
+    return Promise.all([
+      loadChPairingRequests(options),
+      loadChApprovedEntries(options),
+    ]);
+  }
+
   // 批准指定飞书配对码，并自动刷新列表。
   async function handleChPairingApprove(code) {
     var trimmed = String(code || "").trim();
@@ -652,7 +747,7 @@
         showChMsg(result.message || t("error.verifyFailed"), "error");
       } else {
         showToast(t("feishu.pairingApproved"));
-        await loadChPairingRequests({ silent: true });
+        await refreshChPairingPanels({ silent: true });
       }
     } catch (err) {
       showChMsg(t("error.connection") + (err.message || "Unknown error"), "error");
@@ -683,7 +778,7 @@
         setChSaving(false);
         if (result.success) {
           showToast(t("feishu.saved"));
-          loadChPairingRequests({ silent: true });
+          refreshChPairingPanels({ silent: true });
         } else {
           showChMsg(result.message || "Save failed", "error");
         }
@@ -716,7 +811,12 @@
         return;
       }
 
-      var saveResult = await window.oneclaw.settingsSaveChannel({ appId: appId, appSecret: appSecret, enabled: true });
+      var saveResult = await window.oneclaw.settingsSaveChannel({
+        appId: appId,
+        appSecret: appSecret,
+        enabled: true,
+        dmPolicyOpen: !!(els.chDmPolicyOpen && els.chDmPolicyOpen.checked),
+      });
       if (!saveResult.success) {
         showChMsg(saveResult.message || "Save failed", "error");
         setChSaving(false);
@@ -725,7 +825,7 @@
 
       setChSaving(false);
       showToast(t("feishu.saved"));
-      loadChPairingRequests({ silent: true });
+      refreshChPairingPanels({ silent: true });
     } catch (err) {
       showChMsg(t("error.connection") + (err.message || "Unknown error"), "error");
       setChSaving(false);
@@ -745,8 +845,11 @@
       // 回填启用状态
       var enabled = data.enabled && data.appId;
       els.chEnabled.checked = !!enabled;
+      if (els.chDmPolicyOpen) {
+        els.chDmPolicyOpen.checked = !!data.dmPolicyOpen;
+      }
       toggleEl(els.chFields, !!enabled);
-      loadChPairingRequests({ silent: true });
+      refreshChPairingPanels({ silent: true });
     } catch (err) {
       console.error("[Settings] loadChannelConfig failed:", err);
     }
@@ -1313,7 +1416,7 @@
     // Channels tab — 启用/禁用切换
     els.chEnabled.addEventListener("change", function () {
       toggleEl(els.chFields, isChEnabled());
-      loadChPairingRequests({ silent: true });
+      refreshChPairingPanels({ silent: true });
     });
     els.btnToggleChSecret.addEventListener("click", togglePasswordVisibility);
     els.chConsoleLink.addEventListener("click", function (e) {
@@ -1326,6 +1429,11 @@
     if (els.btnChPairingRefresh) {
       els.btnChPairingRefresh.addEventListener("click", function () {
         loadChPairingRequests();
+      });
+    }
+    if (els.btnChApprovedRefresh) {
+      els.btnChApprovedRefresh.addEventListener("click", function () {
+        loadChApprovedEntries();
       });
     }
     if (els.chPairingList) {

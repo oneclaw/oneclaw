@@ -1,7 +1,13 @@
 import { ipcMain } from "electron";
 import { ChildProcess, spawn } from "child_process";
 import { SettingsManager } from "./settings-manager";
-import { resolveNodeBin, resolveGatewayEntry, resolveGatewayCwd, resolveResourcesPath } from "./constants";
+import {
+  resolveNodeBin,
+  resolveGatewayEntry,
+  resolveGatewayCwd,
+  resolveResourcesPath,
+  resolveUserStateDir,
+} from "./constants";
 import {
   PROVIDER_PRESETS,
   MOONSHOT_SUB_PLATFORMS,
@@ -14,6 +20,7 @@ import {
 import { extractKimiConfig, saveKimiPluginConfig, isKimiPluginBundled, DEFAULT_KIMI_BRIDGE_WS_URL } from "./kimi-config";
 import { ensureGatewayAuthTokenInConfig } from "./gateway-auth";
 import * as path from "path";
+import * as fs from "fs";
 
 interface SettingsIpcDeps {
   settingsManager: SettingsManager;
@@ -32,6 +39,9 @@ type FeishuPairingRequestView = {
   createdAt: string;
   lastSeenAt: string;
 };
+
+const FEISHU_CHANNEL = "feishu";
+const WILDCARD_ALLOW_ENTRY = "*";
 
 let doctorProc: ChildProcess | null = null;
 
@@ -100,12 +110,16 @@ export function registerSettingsIpc(deps: SettingsIpcDeps): void {
       const config = readUserConfig();
       const feishu = config?.channels?.feishu ?? {};
       const enabled = config?.plugins?.entries?.feishu?.enabled === true;
+      const dmPolicy = typeof feishu?.dmPolicy === "string" ? feishu.dmPolicy.trim() : "";
+      const allowFrom = normalizeAllowFromEntries(feishu?.allowFrom);
+      const dmPolicyOpen = dmPolicy === "open" || allowFrom.includes(WILDCARD_ALLOW_ENTRY);
       return {
         success: true,
         data: {
           appId: feishu.appId ?? "",
           appSecret: feishu.appSecret ?? "",
           enabled,
+          dmPolicyOpen,
         },
       };
     } catch (err: any) {
@@ -116,6 +130,7 @@ export function registerSettingsIpc(deps: SettingsIpcDeps): void {
   // ── 保存频道配置（支持 enabled=false 仅切换开关） ──
   ipcMain.handle("settings:save-channel", async (_event, params) => {
     const { appId, appSecret, enabled } = params;
+    const dmPolicyOpen = params?.dmPolicyOpen === true;
     try {
       const config = readUserConfig();
       config.plugins ??= {};
@@ -141,13 +156,22 @@ export function registerSettingsIpc(deps: SettingsIpcDeps): void {
         appSecret,
       };
 
-      // OneClaw 当前未提供 pairing 审批入口，首次配置时默认放开 DM 以避免“有配对码但无处审批”死锁
-      if (!("dmPolicy" in config.channels.feishu)) {
+      const currentAllowFrom = normalizeAllowFromEntries(config.channels.feishu.allowFrom);
+      const allowFromWithoutWildcard = currentAllowFrom.filter((entry) => entry !== WILDCARD_ALLOW_ENTRY);
+
+      if (dmPolicyOpen) {
         config.channels.feishu.dmPolicy = "open";
-      }
-      const hasAllowFrom = Array.isArray(config.channels.feishu.allowFrom);
-      if (!hasAllowFrom || config.channels.feishu.allowFrom.length === 0) {
-        config.channels.feishu.allowFrom = ["*"];
+        config.channels.feishu.allowFrom = dedupeEntries([
+          ...allowFromWithoutWildcard,
+          WILDCARD_ALLOW_ENTRY,
+        ]);
+      } else {
+        config.channels.feishu.dmPolicy = "pairing";
+        if (allowFromWithoutWildcard.length > 0) {
+          config.channels.feishu.allowFrom = allowFromWithoutWildcard;
+        } else {
+          delete config.channels.feishu.allowFrom;
+        }
       }
 
       writeUserConfig(config);
@@ -185,6 +209,21 @@ export function registerSettingsIpc(deps: SettingsIpcDeps): void {
       }));
 
       return { success: true, data: { requests } };
+    } catch (err: any) {
+      return { success: false, message: err.message || String(err) };
+    }
+  });
+
+  // ── 列出飞书已批准配对账号（合并 allowFrom store + config.allowFrom） ──
+  ipcMain.handle("settings:list-feishu-approved", async () => {
+    try {
+      const config = readUserConfig();
+      const configEntries = normalizeAllowFromEntries(config?.channels?.feishu?.allowFrom);
+      const storeEntries = readFeishuAllowFromStore();
+      const entries = dedupeEntries([...storeEntries, ...configEntries])
+        .filter((entry) => entry !== WILDCARD_ALLOW_ENTRY)
+        .sort((a, b) => a.localeCompare(b, "en"));
+      return { success: true, data: { entries } };
     } catch (err: any) {
       return { success: false, message: err.message || String(err) };
     }
@@ -414,6 +453,34 @@ function compactCliError(run: CliRunResult, fallback: string): string {
   if (!out) return fallback;
   const firstLine = out.split(/\r?\n/).find((line) => line.trim().length > 0);
   return firstLine ? firstLine.trim() : fallback;
+}
+
+// 规范化 allowFrom 列表，统一转换为非空字符串并去重。
+function normalizeAllowFromEntries(input: unknown): string[] {
+  if (!Array.isArray(input)) return [];
+  return dedupeEntries(
+    input
+      .map((entry) => String(entry ?? "").trim())
+      .filter((entry) => entry.length > 0)
+  );
+}
+
+// 数组去重并保持原始顺序。
+function dedupeEntries(items: string[]): string[] {
+  return [...new Set(items)];
+}
+
+// 读取飞书 allowFrom store 文件（由 openclaw pairing approve 写入）。
+function readFeishuAllowFromStore(): string[] {
+  const filePath = path.join(resolveUserStateDir(), "credentials", `${FEISHU_CHANNEL}-allowFrom.json`);
+  if (!fs.existsSync(filePath)) return [];
+  try {
+    const raw = fs.readFileSync(filePath, "utf-8");
+    const parsed = parseJsonSafe(raw);
+    return normalizeAllowFromEntries(parsed?.allowFrom);
+  } catch {
+    return [];
+  }
 }
 
 // ── 从配置中提取当前 provider 信息（apiKey 掩码） ──

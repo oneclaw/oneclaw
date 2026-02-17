@@ -263,6 +263,13 @@ button, input, select, label, a {
   color: var(--text-secondary);
 }
 
+.field-hint {
+  margin: 0;
+  font-size: 12px;
+  color: var(--text-muted);
+  line-height: 1.45;
+}
+
 .label-row {
   display: flex;
   align-items: center;
@@ -701,6 +708,10 @@ select option {
   border-radius: var(--radius-sm);
   padding: 10px;
   background: rgba(255, 255, 255, 0.02);
+}
+
+.pairing-item-readonly {
+  justify-content: flex-start;
 }
 
 .pairing-item-main {
