@@ -76,37 +76,61 @@ function applySessionKey(state: AppViewState, next: string, syncUrl = false) {
   void refreshChatAvatar(state as any);
 }
 
-function resolveCurrentAgentId(state: AppViewState): string {
-  const parsed = parseAgentSessionKey(state.sessionKey);
-  if (parsed?.agentId) {
-    return parsed.agentId;
+function resolveSessionOptionLabel(
+  key: string,
+  row?: (NonNullable<AppViewState["sessionsResult"]>["sessions"][number] | undefined),
+): string {
+  const displayName = typeof row?.displayName === "string" ? row.displayName.trim() : "";
+  const label = typeof row?.label === "string" ? row.label.trim() : "";
+  if (displayName && displayName !== key) {
+    return `${displayName} (${key})`;
   }
-  return state.agentsList?.defaultId ?? state.agentsList?.agents?.[0]?.id ?? "main";
+  if (label && label !== key) {
+    return `${label} (${key})`;
+  }
+  return key;
 }
 
-function resolveAgentOptions(state: AppViewState): Array<{ id: string; label: string }> {
-  const agents = state.agentsList?.agents ?? [];
-  if (agents.length === 0) {
-    const fallbackAgent = resolveCurrentAgentId(state);
-    return [{ id: fallbackAgent, label: fallbackAgent }];
+function resolveSessionOptions(state: AppViewState): Array<{ key: string; label: string }> {
+  const sessions = state.sessionsResult?.sessions ?? [];
+  const current = state.sessionKey?.trim() || "main";
+  const currentSession = sessions.find((entry) => entry.key === current);
+  const seen = new Set<string>();
+  const options: Array<{ key: string; label: string }> = [];
+
+  const pushOption = (
+    key: string,
+    row?: (NonNullable<AppViewState["sessionsResult"]>["sessions"][number] | undefined),
+  ) => {
+    const trimmedKey = String(key || "").trim();
+    if (!trimmedKey || seen.has(trimmedKey)) {
+      return;
+    }
+    seen.add(trimmedKey);
+    options.push({
+      key: trimmedKey,
+      label: resolveSessionOptionLabel(trimmedKey, row),
+    });
+  };
+
+  // 当前会话置顶，保证切换后立即可见。
+  pushOption(current, currentSession);
+
+  // 补齐 sessions.list 中的其他会话。
+  for (const session of sessions) {
+    pushOption(session.key, session);
   }
-  return agents.map((entry) => {
-    const alias = entry.identity?.name?.trim() || entry.name?.trim() || "";
-    const label = alias && alias !== entry.id ? `${alias} (${entry.id})` : entry.id;
-    return {
-      id: entry.id,
-      label,
-    };
-  });
+
+  if (options.length === 0) {
+    return [{ key: current, label: current }];
+  }
+  return options;
 }
 
-function handleAgentChange(state: AppViewState, nextAgentId: string) {
-  if (!nextAgentId.trim()) {
+function handleSessionChange(state: AppViewState, nextSessionKey: string) {
+  if (!nextSessionKey.trim()) {
     return;
   }
-  const parsed = parseAgentSessionKey(state.sessionKey);
-  const sessionSuffix = parsed?.rest?.trim() || "main";
-  const nextSessionKey = `agent:${nextAgentId}:${sessionSuffix}`;
   applySessionKey(state, nextSessionKey, true);
 }
 
@@ -267,8 +291,8 @@ export function renderApp(state: AppViewState) {
   const chatAvatarUrl = state.chatAvatarUrl ?? assistantAvatarUrl ?? null;
   const chatFocus = state.onboarding;
   const sidebarCollapsed = !state.onboarding && state.settings.navCollapsed;
-  const currentAgentId = resolveCurrentAgentId(state);
-  const agentOptions = resolveAgentOptions(state);
+  const currentSessionKey = state.sessionKey;
+  const sessionOptions = resolveSessionOptions(state);
   const oneclawView = state.settings.oneclawView ?? "chat";
   const settingsActive = oneclawView === "settings";
   const chatActive = oneclawView === "chat";
@@ -281,14 +305,14 @@ export function renderApp(state: AppViewState) {
         ? nothing
         : renderSidebar({
             connected: state.connected,
-            currentAgentId,
-            agentOptions,
+            currentSessionKey,
+            sessionOptions,
             chatActive,
             settingsActive,
             refreshDisabled: state.chatLoading || !state.connected,
             onOpenChat: () => setOneClawView(state, "chat"),
             onNewChat: () => confirmAndCreateNewSession(state),
-            onSelectAgent: (nextAgentId: string) => handleAgentChange(state, nextAgentId),
+            onSelectSession: (nextSessionKey: string) => handleSessionChange(state, nextSessionKey),
             onRefresh: () => void handleRefreshChat(state),
             onToggleSidebar: () => {
               state.applySettings({
