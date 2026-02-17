@@ -223,37 +223,49 @@
             </div>
 
             <div class="field-group">
-              <label class="checkbox-item">
-                <input type="checkbox" id="chDmPolicyOpen">
-                <span data-i18n="feishu.dmPolicyOpen">Open authorization (no pairing required)</span>
-              </label>
-              <p class="field-hint" data-i18n="feishu.dmPolicyHint">When enabled, all DM users can start chatting directly.</p>
+              <label for="chDmPolicy" data-i18n="feishu.dmPolicy">DM Access Mode</label>
+              <select id="chDmPolicy">
+                <option value="pairing" data-i18n="feishu.dmPolicyPairing">Access after pairing.</option>
+                <option value="open" data-i18n="feishu.dmPolicyOpen">Everyone can access.</option>
+              </select>
             </div>
 
-            <div class="pairing-panel">
-              <div class="pairing-header">
-                <span class="pairing-title" data-i18n="feishu.pairingTitle">Pending Pairing Requests</span>
-                <button type="button" class="btn-secondary" id="btnChPairingRefresh" data-i18n="feishu.refreshPairing">
-                  Refresh
-                </button>
-              </div>
-              <div class="pairing-empty hidden" id="chPairingEmpty" data-i18n="feishu.noPairingPending">
-                No pending pairing requests.
-              </div>
-              <div class="pairing-list hidden" id="chPairingList"></div>
+            <div class="field-group">
+              <label for="chGroupPolicy" data-i18n="feishu.groupPolicy">Group Access Mode</label>
+              <select id="chGroupPolicy">
+                <option value="allowlist" data-i18n="feishu.groupPolicyAllowlist">Only allowlisted groups can access.</option>
+                <option value="open" data-i18n="feishu.groupPolicyOpen">All groups can access.</option>
+                <option value="disabled" data-i18n="feishu.groupPolicyDisabled">Ignore all group messages.</option>
+              </select>
             </div>
 
-            <div class="pairing-panel">
-              <div class="pairing-header">
-                <span class="pairing-title" data-i18n="feishu.approvedTitle">Approved Accounts</span>
-                <button type="button" class="btn-secondary" id="btnChApprovedRefresh" data-i18n="feishu.refreshApproved">
-                  Refresh
-                </button>
+            <div class="field-group" id="chGroupAllowFromField">
+              <label for="chGroupAllowFrom" data-i18n="feishu.groupAllowFrom">Group Allowlist</label>
+              <textarea id="chGroupAllowFrom" rows="4" placeholder="oc_xxx&#10;oc_yyy"></textarea>
+              <p class="field-hint" data-i18n="feishu.groupAllowFromHint">One group ID per line. Only effective when Group Access Mode is Allowlist.</p>
+            </div>
+
+            <div class="field-group">
+              <label for="chTopicSessionMode" data-i18n="feishu.topicSessionMode">Topic Session Mode</label>
+              <select id="chTopicSessionMode">
+                <option value="disabled" data-i18n="feishu.topicSessionModeDisabled">Shared session per group.</option>
+                <option value="enabled" data-i18n="feishu.topicSessionModeEnabled">Separate session per topic.</option>
+              </select>
+            </div>
+
+            <div id="chPairingSection">
+              <div class="pairing-panel">
+                <div class="pairing-header">
+                  <span class="pairing-title" data-i18n="feishu.accessTitle">Pending & Authorized</span>
+                  <button type="button" class="btn-secondary" id="btnChAccessRefresh" data-i18n="feishu.refreshPairing">
+                    Refresh
+                  </button>
+                </div>
+                <div class="pairing-empty hidden" id="chAccessEmpty" data-i18n="feishu.noAccessEntries">
+                  No pending or authorized entries.
+                </div>
+                <div class="pairing-list hidden" id="chAccessList"></div>
               </div>
-              <div class="pairing-empty hidden" id="chApprovedEmpty" data-i18n="feishu.noApproved">
-                No approved accounts yet.
-              </div>
-              <div class="pairing-list hidden" id="chApprovedList"></div>
             </div>
           </div>
 

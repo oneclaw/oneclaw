@@ -31,6 +31,8 @@ contextBridge.exposeInMainWorld("oneclaw", {
     ipcRenderer.invoke("settings:list-feishu-approved"),
   settingsApproveFeishuPairing: (params: Record<string, unknown>) =>
     ipcRenderer.invoke("settings:approve-feishu-pairing", params),
+  settingsRemoveFeishuApproved: (params: Record<string, unknown>) =>
+    ipcRenderer.invoke("settings:remove-feishu-approved", params),
   settingsGetKimiConfig: () => ipcRenderer.invoke("settings:get-kimi-config"),
   settingsSaveKimiConfig: (params: Record<string, unknown>) =>
     ipcRenderer.invoke("settings:save-kimi-config", params),
