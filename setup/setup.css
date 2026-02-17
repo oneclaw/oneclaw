@@ -147,6 +147,24 @@ h2 {
 
 #step3 .step-content {
   align-items: stretch;
+  gap: 16px;
+}
+
+/* 完成页统一左对齐，避免标题与正文错位 */
+#step3 .logo-area {
+  margin-bottom: 0;
+}
+
+#step3 h1 {
+  text-align: left;
+}
+
+#step3 .feature-list {
+  margin-top: 2px;
+}
+
+#step3 #btnStart {
+  margin-top: 2px;
 }
 
 /* ---- 安全提示卡片 ---- */
