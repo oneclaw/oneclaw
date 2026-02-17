@@ -92,6 +92,11 @@
       "feishu.dmPolicy": "DM Access Mode",
       "feishu.dmPolicyPairing": "Access after pairing.",
       "feishu.dmPolicyOpen": "Everyone can access.",
+      "feishu.dmScope": "DM Session Scope",
+      "feishu.dmScopeMain": "All DMs share one session.",
+      "feishu.dmScopePerPeer": "Per user session (Recommended).",
+      "feishu.dmScopePerChannelPeer": "Per channel + user session.",
+      "feishu.dmScopePerAccountChannelPeer": "Per account + channel + user session.",
       "feishu.groupPolicy": "Group Access Mode",
       "feishu.groupPolicyOpen": "All groups can access.",
       "feishu.groupPolicyAllowlist": "Only allowlisted groups can access.",
@@ -210,6 +215,11 @@
       "feishu.dmPolicy": "私聊访问模式",
       "feishu.dmPolicyPairing": "配对后可访问",
       "feishu.dmPolicyOpen": "所有人可访问",
+      "feishu.dmScope": "私聊会话模式",
+      "feishu.dmScopeMain": "所有私聊共享会话",
+      "feishu.dmScopePerPeer": "每个用户独立会话（推荐）",
+      "feishu.dmScopePerChannelPeer": "按渠道和用户独立会话",
+      "feishu.dmScopePerAccountChannelPeer": "按账号、渠道和用户独立会话",
       "feishu.groupPolicy": "群聊访问模式",
       "feishu.groupPolicyOpen": "所有群可访问",
       "feishu.groupPolicyAllowlist": "仅白名单可访问",
@@ -330,6 +340,7 @@
     chAppId: $("#chAppId"),
     chAppSecret: $("#chAppSecret"),
     chDmPolicy: $("#chDmPolicy"),
+    chDmScope: $("#chDmScope"),
     chGroupPolicy: $("#chGroupPolicy"),
     chPairingSection: $("#chPairingSection"),
     btnToggleChSecret: $("#btnToggleChSecret"),
@@ -892,6 +903,19 @@
     return value === "open" ? "open" : "pairing";
   }
 
+  // 读取当前私聊会话模式（main/per-peer/per-channel-peer/per-account-channel-peer）。
+  function getChDmScope() {
+    var value = els.chDmScope ? String(els.chDmScope.value || "").trim() : "";
+    if (
+      value === "per-peer" ||
+      value === "per-channel-peer" ||
+      value === "per-account-channel-peer"
+    ) {
+      return value;
+    }
+    return "main";
+  }
+
   // 当前是否为配对模式（仅该模式下展示配对相关面板）。
   function isChPairingMode() {
     return getChDmPolicy() === "pairing";
@@ -1059,6 +1083,7 @@
         appSecret: appSecret,
         enabled: true,
         dmPolicy: getChDmPolicy(),
+        dmScope: getChDmScope(),
         groupPolicy: getChGroupPolicy(),
         groupAllowFrom: groupAllowFromEntries,
       });
@@ -1093,6 +1118,9 @@
       var dmPolicy = data.dmPolicy === "open" ? "open" : "pairing";
       if (els.chDmPolicy) {
         els.chDmPolicy.value = dmPolicy;
+      }
+      if (els.chDmScope) {
+        els.chDmScope.value = data.dmScope || "main";
       }
       if (els.chGroupPolicy && data.groupPolicy) {
         els.chGroupPolicy.value = data.groupPolicy;

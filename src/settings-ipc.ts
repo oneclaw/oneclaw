@@ -136,6 +136,7 @@ export function registerSettingsIpc(deps: SettingsIpcDeps): void {
       const dmPolicy = normalizeDmPolicy(feishu?.dmPolicy, "pairing");
       const allowFrom = normalizeAllowFromEntries(feishu?.allowFrom);
       const dmPolicyOpen = dmPolicy === "open" || allowFrom.includes(WILDCARD_ALLOW_ENTRY);
+      const dmScope = normalizeDmScope(config?.session?.dmScope, "main");
       const groupPolicy = normalizeGroupPolicy(feishu?.groupPolicy, "allowlist");
       const groupAllowFrom = normalizeAllowFromEntries(feishu?.groupAllowFrom);
       const topicSessionMode = normalizeTopicSessionMode(feishu?.topicSessionMode, "disabled");
@@ -147,6 +148,7 @@ export function registerSettingsIpc(deps: SettingsIpcDeps): void {
           enabled,
           dmPolicy,
           dmPolicyOpen,
+          dmScope,
           groupPolicy,
           groupAllowFrom,
           topicSessionMode,
@@ -164,6 +166,7 @@ export function registerSettingsIpc(deps: SettingsIpcDeps): void {
       params?.dmPolicy,
       params?.dmPolicyOpen === true ? "open" : "pairing"
     );
+    const dmScopeInput = params?.dmScope;
     const groupPolicy = normalizeGroupPolicy(params?.groupPolicy, "allowlist");
     const groupAllowFrom = normalizeAllowFromEntries(params?.groupAllowFrom);
     if (groupPolicy === "allowlist") {
@@ -174,6 +177,10 @@ export function registerSettingsIpc(deps: SettingsIpcDeps): void {
     }
     try {
       const config = readUserConfig();
+      const dmScope = normalizeDmScope(
+        dmScopeInput,
+        normalizeDmScope(config?.session?.dmScope, "main")
+      );
       config.plugins ??= {};
       config.plugins.entries ??= {};
 
@@ -219,6 +226,17 @@ export function registerSettingsIpc(deps: SettingsIpcDeps): void {
         config.channels.feishu.groupAllowFrom = groupAllowFrom;
       } else {
         delete config.channels.feishu.groupAllowFrom;
+      }
+
+      // 私聊会话隔离属于全局 session 配置，不是飞书子配置。
+      config.session ??= {};
+      if (dmScope === "main") {
+        delete config.session.dmScope;
+        if (Object.keys(config.session).length === 0) {
+          delete config.session;
+        }
+      } else {
+        config.session.dmScope = dmScope;
       }
       writeUserConfig(config);
       return { success: true };
@@ -795,6 +813,23 @@ function normalizeGroupPolicy(input: unknown, fallback: "open" | "allowlist" | "
 function normalizeTopicSessionMode(input: unknown, fallback: "enabled" | "disabled"): "enabled" | "disabled" {
   const value = String(input ?? "").trim().toLowerCase();
   if (value === "enabled" || value === "disabled") {
+    return value;
+  }
+  return fallback;
+}
+
+// 归一化私聊会话范围，非法值回退为默认值。
+function normalizeDmScope(
+  input: unknown,
+  fallback: "main" | "per-peer" | "per-channel-peer" | "per-account-channel-peer"
+): "main" | "per-peer" | "per-channel-peer" | "per-account-channel-peer" {
+  const value = String(input ?? "").trim().toLowerCase();
+  if (
+    value === "main" ||
+    value === "per-peer" ||
+    value === "per-channel-peer" ||
+    value === "per-account-channel-peer"
+  ) {
     return value;
   }
   return fallback;
