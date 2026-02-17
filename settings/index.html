@@ -222,6 +222,14 @@
               </div>
             </div>
 
+            <div class="field-group">
+              <label class="checkbox-item">
+                <input type="checkbox" id="chDmPolicyOpen">
+                <span data-i18n="feishu.dmPolicyOpen">Open authorization (no pairing required)</span>
+              </label>
+              <p class="field-hint" data-i18n="feishu.dmPolicyHint">When enabled, all DM users can start chatting directly.</p>
+            </div>
+
             <div class="pairing-panel">
               <div class="pairing-header">
                 <span class="pairing-title" data-i18n="feishu.pairingTitle">Pending Pairing Requests</span>
@@ -233,6 +241,19 @@
                 No pending pairing requests.
               </div>
               <div class="pairing-list hidden" id="chPairingList"></div>
+            </div>
+
+            <div class="pairing-panel">
+              <div class="pairing-header">
+                <span class="pairing-title" data-i18n="feishu.approvedTitle">Approved Accounts</span>
+                <button type="button" class="btn-secondary" id="btnChApprovedRefresh" data-i18n="feishu.refreshApproved">
+                  Refresh
+                </button>
+              </div>
+              <div class="pairing-empty hidden" id="chApprovedEmpty" data-i18n="feishu.noApproved">
+                No approved accounts yet.
+              </div>
+              <div class="pairing-list hidden" id="chApprovedList"></div>
             </div>
           </div>
 
