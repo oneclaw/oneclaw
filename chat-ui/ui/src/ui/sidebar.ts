@@ -80,7 +80,7 @@ export function renderSidebar(props: SidebarProps) {
           @click=${props.onNewChat}
           title=${t("sidebar.newChat")}
         >
-          <span class="oneclaw-sidebar__icon">${icons.messageSquare}</span>
+          <span class="oneclaw-sidebar__icon">${icons.plus}</span>
           <span class="oneclaw-sidebar__label">${t("sidebar.newChat")}</span>
         </button>
 
