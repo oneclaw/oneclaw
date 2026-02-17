@@ -10,8 +10,8 @@ const dict: Record<Locale, Record<string, string>> = {
   zh: {
     // Sidebar
     "sidebar.brand": "OneClaw",
-    "sidebar.chat": "对话",
-    "sidebar.newChat": "新对话",
+    "sidebar.chat": "当前对话",
+    "sidebar.newChat": "新建对话",
     "sidebar.settings": "设置",
     "sidebar.openWebUI": "打开 Web UI",
     "sidebar.agent": "Agent",
@@ -41,6 +41,7 @@ const dict: Record<Locale, Record<string, string>> = {
     "chat.queue": "排队",
     "chat.stop": "停止",
     "chat.newSession": "新对话",
+    "chat.confirmNewSession": "当前对话中未记忆的内容将被清除，是否继续新建对话？",
     "chat.loading": "加载中…",
     "chat.newMessages": "新消息",
     "chat.queued": "排队中",
@@ -74,7 +75,7 @@ const dict: Record<Locale, Record<string, string>> = {
   en: {
     // Sidebar
     "sidebar.brand": "OneClaw",
-    "sidebar.chat": "Chat",
+    "sidebar.chat": "Current Chat",
     "sidebar.newChat": "New Chat",
     "sidebar.settings": "Settings",
     "sidebar.openWebUI": "Open Web UI",
@@ -105,6 +106,8 @@ const dict: Record<Locale, Record<string, string>> = {
     "chat.queue": "Queue",
     "chat.stop": "Stop",
     "chat.newSession": "New session",
+    "chat.confirmNewSession":
+      "Unmemorized content in the current conversation will be cleared. Continue?",
     "chat.loading": "Loading chat…",
     "chat.newMessages": "New messages",
     "chat.queued": "Queued",

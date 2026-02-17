@@ -120,6 +120,15 @@ function setOneClawView(state: AppViewState, next: "chat" | "settings") {
   });
 }
 
+function confirmAndCreateNewSession(state: AppViewState) {
+  const ok = window.confirm(t("chat.confirmNewSession"));
+  if (!ok) {
+    return;
+  }
+  setOneClawView(state, "chat");
+  return state.handleSendChat("/new", { restoreDraft: true });
+}
+
 async function handleRefreshChat(state: AppViewState) {
   if (state.chatLoading || !state.connected) {
     return;
@@ -276,10 +285,7 @@ export function renderApp(state: AppViewState) {
             settingsActive,
             refreshDisabled: state.chatLoading || !state.connected,
             onOpenChat: () => setOneClawView(state, "chat"),
-            onNewChat: () => {
-              setOneClawView(state, "chat");
-              return state.handleSendChat("/new", { restoreDraft: true });
-            },
+            onNewChat: () => confirmAndCreateNewSession(state),
             onSelectAgent: (nextAgentId: string) => handleAgentChange(state, nextAgentId),
             onRefresh: () => void handleRefreshChat(state),
             onToggleSidebar: () => {
@@ -351,7 +357,7 @@ export function renderApp(state: AppViewState) {
                 canAbort: Boolean(state.chatRunId),
                 onAbort: () => void state.handleAbortChat(),
                 onQueueRemove: (id) => state.removeQueuedMessage(id),
-                onNewSession: () => state.handleSendChat("/new", { restoreDraft: true }),
+                onNewSession: () => confirmAndCreateNewSession(state),
                 showNewMessages: state.chatNewMessagesBelow && !state.chatManualRefreshInFlight,
                 onScrollToBottom: () => state.scrollToBottom(),
                 sidebarOpen: state.sidebarOpen,
