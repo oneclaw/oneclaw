@@ -2,12 +2,11 @@ import { Tray, Menu, app, nativeImage } from "electron";
 import * as path from "path";
 import { GatewayProcess, GatewayState } from "./gateway-process";
 import { WindowManager } from "./window";
-import { SettingsManager } from "./settings-manager";
 
 interface TrayOptions {
   windowManager: WindowManager;
   gateway: GatewayProcess;
-  settingsManager: SettingsManager;
+  onOpenSettings: () => void;
   onQuit: () => void;
   onCheckUpdates: () => void;
 }
@@ -104,7 +103,7 @@ export class TrayManager {
   updateMenu(): void {
     if (!this.tray || !this.opts) return;
 
-    const { windowManager, gateway, settingsManager, onQuit, onCheckUpdates } = this.opts;
+    const { windowManager, gateway, onOpenSettings, onQuit, onCheckUpdates } = this.opts;
     const t = getTrayStrings();
 
     const menu = Menu.buildFromTemplate([
@@ -116,7 +115,7 @@ export class TrayManager {
       { label: getStateLabel(gateway.getState()), enabled: false },
       { label: t.restartGateway, click: () => gateway.restart() },
       { type: "separator" },
-      { label: t.settings, click: () => settingsManager.show() },
+      { label: t.settings, click: onOpenSettings },
       { label: t.checkUpdates, click: onCheckUpdates },
       { type: "separator" },
       { label: t.quit, click: onQuit },

@@ -16,6 +16,10 @@ interface ShowOptions {
   onboarding?: boolean;
 }
 
+interface NavigateOptions {
+  view: "settings";
+}
+
 function maskToken(token: string): string {
   if (token.length <= 8) {
     return "***";
@@ -145,6 +149,18 @@ export class WindowManager {
     log.info("主窗口显示");
   }
 
+  // 显示主窗口并切换到内嵌设置页
+  async openSettings(opts: ShowOptions): Promise<void> {
+    await this.show(opts);
+    if (!this.win || this.win.isDestroyed()) {
+      return;
+    }
+
+    this.win.show();
+    this.win.focus();
+    this.navigate({ view: "settings" });
+  }
+
   // 标记应用进入退出流程（例如手动退出/更新安装）
   prepareForAppQuit(): void {
     this.allowAppQuit = true;
@@ -156,6 +172,14 @@ export class WindowManager {
     this.win.removeAllListeners("close");
     this.win.close();
     this.win = null;
+  }
+
+  // 通知渲染进程执行应用内导航
+  private navigate(payload: NavigateOptions): void {
+    if (!this.win || this.win.isDestroyed()) {
+      return;
+    }
+    this.win.webContents.send("app:navigate", payload);
   }
 
   // 注入 gateway URL 和 token 到 localStorage，Chat UI 的 gateway.ts 会读取
