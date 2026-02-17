@@ -25,6 +25,10 @@ contextBridge.exposeInMainWorld("oneclaw", {
   settingsGetChannelConfig: () => ipcRenderer.invoke("settings:get-channel-config"),
   settingsSaveChannel: (params: Record<string, unknown>) =>
     ipcRenderer.invoke("settings:save-channel", params),
+  settingsListFeishuPairing: () =>
+    ipcRenderer.invoke("settings:list-feishu-pairing"),
+  settingsApproveFeishuPairing: (params: Record<string, unknown>) =>
+    ipcRenderer.invoke("settings:approve-feishu-pairing", params),
   settingsGetKimiConfig: () => ipcRenderer.invoke("settings:get-kimi-config"),
   settingsSaveKimiConfig: (params: Record<string, unknown>) =>
     ipcRenderer.invoke("settings:save-kimi-config", params),

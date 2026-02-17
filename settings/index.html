@@ -221,6 +221,19 @@
                 </button>
               </div>
             </div>
+
+            <div class="pairing-panel">
+              <div class="pairing-header">
+                <span class="pairing-title" data-i18n="feishu.pairingTitle">Pending Pairing Requests</span>
+                <button type="button" class="btn-secondary" id="btnChPairingRefresh" data-i18n="feishu.refreshPairing">
+                  Refresh
+                </button>
+              </div>
+              <div class="pairing-empty hidden" id="chPairingEmpty" data-i18n="feishu.noPairingPending">
+                No pending pairing requests.
+              </div>
+              <div class="pairing-list hidden" id="chPairingList"></div>
+            </div>
           </div>
 
           <!-- 错误 / 成功信息 -->
