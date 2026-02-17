@@ -5,6 +5,15 @@
 (function () {
   "use strict";
 
+  // iframe 嵌入主窗口时，优先复用父窗口暴露的 oneclaw bridge
+  try {
+    if (!window.oneclaw && window.parent && window.parent !== window && window.parent.oneclaw) {
+      window.oneclaw = window.parent.oneclaw;
+    }
+  } catch {
+    // 跨域场景忽略，继续走本窗口 oneclaw
+  }
+
   // ── Provider 预设（与 setup.js 对齐） ──
 
   const PROVIDERS = {
@@ -92,6 +101,7 @@
       "doctor.pass": "All checks passed (exit code: 0)",
       "doctor.fail": "Some checks failed (exit code: {code})",
       "nav.kimi": "KimiClaw",
+      "nav.appearance": "Appearance",
       "kimi.title": "KimiClaw",
       "kimi.desc": "Control OneClaw remotely via Kimi",
       "kimi.enabled": "Enable",
@@ -113,6 +123,16 @@
       "advanced.save": "Save",
       "advanced.saving": "Saving…",
       "advanced.saved": "Settings saved.",
+      "appearance.title": "Appearance",
+      "appearance.desc": "Control theme and chat display preferences.",
+      "appearance.theme": "Theme",
+      "appearance.theme.system": "System",
+      "appearance.theme.light": "Light",
+      "appearance.theme.dark": "Dark",
+      "appearance.showThinking": "Show thinking output",
+      "appearance.save": "Save",
+      "appearance.saving": "Saving…",
+      "appearance.saved": "Appearance settings saved.",
     },
     zh: {
       "title": "设置",
@@ -157,6 +177,7 @@
       "doctor.pass": "全部检查通过（退出码：0）",
       "doctor.fail": "部分检查未通过（退出码：{code}）",
       "nav.kimi": "KimiClaw",
+      "nav.appearance": "外观",
       "kimi.title": "KimiClaw",
       "kimi.desc": "通过 Kimi 远程遥控 OneClaw",
       "kimi.enabled": "启用状态",
@@ -178,6 +199,16 @@
       "advanced.save": "保存",
       "advanced.saving": "保存中…",
       "advanced.saved": "设置已保存。",
+      "appearance.title": "外观",
+      "appearance.desc": "调整主题和聊天展示相关设置。",
+      "appearance.theme": "主题",
+      "appearance.theme.system": "跟随系统",
+      "appearance.theme.light": "浅色",
+      "appearance.theme.dark": "深色",
+      "appearance.showThinking": "显示思考过程",
+      "appearance.save": "保存",
+      "appearance.saving": "保存中…",
+      "appearance.saved": "外观设置已保存。",
     },
   };
 
@@ -242,6 +273,12 @@
     btnAdvSave: $("#btnAdvSave"),
     btnAdvSaveText: $("#btnAdvSave .btn-text"),
     btnAdvSaveSpinner: $("#btnAdvSave .btn-spinner"),
+    // Appearance tab
+    appearanceShowThinking: $("#appearanceShowThinking"),
+    appearanceMsgBox: $("#appearanceMsgBox"),
+    btnAppearanceSave: $("#btnAppearanceSave"),
+    btnAppearanceSaveText: $("#btnAppearanceSave .btn-text"),
+    btnAppearanceSaveSpinner: $("#btnAppearanceSave .btn-spinner"),
   };
 
   // ── 状态 ──
@@ -252,6 +289,7 @@
   let kimiSaving = false;
   let doctorRunning = false;
   let advSaving = false;
+  let appearanceSaving = false;
   let currentLang = "en";
 
   // ── 语言 ──
@@ -667,6 +705,147 @@
     els.btnAdvSaveSpinner.classList.toggle("hidden", !loading);
   }
 
+  // ── Appearance ──
+
+  function isEmbeddedSettings() {
+    return new URLSearchParams(window.location.search).get("embedded") === "1";
+  }
+
+  function getAppearanceThemeValue() {
+    var checked = document.querySelector('input[name="appearanceTheme"]:checked');
+    return checked ? checked.value : "system";
+  }
+
+  function applyAppearanceState(theme, showThinking) {
+    var themeRadio = document.querySelector('input[name="appearanceTheme"][value="' + theme + '"]');
+    if (themeRadio) themeRadio.checked = true;
+    if (typeof showThinking === "boolean") {
+      els.appearanceShowThinking.checked = showThinking;
+    }
+  }
+
+  function loadAppearanceFromQuery() {
+    var params = new URLSearchParams(window.location.search);
+    var theme = params.get("theme");
+    var showThinking = params.get("showThinking");
+    applyAppearanceState(
+      theme === "light" || theme === "dark" || theme === "system" ? theme : "system",
+      showThinking === "1",
+    );
+  }
+
+  function loadAppearanceFromLocalStorage() {
+    try {
+      var raw = localStorage.getItem("openclaw.control.settings.v1");
+      if (!raw) return;
+      var parsed = JSON.parse(raw);
+      var theme = parsed && parsed.theme;
+      var showThinking = parsed && parsed.chatShowThinking;
+      applyAppearanceState(
+        theme === "light" || theme === "dark" || theme === "system" ? theme : "system",
+        typeof showThinking === "boolean" ? showThinking : true,
+      );
+    } catch {
+      // ignore malformed local cache
+    }
+  }
+
+  function requestEmbeddedAppearanceInit() {
+    if (!isEmbeddedSettings() || !window.parent || window.parent === window) {
+      return;
+    }
+    window.parent.postMessage(
+      {
+        source: "oneclaw-settings-embed",
+        type: "appearance-request-init",
+      },
+      "*",
+    );
+  }
+
+  function handleAppearanceInitMessage(event) {
+    var data = event && event.data;
+    if (!data || data.source !== "oneclaw-chat-ui" || data.type !== "appearance-init") {
+      return;
+    }
+    var payload = data.payload || {};
+    applyAppearanceState(payload.theme || "system", Boolean(payload.showThinking));
+  }
+
+  function showAppearanceMsg(msg, type) {
+    els.appearanceMsgBox.textContent = msg;
+    els.appearanceMsgBox.className = "msg-box " + type;
+  }
+
+  function hideAppearanceMsg() {
+    els.appearanceMsgBox.classList.add("hidden");
+    els.appearanceMsgBox.textContent = "";
+    els.appearanceMsgBox.className = "msg-box hidden";
+  }
+
+  function setAppearanceSaving(loading) {
+    appearanceSaving = loading;
+    els.btnAppearanceSave.disabled = loading;
+    els.btnAppearanceSaveText.textContent = loading ? t("appearance.saving") : t("appearance.save");
+    els.btnAppearanceSaveSpinner.classList.toggle("hidden", !loading);
+  }
+
+  function saveAppearanceToLocalStorage(theme, showThinking) {
+    try {
+      var key = "openclaw.control.settings.v1";
+      var raw = localStorage.getItem(key);
+      var parsed = raw ? JSON.parse(raw) : {};
+      parsed.theme = theme;
+      parsed.chatShowThinking = showThinking;
+      localStorage.setItem(key, JSON.stringify(parsed));
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  async function handleAppearanceSave() {
+    if (appearanceSaving) return;
+    setAppearanceSaving(true);
+    hideAppearanceMsg();
+
+    var theme = getAppearanceThemeValue();
+    var showThinking = !!els.appearanceShowThinking.checked;
+
+    try {
+      if (isEmbeddedSettings() && window.parent && window.parent !== window) {
+        window.parent.postMessage(
+          {
+            source: "oneclaw-settings-embed",
+            type: "appearance-save",
+            payload: { theme: theme, showThinking: showThinking },
+          },
+          "*",
+        );
+      } else {
+        var ok = saveAppearanceToLocalStorage(theme, showThinking);
+        if (!ok) {
+          throw new Error("save appearance failed");
+        }
+      }
+      setAppearanceSaving(false);
+      showToast(t("appearance.saved"));
+    } catch (err) {
+      setAppearanceSaving(false);
+      showAppearanceMsg(t("error.connection") + ((err && err.message) || "Unknown error"), "error");
+    }
+  }
+
+  function loadAppearanceSettings() {
+    loadAppearanceFromQuery();
+    if (!isEmbeddedSettings()) {
+      loadAppearanceFromLocalStorage();
+      return;
+    }
+    window.addEventListener("message", handleAppearanceInitMessage);
+    requestEmbeddedAppearanceInit();
+  }
+
   // ── Kimi Tab ──
 
   // 从 install.sh 命令或直接输入解析 bot token
@@ -1016,6 +1195,9 @@
     // Advanced
     els.btnAdvSave.addEventListener("click", handleAdvSave);
 
+    // Appearance
+    els.btnAppearanceSave.addEventListener("click", handleAppearanceSave);
+
     // Doctor 流式输出监听
     if (window.oneclaw && window.oneclaw.onDoctorOutput) {
       window.oneclaw.onDoctorOutput(onDoctorOutput);
@@ -1037,6 +1219,7 @@
     loadChannelConfig();
     loadKimiConfig();
     loadAdvancedConfig();
+    loadAppearanceSettings();
   }
 
   init();

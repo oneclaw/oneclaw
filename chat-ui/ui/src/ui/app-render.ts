@@ -9,9 +9,8 @@ import { parseAgentSessionKey } from "../../../src/routing/session-key.js";
 import { refreshChat, refreshChatAvatar } from "./app-chat.ts";
 import { syncUrlWithSessionKey } from "./app-settings.ts";
 import { loadChatHistory } from "./controllers/chat.ts";
-import { t } from "./i18n.ts";
+import { getLocale, t } from "./i18n.ts";
 import { icons } from "./icons.ts";
-import { renderThemeToggle } from "./app-render.helpers.ts";
 import { renderSidebar } from "./sidebar.ts";
 import { renderChat } from "./views/chat.ts";
 import { renderExecApprovalPrompt } from "./views/exec-approval.ts";
@@ -157,49 +156,95 @@ async function handleOpenWebUI() {
   }
 }
 
-function renderOneClawSettingsPage(state: AppViewState, showThinking: boolean) {
+function ensureSettingsEmbedBridge(state: AppViewState) {
+  const bridgeKey = "__oneclawSettingsEmbedBridge";
+  const w = window as unknown as {
+    [bridgeKey]?: { state: AppViewState; bound: boolean };
+  };
+  if (!w[bridgeKey]) {
+    w[bridgeKey] = { state, bound: false };
+  } else {
+    w[bridgeKey]!.state = state;
+  }
+  if (w[bridgeKey]!.bound) {
+    return;
+  }
+
+  window.addEventListener("message", (event: MessageEvent) => {
+    const bridge = (window as unknown as { [bridgeKey]?: { state: AppViewState } })[bridgeKey];
+    if (!bridge) {
+      return;
+    }
+    const data = event.data as
+      | {
+          source?: string;
+          type?: string;
+          payload?: { theme?: "system" | "light" | "dark"; showThinking?: boolean };
+        }
+      | undefined;
+    if (!data || data.source !== "oneclaw-settings-embed") {
+      return;
+    }
+
+    if (data.type === "appearance-request-init") {
+      if (event.source && "postMessage" in event.source) {
+        (event.source as Window).postMessage(
+          {
+            source: "oneclaw-chat-ui",
+            type: "appearance-init",
+            payload: {
+              theme: bridge.state.theme,
+              showThinking: bridge.state.settings.chatShowThinking,
+            },
+          },
+          "*",
+        );
+      }
+      return;
+    }
+
+    if (data.type === "appearance-save") {
+      const nextTheme = data.payload?.theme;
+      const nextShowThinking = data.payload?.showThinking;
+      if (nextTheme === "system" || nextTheme === "light" || nextTheme === "dark") {
+        bridge.state.setTheme(nextTheme);
+      }
+      if (typeof nextShowThinking === "boolean") {
+        bridge.state.applySettings({
+          ...bridge.state.settings,
+          chatShowThinking: nextShowThinking,
+        });
+      }
+    }
+  });
+
+  w[bridgeKey]!.bound = true;
+}
+
+function resolveEmbeddedSettingsUrl(state: AppViewState) {
+  const lang = getLocale();
+  const baseUrl = new URL(window.location.href);
+  const settingsUrl = new URL("../../settings/index.html", baseUrl);
+  settingsUrl.searchParams.set("lang", lang);
+  settingsUrl.searchParams.set("embedded", "1");
+  settingsUrl.searchParams.set("theme", state.theme);
+  settingsUrl.searchParams.set(
+    "showThinking",
+    state.settings.chatShowThinking ? "1" : "0",
+  );
+  return settingsUrl.toString();
+}
+
+function renderOneClawSettingsPage(state: AppViewState) {
+  ensureSettingsEmbedBridge(state);
+  const settingsUrl = resolveEmbeddedSettingsUrl(state);
   return html`
-    <section class="oneclaw-settings-page">
-      <header class="oneclaw-settings-page__header">
-        <div>
-          <h2 class="oneclaw-settings-page__title">${t("settings.title")}</h2>
-          <p class="oneclaw-settings-page__sub">${t("settings.subtitle")}</p>
-        </div>
-        <button
-          class="btn btn--sm"
-          type="button"
-          @click=${() => setOneClawView(state, "chat")}
-        >
-          ${t("settings.backToChat")}
-        </button>
-      </header>
-
-      <div class="oneclaw-settings-card">
-        <h3 class="oneclaw-settings-card__title">${t("sidebar.appearance")}</h3>
-
-        <div class="oneclaw-settings-row">
-          <span class="oneclaw-settings-row__label">${t("sidebar.theme")}</span>
-          <div class="oneclaw-settings-row__control">${renderThemeToggle(state)}</div>
-        </div>
-
-        <button
-          class="oneclaw-settings-row oneclaw-settings-row--button"
-          type="button"
-          @click=${() => {
-            state.applySettings({
-              ...state.settings,
-              chatShowThinking: !state.settings.chatShowThinking,
-            });
-          }}
-          aria-pressed=${showThinking}
-          title=${t("sidebar.showThinking")}
-        >
-          <span class="oneclaw-settings-row__label">${t("sidebar.showThinking")}</span>
-          <span class="oneclaw-settings-row__value ${showThinking ? "is-on" : "is-off"}">
-            ${showThinking ? t("sidebar.on") : t("sidebar.off")}
-          </span>
-        </button>
-      </div>
+    <section class="oneclaw-settings-host">
+      <iframe
+        class="oneclaw-settings-iframe"
+        src=${settingsUrl}
+        title=${t("settings.title")}
+      ></iframe>
     </section>
   `;
 }
@@ -215,6 +260,7 @@ export function renderApp(state: AppViewState) {
   const agentOptions = resolveAgentOptions(state);
   const oneclawView = state.settings.oneclawView ?? "chat";
   const settingsActive = oneclawView === "settings";
+  const chatActive = oneclawView === "chat";
 
   return html`
     <div
@@ -226,8 +272,10 @@ export function renderApp(state: AppViewState) {
             connected: state.connected,
             currentAgentId,
             agentOptions,
+            chatActive,
             settingsActive,
             refreshDisabled: state.chatLoading || !state.connected,
+            onOpenChat: () => setOneClawView(state, "chat"),
             onNewChat: () => {
               setOneClawView(state, "chat");
               return state.handleSendChat("/new", { restoreDraft: true });
@@ -268,7 +316,7 @@ export function renderApp(state: AppViewState) {
 
         <main class="oneclaw-content">
           ${settingsActive
-            ? renderOneClawSettingsPage(state, showThinking)
+            ? renderOneClawSettingsPage(state)
             : renderChat({
                 sessionKey: state.sessionKey,
                 onSessionKeyChange: (next) => applySessionKey(state, next),

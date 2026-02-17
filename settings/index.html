@@ -43,6 +43,13 @@
           </svg>
           <span data-i18n="nav.doctor">Doctor</span>
         </li>
+        <li class="nav-item" data-tab="appearance">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+            <circle cx="8" cy="8" r="5.5" stroke="currentColor" stroke-width="1.3"/>
+            <path d="M8 2.5V13.5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
+          </svg>
+          <span data-i18n="nav.appearance">外观</span>
+        </li>
         <li class="nav-item" data-tab="advanced">
           <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
             <path d="M2 5H14M2 8H14M2 11H14" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
@@ -335,6 +342,47 @@
         <div class="btn-row bottom-actions">
           <button class="btn-primary" id="btnAdvSave">
             <span class="btn-text" data-i18n="advanced.save">Save</span>
+            <span class="btn-spinner hidden"></span>
+          </button>
+        </div>
+      </section>
+
+      <!-- Appearance Tab -->
+      <section class="tab-panel" id="tabAppearance">
+        <h2 data-i18n="appearance.title">外观</h2>
+        <p class="desc" data-i18n="appearance.desc">调整主题和聊天展示相关设置。</p>
+
+        <div class="field-group">
+          <label data-i18n="appearance.theme">主题</label>
+          <div class="radio-group">
+            <label class="radio-item">
+              <input type="radio" name="appearanceTheme" value="system" checked>
+              <span data-i18n="appearance.theme.system">跟随系统</span>
+            </label>
+            <label class="radio-item">
+              <input type="radio" name="appearanceTheme" value="light">
+              <span data-i18n="appearance.theme.light">浅色</span>
+            </label>
+            <label class="radio-item">
+              <input type="radio" name="appearanceTheme" value="dark">
+              <span data-i18n="appearance.theme.dark">深色</span>
+            </label>
+          </div>
+        </div>
+
+        <div class="toggle-row">
+          <span class="toggle-label" data-i18n="appearance.showThinking">显示思考过程</span>
+          <label class="toggle-switch">
+            <input type="checkbox" id="appearanceShowThinking">
+            <span class="toggle-slider"></span>
+          </label>
+        </div>
+
+        <div class="msg-box hidden" id="appearanceMsgBox"></div>
+
+        <div class="btn-row bottom-actions">
+          <button class="btn-primary" id="btnAppearanceSave">
+            <span class="btn-text" data-i18n="appearance.save">保存</span>
             <span class="btn-spinner hidden"></span>
           </button>
         </div>
