@@ -151,7 +151,7 @@ async function handleRefreshChat(state: AppViewState) {
   }
 }
 
-async function handleOpenWebUI() {
+async function handleOpenWebUI(state: AppViewState) {
   if (window.oneclaw?.openWebUI) {
     window.oneclaw.openWebUI();
   } else if (window.oneclaw?.openExternal) {
@@ -161,7 +161,9 @@ async function handleOpenWebUI() {
         port = await window.oneclaw.getGatewayPort();
       }
     } catch { /* use default */ }
-    window.oneclaw.openExternal(`http://127.0.0.1:${port}/`);
+    const token = state.settings.token.trim();
+    const query = token ? `?token=${encodeURIComponent(token)}` : "";
+    window.oneclaw.openExternal(`http://127.0.0.1:${port}/${query}`);
   }
 }
 
@@ -295,7 +297,7 @@ export function renderApp(state: AppViewState) {
               });
             },
             onOpenSettings: () => setOneClawView(state, "settings"),
-            onOpenWebUI: () => void handleOpenWebUI(),
+            onOpenWebUI: () => void handleOpenWebUI(state),
           })}
 
       <div class="oneclaw-main">

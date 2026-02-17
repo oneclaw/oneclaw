@@ -172,7 +172,9 @@ ipcMain.handle("app:open-external", (_e, url: string) => shell.openExternal(url)
 ipcMain.on("app:open-settings", () => settingsManager.show());
 ipcMain.on("app:open-webui", () => {
   const port = gateway.getPort();
-  shell.openExternal(`http://127.0.0.1:${port}/`);
+  const token = gateway.getToken().trim();
+  const query = token ? `?token=${encodeURIComponent(token)}` : "";
+  shell.openExternal(`http://127.0.0.1:${port}/${query}`);
 });
 ipcMain.handle("gateway:port", () => gateway.getPort());
 
