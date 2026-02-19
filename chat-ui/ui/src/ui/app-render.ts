@@ -15,6 +15,7 @@ import { renderSidebar } from "./sidebar.ts";
 import { renderChat } from "./views/chat.ts";
 import { renderExecApprovalPrompt } from "./views/exec-approval.ts";
 import { renderGatewayUrlConfirmation } from "./views/gateway-url-confirmation.ts";
+import { renderSharePrompt } from "./views/share-prompt.ts";
 
 declare global {
   interface Window {
@@ -429,6 +430,7 @@ export function renderApp(state: AppViewState) {
 
       ${renderExecApprovalPrompt(state)}
       ${renderGatewayUrlConfirmation(state)}
+      ${renderSharePrompt(state)}
     </div>
   `;
 }

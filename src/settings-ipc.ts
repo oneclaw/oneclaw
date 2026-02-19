@@ -22,6 +22,7 @@ import {
   readUserConfig,
   writeUserConfig,
 } from "./provider-config";
+import { getLatestShareCopyPayload } from "./share-copy";
 import { extractKimiConfig, saveKimiPluginConfig, isKimiPluginBundled, DEFAULT_KIMI_BRIDGE_WS_URL } from "./kimi-config";
 import { ensureGatewayAuthTokenInConfig } from "./gateway-auth";
 import * as path from "path";
@@ -84,6 +85,21 @@ export function registerSettingsIpc(): void {
   // ── 验证 API Key（复用 provider-config） ──
   ipcMain.handle("settings:verify-key", async (_event, params) => {
     return verifyProvider(params);
+  });
+
+  // ── 读取最新分享文案（服务端维护中英文版本） ──
+  ipcMain.handle("settings:get-share-copy", async () => {
+    try {
+      return {
+        success: true,
+        data: await getLatestShareCopyPayload(),
+      };
+    } catch (err: any) {
+      return {
+        success: false,
+        message: err.message || String(err),
+      };
+    }
   });
 
   // ── 保存 provider 配置 ──
@@ -1040,10 +1056,12 @@ function extractProviderInfo(config: any): any {
     baseURL = prov?.baseUrl ?? "";
     api = prov?.api ?? "";
     configuredModels = extractModelIds(prov);
-    // 从 models[0].input 推断 custom provider 是否支持图像
-    const modelEntry = (prov?.models ?? [])[0];
-    if (modelEntry?.input) {
-      supportsImage = Array.isArray(modelEntry.input) && modelEntry.input.includes("image");
+    // 从当前选中模型（primary）推断 custom provider 是否支持图像，避免读取到旧模型条目。
+    const models = Array.isArray(prov?.models) ? prov.models : [];
+    const matchedModel = models.find((item: any) => item && typeof item === "object" && item.id === modelID);
+    const modelEntry = matchedModel ?? models[0];
+    if (modelEntry && typeof modelEntry === "object" && Array.isArray(modelEntry.input)) {
+      supportsImage = modelEntry.input.includes("image");
     }
   }
 
@@ -1060,13 +1078,22 @@ function extractProviderInfo(config: any): any {
   };
 }
 
-// 合并模型列表：保留 prevModels 中的全部条目，确保 selectedID 存在
+// 合并模型列表：保留历史模型，同时用最新配置覆盖当前选中模型（如 input 能力变更）。
 function mergeModels(provEntry: any, selectedID: string, prevModels: any[]): void {
   if (!provEntry || !prevModels.length) return;
   const newEntry = (provEntry.models ?? [])[0]; // buildProviderConfig 生成的单条目
   const merged = [...prevModels];
-  const exists = merged.some((m: any) => m.id === selectedID);
-  if (!exists && newEntry) {
+  const currentIndex = merged.findIndex((m: any) => m?.id === selectedID);
+  if (currentIndex >= 0) {
+    if (newEntry) {
+      merged[currentIndex] = {
+        ...(merged[currentIndex] && typeof merged[currentIndex] === "object"
+          ? merged[currentIndex]
+          : {}),
+        ...newEntry,
+      };
+    }
+  } else if (newEntry) {
     merged.push(newEntry);
   }
   provEntry.models = merged;

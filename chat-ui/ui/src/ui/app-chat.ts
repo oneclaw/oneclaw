@@ -60,6 +60,18 @@ function isChatResetCommand(text: string) {
   return normalized.startsWith("/new ") || normalized.startsWith("/reset ");
 }
 
+// 仅统计真实用户输入消息：排除空输入和控制命令（如 stop/new/reset）。
+export function isSharePromptCountableInput(text: string): boolean {
+  const trimmed = text.trim();
+  if (!trimmed) {
+    return false;
+  }
+  if (isChatStopCommand(trimmed) || isChatResetCommand(trimmed)) {
+    return false;
+  }
+  return true;
+}
+
 export async function handleAbortChat(host: ChatHost) {
   if (!host.connected) {
     return;
@@ -162,7 +174,7 @@ export async function handleSendChat(
   opts?: { restoreDraft?: boolean },
 ) {
   if (!host.connected) {
-    return;
+    return false;
   }
   const previousDraft = host.chatMessage;
   const message = (messageOverride ?? host.chatMessage).trim();
@@ -172,12 +184,12 @@ export async function handleSendChat(
 
   // Allow sending with just attachments (no message text required)
   if (!message && !hasAttachments) {
-    return;
+    return false;
   }
 
   if (isChatStopCommand(message)) {
     await handleAbortChat(host);
-    return;
+    return false;
   }
 
   const refreshSessions = isChatResetCommand(message);
@@ -189,10 +201,10 @@ export async function handleSendChat(
 
   if (isChatBusy(host)) {
     enqueueChatMessage(host, message, attachmentsToSend, refreshSessions);
-    return;
+    return true;
   }
 
-  await sendChatMessageNow(host, message, {
+  const ok = await sendChatMessageNow(host, message, {
     previousDraft: messageOverride == null ? previousDraft : undefined,
     restoreDraft: Boolean(messageOverride && opts?.restoreDraft),
     attachments: hasAttachments ? attachmentsToSend : undefined,
@@ -200,6 +212,7 @@ export async function handleSendChat(
     restoreAttachments: Boolean(messageOverride && opts?.restoreDraft),
     refreshSessions,
   });
+  return ok;
 }
 
 export async function refreshChat(host: ChatHost, opts?: { scheduleScroll?: boolean }) {

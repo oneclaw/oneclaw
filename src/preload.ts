@@ -49,6 +49,7 @@ contextBridge.exposeInMainWorld("oneclaw", {
     ipcRenderer.invoke("settings:restore-config-backup", params),
   settingsRestoreLastKnownGood: () => ipcRenderer.invoke("settings:restore-last-known-good"),
   settingsResetConfigAndRelaunch: () => ipcRenderer.invoke("settings:reset-config-and-relaunch"),
+  settingsGetShareCopy: () => ipcRenderer.invoke("settings:get-share-copy"),
 
   // Doctor 流式事件监听
   onDoctorOutput: (cb: (text: string) => void) => {
