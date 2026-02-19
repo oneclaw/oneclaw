@@ -1775,6 +1775,18 @@
     });
   }
 
+  // 恢复配置后，重载所有设置面板数据，防止旧 UI 状态覆盖新配置。
+  async function refreshAllSettingsViewsAfterRestore() {
+    await Promise.allSettled([
+      loadCurrentConfig(),
+      loadChannelConfig(),
+      loadKimiConfig(),
+      loadAdvancedConfig(),
+      loadBackupData(),
+      refreshGatewayState(),
+    ]);
+  }
+
   // 恢复指定历史备份并触发 Gateway 重启。
   async function handleRestoreBackup(fileName) {
     if (backupRestoring || backupResetting) return;
@@ -1797,7 +1809,7 @@
         scheduleGatewayStateRefresh();
       }
       showToast(t("backup.restored"));
-      await loadBackupData();
+      await refreshAllSettingsViewsAfterRestore();
     } catch (err) {
       showBackupMsg(t("error.connection") + (err.message || "Unknown error"), "error");
     }
@@ -1826,7 +1838,7 @@
         scheduleGatewayStateRefresh();
       }
       showToast(t("backup.restored"));
-      await loadBackupData();
+      await refreshAllSettingsViewsAfterRestore();
     } catch (err) {
       showBackupMsg(t("error.connection") + (err.message || "Unknown error"), "error");
     }

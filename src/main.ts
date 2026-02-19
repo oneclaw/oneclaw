@@ -19,6 +19,7 @@ import {
   getConfigRecoveryData,
   inspectUserConfigHealth,
   recordLastKnownGoodConfigSnapshot,
+  recordSetupBaselineConfigSnapshot,
   restoreLastKnownGoodConfigSnapshot,
 } from "./config-backup";
 import * as log from "./logger";
@@ -334,10 +335,14 @@ async function quit(): Promise<void> {
 // ── Setup 完成后：启动 Gateway → 打开主窗口 ──
 
 setupManager.setOnComplete(async () => {
-  return await startGatewayAndShowMain("setup:complete", {
+  const ok = await startGatewayAndShowMain("setup:complete", {
     openOnFailure: false,
     reportFailure: false,
   });
+  if (ok) {
+    recordSetupBaselineConfigSnapshot();
+  }
+  return ok;
 });
 
 // ── macOS Dock 可见性：窗口全隐藏时切换纯托盘模式 ──

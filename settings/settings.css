@@ -83,6 +83,14 @@ button, input, select, label, a {
 
 .nav-list {
   list-style: none;
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+
+.nav-item-bottom {
+  margin-top: auto;
 }
 
 .nav-item {
@@ -945,6 +953,9 @@ select option {
   display: flex;
   flex-direction: column;
   gap: 8px;
+  max-height: 300px;
+  overflow-y: auto;
+  padding-right: 2px;
 }
 
 .backup-item {
