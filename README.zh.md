@@ -83,4 +83,6 @@ A: 你可以把 OneClaw 连接到飞书，让它作为飞书工作区中的聊�
 
 ## 许可证
 
-MIT
+GNU Affero General Public License v3.0（`AGPL-3.0-only`）。
+
+允许商业使用，但如果你修改后分发本软件，或以网络服务形式提供修改版，你必须按 AGPL v3 公开对应源码。

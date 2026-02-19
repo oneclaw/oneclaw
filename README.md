@@ -5,7 +5,7 @@ You describe what you want, and it can automate browser tasks, organize informat
 
 OneClaw means **One-Click OpenClaw**.
 
-Chinese version: [README.zh.md](README.zh.md)
+中文文档: [README.zh.md](README.zh.md)
 
 Its goal is simple: **AI that gets things done, not just chats.**
 
@@ -83,4 +83,6 @@ A: You can connect OneClaw to Feishu (Lark) so it works as a chat bot in your Fe
 
 ## License
 
-MIT
+GNU Affero General Public License v3.0 (`AGPL-3.0-only`).
+
+Commercial use is allowed, but if you modify and distribute this software, or provide a modified version over a network, you must provide the corresponding source code under AGPL v3.
