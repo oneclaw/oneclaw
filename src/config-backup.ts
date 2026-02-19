@@ -9,7 +9,8 @@ import {
 
 const BACKUP_FILE_PREFIX = "openclaw-";
 const BACKUP_FILE_EXT = ".json";
-const MAX_BACKUP_FILES = 60;
+const MAX_BACKUP_FILES = 10;
+const SETUP_BASELINE_FILE = "openclaw-setup-baseline.json";
 
 export interface ConfigBackupItem {
   fileName: string;
@@ -66,6 +67,7 @@ export function backupCurrentUserConfig(): void {
 export function listUserConfigBackups(): ConfigBackupItem[] {
   const backupDir = resolveConfigBackupDir();
   if (!fs.existsSync(backupDir)) return [];
+  pruneOldBackups(backupDir);
 
   const files = fs
     .readdirSync(backupDir, { withFileTypes: true })
@@ -85,6 +87,20 @@ export function listUserConfigBackups(): ConfigBackupItem[] {
     .sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt));
 
   return items;
+}
+
+// 首次 setup 成功后保留一份基线配置，后续不覆盖，便于回退到“刚完成引导”状态。
+export function recordSetupBaselineConfigSnapshot(): void {
+  const configPath = resolveUserConfigPath();
+  const raw = readValidConfigRaw(configPath);
+  if (!raw) return;
+
+  const stateDir = resolveUserStateDir();
+  fs.mkdirSync(stateDir, { recursive: true });
+  const baselinePath = path.join(stateDir, SETUP_BASELINE_FILE);
+  if (fs.existsSync(baselinePath)) return;
+
+  fs.writeFileSync(baselinePath, raw, "utf-8");
 }
 
 // 恢复指定备份到 openclaw.json，恢复前先备份当前可解析配置以便回滚。
