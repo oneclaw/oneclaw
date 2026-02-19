@@ -4,6 +4,8 @@ import { contextBridge, ipcRenderer } from "electron";
 contextBridge.exposeInMainWorld("oneclaw", {
   // Gateway 控制
   restartGateway: () => ipcRenderer.send("gateway:restart"),
+  startGateway: () => ipcRenderer.send("gateway:start"),
+  stopGateway: () => ipcRenderer.send("gateway:stop"),
   getGatewayState: () => ipcRenderer.invoke("gateway:state"),
 
   // 自动更新
@@ -46,6 +48,7 @@ contextBridge.exposeInMainWorld("oneclaw", {
   settingsRestoreConfigBackup: (params: Record<string, unknown>) =>
     ipcRenderer.invoke("settings:restore-config-backup", params),
   settingsRestoreLastKnownGood: () => ipcRenderer.invoke("settings:restore-last-known-good"),
+  settingsResetConfigAndRelaunch: () => ipcRenderer.invoke("settings:reset-config-and-relaunch"),
 
   // Doctor 流式事件监听
   onDoctorOutput: (cb: (text: string) => void) => {

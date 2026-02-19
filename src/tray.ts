@@ -6,6 +6,9 @@ import { WindowManager } from "./window";
 interface TrayOptions {
   windowManager: WindowManager;
   gateway: GatewayProcess;
+  onRestartGateway: () => void;
+  onStartGateway: () => void;
+  onStopGateway: () => void;
   onOpenSettings: () => void;
   onQuit: () => void;
   onCheckUpdates: () => void;
@@ -19,6 +22,8 @@ type TrayStrings = {
   stateStopped: string;
   openDashboard: string;
   restartGateway: string;
+  startGateway: string;
+  stopGateway: string;
   settings: string;
   checkUpdates: string;
   quit: string;
@@ -32,6 +37,8 @@ const I18N: Record<string, TrayStrings> = {
     stateStopped: "Gateway: Stopped",
     openDashboard: "Open Dashboard",
     restartGateway: "Restart Gateway",
+    startGateway: "Start Gateway",
+    stopGateway: "Stop Gateway",
     settings: "Settings",
     checkUpdates: "Check for Updates",
     quit: "Quit OneClaw",
@@ -43,6 +50,8 @@ const I18N: Record<string, TrayStrings> = {
     stateStopped: "Gateway: 已停止",
     openDashboard: "打开 OneClaw",
     restartGateway: "重启 Gateway",
+    startGateway: "启动 Gateway",
+    stopGateway: "停止 Gateway",
     settings: "设置",
     checkUpdates: "检查更新",
     quit: "退出 OneClaw",
@@ -103,8 +112,12 @@ export class TrayManager {
   updateMenu(): void {
     if (!this.tray || !this.opts) return;
 
-    const { windowManager, gateway, onOpenSettings, onQuit, onCheckUpdates } = this.opts;
+    const { windowManager, gateway, onRestartGateway, onStartGateway, onStopGateway, onOpenSettings, onQuit, onCheckUpdates } = this.opts;
     const t = getTrayStrings();
+    const state = gateway.getState();
+    const inTransition = state === "starting" || state === "stopping";
+    const showStart = state === "stopped" || state === "stopping";
+    const showStop = state === "running" || state === "starting";
 
     const menu = Menu.buildFromTemplate([
       {
@@ -112,8 +125,10 @@ export class TrayManager {
         click: () => windowManager.show({ port: gateway.getPort(), token: gateway.getToken() }),
       },
       { type: "separator" },
-      { label: getStateLabel(gateway.getState()), enabled: false },
-      { label: t.restartGateway, click: () => gateway.restart() },
+      { label: getStateLabel(state), enabled: false },
+      { label: t.restartGateway, enabled: !inTransition, click: onRestartGateway },
+      ...(showStart ? [{ label: t.startGateway, enabled: state === "stopped", click: onStartGateway }] : []),
+      ...(showStop ? [{ label: t.stopGateway, enabled: state === "running", click: onStopGateway }] : []),
       { type: "separator" },
       { label: t.settings, click: onOpenSettings },
       { label: t.checkUpdates, click: onCheckUpdates },

@@ -212,7 +212,9 @@ Electron 40 defaults to sandbox mode. 15 IPC methods + 2 event listeners are exp
 
 2. **No `text-transform: uppercase` on labels.** Labels should display as written — respect the original casing of brand names (Chrome, iMessage) and CJK text.
 
-3. **Use radio buttons for boolean toggles**, not checkboxes. Pattern: label on one line, radio group on the next line.
+3. **Use iOS-style Switch for boolean settings**, not radio buttons or checkboxes. Follow the Apple-like toggle pattern (`toggle-switch`): label on the left, switch on the right.
+
+4. **Default action buttons align right.** In settings pages, action rows should right-align buttons by default (`.btn-row { justify-content: flex-end; }`) for a consistent visual rhythm. Only deviate when an inline/list context explicitly requires local actions.
 
 ## Common Gotchas
 
