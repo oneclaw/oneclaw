@@ -1,0 +1,75 @@
+name: Publish Share Copy
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - settings/share-copy-content.json
+  workflow_dispatch:
+
+env:
+  CDN_DOMAIN: oneclaw.cn
+  SHARE_COPY_OBJECT_KEY: config/share-copy-content.json
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 校验分享文案 JSON
+        run: |
+          node -e '
+            const fs = require("fs");
+            const raw = fs.readFileSync("settings/share-copy-content.json", "utf8");
+            const data = JSON.parse(raw);
+            if (!Number.isInteger(data.version) || data.version < 0) {
+              throw new Error("share-copy-content.json version 必须是非负整数");
+            }
+            if (!data.locales || typeof data.locales !== "object") {
+              throw new Error("share-copy-content.json locales 缺失或格式错误");
+            }
+            for (const locale of ["zh", "en"]) {
+              const entry = data.locales[locale];
+              if (!entry || typeof entry !== "object") {
+                throw new Error(`share-copy-content.json locales.${locale} 缺失或格式错误`);
+              }
+              if (typeof entry.title !== "string" || !entry.title.trim()) {
+                throw new Error(`share-copy-content.json locales.${locale}.title 不能为空字符串`);
+              }
+              if (typeof entry.subtitle !== "string" || !entry.subtitle.trim()) {
+                throw new Error(`share-copy-content.json locales.${locale}.subtitle 不能为空字符串`);
+              }
+              if (typeof entry.body !== "string" || !entry.body.trim()) {
+                throw new Error(`share-copy-content.json locales.${locale}.body 不能为空字符串`);
+              }
+            }
+          '
+
+      - name: 安装 ossutil
+        run: curl -fsSL https://gosspublic.alicdn.com/ossutil/install.sh | sudo bash
+
+      - name: 上传分享文案到 OSS
+        env:
+          ALIYUN_ACCESS_KEY_ID: ${{ secrets.ALIYUN_ACCESS_KEY_ID }}
+          ALIYUN_ACCESS_KEY_SECRET: ${{ secrets.ALIYUN_ACCESS_KEY_SECRET }}
+        run: |
+          ossutil config -e oss-cn-beijing.aliyuncs.com -i "$ALIYUN_ACCESS_KEY_ID" -k "$ALIYUN_ACCESS_KEY_SECRET"
+          ossutil cp settings/share-copy-content.json "oss://oneclaw/${{ env.SHARE_COPY_OBJECT_KEY }}" --force
+          echo "share-copy-content.json 上传完成"
+
+      - name: 刷新 CDN 缓存
+        env:
+          ALIYUN_ACCESS_KEY_ID: ${{ secrets.ALIYUN_ACCESS_KEY_ID }}
+          ALIYUN_ACCESS_KEY_SECRET: ${{ secrets.ALIYUN_ACCESS_KEY_SECRET }}
+        run: |
+          curl -fsSL https://aliyuncli.alicdn.com/aliyun-cli-linux-latest-amd64.tgz | tar xz
+          chmod +x aliyun
+          ./aliyun configure set \
+            --access-key-id "$ALIYUN_ACCESS_KEY_ID" \
+            --access-key-secret "$ALIYUN_ACCESS_KEY_SECRET" \
+            --region cn-beijing
+          ./aliyun cdn RefreshObjectCaches \
+            --ObjectType File \
+            --ObjectPath "https://${{ env.CDN_DOMAIN }}/${{ env.SHARE_COPY_OBJECT_KEY }}"
+          echo "CDN 刷新已提交"

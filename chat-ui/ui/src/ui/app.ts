@@ -45,6 +45,7 @@ import {
 import {
   handleAbortChat as handleAbortChatInternal,
   handleSendChat as handleSendChatInternal,
+  isSharePromptCountableInput,
   removeQueuedMessage as removeQueuedMessageInternal,
 } from "./app-chat.ts";
 import { DEFAULT_CRON_FORM, DEFAULT_LOG_LEVEL_FILTERS } from "./app-defaults.ts";
@@ -78,6 +79,7 @@ import {
 } from "./app-tool-stream.ts";
 import { resolveInjectedAssistantIdentity } from "./assistant-identity.ts";
 import { loadAssistantIdentity as loadAssistantIdentityInternal } from "./controllers/assistant-identity.ts";
+import { getLocale, t } from "./i18n.ts";
 import { loadSettings, type UiSettings } from "./storage.ts";
 import { type ChatAttachment, type ChatQueueItem, type CronFormState } from "./ui-types.ts";
 
@@ -88,6 +90,30 @@ declare global {
 }
 
 const injectedAssistantIdentity = resolveInjectedAssistantIdentity();
+
+type ShareCopyPayload = {
+  version: number;
+  locales: {
+    zh: {
+      title: string;
+      subtitle: string;
+      body: string;
+    };
+    en: {
+      title: string;
+      subtitle: string;
+      body: string;
+    };
+  };
+};
+
+type SharePromptStore = {
+  sendCount: number;
+  shownVersions: number[];
+};
+
+const SHARE_PROMPT_STORE_KEY = "openclaw.share.prompt.v1";
+const SHARE_PROMPT_TRIGGER_COUNT = 5;
 
 function resolveOnboardingMode(): boolean {
   if (!window.location.search) {
@@ -285,12 +311,20 @@ export class OpenClawApp extends LitElement {
     logsMaxBytes: { state: true },
     logsAtBottom: { state: true },
     chatNewMessagesBelow: { state: true },
+    sharePromptVisible: { state: true },
+    sharePromptCopied: { state: true },
+    sharePromptCopyError: { state: true },
+    sharePromptTitle: { state: true },
+    sharePromptSubtitle: { state: true },
+    sharePromptText: { state: true },
+    sharePromptVersion: { state: true },
   };
 
   // 兼容 class field 的 define 语义：回灌实例字段到 Lit accessor，恢复响应式更新。
   constructor() {
     super();
     this.rebindReactiveFieldsForLit();
+    this.restoreSharePromptStore();
   }
 
   // 将实例自有字段删除并通过 setter 重新赋值，避免覆盖原型上的响应式访问器。
@@ -533,6 +567,16 @@ export class OpenClawApp extends LitElement {
   private chatHasAutoScrolled = false;
   private chatUserNearBottom = true;
   chatNewMessagesBelow = false;
+  sharePromptVisible = false;
+  sharePromptCopied = false;
+  sharePromptCopyError: string | null = null;
+  sharePromptTitle = t("sharePrompt.title");
+  sharePromptSubtitle = t("sharePrompt.subtitle");
+  sharePromptText = "";
+  sharePromptVersion: number | null = null;
+  private sharePromptSendCount = 0;
+  private sharePromptShownVersions = new Set<number>();
+  private sharePromptCheckInFlight = false;
   private nodesPollInterval: number | null = null;
   private logsPollInterval: number | null = null;
   private debugPollInterval: number | null = null;
@@ -674,15 +718,230 @@ export class OpenClawApp extends LitElement {
     );
   }
 
+  // 恢复分享弹窗状态（累计发送次数 + 已展示版本集合）。
+  private restoreSharePromptStore() {
+    try {
+      const raw = localStorage.getItem(SHARE_PROMPT_STORE_KEY);
+      if (!raw) {
+        return;
+      }
+      const parsed = JSON.parse(raw) as Partial<SharePromptStore>;
+      const sendCount = Number(parsed.sendCount);
+      this.sharePromptSendCount = Number.isFinite(sendCount) && sendCount > 0
+        ? Math.floor(sendCount)
+        : 0;
+      const versions = Array.isArray(parsed.shownVersions)
+        ? parsed.shownVersions
+          .map((version) => Number(version))
+          .filter((version) => Number.isInteger(version) && version >= 0)
+        : [];
+      this.sharePromptShownVersions = new Set(versions);
+    } catch {
+      this.sharePromptSendCount = 0;
+      this.sharePromptShownVersions = new Set();
+    }
+  }
+
+  // 持久化分享弹窗状态，确保“每版本只弹一次”跨重启生效。
+  private persistSharePromptStore() {
+    try {
+      const payload: SharePromptStore = {
+        sendCount: this.sharePromptSendCount,
+        shownVersions: Array.from(this.sharePromptShownVersions),
+      };
+      localStorage.setItem(SHARE_PROMPT_STORE_KEY, JSON.stringify(payload));
+    } catch {
+      // ignore storage write failures
+    }
+  }
+
+  // 规范化服务端文案结构，缺语言时做互相回退。
+  private normalizeShareCopyPayload(input: unknown): ShareCopyPayload | null {
+    const data = input && typeof input === "object" ? (input as Record<string, unknown>) : null;
+    if (!data) {
+      return null;
+    }
+    const version = Number(data.version);
+    if (!Number.isInteger(version) || version < 0) {
+      return null;
+    }
+    const locales =
+      data.locales && typeof data.locales === "object"
+        ? (data.locales as Record<string, unknown>)
+        : null;
+    if (!locales) {
+      return null;
+    }
+    const zhRaw =
+      locales.zh && typeof locales.zh === "object"
+        ? (locales.zh as Record<string, unknown>)
+        : null;
+    const enRaw =
+      locales.en && typeof locales.en === "object"
+        ? (locales.en as Record<string, unknown>)
+        : null;
+    if (!zhRaw || !enRaw) {
+      return null;
+    }
+    const zhTitle = String(zhRaw.title ?? "").replace(/\r\n/g, "\n").trim();
+    const zhSubtitle = String(zhRaw.subtitle ?? "").replace(/\r\n/g, "\n").trim();
+    const zhBody = String(zhRaw.body ?? "").replace(/\r\n/g, "\n").trim();
+    const enTitle = String(enRaw.title ?? "").replace(/\r\n/g, "\n").trim();
+    const enSubtitle = String(enRaw.subtitle ?? "").replace(/\r\n/g, "\n").trim();
+    const enBody = String(enRaw.body ?? "").replace(/\r\n/g, "\n").trim();
+    if (!zhTitle || !zhSubtitle || !zhBody || !enTitle || !enSubtitle || !enBody) {
+      return null;
+    }
+    return {
+      version,
+      locales: {
+        zh: {
+          title: zhTitle,
+          subtitle: zhSubtitle,
+          body: zhBody,
+        },
+        en: {
+          title: enTitle,
+          subtitle: enSubtitle,
+          body: enBody,
+        },
+      },
+    };
+  }
+
+  // 从主进程拉取最新分享文案（主进程负责远端拉取与本地兜底）。
+  private async fetchShareCopyPayload(): Promise<ShareCopyPayload | null> {
+    const bridge = (window as unknown as {
+      oneclaw?: { settingsGetShareCopy?: () => Promise<unknown> };
+    }).oneclaw;
+    if (!bridge?.settingsGetShareCopy) {
+      return null;
+    }
+    try {
+      const result = await bridge.settingsGetShareCopy() as {
+        success?: unknown;
+        data?: unknown;
+      };
+      if (!result || result.success !== true) {
+        return null;
+      }
+      return this.normalizeShareCopyPayload(result.data);
+    } catch {
+      return null;
+    }
+  }
+
+  // 按当前客户端语言选择展示文案。
+  private resolveSharePromptText(payload: ShareCopyPayload): string {
+    return getLocale() === "zh" ? payload.locales.zh.body : payload.locales.en.body;
+  }
+
+  // 按当前客户端语言选择标题。
+  private resolveSharePromptTitle(payload: ShareCopyPayload): string {
+    return getLocale() === "zh" ? payload.locales.zh.title : payload.locales.en.title;
+  }
+
+  // 按当前客户端语言选择副标题。
+  private resolveSharePromptSubtitle(payload: ShareCopyPayload): string {
+    return getLocale() === "zh" ? payload.locales.zh.subtitle : payload.locales.en.subtitle;
+  }
+
+  // 达到阈值后尝试弹窗；同一版本只展示一次。
+  private async maybeShowSharePrompt() {
+    if (this.sharePromptCheckInFlight || this.sharePromptVisible) {
+      return;
+    }
+    if (this.sharePromptSendCount < SHARE_PROMPT_TRIGGER_COUNT) {
+      return;
+    }
+    this.sharePromptCheckInFlight = true;
+    try {
+      const payload = await this.fetchShareCopyPayload();
+      if (!payload || this.sharePromptShownVersions.has(payload.version)) {
+        return;
+      }
+      this.sharePromptTitle = this.resolveSharePromptTitle(payload);
+      this.sharePromptSubtitle = this.resolveSharePromptSubtitle(payload);
+      this.sharePromptText = this.resolveSharePromptText(payload);
+      this.sharePromptVersion = payload.version;
+      this.sharePromptCopied = false;
+      this.sharePromptCopyError = null;
+      this.sharePromptVisible = true;
+
+      // 首次展示即标记已展示，避免同版本重复打扰。
+      this.sharePromptShownVersions.add(payload.version);
+      this.persistSharePromptStore();
+    } finally {
+      this.sharePromptCheckInFlight = false;
+    }
+  }
+
+  // 记录一次有效用户输入，并检查是否需要触发分享弹窗。
+  private recordSharePromptInput() {
+    this.sharePromptSendCount += 1;
+    this.persistSharePromptStore();
+    void this.maybeShowSharePrompt();
+  }
+
   async handleSendChat(
     messageOverride?: string,
     opts?: Parameters<typeof handleSendChatInternal>[2],
   ) {
-    await handleSendChatInternal(
+    const inputText = String(messageOverride ?? this.chatMessage ?? "").trim();
+    const accepted = await handleSendChatInternal(
       this as unknown as Parameters<typeof handleSendChatInternal>[0],
       messageOverride,
       opts,
     );
+    if (accepted && isSharePromptCountableInput(inputText)) {
+      this.recordSharePromptInput();
+    }
+  }
+
+  dismissSharePrompt() {
+    this.sharePromptVisible = false;
+    this.sharePromptCopied = false;
+    this.sharePromptCopyError = null;
+    this.sharePromptVersion = null;
+  }
+
+  async handleSharePromptCopy() {
+    const text = this.sharePromptText.trim();
+    this.sharePromptCopyError = null;
+    if (!text) {
+      this.sharePromptCopyError = t("sharePrompt.copyFailed");
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(text);
+      this.dismissSharePrompt();
+      return;
+    } catch {
+      // Clipboard API failed; fall back to execCommand.
+    }
+
+    const textarea = document.createElement("textarea");
+    textarea.value = text;
+    textarea.setAttribute("readonly", "true");
+    textarea.style.position = "fixed";
+    textarea.style.left = "-9999px";
+    textarea.style.top = "0";
+    document.body.appendChild(textarea);
+    textarea.focus();
+    textarea.select();
+    let copied = false;
+    try {
+      copied = document.execCommand("copy");
+    } catch {
+      copied = false;
+    } finally {
+      document.body.removeChild(textarea);
+    }
+    if (copied) {
+      this.dismissSharePrompt();
+    } else {
+      this.sharePromptCopyError = t("sharePrompt.copyFailed");
+    }
   }
 
   async handleWhatsAppStart(force: boolean) {

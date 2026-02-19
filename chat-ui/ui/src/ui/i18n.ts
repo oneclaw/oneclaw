@@ -54,6 +54,14 @@ const dict: Record<Locale, Record<string, string>> = {
     "chat.removeQueuedMessage": "移除排队消息",
     "chat.attachmentPreview": "图片预览",
 
+    // Share prompt
+    "sharePrompt.title": "分享 OneClaw 给朋友",
+    "sharePrompt.subtitle": "复制下面这段文案分享给你的朋友或群聊，作者会非常感谢你哟😘",
+    "sharePrompt.copy": "复制文案",
+    "sharePrompt.copied": "已复制",
+    "sharePrompt.close": "关闭",
+    "sharePrompt.copyFailed": "复制失败，请手动选择文案复制",
+
     // Senders
     "sender.you": "你",
     "sender.assistant": "助手",
@@ -119,6 +127,15 @@ const dict: Record<Locale, Record<string, string>> = {
     "chat.removeAttachment": "Remove attachment",
     "chat.removeQueuedMessage": "Remove queued message",
     "chat.attachmentPreview": "Attachment preview",
+
+    // Share prompt
+    "sharePrompt.title": "Share OneClaw with friends",
+    "sharePrompt.subtitle":
+      "Copy this text and share it with your friends or group chats. The creator will really appreciate it 😘",
+    "sharePrompt.copy": "Copy text",
+    "sharePrompt.copied": "Copied",
+    "sharePrompt.close": "Close",
+    "sharePrompt.copyFailed": "Copy failed. Please select and copy manually",
 
     // Senders
     "sender.you": "You",
