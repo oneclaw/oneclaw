@@ -1,10 +1,11 @@
-import { ipcMain } from "electron";
+import { app, ipcMain } from "electron";
 import { ChildProcess, spawn } from "child_process";
 import {
   resolveNodeBin,
   resolveGatewayEntry,
   resolveGatewayCwd,
   resolveResourcesPath,
+  resolveUserConfigPath,
   resolveUserStateDir,
 } from "./constants";
 import {
@@ -507,6 +508,31 @@ export function registerSettingsIpc(): void {
     try {
       restoreLastKnownGoodConfigSnapshot();
       return { success: true };
+    } catch (err: any) {
+      return { success: false, message: err.message || String(err) };
+    }
+  });
+
+  // ── 恢复配置：删除 openclaw.json 并重启应用，保留历史目录 ──
+  ipcMain.handle("settings:reset-config-and-relaunch", async () => {
+    try {
+      const configPath = resolveUserConfigPath();
+      if (fs.existsSync(configPath)) {
+        fs.unlinkSync(configPath);
+      }
+
+      app.relaunch();
+      setTimeout(() => {
+        app.exit(0);
+      }, 100);
+
+      return {
+        success: true,
+        data: {
+          configPath,
+          preservedStateDir: resolveUserStateDir(),
+        },
+      };
     } catch (err: any) {
       return { success: false, message: err.message || String(err) };
     }

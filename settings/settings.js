@@ -183,15 +183,29 @@
       "appearance.saved": "Appearance settings saved.",
       "backup.title": "Backup & Restore",
       "backup.desc": "Restore openclaw.json when config changes break startup.",
-      "backup.lastKnownGoodTitle": "Last known good config",
       "backup.restoreLastKnownGood": "Restore Last Known Good",
       "backup.historyTitle": "Backup history",
       "backup.empty": "No backup found yet. Save settings once to create one.",
       "backup.restore": "Restore",
       "backup.restoring": "Restoring…",
+      "backup.gatewayTitle": "Gateway Control",
+      "backup.gatewayRestart": "Restart Gateway",
+      "backup.gatewayStart": "Start Gateway",
+      "backup.gatewayStop": "Stop Gateway",
+      "backup.gatewayState": "Gateway status: ",
+      "backup.gatewayStateRunning": "Running",
+      "backup.gatewayStateStarting": "Starting…",
+      "backup.gatewayStateStopping": "Stopping…",
+      "backup.gatewayStateStopped": "Stopped",
+      "backup.gatewayStateUnknown": "Unknown",
+      "backup.resetTitle": "Reset Configuration",
+      "backup.resetDesc": "Delete openclaw.json and relaunch app to run setup again. Chat history is kept.",
+      "backup.resetButton": "Reset Config And Relaunch",
+      "backup.resetting": "Resetting…",
+      "backup.confirmReset": "Delete openclaw.json, keep history data, and relaunch app to run setup again?",
+      "backup.resetDone": "Configuration removed. App is relaunching.",
       "backup.lastKnownGoodAt": "Last successful startup snapshot: ",
       "backup.noLastKnownGood": "No last known good snapshot found yet.",
-      "backup.meta": "Config path: {configPath}\nBackup dir: {backupDir}",
       "backup.confirmRestore": "Restore this backup and overwrite current openclaw.json?",
       "backup.confirmRestoreLastKnownGood": "Restore last known good config and overwrite current openclaw.json?",
       "backup.restored": "Configuration restored. Gateway restart triggered.",
@@ -324,15 +338,29 @@
       "appearance.saved": "外观设置已保存。",
       "backup.title": "备份与恢复",
       "backup.desc": "当配置改坏导致无法启动时，可在这里回退 openclaw.json。",
-      "backup.lastKnownGoodTitle": "最近一次可启动配置",
       "backup.restoreLastKnownGood": "恢复最近可用配置",
       "backup.historyTitle": "备份历史",
       "backup.empty": "暂无备份。先保存一次设置即可生成。",
       "backup.restore": "恢复",
       "backup.restoring": "恢复中…",
+      "backup.gatewayTitle": "Gateway 控制",
+      "backup.gatewayRestart": "重启 Gateway",
+      "backup.gatewayStart": "启动 Gateway",
+      "backup.gatewayStop": "停止 Gateway",
+      "backup.gatewayState": "Gateway 状态：",
+      "backup.gatewayStateRunning": "运行中",
+      "backup.gatewayStateStarting": "启动中…",
+      "backup.gatewayStateStopping": "停止中…",
+      "backup.gatewayStateStopped": "已停止",
+      "backup.gatewayStateUnknown": "未知",
+      "backup.resetTitle": "恢复配置",
+      "backup.resetDesc": "删除 openclaw.json 并重启应用，重新进入引导流程。历史数据会保留。",
+      "backup.resetButton": "恢复配置并重启",
+      "backup.resetting": "恢复中…",
+      "backup.confirmReset": "将删除 openclaw.json，保留历史数据，并重启应用重新进入引导流程，确认继续吗？",
+      "backup.resetDone": "配置已删除，应用正在重启。",
       "backup.lastKnownGoodAt": "最近成功启动快照时间：",
       "backup.noLastKnownGood": "暂无“最近可用配置”快照。",
-      "backup.meta": "配置文件：{configPath}\n备份目录：{backupDir}",
       "backup.confirmRestore": "确认恢复该备份并覆盖当前 openclaw.json 吗？",
       "backup.confirmRestoreLastKnownGood": "确认恢复“最近可用配置”并覆盖当前 openclaw.json 吗？",
       "backup.restored": "配置已恢复，已触发 Gateway 重启。",
@@ -423,13 +451,19 @@
     btnAppearanceSaveSpinner: $("#btnAppearanceSave .btn-spinner"),
     // Backup tab
     backupLastKnownGood: $("#backupLastKnownGood"),
-    backupMeta: $("#backupMeta"),
     backupEmpty: $("#backupEmpty"),
     backupList: $("#backupList"),
     backupMsgBox: $("#backupMsgBox"),
     btnRestoreLastKnownGood: $("#btnRestoreLastKnownGood"),
     btnRestoreLastKnownGoodText: $("#btnRestoreLastKnownGood .btn-text"),
     btnRestoreLastKnownGoodSpinner: $("#btnRestoreLastKnownGood .btn-spinner"),
+    gatewayStateText: $("#gatewayStateText"),
+    btnGatewayRestart: $("#btnGatewayRestart"),
+    btnGatewayStart: $("#btnGatewayStart"),
+    btnGatewayStop: $("#btnGatewayStop"),
+    btnResetConfig: $("#btnResetConfig"),
+    btnResetConfigText: $("#btnResetConfig .btn-text"),
+    btnResetConfigSpinner: $("#btnResetConfig .btn-spinner"),
   };
 
   // ── 状态 ──
@@ -449,7 +483,11 @@
   let advSaving = false;
   let appearanceSaving = false;
   let backupRestoring = false;
+  let backupResetting = false;
   let backupHasLastKnownGood = false;
+  let gatewayState = "stopped";
+  let gatewayOperating = false;
+  let gatewayStateTimer = null;
   let currentLang = "en";
   let initialTab = "provider";
   let startupNotice = "";
@@ -509,6 +547,7 @@
 
     if (target === "backup") {
       loadBackupData();
+      refreshGatewayState();
     }
   }
 
@@ -1687,14 +1726,9 @@
     }
   }
 
-  // 渲染备份页：最近可用快照信息、备份目录信息和历史备份条目。
+  // 渲染备份页：最近可用快照信息与历史备份条目。
   function renderBackupData(data) {
-    if (!els.backupMeta || !els.backupList) return;
-
-    var metaText = t("backup.meta")
-      .replace("{configPath}", data.configPath || "")
-      .replace("{backupDir}", data.backupDir || "");
-    els.backupMeta.textContent = metaText;
+    if (!els.backupList) return;
 
     backupHasLastKnownGood = !!data.hasLastKnownGood;
     if (backupHasLastKnownGood && data.lastKnownGoodUpdatedAt) {
@@ -1704,7 +1738,8 @@
     }
 
     if (els.btnRestoreLastKnownGood) {
-      els.btnRestoreLastKnownGood.disabled = !backupHasLastKnownGood || backupRestoring;
+      els.btnRestoreLastKnownGood.disabled =
+        !backupHasLastKnownGood || backupRestoring || backupResetting;
     }
 
     var backups = Array.isArray(data.backups) ? data.backups : [];
@@ -1728,7 +1763,7 @@
 
       var btn = document.createElement("button");
       btn.type = "button";
-      btn.className = "btn-ghost";
+      btn.className = "btn-primary btn-compact";
       btn.dataset.fileName = item.fileName || "";
       btn.textContent = t("backup.restore");
 
@@ -1742,7 +1777,7 @@
 
   // 恢复指定历史备份并触发 Gateway 重启。
   async function handleRestoreBackup(fileName) {
-    if (backupRestoring) return;
+    if (backupRestoring || backupResetting) return;
     if (!fileName) return;
     if (!window.confirm(t("backup.confirmRestore"))) return;
 
@@ -1759,6 +1794,7 @@
 
       if (window.oneclaw && window.oneclaw.restartGateway) {
         window.oneclaw.restartGateway();
+        scheduleGatewayStateRefresh();
       }
       showToast(t("backup.restored"));
       await loadBackupData();
@@ -1771,7 +1807,7 @@
 
   // 一键恢复最近可用配置并触发 Gateway 重启。
   async function handleRestoreLastKnownGood() {
-    if (backupRestoring) return;
+    if (backupRestoring || backupResetting) return;
     if (!window.confirm(t("backup.confirmRestoreLastKnownGood"))) return;
 
     setBackupRestoring(true);
@@ -1787,6 +1823,7 @@
 
       if (window.oneclaw && window.oneclaw.restartGateway) {
         window.oneclaw.restartGateway();
+        scheduleGatewayStateRefresh();
       }
       showToast(t("backup.restored"));
       await loadBackupData();
@@ -1795,6 +1832,92 @@
     }
 
     setBackupRestoring(false);
+  }
+
+  function normalizeGatewayState(state) {
+    if (state === "running" || state === "starting" || state === "stopping" || state === "stopped") {
+      return state;
+    }
+    return "unknown";
+  }
+
+  function formatGatewayStateText(state) {
+    if (state === "running") return t("backup.gatewayStateRunning");
+    if (state === "starting") return t("backup.gatewayStateStarting");
+    if (state === "stopping") return t("backup.gatewayStateStopping");
+    if (state === "stopped") return t("backup.gatewayStateStopped");
+    return t("backup.gatewayStateUnknown");
+  }
+
+  function setGatewayStateUI(state) {
+    gatewayState = normalizeGatewayState(state);
+
+    if (els.gatewayStateText) {
+      els.gatewayStateText.textContent = t("backup.gatewayState") + formatGatewayStateText(gatewayState);
+    }
+
+    var inTransition = gatewayState === "starting" || gatewayState === "stopping";
+    var showStart = gatewayState === "stopped" || gatewayState === "stopping" || gatewayState === "unknown";
+    var showStop = gatewayState === "running" || gatewayState === "starting";
+    if (els.btnGatewayRestart) {
+      els.btnGatewayRestart.disabled = gatewayOperating || backupRestoring || backupResetting || inTransition;
+    }
+    if (els.btnGatewayStart) {
+      els.btnGatewayStart.classList.toggle("hidden", !showStart);
+      els.btnGatewayStart.disabled = gatewayOperating || backupRestoring || backupResetting || gatewayState !== "stopped";
+    }
+    if (els.btnGatewayStop) {
+      els.btnGatewayStop.classList.toggle("hidden", !showStop);
+      els.btnGatewayStop.disabled = gatewayOperating || backupRestoring || backupResetting || gatewayState !== "running";
+    }
+  }
+
+  // 查询 Gateway 当前状态并刷新按钮可用性。
+  async function refreshGatewayState() {
+    if (!window.oneclaw || !window.oneclaw.getGatewayState) {
+      setGatewayStateUI("unknown");
+      return;
+    }
+    try {
+      var state = await window.oneclaw.getGatewayState();
+      setGatewayStateUI(state);
+    } catch {
+      setGatewayStateUI("unknown");
+    }
+  }
+
+  function scheduleGatewayStateRefresh() {
+    setTimeout(refreshGatewayState, 200);
+    setTimeout(refreshGatewayState, 1200);
+    setTimeout(refreshGatewayState, 3000);
+  }
+
+  // 按钮操作统一入口：重启/启动/停止 Gateway。
+  async function handleGatewayAction(kind) {
+    if (gatewayOperating || backupRestoring || backupResetting) return;
+    if (!window.oneclaw) return;
+
+    gatewayOperating = true;
+    setGatewayStateUI(gatewayState);
+    hideBackupMsg();
+
+    try {
+      if (kind === "restart" && window.oneclaw.restartGateway) {
+        window.oneclaw.restartGateway();
+      } else if (kind === "start" && window.oneclaw.startGateway) {
+        window.oneclaw.startGateway();
+      } else if (kind === "stop" && window.oneclaw.stopGateway) {
+        window.oneclaw.stopGateway();
+      } else {
+        throw new Error("Gateway control API unavailable");
+      }
+      scheduleGatewayStateRefresh();
+    } catch (err) {
+      showBackupMsg(t("error.connection") + (err.message || "Unknown error"), "error");
+    } finally {
+      gatewayOperating = false;
+      setGatewayStateUI(gatewayState);
+    }
   }
 
   // 根据主进程传入的 notice code，在恢复页顶部展示上下文提示。
@@ -1829,9 +1952,53 @@
   function setBackupRestoring(loading) {
     backupRestoring = loading;
     if (!els.btnRestoreLastKnownGoodText || !els.btnRestoreLastKnownGoodSpinner) return;
-    els.btnRestoreLastKnownGood.disabled = loading || !backupHasLastKnownGood;
+    els.btnRestoreLastKnownGood.disabled = loading || backupResetting || !backupHasLastKnownGood;
     els.btnRestoreLastKnownGoodText.textContent = loading ? t("backup.restoring") : t("backup.restoreLastKnownGood");
     els.btnRestoreLastKnownGoodSpinner.classList.toggle("hidden", !loading);
+    if (els.btnResetConfig) {
+      els.btnResetConfig.disabled = loading || backupResetting;
+    }
+    setGatewayStateUI(gatewayState);
+  }
+
+  // 删除配置并重启应用，让用户重新进入引导流程。
+  async function handleResetConfig() {
+    if (backupRestoring || backupResetting) return;
+    if (!window.confirm(t("backup.confirmReset"))) return;
+    if (!window.oneclaw || !window.oneclaw.settingsResetConfigAndRelaunch) return;
+
+    setBackupResetting(true);
+    hideBackupMsg();
+
+    try {
+      var result = await window.oneclaw.settingsResetConfigAndRelaunch();
+      if (!result.success) {
+        showBackupMsg(result.message || "Reset failed", "error");
+        setBackupResetting(false);
+        return;
+      }
+      showToast(t("backup.resetDone"));
+    } catch (err) {
+      showBackupMsg(t("error.connection") + (err.message || "Unknown error"), "error");
+      setBackupResetting(false);
+    }
+  }
+
+  function setBackupResetting(loading) {
+    backupResetting = loading;
+    if (els.btnResetConfig) {
+      els.btnResetConfig.disabled = loading || backupRestoring;
+    }
+    if (els.btnResetConfigText) {
+      els.btnResetConfigText.textContent = loading ? t("backup.resetting") : t("backup.resetButton");
+    }
+    if (els.btnResetConfigSpinner) {
+      els.btnResetConfigSpinner.classList.toggle("hidden", !loading);
+    }
+    if (els.btnRestoreLastKnownGood) {
+      els.btnRestoreLastKnownGood.disabled = loading || backupRestoring || !backupHasLastKnownGood;
+    }
+    setGatewayStateUI(gatewayState);
   }
 
   function formatDateTime(iso) {
@@ -2063,6 +2230,24 @@
         handleRestoreBackup(btn.dataset.fileName || "");
       });
     }
+    if (els.btnGatewayRestart) {
+      els.btnGatewayRestart.addEventListener("click", function () {
+        handleGatewayAction("restart");
+      });
+    }
+    if (els.btnGatewayStart) {
+      els.btnGatewayStart.addEventListener("click", function () {
+        handleGatewayAction("start");
+      });
+    }
+    if (els.btnGatewayStop) {
+      els.btnGatewayStop.addEventListener("click", function () {
+        handleGatewayAction("stop");
+      });
+    }
+    if (els.btnResetConfig) {
+      els.btnResetConfig.addEventListener("click", handleResetConfig);
+    }
 
     // Doctor 流式输出监听
     if (window.oneclaw && window.oneclaw.onDoctorOutput) {
@@ -2095,6 +2280,11 @@
     loadKimiConfig();
     loadAdvancedConfig();
     loadAppearanceSettings();
+    refreshGatewayState();
+    if (gatewayStateTimer) {
+      clearInterval(gatewayStateTimer);
+    }
+    gatewayStateTimer = setInterval(refreshGatewayState, 2000);
   }
 
   init();

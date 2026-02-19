@@ -509,6 +509,20 @@ select option {
   cursor: not-allowed;
 }
 
+.btn-primary.btn-compact {
+  padding: 6px 12px;
+  min-height: 32px;
+  font-size: 12px;
+}
+
+.btn-primary.danger {
+  background: var(--error);
+}
+
+.btn-primary.danger:hover:not(:disabled) {
+  background: #aa3125;
+}
+
 .btn-secondary {
   display: inline-flex;
   align-items: center;
@@ -906,6 +920,13 @@ select option {
   color: var(--text-primary);
 }
 
+.backup-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
 .backup-last-known-good,
 .backup-meta {
   font-size: 12.5px;
@@ -979,6 +1000,10 @@ select option {
   color: var(--accent);
 }
 
+.gateway-actions {
+  justify-content: flex-end;
+}
+
 /* ── Toast 提示 ── */
 
 .toast-container {
@@ -1043,6 +1068,15 @@ select option {
 @media (max-width: 720px) {
   .content {
     padding: 20px 18px;
+  }
+
+  .backup-card-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .gateway-actions {
+    flex-wrap: wrap;
   }
 
   .channel-desc-row {

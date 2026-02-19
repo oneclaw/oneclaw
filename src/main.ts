@@ -270,9 +270,34 @@ async function startGatewayAndShowMain(source: string, opts: StartMainOptions = 
   return running;
 }
 
+// 手动控制 Gateway：统一入口，确保启动前同步最新 token。
+function requestGatewayStart(source: string): void {
+  gateway.setToken(resolveGatewayAuthToken());
+  gateway.start().catch((err) => {
+    log.error(`Gateway 启动失败(${source}): ${err}`);
+  });
+}
+
+function requestGatewayRestart(source: string): void {
+  gateway.setToken(resolveGatewayAuthToken());
+  gateway.restart().catch((err) => {
+    log.error(`Gateway 重启失败(${source}): ${err}`);
+  });
+}
+
+function requestGatewayStop(source: string): void {
+  try {
+    gateway.stop();
+  } catch (err) {
+    log.error(`Gateway 停止失败(${source}): ${err}`);
+  }
+}
+
 // ── IPC 注册 ──
 
-ipcMain.on("gateway:restart", () => gateway.restart());
+ipcMain.on("gateway:restart", () => requestGatewayRestart("ipc:restart"));
+ipcMain.on("gateway:start", () => requestGatewayStart("ipc:start"));
+ipcMain.on("gateway:stop", () => requestGatewayStop("ipc:stop"));
 ipcMain.handle("gateway:state", () => gateway.getState());
 ipcMain.on("app:check-updates", () => checkForUpdates(true));
 ipcMain.handle("app:open-external", (_e, url: string) => shell.openExternal(url));
@@ -394,6 +419,9 @@ app.whenReady().then(async () => {
   tray.create({
     windowManager,
     gateway,
+    onRestartGateway: () => requestGatewayRestart("tray:restart"),
+    onStartGateway: () => requestGatewayStart("tray:start"),
+    onStopGateway: () => requestGatewayStop("tray:stop"),
     onOpenSettings: () => {
       openSettingsInMainWindow().catch((err) => {
         log.error(`托盘设置打开失败: ${err}`);
