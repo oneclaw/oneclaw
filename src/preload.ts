@@ -47,7 +47,6 @@ contextBridge.exposeInMainWorld("oneclaw", {
   settingsGetKimiConfig: () => ipcRenderer.invoke("settings:get-kimi-config"),
   settingsSaveKimiConfig: (params: Record<string, unknown>) =>
     ipcRenderer.invoke("settings:save-kimi-config", params),
-  settingsRunDoctor: () => ipcRenderer.invoke("settings:run-doctor"),
   settingsGetAdvanced: () => ipcRenderer.invoke("settings:get-advanced"),
   settingsSaveAdvanced: (params: Record<string, unknown>) =>
     ipcRenderer.invoke("settings:save-advanced", params),
@@ -58,13 +57,6 @@ contextBridge.exposeInMainWorld("oneclaw", {
   settingsResetConfigAndRelaunch: () => ipcRenderer.invoke("settings:reset-config-and-relaunch"),
   settingsGetShareCopy: () => ipcRenderer.invoke("settings:get-share-copy"),
 
-  // Doctor 流式事件监听
-  onDoctorOutput: (cb: (text: string) => void) => {
-    ipcRenderer.on("settings:doctor-output", (_e, text) => cb(text));
-  },
-  onDoctorExit: (cb: (code: number) => void) => {
-    ipcRenderer.on("settings:doctor-exit", (_e, code) => cb(code));
-  },
   onSettingsNavigate: (cb: (payload: { tab: string; notice: string }) => void) => {
     ipcRenderer.on("settings:navigate", (_e, payload) => cb(payload));
   },

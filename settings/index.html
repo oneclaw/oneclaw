@@ -36,19 +36,12 @@
           </svg>
           <span data-i18n="nav.kimi">KimiClaw</span>
         </li>
-        <li class="nav-item" data-tab="doctor">
-          <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-            <path d="M8 2V14M2 8H14" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
-            <rect x="1" y="1" width="14" height="14" rx="3" stroke="currentColor" stroke-width="1.3"/>
-          </svg>
-          <span data-i18n="nav.doctor">Doctor</span>
-        </li>
         <li class="nav-item" data-tab="appearance">
           <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
             <circle cx="8" cy="8" r="5.5" stroke="currentColor" stroke-width="1.3"/>
             <path d="M8 2.5V13.5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
           </svg>
-          <span data-i18n="nav.appearance">外观</span>
+          <span data-i18n="nav.appearance">外观显示</span>
         </li>
         <li class="nav-item" data-tab="advanced">
           <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
@@ -59,7 +52,7 @@
           </svg>
           <span data-i18n="nav.advanced">Advanced</span>
         </li>
-        <li class="nav-item nav-item-bottom" data-tab="backup">
+        <li class="nav-item" data-tab="backup">
           <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
             <path d="M8 1.8V8.2M8 8.2L5.8 6M8 8.2L10.2 6" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
             <path d="M3 9.5V12.5C3 13.3 3.7 14 4.5 14H11.5C12.3 14 13 13.3 13 12.5V9.5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
@@ -369,21 +362,6 @@
         </div>
       </section>
 
-      <!-- Doctor Tab -->
-      <section class="tab-panel" id="tabDoctor">
-        <h2 data-i18n="doctor.title">Doctor</h2>
-        <p class="desc" data-i18n="doctor.desc">Run diagnostics and auto-repair configuration issues.</p>
-
-        <button class="btn-primary" id="btnDoctor">
-          <span class="btn-text" data-i18n="doctor.run">Run Doctor</span>
-          <span class="btn-spinner hidden"></span>
-        </button>
-
-        <pre class="doctor-log hidden" id="doctorLog"></pre>
-
-        <div class="doctor-exit hidden" id="doctorExit"></div>
-      </section>
-
       <!-- Advanced Tab -->
       <section class="tab-panel" id="tabAdvanced">
         <h2 data-i18n="advanced.title">Advanced</h2>
@@ -435,7 +413,7 @@
 
       <!-- Appearance Tab -->
       <section class="tab-panel" id="tabAppearance">
-        <h2 data-i18n="appearance.title">外观</h2>
+        <h2 data-i18n="appearance.title">外观显示</h2>
         <p class="desc" data-i18n="appearance.desc">调整主题和聊天展示相关设置。</p>
 
         <div class="field-group">

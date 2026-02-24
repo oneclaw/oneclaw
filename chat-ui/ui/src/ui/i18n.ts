@@ -18,7 +18,7 @@ const dict: Record<Locale, Record<string, string>> = {
     "sidebar.updateDownloading": "正在下载更新 {percent}%",
     "sidebar.agent": "会话列表",
     "sidebar.preferences": "偏好设置",
-    "sidebar.appearance": "外观",
+    "sidebar.appearance": "外观显示",
     "sidebar.theme": "主题",
     "sidebar.showThinking": "显示思考过程",
     "sidebar.on": "开启",
@@ -43,7 +43,7 @@ const dict: Record<Locale, Record<string, string>> = {
 
     // OneClaw settings page
     "settings.title": "设置",
-    "settings.subtitle": "管理外观与聊天展示偏好",
+    "settings.subtitle": "管理外观显示与聊天展示偏好",
     "settings.backToChat": "返回对话",
 
     // Chat

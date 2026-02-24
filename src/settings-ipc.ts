@@ -1,5 +1,5 @@
 import { app, ipcMain } from "electron";
-import { ChildProcess, spawn } from "child_process";
+import { spawn } from "child_process";
 import {
   resolveNodeBin,
   resolveGatewayEntry,
@@ -84,7 +84,6 @@ type FeishuRejectedPairingStore = {
   codes: string[];
 };
 
-let doctorProc: ChildProcess | null = null;
 let feishuTenantTokenCache: FeishuTenantTokenCache | null = null;
 
 type SettingsActionResult = {
@@ -619,63 +618,6 @@ export function registerSettingsIpc(): void {
     }
   });
 
-  // ── Doctor 子进程 ──
-  ipcMain.handle("settings:run-doctor", async (event) => {
-    // 防止并发
-    if (doctorProc && doctorProc.exitCode == null) {
-      return { success: false, message: "Doctor 正在运行中" };
-    }
-
-    const nodeBin = resolveNodeBin();
-    const entry = resolveGatewayEntry();
-    const cwd = resolveGatewayCwd();
-
-    // 组装 PATH，内嵌 runtime 优先
-    const runtimeDir = path.join(resolveResourcesPath(), "runtime");
-    const envPath = runtimeDir + path.delimiter + (process.env.PATH ?? "");
-
-    doctorProc = spawn(nodeBin, [entry, "doctor", "--non-interactive", "--repair"], {
-      cwd,
-      env: {
-        ...process.env,
-        // 禁止 openclaw 入口二次 respawn，避免 Windows 控制台闪烁
-        OPENCLAW_NO_RESPAWN: "1",
-        PATH: envPath,
-        FORCE_COLOR: "0",
-      },
-      stdio: ["ignore", "pipe", "pipe"],
-      windowsHide: true,
-    });
-
-    const wc = event.sender;
-
-    // 流式推送 stdout/stderr
-    const pushOutput = (data: Buffer) => {
-      if (!wc.isDestroyed()) {
-        wc.send("settings:doctor-output", data.toString());
-      }
-    };
-    doctorProc.stdout?.on("data", pushOutput);
-    doctorProc.stderr?.on("data", pushOutput);
-
-    // 完成时推送退出码
-    doctorProc.on("exit", (code) => {
-      if (!wc.isDestroyed()) {
-        wc.send("settings:doctor-exit", code ?? -1);
-      }
-      doctorProc = null;
-    });
-
-    doctorProc.on("error", (err) => {
-      if (!wc.isDestroyed()) {
-        wc.send("settings:doctor-output", `Error: ${err.message}\n`);
-        wc.send("settings:doctor-exit", -1);
-      }
-      doctorProc = null;
-    });
-
-    return { success: true, pid: doctorProc.pid };
-  });
 }
 
 // 读取当前飞书配对模式状态，供主进程轮询器判断是否需要继续监听。
