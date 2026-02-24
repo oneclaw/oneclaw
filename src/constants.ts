@@ -69,8 +69,12 @@ export function resolveNpmBin(): string {
   return path.join(resolveResourcesPath(), "runtime", IS_WIN ? "npm.cmd" : "npm");
 }
 
-/** Gateway 入口（统一使用 package:resources 从 npm 安装的路径） */
+/** Gateway 入口（优先使用 openclaw.mjs；旧包回退 gateway-entry.mjs） */
 export function resolveGatewayEntry(): string {
+  const openclawCliEntry = path.join(resolveResourcesPath(), "gateway", "node_modules", "openclaw", "openclaw.mjs");
+  if (fs.existsSync(openclawCliEntry)) {
+    return openclawCliEntry;
+  }
   return path.join(resolveResourcesPath(), "gateway", "gateway-entry.mjs");
 }
 

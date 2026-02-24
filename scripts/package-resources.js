@@ -1076,7 +1076,7 @@ function copyAppIcon(iconPath) {
 // ─── Step 5: 生成统一入口和构建信息 ───
 
 function generateEntryAndBuildInfo(gatewayDir, platform, arch) {
-  // 写入 gateway-entry.mjs
+  // 写入 gateway-entry.mjs（保持静态入口，避免入口脚本提前退出）
   const entryContent = 'import "./node_modules/openclaw/dist/entry.js";\n';
   fs.writeFileSync(path.join(gatewayDir, "gateway-entry.mjs"), entryContent);
   log("已生成 gateway-entry.mjs");
@@ -1107,6 +1107,7 @@ function verifyOutput(targetPaths, platform) {
     path.join(targetRel, "runtime", nodeExe),
     npmDir,
     path.join(targetRel, "gateway", "gateway-entry.mjs"),
+    path.join(targetRel, "gateway", "node_modules", "openclaw", "openclaw.mjs"),
     path.join(targetRel, "gateway", "node_modules", "openclaw", "dist", "entry.js"),
     path.join(targetRel, "gateway", "node_modules", "openclaw", "dist", "control-ui", "index.html"),
     path.join(targetRel, "analytics-config.json"),
