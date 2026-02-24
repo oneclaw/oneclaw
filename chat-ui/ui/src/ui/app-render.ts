@@ -24,6 +24,7 @@ declare global {
       openWebUI?: () => void;
       openExternal?: (url: string) => unknown;
       getGatewayPort?: () => Promise<number>;
+      downloadAndInstallUpdate?: () => Promise<boolean>;
     };
   }
 }
@@ -220,6 +221,19 @@ async function handleOpenWebUI(state: AppViewState) {
   }
 }
 
+// 仅在存在可用更新时触发下载与安装，避免误触发无效 IPC 调用。
+async function handleApplyUpdate(state: AppViewState) {
+  const current = state.updateBannerState;
+  if (current.status !== "available") {
+    return;
+  }
+  try {
+    await window.oneclaw?.downloadAndInstallUpdate?.();
+  } catch {
+    // ignore bridge failure; main process会记录日志并回退状态
+  }
+}
+
 function ensureSettingsEmbedBridge(state: AppViewState) {
   const bridgeKey = "__oneclawSettingsEmbedBridge";
   const w = window as unknown as {
@@ -325,6 +339,7 @@ export function renderApp(state: AppViewState) {
   const oneclawView = state.settings.oneclawView ?? "chat";
   const settingsActive = oneclawView === "settings";
   const chatActive = oneclawView === "chat";
+  const updateBannerState = state.updateBannerState;
 
   return html`
     <div
@@ -338,6 +353,10 @@ export function renderApp(state: AppViewState) {
             sessionOptions,
             chatActive,
             settingsActive,
+            updateStatus: updateBannerState.status,
+            updateVersion: updateBannerState.version,
+            updatePercent: updateBannerState.percent,
+            updateShowBadge: updateBannerState.showBadge,
             refreshDisabled: state.chatLoading || !state.connected,
             onOpenChat: () => setOneClawView(state, "chat"),
             onNewChat: () => confirmAndCreateNewSession(state),
@@ -351,6 +370,7 @@ export function renderApp(state: AppViewState) {
             },
             onOpenSettings: () => setOneClawView(state, "settings"),
             onOpenWebUI: () => void handleOpenWebUI(state),
+            onApplyUpdate: () => void handleApplyUpdate(state),
           })}
 
       <div class="oneclaw-main">

@@ -3,6 +3,7 @@
  * Replaces the upstream 13-tab navigation with a compact chat sidebar.
  */
 import { html } from "lit";
+import { nothing } from "lit";
 import { repeat } from "lit/directives/repeat.js";
 import { t } from "./i18n.ts";
 import { icons } from "./icons.ts";
@@ -14,6 +15,10 @@ export type SidebarProps = {
   sessionOptions: Array<{ key: string; label: string }>;
   chatActive: boolean;
   settingsActive: boolean;
+  updateStatus: "hidden" | "available" | "downloading";
+  updateVersion: string | null;
+  updatePercent: number | null;
+  updateShowBadge: boolean;
   refreshDisabled: boolean;
   onToggleSidebar: () => void;
   onOpenChat: () => void;
@@ -22,6 +27,7 @@ export type SidebarProps = {
   onNewChat: () => void;
   onOpenSettings: () => void;
   onOpenWebUI: () => void;
+  onApplyUpdate: () => void;
 };
 
 export function renderSidebar(props: SidebarProps) {
@@ -43,6 +49,13 @@ export function renderSidebar(props: SidebarProps) {
       <path d="M21 3v5h-5"></path>
     </svg>
   `;
+  const showUpdateAction = props.updateStatus !== "hidden";
+  const updateLabel = props.updateStatus === "downloading"
+    ? t("sidebar.updateDownloading").replace(
+        "{percent}",
+        String(Math.max(0, Math.min(100, Math.round(props.updatePercent ?? 0)))),
+      )
+    : t("sidebar.updateReady");
 
   return html`
     <aside class="oneclaw-sidebar">
@@ -122,6 +135,27 @@ export function renderSidebar(props: SidebarProps) {
       </nav>
 
       <div class="oneclaw-sidebar__footer">
+        ${showUpdateAction
+          ? html`
+              <button
+                class="oneclaw-sidebar__item oneclaw-sidebar__item--update ${props.updateStatus === "downloading"
+                  ? "is-loading"
+                  : ""}"
+                type="button"
+                @click=${props.onApplyUpdate}
+                title=${props.updateVersion ? `${updateLabel} (${props.updateVersion})` : updateLabel}
+                ?disabled=${props.updateStatus === "downloading"}
+              >
+                <span class="oneclaw-sidebar__icon">
+                  ${props.updateStatus === "downloading" ? icons.loader : icons.zap}
+                </span>
+                <span class="oneclaw-sidebar__label">${updateLabel}</span>
+                ${props.updateShowBadge
+                  ? html`<span class="oneclaw-sidebar__update-dot" aria-hidden="true"></span>`
+                  : nothing}
+              </button>
+            `
+          : nothing}
         <button
           class="oneclaw-sidebar__item oneclaw-sidebar__item--settings ${props.settingsActive
             ? "active"

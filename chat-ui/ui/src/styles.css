@@ -236,6 +236,36 @@
   width: 100%;
 }
 
+.oneclaw-sidebar__item--update {
+  width: 100%;
+  position: relative;
+  color: var(--accent);
+  background: var(--accent-subtle);
+}
+.oneclaw-sidebar__item--update:hover:not(:disabled) {
+  color: var(--accent);
+  background: rgba(192, 57, 43, 0.2);
+}
+.oneclaw-sidebar__item--update .oneclaw-sidebar__label {
+  font-weight: 600;
+}
+.oneclaw-sidebar__item--update:disabled {
+  cursor: default;
+  opacity: 0.78;
+}
+.oneclaw-sidebar__item--update.is-loading .oneclaw-sidebar__icon svg {
+  animation: spin 1s linear infinite;
+}
+.oneclaw-sidebar__update-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  margin-left: auto;
+  background: var(--accent);
+  box-shadow: 0 0 0 3px rgba(192, 57, 43, 0.15);
+}
+
 .oneclaw-sidebar__item.active {
   color: var(--text-strong);
   background: var(--accent-subtle);
