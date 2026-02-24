@@ -109,6 +109,9 @@
       "feishu.approvePairing": "Approve",
       "feishu.approvingPairing": "Approving…",
       "feishu.pairingApproved": "Pairing request approved.",
+      "feishu.rejectPairing": "Reject",
+      "feishu.rejectingPairing": "Rejecting…",
+      "feishu.pairingRejected": "Pairing request rejected.",
       "feishu.approvedTitle": "Authorized Users & Groups",
       "feishu.refreshApproved": "Refresh",
       "feishu.refreshingApproved": "Refreshing…",
@@ -265,6 +268,9 @@
       "feishu.approvePairing": "批准",
       "feishu.approvingPairing": "批准中…",
       "feishu.pairingApproved": "配对请求已批准。",
+      "feishu.rejectPairing": "拒绝",
+      "feishu.rejectingPairing": "拒绝中…",
+      "feishu.pairingRejected": "配对请求已拒绝。",
       "feishu.approvedTitle": "已授权用户与群聊",
       "feishu.refreshApproved": "刷新",
       "feishu.refreshingApproved": "刷新中…",
@@ -479,6 +485,7 @@
   let chApprovedLoading = false;
   let chGroupAdding = false;
   let chPairingApprovingCode = "";
+  let chPairingRejectingCode = "";
   let chApprovedRemovingKey = "";
   let chPairingRequests = [];
   let chApprovedEntries = [];
@@ -495,6 +502,10 @@
   let currentLang = "en";
   let initialTab = "provider";
   let startupNotice = "";
+  const TAB_ALIAS_MAP = {
+    channel: "channels",
+    feishu: "channels",
+  };
 
   // ── 语言 ──
 
@@ -509,7 +520,7 @@
     }
     const tab = params.get("tab");
     const notice = params.get("notice");
-    initialTab = tab || "provider";
+    initialTab = normalizeTabName(tab || "provider");
     startupNotice = notice || "";
   }
 
@@ -534,8 +545,15 @@
 
   // ── Tab 切换 ──
 
+  // 兼容历史 tab 参数别名，确保外部深链都能落到正确面板。
+  function normalizeTabName(tabName) {
+    var raw = String(tabName || "").trim();
+    if (!raw) return "provider";
+    return TAB_ALIAS_MAP[raw] || raw;
+  }
+
   function switchTab(tabName) {
-    var target = tabName;
+    var target = normalizeTabName(tabName);
     var found = false;
     els.navItems.forEach((item) => {
       if (item.dataset.tab === target) found = true;
@@ -758,7 +776,7 @@
   // 同步待审批/已授权刷新按钮状态。
   function updateChAccessRefreshState() {
     var loading = chPairingLoading || chApprovedLoading;
-    var busy = loading || chGroupAdding || !!chPairingApprovingCode || !!chApprovedRemovingKey;
+    var busy = loading || chGroupAdding || !!chPairingApprovingCode || !!chPairingRejectingCode || !!chApprovedRemovingKey;
     if (els.btnChAccessRefresh) {
       els.btnChAccessRefresh.disabled = busy;
     }
@@ -795,23 +813,40 @@
 
     // 批准图标（勾号）
     var approveIcon = '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8.5L6.5 12L13 4"/></svg>';
+    // 拒绝图标（叉号）
+    var rejectIcon = '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="M4 4L12 12"/><path d="M12 4L4 12"/></svg>';
     // 删除图标（垃圾桶）
     var removeIcon = '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 4.5h10M6 4.5V3a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1v1.5M4.5 4.5L5 13.5a1 1 0 0 0 1 1h4a1 1 0 0 0 1-1l.5-9"/></svg>';
 
     var pendingRows = (Array.isArray(chPairingRequests) ? chPairingRequests : []).map(function (item) {
       var code = String(item.code || "");
       var isApproving = chPairingApprovingCode === code;
+      var isRejecting = chPairingRejectingCode === code;
       return {
         display: formatChEntryDisplay(item.name, item.id),
         meta: t("feishu.statusPending"),
-        buttonIcon: approveIcon,
-        buttonClass: "btn-icon success",
-        buttonTitle: t("feishu.approvePairing"),
-        buttonAttr:
-          'data-pairing-approve="' + escapeHtml(code) + '"' +
-          ' data-pairing-id="' + escapeHtml(String(item.id || "")) + '"' +
-          ' data-pairing-name="' + escapeHtml(String(item.name || "")) + '"',
-        disabled: isApproving,
+        actions: [
+          {
+            icon: approveIcon,
+            klass: "btn-icon success",
+            title: isApproving ? t("feishu.approvingPairing") : t("feishu.approvePairing"),
+            attr:
+              'data-pairing-approve="' + escapeHtml(code) + '"' +
+              ' data-pairing-id="' + escapeHtml(String(item.id || "")) + '"' +
+              ' data-pairing-name="' + escapeHtml(String(item.name || "")) + '"',
+            disabled: isApproving || isRejecting,
+          },
+          {
+            icon: rejectIcon,
+            klass: "btn-icon danger",
+            title: isRejecting ? t("feishu.rejectingPairing") : t("feishu.rejectPairing"),
+            attr:
+              'data-pairing-reject="' + escapeHtml(code) + '"' +
+              ' data-pairing-id="' + escapeHtml(String(item.id || "")) + '"' +
+              ' data-pairing-name="' + escapeHtml(String(item.name || "")) + '"',
+            disabled: isApproving || isRejecting,
+          },
+        ],
       };
     });
     var approvedRows = (Array.isArray(chApprovedEntries) ? chApprovedEntries : []).map(function (entry) {
@@ -823,13 +858,17 @@
       return {
         display: formatChEntryDisplay(entry.name, entry.id),
         meta: statusText,
-        buttonIcon: removeIcon,
-        buttonClass: "btn-icon danger",
-        buttonTitle: t("feishu.removeApproved"),
-        buttonAttr:
-          'data-approved-remove-kind="' + escapeHtml(kind) + '"' +
-          ' data-approved-remove-id="' + escapeHtml(id) + '"',
-        disabled: isRemoving,
+        actions: [
+          {
+            icon: removeIcon,
+            klass: "btn-icon danger",
+            title: t("feishu.removeApproved"),
+            attr:
+              'data-approved-remove-kind="' + escapeHtml(kind) + '"' +
+              ' data-approved-remove-id="' + escapeHtml(id) + '"',
+            disabled: isRemoving,
+          },
+        ],
       };
     });
     var rows = pendingRows.concat(approvedRows);
@@ -845,6 +884,13 @@
     toggleEl(listEl, true);
 
     listEl.innerHTML = rows.map(function (row) {
+      var actionsHtml = (Array.isArray(row.actions) ? row.actions : []).map(function (action) {
+        return [
+          '<button type="button" class="' + action.klass + '" title="' + escapeHtml(action.title) + '" ' + action.attr + (action.disabled ? " disabled" : "") + ">",
+          "  " + action.icon,
+          "</button>",
+        ].join("");
+      }).join("");
       return [
         '<div class="pairing-item">',
         '  <div class="pairing-item-main">',
@@ -852,9 +898,7 @@
           escapeHtml(row.display) +
           '<span class="pairing-meta-inline">' + escapeHtml(row.meta) + "</span></div>",
         "  </div>",
-        '  <button type="button" class="' + row.buttonClass + '" title="' + escapeHtml(row.buttonTitle) + '" ' + row.buttonAttr + (row.disabled ? " disabled" : "") + ">",
-        "    " + row.buttonIcon,
-        "  </button>",
+        '  <div class="pairing-item-actions">' + actionsHtml + "</div>",
         "</div>",
       ].join("");
     }).join("");
@@ -866,6 +910,7 @@
     if (!isChEnabled() || !isChPairingMode()) {
       chPairingRequests = [];
       chPairingApprovingCode = "";
+      chPairingRejectingCode = "";
       renderChAccessEntries();
       return;
     }
@@ -929,6 +974,27 @@
     ]);
   }
 
+  // 接收主进程推送的飞书待审批快照，减少“手动刷新”依赖。
+  function applyChPairingStateFromPush(payload) {
+    if (!payload || !Array.isArray(payload.requests)) {
+      return;
+    }
+    var requests = payload.requests
+      .map(function (item) {
+        return {
+          code: String((item && item.code) || "").trim(),
+          id: String((item && item.id) || "").trim(),
+          name: String((item && item.name) || "").trim(),
+          createdAt: String((item && item.createdAt) || ""),
+          lastSeenAt: String((item && item.lastSeenAt) || ""),
+        };
+      })
+      .filter(function (item) { return item.code; });
+    chPairingRequests = requests;
+    renderChAccessEntries();
+    updateChAccessRefreshState();
+  }
+
   // 批准指定飞书配对码，并自动刷新列表。
   async function handleChPairingApprove(code, id, name) {
     var trimmed = String(code || "").trim();
@@ -936,7 +1002,7 @@
       showChMsg(t("error.noPairingCode"), "error");
       return;
     }
-    if (chPairingApprovingCode) return;
+    if (chPairingApprovingCode || chPairingRejectingCode) return;
 
     chPairingApprovingCode = trimmed;
     renderChAccessEntries();
@@ -959,6 +1025,41 @@
       showChMsg(t("error.connection") + (err.message || "Unknown error"), "error");
     } finally {
       chPairingApprovingCode = "";
+      renderChAccessEntries();
+      updateChAccessRefreshState();
+    }
+  }
+
+  // 拒绝指定飞书配对码，并自动刷新列表。
+  async function handleChPairingReject(code, id, name) {
+    var trimmed = String(code || "").trim();
+    if (!trimmed) {
+      showChMsg(t("error.noPairingCode"), "error");
+      return;
+    }
+    if (chPairingApprovingCode || chPairingRejectingCode) return;
+
+    chPairingRejectingCode = trimmed;
+    renderChAccessEntries();
+    updateChAccessRefreshState();
+    hideChMsg();
+
+    try {
+      var result = await window.oneclaw.settingsRejectFeishuPairing({
+        code: trimmed,
+        id: String(id || "").trim(),
+        name: String(name || "").trim(),
+      });
+      if (!result.success) {
+        showChMsg(result.message || t("error.verifyFailed"), "error");
+      } else {
+        showToast(t("feishu.pairingRejected"));
+        await refreshChPairingPanels({ silent: true });
+      }
+    } catch (err) {
+      showChMsg(t("error.connection") + (err.message || "Unknown error"), "error");
+    } finally {
+      chPairingRejectingCode = "";
       renderChAccessEntries();
       updateChAccessRefreshState();
     }
@@ -2202,6 +2303,15 @@
           );
           return;
         }
+        var rejectBtn = e.target.closest("[data-pairing-reject]");
+        if (rejectBtn) {
+          handleChPairingReject(
+            rejectBtn.getAttribute("data-pairing-reject"),
+            rejectBtn.getAttribute("data-pairing-id"),
+            rejectBtn.getAttribute("data-pairing-name")
+          );
+          return;
+        }
         var removeBtn = e.target.closest("[data-approved-remove-kind][data-approved-remove-id]");
         if (!removeBtn) return;
         handleChApprovedRemove(
@@ -2284,6 +2394,14 @@
         if (!payload || !payload.tab) return;
         switchTab(payload.tab);
         applyRecoveryNotice(payload.notice || "");
+      });
+    }
+    if (window.oneclaw && window.oneclaw.onFeishuPairingState) {
+      window.oneclaw.onFeishuPairingState(function (payload) {
+        if (!isChEnabled() || !isChPairingMode()) {
+          return;
+        }
+        applyChPairingStateFromPush(payload);
       });
     }
   }

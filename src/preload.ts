@@ -12,6 +12,8 @@ contextBridge.exposeInMainWorld("oneclaw", {
   checkForUpdates: () => ipcRenderer.send("app:check-updates"),
   getUpdateState: () => ipcRenderer.invoke("app:get-update-state"),
   downloadAndInstallUpdate: () => ipcRenderer.invoke("app:download-and-install-update"),
+  getFeishuPairingState: () => ipcRenderer.invoke("app:get-feishu-pairing-state"),
+  refreshFeishuPairingState: () => ipcRenderer.send("app:refresh-feishu-pairing-state"),
 
   // Setup 相关
   verifyKey: (params: Record<string, unknown>) =>
@@ -36,6 +38,8 @@ contextBridge.exposeInMainWorld("oneclaw", {
     ipcRenderer.invoke("settings:list-feishu-approved"),
   settingsApproveFeishuPairing: (params: Record<string, unknown>) =>
     ipcRenderer.invoke("settings:approve-feishu-pairing", params),
+  settingsRejectFeishuPairing: (params: Record<string, unknown>) =>
+    ipcRenderer.invoke("settings:reject-feishu-pairing", params),
   settingsAddFeishuGroupAllowFrom: (params: Record<string, unknown>) =>
     ipcRenderer.invoke("settings:add-feishu-group-allow-from", params),
   settingsRemoveFeishuApproved: (params: Record<string, unknown>) =>
@@ -100,5 +104,41 @@ contextBridge.exposeInMainWorld("oneclaw", {
     };
     ipcRenderer.on("app:update-state", listener);
     return () => ipcRenderer.removeListener("app:update-state", listener);
+  },
+  onFeishuPairingState: (
+    cb: (payload: {
+      pendingCount: number;
+      requests: Array<{
+        code: string;
+        id: string;
+        name: string;
+        createdAt: string;
+        lastSeenAt: string;
+      }>;
+      updatedAt: number;
+      lastAutoApprovedAt: number | null;
+      lastAutoApprovedName: string | null;
+    }) => void,
+  ) => {
+    const listener = (
+      _event: Electron.IpcRendererEvent,
+      payload: {
+        pendingCount: number;
+        requests: Array<{
+          code: string;
+          id: string;
+          name: string;
+          createdAt: string;
+          lastSeenAt: string;
+        }>;
+        updatedAt: number;
+        lastAutoApprovedAt: number | null;
+        lastAutoApprovedName: string | null;
+      },
+    ) => {
+      cb(payload);
+    };
+    ipcRenderer.on("app:feishu-pairing-state", listener);
+    return () => ipcRenderer.removeListener("app:feishu-pairing-state", listener);
   },
 });

@@ -5,6 +5,7 @@ import { TrayManager } from "./tray";
 import { SetupManager } from "./setup-manager";
 import { registerSetupIpc } from "./setup-ipc";
 import { registerSettingsIpc } from "./settings-ipc";
+import { FeishuPairingMonitor } from "./feishu-pairing-monitor";
 import {
   setupAutoUpdater,
   checkForUpdates,
@@ -98,14 +99,33 @@ process.on("unhandledRejection", (reason) => {
 
 // ── 核心组件 ──
 
+let feishuPairingMonitor: FeishuPairingMonitor | null = null;
 const gateway = new GatewayProcess({
   port: DEFAULT_PORT,
   token: resolveGatewayAuthToken({ persist: false }),
-  onStateChange: () => tray.updateMenu(),
+  onStateChange: () => {
+    tray.updateMenu();
+    feishuPairingMonitor?.triggerNow();
+  },
 });
 const windowManager = new WindowManager();
 const tray = new TrayManager();
 const setupManager = new SetupManager();
+
+// 应用前台判定：任一窗口拿到系统焦点即视为前台；否则视为后台。
+function isAppInForeground(): boolean {
+  return BrowserWindow.getAllWindows().some(
+    (w) => !w.isDestroyed() && w.isFocused(),
+  );
+}
+
+feishuPairingMonitor = new FeishuPairingMonitor({
+  gateway,
+  isAppInForeground,
+  onStateChange: (state) => {
+    windowManager.pushFeishuPairingState(state);
+  },
+});
 
 // ── 显示主窗口的统一入口 ──
 
@@ -307,6 +327,8 @@ ipcMain.handle("gateway:state", () => gateway.getState());
 ipcMain.on("app:check-updates", () => checkForUpdates(true));
 ipcMain.handle("app:get-update-state", () => getUpdateBannerState());
 ipcMain.handle("app:download-and-install-update", () => downloadAndInstallUpdate());
+ipcMain.handle("app:get-feishu-pairing-state", () => feishuPairingMonitor?.getState());
+ipcMain.on("app:refresh-feishu-pairing-state", () => feishuPairingMonitor?.triggerNow());
 ipcMain.handle("app:open-external", (_e, url: string) => shell.openExternal(url));
 
 // Chat UI 侧边栏 IPC
@@ -330,6 +352,7 @@ registerSettingsIpc();
 
 async function quit(): Promise<void> {
   stopAutoCheckSchedule();
+  feishuPairingMonitor?.stop();
   analytics.track("app_closed");
   await analytics.shutdown();
   windowManager.destroy();
@@ -480,6 +503,7 @@ app.whenReady().then(async () => {
     onQuit: quit,
     onCheckUpdates: () => checkForUpdates(true),
   });
+  feishuPairingMonitor?.start();
 
   const configHealth = inspectUserConfigHealth();
   if (configHealth.exists && !configHealth.validJson) {
@@ -550,6 +574,7 @@ app.on("window-all-closed", () => {
 // ── 退出前清理 ──
 
 app.on("before-quit", () => {
+  feishuPairingMonitor?.stop();
   windowManager.destroy();
   gateway.stop();
 });

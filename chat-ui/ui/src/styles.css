@@ -394,3 +394,114 @@
     font-size: 12px;
   }
 }
+
+/* 飞书待审批提示卡：把隐式设置步骤前置到聊天主流程。 */
+.oneclaw-feishu-notice {
+  position: fixed;
+  top: 16px;
+  right: 16px;
+  z-index: 2100;
+  width: min(360px, calc(100vw - 32px));
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 12px;
+  padding: 16px;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  border-radius: 12px;
+  background: #ffffff;
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05), 0 0 0 1px rgba(0, 0, 0, 0.05);
+}
+
+.oneclaw-feishu-notice__main {
+  min-width: 0;
+  display: grid;
+  gap: 4px;
+}
+
+.oneclaw-feishu-notice__title {
+  font-size: 15px;
+  line-height: 1.4;
+  color: #111827;
+  font-weight: 600;
+}
+
+.oneclaw-feishu-notice__desc {
+  font-size: 13px;
+  line-height: 1.5;
+  color: #4b5563;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  overflow: hidden;
+}
+
+.oneclaw-feishu-notice__actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.oneclaw-feishu-notice__icon-btn {
+  width: 32px;
+  height: 32px;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  background: #ffffff;
+  color: #6b7280;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  padding: 0;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.oneclaw-feishu-notice__icon-btn svg {
+  width: 16px;
+  height: 16px;
+  stroke: currentColor;
+  fill: none;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.oneclaw-feishu-notice__icon-btn:hover:not(:disabled) {
+  background: #f9fafb;
+  border-color: #d1d5db;
+  color: #374151;
+}
+
+.oneclaw-feishu-notice__icon-btn:active:not(:disabled) {
+  background: #f3f4f6;
+  transform: translateY(1px);
+}
+
+.oneclaw-feishu-notice__icon-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  background: #f9fafb;
+}
+
+.oneclaw-feishu-notice__icon-btn.is-approve:hover:not(:disabled) {
+  color: #16a34a;
+  border-color: #86efac;
+  background: #f0fdf4;
+}
+
+.oneclaw-feishu-notice__icon-btn.is-reject:hover:not(:disabled) {
+  color: #dc2626;
+  border-color: #fca5a5;
+  background: #fef2f2;
+}
+
+@media (max-width: 720px) {
+  .oneclaw-feishu-notice {
+    top: 12px;
+    right: 12px;
+    width: calc(100vw - 24px);
+  }
+}

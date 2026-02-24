@@ -174,6 +174,12 @@ function setOneClawView(state: AppViewState, next: "chat" | "settings") {
   });
 }
 
+// 打开内嵌设置页时可携带目标 tab 提示，减少用户二次定位成本。
+function openSettingsView(state: AppViewState, tabHint: "channels" | null = null) {
+  state.settingsTabHint = tabHint;
+  setOneClawView(state, "settings");
+}
+
 function confirmAndCreateNewSession(state: AppViewState) {
   const ok = window.confirm(t("chat.confirmNewSession"));
   if (!ok) {
@@ -310,6 +316,9 @@ function resolveEmbeddedSettingsUrl(state: AppViewState) {
     "showThinking",
     state.settings.chatShowThinking ? "1" : "0",
   );
+  if (state.settingsTabHint) {
+    settingsUrl.searchParams.set("tab", state.settingsTabHint);
+  }
   return settingsUrl.toString();
 }
 
@@ -323,6 +332,47 @@ function renderOneClawSettingsPage(state: AppViewState) {
         src=${settingsUrl}
         title=${t("settings.title")}
       ></iframe>
+    </section>
+  `;
+}
+
+// 在聊天页顶部展示飞书待审批卡片，把“去设置里找批准”改成主流程内的一步动作。
+function renderFeishuPairingNotice(state: AppViewState) {
+  if (!state.shouldShowFeishuPairingNotice()) {
+    return nothing;
+  }
+  const first = state.feishuPairingState.requests[0];
+  const peerLabel = first?.name?.trim() || first?.id?.trim() || t("feishu.pendingUnknown");
+  return html`
+    <section class="oneclaw-feishu-notice">
+      <div class="oneclaw-feishu-notice__main">
+        <div class="oneclaw-feishu-notice__title">${t("feishu.pendingTitle")}</div>
+        <div class="oneclaw-feishu-notice__desc">
+          ${t("feishu.pendingDesc").replace("{name}", peerLabel)}
+        </div>
+      </div>
+      <div class="oneclaw-feishu-notice__actions">
+        <button
+          class="oneclaw-feishu-notice__icon-btn is-approve"
+          type="button"
+          ?disabled=${state.feishuPairingApproving || state.feishuPairingRejecting}
+          title=${t("feishu.approveNow")}
+          aria-label=${t("feishu.approveNow")}
+          @click=${() => void state.approveFirstFeishuPairing()}
+        >
+          ${icons.check}
+        </button>
+        <button
+          class="oneclaw-feishu-notice__icon-btn is-reject"
+          type="button"
+          ?disabled=${state.feishuPairingApproving || state.feishuPairingRejecting}
+          title=${t("feishu.rejectNow")}
+          aria-label=${t("feishu.rejectNow")}
+          @click=${() => void state.rejectFirstFeishuPairing()}
+        >
+          ${icons.x}
+        </button>
+      </div>
     </section>
   `;
 }
@@ -368,7 +418,10 @@ export function renderApp(state: AppViewState) {
                 navCollapsed: !state.settings.navCollapsed,
               });
             },
-            onOpenSettings: () => setOneClawView(state, "settings"),
+            onOpenSettings: () => openSettingsView(
+              state,
+              state.feishuPairingState.pendingCount > 0 ? "channels" : null,
+            ),
             onOpenWebUI: () => void handleOpenWebUI(state),
             onApplyUpdate: () => void handleApplyUpdate(state),
           })}
@@ -396,55 +449,58 @@ export function renderApp(state: AppViewState) {
         }
 
         <main class="oneclaw-content">
+          ${renderFeishuPairingNotice(state)}
           ${settingsActive
             ? renderOneClawSettingsPage(state)
-            : renderChat({
-                sessionKey: state.sessionKey,
-                onSessionKeyChange: (next) => applySessionKey(state, next),
-                thinkingLevel: state.chatThinkingLevel,
-                showThinking,
-                loading: state.chatLoading,
-                sending: state.chatSending,
-                compactionStatus: state.compactionStatus,
-                assistantAvatarUrl: chatAvatarUrl,
-                messages: state.chatMessages,
-                toolMessages: state.chatToolMessages,
-                stream: state.chatStream,
-                streamStartedAt: (state as any).chatStreamStartedAt,
-                draft: state.chatMessage,
-                queue: state.chatQueue,
-                connected: state.connected,
-                canSend: state.connected,
-                disabledReason: chatDisabledReason,
-                error: state.lastError,
-                sessions: state.sessionsResult,
-                focusMode: false,
-                onRefresh: () => {
-                  (state as any).resetToolStream();
-                  return Promise.all([loadChatHistory(state as any), refreshChatAvatar(state as any)]);
-                },
-                onToggleFocusMode: () => {},
-                onChatScroll: (event) => state.handleChatScroll(event),
-                onDraftChange: (next) => (state.chatMessage = next),
-                attachments: state.chatAttachments,
-                onAttachmentsChange: (next) => (state.chatAttachments = next),
-                onSend: () => state.handleSendChat(),
-                canAbort: Boolean(state.chatRunId),
-                onAbort: () => void state.handleAbortChat(),
-                onQueueRemove: (id) => state.removeQueuedMessage(id),
-                onNewSession: () => confirmAndCreateNewSession(state),
-                showNewMessages: state.chatNewMessagesBelow && !state.chatManualRefreshInFlight,
-                onScrollToBottom: () => state.scrollToBottom(),
-                sidebarOpen: state.sidebarOpen,
-                sidebarContent: state.sidebarContent,
-                sidebarError: state.sidebarError,
-                splitRatio: state.splitRatio,
-                onOpenSidebar: (content: string) => state.handleOpenSidebar(content),
-                onCloseSidebar: () => state.handleCloseSidebar(),
-                onSplitRatioChange: (ratio: number) => state.handleSplitRatioChange(ratio),
-                assistantName: state.assistantName,
-                assistantAvatar: state.assistantAvatar,
-              })}
+            : html`
+                ${renderChat({
+                  sessionKey: state.sessionKey,
+                  onSessionKeyChange: (next) => applySessionKey(state, next),
+                  thinkingLevel: state.chatThinkingLevel,
+                  showThinking,
+                  loading: state.chatLoading,
+                  sending: state.chatSending,
+                  compactionStatus: state.compactionStatus,
+                  assistantAvatarUrl: chatAvatarUrl,
+                  messages: state.chatMessages,
+                  toolMessages: state.chatToolMessages,
+                  stream: state.chatStream,
+                  streamStartedAt: (state as any).chatStreamStartedAt,
+                  draft: state.chatMessage,
+                  queue: state.chatQueue,
+                  connected: state.connected,
+                  canSend: state.connected,
+                  disabledReason: chatDisabledReason,
+                  error: state.lastError,
+                  sessions: state.sessionsResult,
+                  focusMode: false,
+                  onRefresh: () => {
+                    (state as any).resetToolStream();
+                    return Promise.all([loadChatHistory(state as any), refreshChatAvatar(state as any)]);
+                  },
+                  onToggleFocusMode: () => {},
+                  onChatScroll: (event) => state.handleChatScroll(event),
+                  onDraftChange: (next) => (state.chatMessage = next),
+                  attachments: state.chatAttachments,
+                  onAttachmentsChange: (next) => (state.chatAttachments = next),
+                  onSend: () => state.handleSendChat(),
+                  canAbort: Boolean(state.chatRunId),
+                  onAbort: () => void state.handleAbortChat(),
+                  onQueueRemove: (id) => state.removeQueuedMessage(id),
+                  onNewSession: () => confirmAndCreateNewSession(state),
+                  showNewMessages: state.chatNewMessagesBelow && !state.chatManualRefreshInFlight,
+                  onScrollToBottom: () => state.scrollToBottom(),
+                  sidebarOpen: state.sidebarOpen,
+                  sidebarContent: state.sidebarContent,
+                  sidebarError: state.sidebarError,
+                  splitRatio: state.splitRatio,
+                  onOpenSidebar: (content: string) => state.handleOpenSidebar(content),
+                  onCloseSidebar: () => state.handleCloseSidebar(),
+                  onSplitRatioChange: (ratio: number) => state.handleSplitRatioChange(ratio),
+                  assistantName: state.assistantName,
+                  assistantAvatar: state.assistantAvatar,
+                })}
+              `}
         </main>
       </div>
 
