@@ -25,6 +25,7 @@ import {
 import { getLatestShareCopyPayload } from "./share-copy";
 import { extractKimiConfig, saveKimiPluginConfig, isKimiPluginBundled, DEFAULT_KIMI_BRIDGE_WS_URL } from "./kimi-config";
 import { ensureGatewayAuthTokenInConfig } from "./gateway-auth";
+import { getLaunchAtLoginState, setLaunchAtLoginEnabled } from "./launch-at-login";
 import * as analytics from "./analytics";
 import * as path from "path";
 import * as fs from "fs";
@@ -535,11 +536,14 @@ export function registerSettingsIpc(): void {
   ipcMain.handle("settings:get-advanced", async () => {
     try {
       const config = readUserConfig();
+      const launchAtLoginState = getLaunchAtLoginState(app);
       return {
         success: true,
         data: {
           browserProfile: config?.browser?.defaultProfile ?? "openclaw",
           imessageEnabled: config?.channels?.imessage?.enabled !== false,
+          launchAtLoginSupported: launchAtLoginState.supported,
+          launchAtLogin: launchAtLoginState.enabled,
         },
       };
     } catch (err: any) {
@@ -550,9 +554,10 @@ export function registerSettingsIpc(): void {
   // ── 保存高级配置 ──
   ipcMain.handle("settings:save-advanced", async (_event, params) => {
     const { browserProfile, imessageEnabled } = params;
+    const launchAtLogin = typeof params?.launchAtLogin === "boolean" ? params.launchAtLogin : undefined;
     return runTrackedSettingsAction(
       "save_advanced",
-      { browser_profile: browserProfile, imessage_enabled: imessageEnabled },
+      { browser_profile: browserProfile, imessage_enabled: imessageEnabled, launch_at_login: launchAtLogin },
       async () => {
         try {
           const config = readUserConfig();
@@ -563,6 +568,10 @@ export function registerSettingsIpc(): void {
           config.channels ??= {};
           config.channels.imessage ??= {};
           config.channels.imessage.enabled = imessageEnabled;
+
+          if (typeof launchAtLogin === "boolean") {
+            setLaunchAtLoginEnabled(app, launchAtLogin);
+          }
 
           writeUserConfig(config);
           return { success: true };

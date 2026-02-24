@@ -168,6 +168,7 @@
       "advanced.browserOpenclaw": "Standalone browser instance",
       "advanced.browserChrome": "Chrome extension",
       "advanced.imessage": "iMessage channel",
+      "advanced.launchAtLogin": "Launch at login",
       "advanced.save": "Save",
       "advanced.saving": "Saving…",
       "advanced.saved": "Settings saved.",
@@ -323,6 +324,7 @@
       "advanced.browserOpenclaw": "独立浏览器(建议)",
       "advanced.browserChrome": "Chrome 扩展",
       "advanced.imessage": "iMessage 频道",
+      "advanced.launchAtLogin": "开机启动",
       "advanced.save": "保存",
       "advanced.saving": "保存中…",
       "advanced.saved": "设置已保存。",
@@ -439,6 +441,8 @@
     doctorExit: $("#doctorExit"),
     // Advanced tab
     imessageEnabled: $("#imessageEnabled"),
+    launchAtLoginRow: $("#launchAtLoginRow"),
+    launchAtLoginEnabled: $("#launchAtLoginEnabled"),
     advMsgBox: $("#advMsgBox"),
     btnAdvSave: $("#btnAdvSave"),
     btnAdvSaveText: $("#btnAdvSave .btn-text"),
@@ -1295,6 +1299,11 @@
       if (radio) radio.checked = true;
       // 回填 iMessage toggle
       els.imessageEnabled.checked = !!data.imessageEnabled;
+      // 按平台能力展示并回填开机启动开关
+      toggleEl(els.launchAtLoginRow, data.launchAtLoginSupported === true);
+      if (data.launchAtLoginSupported === true) {
+        els.launchAtLoginEnabled.checked = data.launchAtLogin === true;
+      }
     } catch (err) {
       console.error("[Settings] loadAdvancedConfig failed:", err);
     }
@@ -1308,11 +1317,13 @@
 
     var browserProfile = document.querySelector('input[name="browserProfile"]:checked').value;
     var imessageEnabled = els.imessageEnabled.checked;
+    var launchAtLogin = els.launchAtLoginEnabled ? !!els.launchAtLoginEnabled.checked : false;
 
     try {
       var result = await window.oneclaw.settingsSaveAdvanced({
         browserProfile: browserProfile,
         imessageEnabled: imessageEnabled,
+        launchAtLogin: launchAtLogin,
       });
       setAdvSaving(false);
       if (result.success) {
@@ -1622,8 +1633,8 @@
   // provider + subPlatform → 人类可读名称
   function getProviderDisplayName(provider, subPlatform) {
     if (provider === "moonshot") {
-      var names = { "moonshot-cn": "Moonshot CN", "moonshot-ai": "Moonshot AI", "kimi-code": "Kimi Code" };
-      return names[subPlatform] || "Moonshot";
+      var names = { "moonshot-cn": "Moonshot CN", "moonshot-ai": "Moonshot AI", "kimi-code": "Kimi 会员订阅" };
+      return names[subPlatform] || "Kimi";
     }
     var map = { anthropic: "Anthropic", openai: "OpenAI", google: "Google", custom: "Custom" };
     return map[provider] || provider;

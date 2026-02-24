@@ -1,6 +1,7 @@
 import { app } from "electron";
 import * as path from "path";
 import * as fs from "fs";
+import { isSetupCompleteFromConfig } from "./setup-completion";
 
 // ── 网络端口 ──
 
@@ -130,18 +131,7 @@ export function isSetupComplete(): boolean {
   try {
     const raw = fs.readFileSync(configPath, "utf-8");
     const config = JSON.parse(raw);
-
-    // 有 wizard 记录 → 已完成
-    if (config.wizard) return true;
-
-    // 有 models.providers 配置 → 已完成
-    if (config.models?.providers && Object.keys(config.models.providers).length > 0) return true;
-
-    // 有 gateway.auth 配置 → 已完成
-    const auth = config.gateway?.auth;
-    if (auth?.mode || auth?.token || auth?.password) return true;
-
-    return false;
+    return isSetupCompleteFromConfig(config);
   } catch {
     return false;
   }

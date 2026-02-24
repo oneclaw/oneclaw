@@ -1,7 +1,8 @@
-import { ipcMain } from "electron";
+import { app, ipcMain } from "electron";
 import { ensureGatewayAuthTokenInConfig } from "./gateway-auth";
 import { SetupManager } from "./setup-manager";
 import * as analytics from "./analytics";
+import { getLaunchAtLoginState, setLaunchAtLoginEnabled } from "./launch-at-login";
 import {
   PROVIDER_PRESETS,
   MOONSHOT_SUB_PLATFORMS,
@@ -74,6 +75,18 @@ async function runTrackedSetupAction<T extends SetupActionResult>(
 export function registerSetupIpc(deps: SetupIpcDeps): void {
   const { setupManager } = deps;
 
+  // ── 读取系统开机启动状态（Setup Step 3 开关回填） ──
+  ipcMain.handle("setup:get-launch-at-login", async () => {
+    try {
+      return {
+        success: true,
+        data: getLaunchAtLoginState(app),
+      };
+    } catch (err: any) {
+      return { success: false, message: err.message || String(err) };
+    }
+  });
+
   // ── 验证 API Key ──
   ipcMain.handle("setup:verify-key", async (_event, params) => {
     const provider = typeof params?.provider === "string" ? params.provider : "";
@@ -132,8 +145,9 @@ export function registerSetupIpc(deps: SetupIpcDeps): void {
         config.channels.imessage ??= {};
         config.channels.imessage.enabled = false;
 
-        // 标记 Setup 已完成（字段对齐 openclaw config schema，避免每次启动重走 onboarding）
-        config.wizard = { lastRunAt: new Date().toISOString() };
+        // Step 2 不写 wizard，避免生成 schema 未识别字段。
+        // Setup 完成标记仅在 Step 3（Gateway 成功启动）后写入 wizard.lastRunAt。
+        delete config.wizard;
 
         writeUserConfig(config);
         // 配置落盘成功后再缓存埋点上下文，避免失败时污染事件参数。
@@ -146,8 +160,12 @@ export function registerSetupIpc(deps: SetupIpcDeps): void {
   });
 
   // ── Setup 完成（Gateway 启动 + 窗口切换由 setOnComplete 回调统一处理） ──
-  ipcMain.handle("setup:complete", async () => {
-    return runTrackedSetupAction("complete", {}, async () => {
+  ipcMain.handle("setup:complete", async (_event, params) => {
+    const launchAtLogin = typeof params?.launchAtLogin === "boolean" ? params.launchAtLogin : undefined;
+    return runTrackedSetupAction("complete", { launch_at_login: launchAtLogin }, async () => {
+      if (typeof launchAtLogin === "boolean") {
+        setLaunchAtLoginEnabled(app, launchAtLogin);
+      }
       const ok = await setupManager.complete();
       if (ok) {
         analytics.track("setup_completed", latestSetupCompletedProps ?? {});

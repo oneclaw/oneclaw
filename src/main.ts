@@ -22,6 +22,7 @@ import {
   recordSetupBaselineConfigSnapshot,
   restoreLastKnownGoodConfigSnapshot,
 } from "./config-backup";
+import { readUserConfig, writeUserConfig } from "./provider-config";
 import * as log from "./logger";
 import * as analytics from "./analytics";
 
@@ -335,14 +336,26 @@ async function quit(): Promise<void> {
 // ── Setup 完成后：启动 Gateway → 打开主窗口 ──
 
 setupManager.setOnComplete(async () => {
-  const ok = await startGatewayAndShowMain("setup:complete", {
-    openOnFailure: false,
-    reportFailure: false,
-  });
-  if (ok) {
-    recordSetupBaselineConfigSnapshot();
+  const running = await ensureGatewayRunning("setup:complete");
+  if (!running) {
+    return false;
   }
-  return ok;
+
+  try {
+    // 只有最后一步成功（Gateway 可用）后，才标记 Setup 完成。
+    const config = readUserConfig();
+    config.wizard ??= {};
+    config.wizard.lastRunAt = new Date().toISOString();
+    delete config.wizard.pendingAt;
+    writeUserConfig(config);
+  } catch (err: any) {
+    log.error(`写入 setup 完成标记失败: ${err?.message ?? err}`);
+    return false;
+  }
+
+  await showMainWindow();
+  recordSetupBaselineConfigSnapshot();
+  return true;
 });
 
 // ── macOS Dock 可见性：窗口全隐藏时切换纯托盘模式 ──

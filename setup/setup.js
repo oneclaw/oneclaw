@@ -75,6 +75,7 @@
       "done.feature2": "Generate and execute code in real time",
       "done.feature3": "Manage multiple conversations and contexts",
       "done.feature4": "Switch providers or models anytime in Settings",
+      "done.launchAtLogin": "Launch at login",
       "done.start": "Start OneClaw",
       "done.starting": "Starting Gateway…",
       "done.startFailed": "Gateway failed to start. Please click Start OneClaw to retry.",
@@ -110,6 +111,7 @@
       "done.feature2": "实时生成并执行代码",
       "done.feature3": "管理多个对话和上下文",
       "done.feature4": "随时在设置中切换服务商或模型",
+      "done.launchAtLogin": "开机启动",
       "done.start": "启动 OneClaw",
       "done.starting": "正在启动 Gateway…",
       "done.startFailed": 'Gateway 启动失败，请点击"启动 OneClaw"重试。',
@@ -154,6 +156,8 @@
     btnStartText: $("#btnStart .btn-text"),
     btnStartSpinner: $("#btnStartSpinner"),
     doneStatus: $("#doneStatus"),
+    launchAtLoginRow: $("#launchAtLoginRow"),
+    launchAtLoginEnabled: $("#launchAtLoginEnabled"),
   };
 
   // ---- 状态 ----
@@ -162,6 +166,7 @@
   let verifying = false;
   let starting = false;
   let currentLang = "en";
+  let launchAtLoginSupported = false;
 
   // ---- 语言检测（从 URL ?lang= 参数读取） ----
   function detectLang() {
@@ -373,7 +378,10 @@
     setDoneStatus("");
 
     try {
-      const result = await window.oneclaw.completeSetup();
+      const payload = launchAtLoginSupported
+        ? { launchAtLogin: !!els.launchAtLoginEnabled.checked }
+        : {};
+      const result = await window.oneclaw.completeSetup(payload);
       if (!result || !result.success) {
         setStarting(false);
         setDoneStatus(result?.message || t("done.startFailed"), true);
@@ -381,6 +389,28 @@
     } catch (err) {
       setStarting(false);
       setDoneStatus((err && err.message) || t("done.startFailed"), true);
+    }
+  }
+
+  // 读取系统层开机启动状态并回填 Step 3 开关。
+  async function loadLaunchAtLoginState() {
+    if (!window.oneclaw?.setupGetLaunchAtLogin) {
+      return;
+    }
+    try {
+      const result = await window.oneclaw.setupGetLaunchAtLogin();
+      if (!result?.success || !result.data) {
+        return;
+      }
+      launchAtLoginSupported = result.data.supported === true;
+      toggleEl(els.launchAtLoginRow, launchAtLoginSupported);
+      if (launchAtLoginSupported) {
+        // Setup 阶段默认开启开机启动，用户可在此页手动关闭。
+        els.launchAtLoginEnabled.checked = true;
+      }
+    } catch {
+      // 获取失败时不阻断 Setup 流程，保持开关隐藏。
+      launchAtLoginSupported = false;
     }
   }
 
@@ -480,6 +510,7 @@
     bindEvents();
     switchProvider("anthropic");
     goToStep(1);
+    loadLaunchAtLoginState();
   }
 
   init();

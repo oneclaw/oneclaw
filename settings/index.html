@@ -83,7 +83,7 @@
         <!-- Provider 分段选择器 -->
         <div class="provider-tabs" id="providerTabs">
           <button class="provider-tab active" data-provider="anthropic">Anthropic</button>
-          <button class="provider-tab" data-provider="moonshot">Moonshot</button>
+          <button class="provider-tab" data-provider="moonshot">Kimi</button>
           <button class="provider-tab" data-provider="openai">OpenAI</button>
           <button class="provider-tab" data-provider="google">Google</button>
           <button class="provider-tab" data-provider="custom" data-i18n="provider.custom">Custom</button>
@@ -103,7 +103,7 @@
             </label>
             <label class="radio-item">
               <input type="radio" name="subPlatform" value="kimi-code">
-              <span>Kimi Code</span>
+              <span>Kimi 会员订阅</span>
             </label>
           </div>
         </div>
@@ -409,6 +409,14 @@
           <span class="toggle-label" data-i18n="advanced.imessage">iMessage channel</span>
           <label class="toggle-switch">
             <input type="checkbox" id="imessageEnabled">
+            <span class="toggle-slider"></span>
+          </label>
+        </div>
+
+        <div class="toggle-row hidden" id="launchAtLoginRow">
+          <span class="toggle-label" data-i18n="advanced.launchAtLogin">Launch at login</span>
+          <label class="toggle-switch">
+            <input type="checkbox" id="launchAtLoginEnabled">
             <span class="toggle-slider"></span>
           </label>
         </div>
