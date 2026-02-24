@@ -27,7 +27,7 @@
   --radius-md: 10px;
   --radius-lg: 14px;
   --transition: 180ms ease;
-  --sidebar-width: 170px;
+  --sidebar-width: 220px;
 }
 
 /* 全局重置 */
@@ -68,17 +68,20 @@ button, input, select, label, a {
   flex-shrink: 0;
   background: var(--bg-secondary);
   border-right: 1px solid var(--border);
-  padding: 20px 0;
+  padding: 12px 8px;
   display: flex;
   flex-direction: column;
   -webkit-app-region: drag;
 }
 
 .sidebar-title {
-  padding: 0 20px 16px;
-  font-size: 13px;
-  font-weight: 600;
+  padding: 8px 12px;
+  font-size: 11px;
+  font-weight: 500;
   color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 4px;
 }
 
 .nav-list {
@@ -87,31 +90,37 @@ button, input, select, label, a {
   flex-direction: column;
   flex: 1;
   min-height: 0;
+  gap: 2px;
 }
 
 .nav-item {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 9px 20px;
-  font-size: 13.5px;
+  padding: 8px 10px;
+  font-size: 13px;
   font-weight: 500;
   color: var(--text-secondary);
   cursor: pointer;
+  border-radius: 6px;
   transition: color var(--transition), background var(--transition);
   -webkit-app-region: no-drag;
 }
 
 .nav-item:hover {
   color: var(--text-primary);
-  background: rgba(255, 255, 255, 0.04);
+  background: var(--bg-input);
 }
 
 .nav-item.active {
   color: var(--text-primary);
   background: var(--accent-dim);
-  border-left: 2px solid var(--accent);
-  padding-left: 18px;
+  border-left: none;
+  padding-left: 10px;
+}
+
+.nav-item.active svg {
+  color: var(--accent);
 }
 
 .nav-item svg {
@@ -1076,13 +1085,13 @@ select option {
 @media (prefers-color-scheme: light) {
   :root {
     --bg-primary: #ffffff;
-    --bg-secondary: #f5f5f5;
+    --bg-secondary: #fbfbfb;
     --bg-card: #ffffff;
-    --bg-input: #f5f5f5;
-    --border: #e0e0e0;
-    --text-primary: #1a1a1a;
-    --text-secondary: #555555;
-    --text-muted: #888888;
+    --bg-input: #f4f4f5;
+    --border: #e4e4e7;
+    --text-primary: #18181b;
+    --text-secondary: #52525b;
+    --text-muted: #a1a1aa;
     --accent-dim: rgba(192, 57, 43, 0.08);
     --success-bg: rgba(212, 119, 106, 0.06);
     --error-bg: rgba(192, 57, 43, 0.06);
@@ -1091,7 +1100,7 @@ select option {
 
   /* 导航 hover：浅色下用黑色半透明 */
   .nav-item:hover {
-    background: rgba(0, 0, 0, 0.04);
+    background: #f4f4f5;
   }
 
   /* 分段选择器激活态：红底强制白字 */
