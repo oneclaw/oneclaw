@@ -288,6 +288,7 @@
   align-items: center;
   justify-content: space-between;
   gap: 10px;
+  padding: 0 10px;
 }
 
 .oneclaw-sidebar__status {
