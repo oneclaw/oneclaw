@@ -125,6 +125,8 @@ export class GatewayProcess {
       env: {
         ...process.env,
         NODE_ENV: "production",
+        // 禁止 openclaw 入口在子进程内二次 respawn，避免 Windows 闪烁控制台窗口
+        OPENCLAW_NO_RESPAWN: "1",
         OPENCLAW_LENIENT_CONFIG: "1",
         OPENCLAW_GATEWAY_TOKEN: this.token,
         OPENCLAW_NPM_BIN: resolveNpmBin(),
@@ -214,7 +216,12 @@ export class GatewayProcess {
         cwd,
         timeout: 10_000,
         stdio: "pipe",
-        env: { ...process.env, OPENCLAW_LENIENT_CONFIG: "1" },
+        windowsHide: true,
+        env: {
+          ...process.env,
+          OPENCLAW_NO_RESPAWN: "1",
+          OPENCLAW_LENIENT_CONFIG: "1",
+        },
       });
       diagLog("旧 gateway 已停止");
     } catch (err: any) {

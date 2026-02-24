@@ -573,6 +573,8 @@ export function registerSettingsIpc(): void {
       cwd,
       env: {
         ...process.env,
+        // 禁止 openclaw 入口二次 respawn，避免 Windows 控制台闪烁
+        OPENCLAW_NO_RESPAWN: "1",
         PATH: envPath,
         FORCE_COLOR: "0",
       },
@@ -624,6 +626,8 @@ async function runGatewayCli(args: string[]): Promise<CliRunResult> {
       cwd,
       env: {
         ...process.env,
+        // 统一关闭入口二次 respawn，保证所有短命 CLI 子命令都静默运行
+        OPENCLAW_NO_RESPAWN: "1",
         PATH: envPath,
         FORCE_COLOR: "0",
       },
