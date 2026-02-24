@@ -89,10 +89,6 @@ button, input, select, label, a {
   min-height: 0;
 }
 
-.nav-item-bottom {
-  margin-top: auto;
-}
-
 .nav-item {
   display: flex;
   align-items: center;
@@ -883,38 +879,6 @@ select option {
   font-size: 12.5px;
   color: var(--text-secondary);
   line-height: 1.5;
-}
-
-/* ── Doctor Tab ── */
-
-.doctor-log {
-  background: var(--bg-input);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  padding: 14px 16px;
-  font-family: "SF Mono", "Fira Code", "Cascadia Code", Menlo, Monaco, monospace;
-  font-size: 12px;
-  line-height: 1.6;
-  color: var(--text-secondary);
-  max-height: 300px;
-  overflow-y: auto;
-  white-space: pre-wrap;
-  word-break: break-all;
-  user-select: text;
-}
-
-.doctor-exit {
-  font-size: 13px;
-  font-weight: 500;
-  padding: 8px 0;
-}
-
-.doctor-exit.pass {
-  color: var(--success);
-}
-
-.doctor-exit.fail {
-  color: var(--error);
 }
 
 /* ── Backup Tab ── */

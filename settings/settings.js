@@ -62,7 +62,6 @@
       "title": "Settings",
       "nav.provider": "Model",
       "nav.feishu": "Feishu Integration",
-      "nav.doctor": "Doctor",
       "provider.title": "Model Configuration",
       "provider.desc": "Change your LLM provider, API key, or model.",
       "provider.custom": "Custom",
@@ -144,12 +143,6 @@
       "error.noModelId": "Please enter the Model ID.",
       "error.verifyFailed": "Verification failed. Please check your API key.",
       "error.connection": "Connection error: ",
-      "doctor.title": "Doctor",
-      "doctor.desc": "Run diagnostics and auto-repair configuration issues.",
-      "doctor.run": "Run Doctor",
-      "doctor.running": "Running…",
-      "doctor.pass": "All checks passed (exit code: 0)",
-      "doctor.fail": "Some checks failed (exit code: {code})",
       "nav.kimi": "KimiClaw",
       "nav.appearance": "Appearance",
       "nav.backup": "Backup & Restore",
@@ -221,7 +214,6 @@
       "title": "设置",
       "nav.provider": "模型配置",
       "nav.feishu": "飞书集成",
-      "nav.doctor": "诊断修复",
       "provider.title": "模型配置",
       "provider.desc": "修改 LLM 云厂商、API 密钥或模型。",
       "provider.custom": "自定义",
@@ -303,14 +295,8 @@
       "error.noModelId": "请输入模型 ID。",
       "error.verifyFailed": "验证失败，请检查 API 密钥。",
       "error.connection": "连接错误：",
-      "doctor.title": "诊断修复",
-      "doctor.desc": "运行诊断并自动修复配置问题。",
-      "doctor.run": "运行诊断",
-      "doctor.running": "运行中…",
-      "doctor.pass": "全部检查通过（退出码：0）",
-      "doctor.fail": "部分检查未通过（退出码：{code}）",
       "nav.kimi": "KimiClaw",
-      "nav.appearance": "外观",
+      "nav.appearance": "外观显示",
       "nav.backup": "备份与恢复",
       "kimi.title": "KimiClaw",
       "kimi.desc": "通过 Kimi 远程遥控 OneClaw",
@@ -334,7 +320,7 @@
       "advanced.save": "保存",
       "advanced.saving": "保存中…",
       "advanced.saved": "设置已保存。",
-      "appearance.title": "外观",
+      "appearance.title": "外观显示",
       "appearance.desc": "调整主题和聊天展示相关设置。",
       "appearance.theme": "主题",
       "appearance.theme.system": "跟随系统",
@@ -343,7 +329,7 @@
       "appearance.showThinking": "显示思考过程",
       "appearance.save": "保存",
       "appearance.saving": "保存中…",
-      "appearance.saved": "外观设置已保存。",
+      "appearance.saved": "外观显示设置已保存。",
       "backup.title": "备份与恢复",
       "backup.desc": "当配置改坏导致无法启动时，可在这里回退 openclaw.json。",
       "backup.restoreLastKnownGood": "恢复最近可用配置",
@@ -439,12 +425,6 @@
     btnKimiSave: $("#btnKimiSave"),
     btnKimiSaveText: $("#btnKimiSave .btn-text"),
     btnKimiSaveSpinner: $("#btnKimiSave .btn-spinner"),
-    // Doctor tab
-    btnDoctor: $("#btnDoctor"),
-    btnDoctorText: $("#btnDoctor .btn-text"),
-    btnDoctorSpinner: $("#btnDoctor .btn-spinner"),
-    doctorLog: $("#doctorLog"),
-    doctorExit: $("#doctorExit"),
     // Advanced tab
     imessageEnabled: $("#imessageEnabled"),
     launchAtLoginRow: $("#launchAtLoginRow"),
@@ -490,7 +470,6 @@
   let chPairingRequests = [];
   let chApprovedEntries = [];
   let kimiSaving = false;
-  let doctorRunning = false;
   let advSaving = false;
   let appearanceSaving = false;
   let backupRestoring = false;
@@ -1342,50 +1321,6 @@
     }
   }
 
-  // ── Doctor ──
-
-  async function handleDoctor() {
-    if (doctorRunning) return;
-    setDoctorRunning(true);
-
-    // 清空上次输出
-    els.doctorLog.textContent = "";
-    els.doctorLog.classList.remove("hidden");
-    els.doctorExit.classList.add("hidden");
-
-    try {
-      var result = await window.oneclaw.settingsRunDoctor();
-      if (!result.success) {
-        els.doctorLog.textContent = result.message || "Failed to start doctor";
-        setDoctorRunning(false);
-      }
-      // 成功时等待流式输出 + exit 事件
-    } catch (err) {
-      els.doctorLog.textContent = (err && err.message) || "Failed to start doctor";
-      setDoctorRunning(false);
-    }
-  }
-
-  // Doctor 流式输出回调
-  function onDoctorOutput(text) {
-    els.doctorLog.textContent += text;
-    // 自动滚动到底部
-    els.doctorLog.scrollTop = els.doctorLog.scrollHeight;
-  }
-
-  // Doctor 退出回调
-  function onDoctorExit(code) {
-    setDoctorRunning(false);
-    els.doctorExit.classList.remove("hidden");
-    if (code === 0) {
-      els.doctorExit.textContent = t("doctor.pass");
-      els.doctorExit.className = "doctor-exit pass";
-    } else {
-      els.doctorExit.textContent = t("doctor.fail").replace("{code}", String(code));
-      els.doctorExit.className = "doctor-exit fail";
-    }
-  }
-
   // ── Advanced ──
 
   // 加载高级配置
@@ -2171,13 +2106,6 @@
     els.btnSaveSpinner.classList.toggle("hidden", !loading);
   }
 
-  function setDoctorRunning(loading) {
-    doctorRunning = loading;
-    els.btnDoctor.disabled = loading;
-    els.btnDoctorText.textContent = loading ? t("doctor.running") : t("doctor.run");
-    els.btnDoctorSpinner.classList.toggle("hidden", !loading);
-  }
-
   // ── 事件绑定 ──
 
   function bindEvents() {
@@ -2343,9 +2271,6 @@
       }
     });
 
-    // Doctor
-    els.btnDoctor.addEventListener("click", handleDoctor);
-
     // Advanced
     els.btnAdvSave.addEventListener("click", handleAdvSave);
 
@@ -2382,13 +2307,6 @@
       els.btnResetConfig.addEventListener("click", handleResetConfig);
     }
 
-    // Doctor 流式输出监听
-    if (window.oneclaw && window.oneclaw.onDoctorOutput) {
-      window.oneclaw.onDoctorOutput(onDoctorOutput);
-    }
-    if (window.oneclaw && window.oneclaw.onDoctorExit) {
-      window.oneclaw.onDoctorExit(onDoctorExit);
-    }
     if (window.oneclaw && window.oneclaw.onSettingsNavigate) {
       window.oneclaw.onSettingsNavigate(function (payload) {
         if (!payload || !payload.tab) return;
