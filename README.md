@@ -32,7 +32,7 @@ You define the goal, OneClaw executes.
 
 ## Download
 
-- Releases: <https://github.com/nicepkg/oneclaw/releases>
+- Releases: <https://github.com/oneclaw/oneclaw/releases>
 
 ## Which Installer Should I Choose?
 

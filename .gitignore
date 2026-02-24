@@ -34,3 +34,5 @@ tools/
 # 签名密钥与本地环境变量（绝对不能提交）
 .env
 private_keys/
+
+.gemini-clipboard/

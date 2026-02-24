@@ -32,7 +32,7 @@ English version: [README.md](README.md)
 
 ## 下载
 
-- Releases: <https://github.com/nicepkg/oneclaw/releases>
+- Releases: <https://github.com/oneclaw/oneclaw/releases>
 
 ## 我该下载哪个安装包？
 
