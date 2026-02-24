@@ -25,6 +25,7 @@ import {
 import { getLatestShareCopyPayload } from "./share-copy";
 import { extractKimiConfig, saveKimiPluginConfig, isKimiPluginBundled, DEFAULT_KIMI_BRIDGE_WS_URL } from "./kimi-config";
 import { ensureGatewayAuthTokenInConfig } from "./gateway-auth";
+import * as analytics from "./analytics";
 import * as path from "path";
 import * as fs from "fs";
 
@@ -70,6 +71,59 @@ type FeishuTenantTokenCache = {
 let doctorProc: ChildProcess | null = null;
 let feishuTenantTokenCache: FeishuTenantTokenCache | null = null;
 
+type SettingsActionResult = {
+  success: boolean;
+  message?: string;
+};
+
+// 统一封装 Settings 埋点：started/result 一次接入，所有保存类 handler 复用。
+async function runTrackedSettingsAction<T extends SettingsActionResult>(
+  action: analytics.SettingsAction,
+  props: Record<string, unknown>,
+  run: () => Promise<T>,
+): Promise<T> {
+  const startedAt = Date.now();
+  const canTrackStructured =
+    typeof analytics.trackSettingsActionStarted === "function" &&
+    typeof analytics.trackSettingsActionResult === "function";
+  if (canTrackStructured) {
+    analytics.trackSettingsActionStarted(action, props);
+  }
+  try {
+    const result = await run();
+    const latencyMs = Date.now() - startedAt;
+    const errorType = result.success
+      ? undefined
+      : (typeof analytics.classifyErrorType === "function"
+        ? analytics.classifyErrorType(result.message)
+        : "unknown");
+    if (canTrackStructured) {
+      analytics.trackSettingsActionResult(action, {
+        success: result.success,
+        latencyMs,
+        errorType,
+        props,
+      });
+    }
+    return result;
+  } catch (err) {
+    const latencyMs = Date.now() - startedAt;
+    const errorType =
+      typeof analytics.classifyErrorType === "function"
+        ? analytics.classifyErrorType(err)
+        : "unknown";
+    if (canTrackStructured) {
+      analytics.trackSettingsActionResult(action, {
+        success: false,
+        latencyMs,
+        errorType,
+        props,
+      });
+    }
+    throw err;
+  }
+}
+
 // 注册 Settings 相关 IPC
 export function registerSettingsIpc(): void {
   // ── 读取当前 provider/model 配置（apiKey 掩码返回） ──
@@ -84,7 +138,8 @@ export function registerSettingsIpc(): void {
 
   // ── 验证 API Key（复用 provider-config） ──
   ipcMain.handle("settings:verify-key", async (_event, params) => {
-    return verifyProvider(params);
+    const provider = typeof params?.provider === "string" ? params.provider : "";
+    return runTrackedSettingsAction("verify_key", { provider }, async () => verifyProvider(params));
   });
 
   // ── 读取最新分享文案（服务端维护中英文版本） ──
@@ -105,41 +160,48 @@ export function registerSettingsIpc(): void {
   // ── 保存 provider 配置 ──
   ipcMain.handle("settings:save-provider", async (_event, params) => {
     const { provider, apiKey, modelID, baseURL, api, subPlatform, supportImage } = params;
-    try {
-      const config = readUserConfig();
+    const trackedProps = {
+      provider,
+      model: modelID,
+      sub_platform: subPlatform || undefined,
+    };
+    return runTrackedSettingsAction("save_provider", trackedProps, async () => {
+      try {
+        const config = readUserConfig();
 
-      // 初始化嵌套结构
-      config.models ??= {};
-      config.models.providers ??= {};
-      config.agents ??= {};
-      config.agents.defaults ??= {};
-      config.agents.defaults.model ??= {};
+        // 初始化嵌套结构
+        config.models ??= {};
+        config.models.providers ??= {};
+        config.agents ??= {};
+        config.agents.defaults ??= {};
+        config.agents.defaults.model ??= {};
 
-      if (provider === "moonshot") {
-        // 记住现有 models 再写入（saveMoonshotConfig 会覆盖）
-        const sub = MOONSHOT_SUB_PLATFORMS[subPlatform || "moonshot-cn"];
-        const provKey = sub?.providerKey || "moonshot";
-        const prevModels: any[] = config.models.providers[provKey]?.models ?? [];
+        if (provider === "moonshot") {
+          // 记住现有 models 再写入（saveMoonshotConfig 会覆盖）
+          const sub = MOONSHOT_SUB_PLATFORMS[subPlatform || "moonshot-cn"];
+          const provKey = sub?.providerKey || "moonshot";
+          const prevModels: any[] = config.models.providers[provKey]?.models ?? [];
 
-        saveMoonshotConfig(config, apiKey, modelID, subPlatform);
+          saveMoonshotConfig(config, apiKey, modelID, subPlatform);
 
-        // 合并：保留已有模型，确保选中模型在列表中
-        mergeModels(config.models.providers[provKey], modelID, prevModels);
-      } else {
-        const prevModels: any[] = config.models.providers[provider]?.models ?? [];
+          // 合并：保留已有模型，确保选中模型在列表中
+          mergeModels(config.models.providers[provKey], modelID, prevModels);
+        } else {
+          const prevModels: any[] = config.models.providers[provider]?.models ?? [];
 
-        const providerConfig = buildProviderConfig(provider, apiKey, modelID, baseURL, api, supportImage);
-        config.models.providers[provider] = providerConfig;
-        config.agents.defaults.model.primary = `${provider}/${modelID}`;
+          const providerConfig = buildProviderConfig(provider, apiKey, modelID, baseURL, api, supportImage);
+          config.models.providers[provider] = providerConfig;
+          config.agents.defaults.model.primary = `${provider}/${modelID}`;
 
-        mergeModels(config.models.providers[provider], modelID, prevModels);
+          mergeModels(config.models.providers[provider], modelID, prevModels);
+        }
+
+        writeUserConfig(config);
+        return { success: true };
+      } catch (err: any) {
+        return { success: false, message: err.message || String(err) };
       }
-
-      writeUserConfig(config);
-      return { success: true };
-    } catch (err: any) {
-      return { success: false, message: err.message || String(err) };
-    }
+    });
   });
 
   // ── 读取频道配置 ──
@@ -184,80 +246,87 @@ export function registerSettingsIpc(): void {
     const dmScopeInput = params?.dmScope;
     const groupPolicy = normalizeGroupPolicy(params?.groupPolicy, "allowlist");
     const groupAllowFrom = normalizeAllowFromEntries(params?.groupAllowFrom);
-    if (groupPolicy === "allowlist") {
-      const hasInvalidGroupId = groupAllowFrom.some((entry) => !looksLikeFeishuGroupId(entry));
-      if (hasInvalidGroupId) {
-        return { success: false, message: "群聊白名单只能填写以 oc_ 开头的群 ID。" };
+    const trackedProps = {
+      enabled,
+      dm_policy: dmPolicy,
+      group_policy: groupPolicy,
+    };
+    return runTrackedSettingsAction("save_channel", trackedProps, async () => {
+      if (groupPolicy === "allowlist") {
+        const hasInvalidGroupId = groupAllowFrom.some((entry) => !looksLikeFeishuGroupId(entry));
+        if (hasInvalidGroupId) {
+          return { success: false, message: "群聊白名单只能填写以 oc_ 开头的群 ID。" };
+        }
       }
-    }
-    try {
-      const config = readUserConfig();
-      const dmScope = normalizeDmScope(
-        dmScopeInput,
-        normalizeDmScope(config?.session?.dmScope, "main")
-      );
-      config.plugins ??= {};
-      config.plugins.entries ??= {};
+      try {
+        const config = readUserConfig();
+        const dmScope = normalizeDmScope(
+          dmScopeInput,
+          normalizeDmScope(config?.session?.dmScope, "main")
+        );
+        config.plugins ??= {};
+        config.plugins.entries ??= {};
 
-      // 仅禁用 → 不校验凭据
-      if (enabled === false) {
-        config.plugins.entries.feishu = { ...(config.plugins.entries.feishu ?? {}), enabled: false };
+        // 仅禁用 → 不校验凭据
+        if (enabled === false) {
+          config.plugins.entries.feishu = { ...(config.plugins.entries.feishu ?? {}), enabled: false };
+          writeUserConfig(config);
+          return { success: true };
+        }
+
+        config.plugins.entries.feishu = { enabled: true };
+        config.channels ??= {};
+        // 保留已有飞书策略字段，避免每次保存凭据都把 dmPolicy/allowFrom 覆盖丢失
+        const prevFeishu =
+          config.channels.feishu && typeof config.channels.feishu === "object"
+            ? config.channels.feishu
+            : {};
+        config.channels.feishu = {
+          ...prevFeishu,
+          appId,
+          appSecret,
+        };
+
+        const currentAllowFrom = normalizeAllowFromEntries(config.channels.feishu.allowFrom);
+        const allowFromWithoutWildcard = currentAllowFrom.filter((entry) => entry !== WILDCARD_ALLOW_ENTRY);
+
+        if (dmPolicy === "open") {
+          config.channels.feishu.dmPolicy = "open";
+          config.channels.feishu.allowFrom = dedupeEntries([
+            ...allowFromWithoutWildcard,
+            WILDCARD_ALLOW_ENTRY,
+          ]);
+        } else {
+          config.channels.feishu.dmPolicy = dmPolicy;
+          if (allowFromWithoutWildcard.length > 0) {
+            config.channels.feishu.allowFrom = allowFromWithoutWildcard;
+          } else {
+            delete config.channels.feishu.allowFrom;
+          }
+        }
+        config.channels.feishu.groupPolicy = groupPolicy;
+        if (groupAllowFrom.length > 0) {
+          config.channels.feishu.groupAllowFrom = groupAllowFrom;
+        } else {
+          delete config.channels.feishu.groupAllowFrom;
+        }
+
+        // 私聊会话隔离属于全局 session 配置，不是飞书子配置。
+        config.session ??= {};
+        if (dmScope === "main") {
+          delete config.session.dmScope;
+          if (Object.keys(config.session).length === 0) {
+            delete config.session;
+          }
+        } else {
+          config.session.dmScope = dmScope;
+        }
         writeUserConfig(config);
         return { success: true };
+      } catch (err: any) {
+        return { success: false, message: err.message || String(err) };
       }
-
-      config.plugins.entries.feishu = { enabled: true };
-      config.channels ??= {};
-      // 保留已有飞书策略字段，避免每次保存凭据都把 dmPolicy/allowFrom 覆盖丢失
-      const prevFeishu =
-        config.channels.feishu && typeof config.channels.feishu === "object"
-          ? config.channels.feishu
-          : {};
-      config.channels.feishu = {
-        ...prevFeishu,
-        appId,
-        appSecret,
-      };
-
-      const currentAllowFrom = normalizeAllowFromEntries(config.channels.feishu.allowFrom);
-      const allowFromWithoutWildcard = currentAllowFrom.filter((entry) => entry !== WILDCARD_ALLOW_ENTRY);
-
-      if (dmPolicy === "open") {
-        config.channels.feishu.dmPolicy = "open";
-        config.channels.feishu.allowFrom = dedupeEntries([
-          ...allowFromWithoutWildcard,
-          WILDCARD_ALLOW_ENTRY,
-        ]);
-      } else {
-        config.channels.feishu.dmPolicy = dmPolicy;
-        if (allowFromWithoutWildcard.length > 0) {
-          config.channels.feishu.allowFrom = allowFromWithoutWildcard;
-        } else {
-          delete config.channels.feishu.allowFrom;
-        }
-      }
-      config.channels.feishu.groupPolicy = groupPolicy;
-      if (groupAllowFrom.length > 0) {
-        config.channels.feishu.groupAllowFrom = groupAllowFrom;
-      } else {
-        delete config.channels.feishu.groupAllowFrom;
-      }
-
-      // 私聊会话隔离属于全局 session 配置，不是飞书子配置。
-      config.session ??= {};
-      if (dmScope === "main") {
-        delete config.session.dmScope;
-        if (Object.keys(config.session).length === 0) {
-          delete config.session;
-        }
-      } else {
-        config.session.dmScope = dmScope;
-      }
-      writeUserConfig(config);
-      return { success: true };
-    } catch (err: any) {
-      return { success: false, message: err.message || String(err) };
-    }
+    });
   });
 
   // ── 列出飞书待审批配对请求（走 openclaw pairing list，避免重复实现存储协议） ──
@@ -427,37 +496,39 @@ export function registerSettingsIpc(): void {
   ipcMain.handle("settings:save-kimi-config", async (_event, params) => {
     const botToken = typeof params?.botToken === "string" ? params.botToken.trim() : "";
     const enabled = params?.enabled;
-    try {
-      const config = readUserConfig();
-      config.plugins ??= {};
-      config.plugins.entries ??= {};
+    return runTrackedSettingsAction("save_kimi", { enabled }, async () => {
+      try {
+        const config = readUserConfig();
+        config.plugins ??= {};
+        config.plugins.entries ??= {};
 
-      // 仅禁用 → 不校验 token
-      if (enabled === false) {
-        if (config.plugins.entries["kimi-claw"]) {
-          config.plugins.entries["kimi-claw"].enabled = false;
+        // 仅禁用 → 不校验 token
+        if (enabled === false) {
+          if (config.plugins.entries["kimi-claw"]) {
+            config.plugins.entries["kimi-claw"].enabled = false;
+          }
+          if (config.plugins.entries["kimi-search"]) {
+            config.plugins.entries["kimi-search"].enabled = false;
+          }
+          writeUserConfig(config);
+          return { success: true };
         }
-        if (config.plugins.entries["kimi-search"]) {
-          config.plugins.entries["kimi-search"].enabled = false;
+
+        if (!botToken) {
+          return { success: false, message: "Kimi Bot Token 不能为空。" };
         }
+        if (!isKimiPluginBundled()) {
+          return { success: false, message: "Kimi Channel 组件缺失，请重新安装 OneClaw。" };
+        }
+
+        const gatewayToken = ensureGatewayAuthTokenInConfig(config);
+        saveKimiPluginConfig(config, { botToken, gatewayToken, wsURL: DEFAULT_KIMI_BRIDGE_WS_URL });
         writeUserConfig(config);
         return { success: true };
+      } catch (err: any) {
+        return { success: false, message: err.message || String(err) };
       }
-
-      if (!botToken) {
-        return { success: false, message: "Kimi Bot Token 不能为空。" };
-      }
-      if (!isKimiPluginBundled()) {
-        return { success: false, message: "Kimi Channel 组件缺失，请重新安装 OneClaw。" };
-      }
-
-      const gatewayToken = ensureGatewayAuthTokenInConfig(config);
-      saveKimiPluginConfig(config, { botToken, gatewayToken, wsURL: DEFAULT_KIMI_BRIDGE_WS_URL });
-      writeUserConfig(config);
-      return { success: true };
-    } catch (err: any) {
-      return { success: false, message: err.message || String(err) };
-    }
+    });
   });
 
   // ── 读取高级配置（browser profile + iMessage） ──
@@ -479,21 +550,27 @@ export function registerSettingsIpc(): void {
   // ── 保存高级配置 ──
   ipcMain.handle("settings:save-advanced", async (_event, params) => {
     const { browserProfile, imessageEnabled } = params;
-    try {
-      const config = readUserConfig();
+    return runTrackedSettingsAction(
+      "save_advanced",
+      { browser_profile: browserProfile, imessage_enabled: imessageEnabled },
+      async () => {
+        try {
+          const config = readUserConfig();
 
-      config.browser ??= {};
-      config.browser.defaultProfile = browserProfile;
+          config.browser ??= {};
+          config.browser.defaultProfile = browserProfile;
 
-      config.channels ??= {};
-      config.channels.imessage ??= {};
-      config.channels.imessage.enabled = imessageEnabled;
+          config.channels ??= {};
+          config.channels.imessage ??= {};
+          config.channels.imessage.enabled = imessageEnabled;
 
-      writeUserConfig(config);
-      return { success: true };
-    } catch (err: any) {
-      return { success: false, message: err.message || String(err) };
-    }
+          writeUserConfig(config);
+          return { success: true };
+        } catch (err: any) {
+          return { success: false, message: err.message || String(err) };
+        }
+      }
+    );
   });
 
   // ── 列出配置备份与恢复元数据 ──

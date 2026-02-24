@@ -1,5 +1,6 @@
 import { BrowserWindow, app } from "electron";
 import * as path from "path";
+import * as analytics from "./analytics";
 
 // Setup 窗口生命周期管理
 export class SetupManager {
@@ -40,6 +41,7 @@ export class SetupManager {
 
     // Setup 窗口关闭 → 直接退出应用
     this.setupWin.on("close", () => {
+      analytics.trackSetupAbandoned({ trigger: "window_close" });
       app.quit();
     });
 

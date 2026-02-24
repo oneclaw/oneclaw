@@ -17,13 +17,67 @@ interface SetupIpcDeps {
 
 let latestSetupCompletedProps: Record<string, string> | null = null;
 
+type SetupActionResult = {
+  success: boolean;
+  message?: string;
+};
+
+// 统一封装 Setup 埋点：started/result 结构固定，避免每个 handler 手写重复逻辑。
+async function runTrackedSetupAction<T extends SetupActionResult>(
+  action: analytics.SetupAction,
+  props: Record<string, unknown>,
+  run: () => Promise<T>,
+): Promise<T> {
+  const startedAt = Date.now();
+  const canTrackStructured =
+    typeof analytics.trackSetupActionStarted === "function" &&
+    typeof analytics.trackSetupActionResult === "function";
+  if (canTrackStructured) {
+    analytics.trackSetupActionStarted(action, props);
+  }
+  try {
+    const result = await run();
+    const latencyMs = Date.now() - startedAt;
+    const errorType = result.success
+      ? undefined
+      : (typeof analytics.classifyErrorType === "function"
+        ? analytics.classifyErrorType(result.message)
+        : "unknown");
+    if (canTrackStructured) {
+      analytics.trackSetupActionResult(action, {
+        success: result.success,
+        latencyMs,
+        errorType,
+        props,
+      });
+    }
+    return result;
+  } catch (err) {
+    const latencyMs = Date.now() - startedAt;
+    const errorType =
+      typeof analytics.classifyErrorType === "function"
+        ? analytics.classifyErrorType(err)
+        : "unknown";
+    if (canTrackStructured) {
+      analytics.trackSetupActionResult(action, {
+        success: false,
+        latencyMs,
+        errorType,
+        props,
+      });
+    }
+    throw err;
+  }
+}
+
 // 注册 Setup 相关 IPC
 export function registerSetupIpc(deps: SetupIpcDeps): void {
   const { setupManager } = deps;
 
   // ── 验证 API Key ──
   ipcMain.handle("setup:verify-key", async (_event, params) => {
-    return verifyProvider(params);
+    const provider = typeof params?.provider === "string" ? params.provider : "";
+    return runTrackedSetupAction("verify_key", { provider }, async () => verifyProvider(params));
   });
 
   // ── 保存配置到 ~/.openclaw/openclaw.json ──
@@ -37,64 +91,73 @@ export function registerSetupIpc(deps: SetupIpcDeps): void {
       subPlatform,
       supportImage,
     } = params;
-    try {
-      // 读取现有配置
-      const config = readUserConfig();
+    const trackedProps = {
+      provider,
+      model: modelID,
+      sub_platform: subPlatform || undefined,
+    };
+    return runTrackedSetupAction("save_config", trackedProps, async () => {
+      try {
+        // 读取现有配置
+        const config = readUserConfig();
 
-      // 初始化嵌套结构
-      config.models ??= {};
-      config.models.providers ??= {};
-      config.agents ??= {};
-      config.agents.defaults ??= {};
-      config.agents.defaults.model ??= {};
+        // 初始化嵌套结构
+        config.models ??= {};
+        config.models.providers ??= {};
+        config.agents ??= {};
+        config.agents.defaults ??= {};
+        config.agents.defaults.model ??= {};
 
-      // Moonshot 子平台需要特殊处理
-      if (provider === "moonshot") {
-        saveMoonshotConfig(config, apiKey, modelID, subPlatform);
-      } else {
-        // 构造 provider 配置
-        const providerConfig = buildProviderConfig(provider, apiKey, modelID, baseURL, api, supportImage);
-        config.models.providers[provider] = providerConfig;
-        config.agents.defaults.model.primary = `${provider}/${modelID}`;
+        // Moonshot 子平台需要特殊处理
+        if (provider === "moonshot") {
+          saveMoonshotConfig(config, apiKey, modelID, subPlatform);
+        } else {
+          // 构造 provider 配置
+          const providerConfig = buildProviderConfig(provider, apiKey, modelID, baseURL, api, supportImage);
+          config.models.providers[provider] = providerConfig;
+          config.agents.defaults.model.primary = `${provider}/${modelID}`;
+        }
+
+        // 统一 gateway 鉴权配置：local 模式 + 持久化 token（单一真相源）
+        config.gateway ??= {};
+        config.gateway.mode = "local";
+        ensureGatewayAuthTokenInConfig(config);
+
+        // 默认使用独立浏览器实例，免去用户手动安装 Chrome 扩展
+        config.browser ??= {};
+        config.browser.defaultProfile = "openclaw";
+
+        // 显式禁用 iMessage 频道（openclaw 默认启用，会因 macOS 权限拒绝产生大量错误日志）
+        config.channels ??= {};
+        config.channels.imessage ??= {};
+        config.channels.imessage.enabled = false;
+
+        // 标记 Setup 已完成（字段对齐 openclaw config schema，避免每次启动重走 onboarding）
+        config.wizard = { lastRunAt: new Date().toISOString() };
+
+        writeUserConfig(config);
+        // 配置落盘成功后再缓存埋点上下文，避免失败时污染事件参数。
+        latestSetupCompletedProps = buildSetupCompletedProps(params, config);
+        return { success: true };
+      } catch (err: any) {
+        return { success: false, message: err.message || String(err) };
       }
-
-      // 统一 gateway 鉴权配置：local 模式 + 持久化 token（单一真相源）
-      config.gateway ??= {};
-      config.gateway.mode = "local";
-      ensureGatewayAuthTokenInConfig(config);
-
-      // 默认使用独立浏览器实例，免去用户手动安装 Chrome 扩展
-      config.browser ??= {};
-      config.browser.defaultProfile = "openclaw";
-
-      // 显式禁用 iMessage 频道（openclaw 默认启用，会因 macOS 权限拒绝产生大量错误日志）
-      config.channels ??= {};
-      config.channels.imessage ??= {};
-      config.channels.imessage.enabled = false;
-
-      // 标记 Setup 已完成（字段对齐 openclaw config schema，避免每次启动重走 onboarding）
-      config.wizard = { lastRunAt: new Date().toISOString() };
-
-      writeUserConfig(config);
-      // 配置落盘成功后再缓存埋点上下文，避免失败时污染事件参数。
-      latestSetupCompletedProps = buildSetupCompletedProps(params, config);
-      return { success: true };
-    } catch (err: any) {
-      return { success: false, message: err.message || String(err) };
-    }
+    });
   });
 
   // ── Setup 完成（Gateway 启动 + 窗口切换由 setOnComplete 回调统一处理） ──
   ipcMain.handle("setup:complete", async () => {
-    const ok = await setupManager.complete();
-    if (ok) {
-      analytics.track("setup_completed", latestSetupCompletedProps ?? {});
-      return { success: true };
-    }
-    return {
-      success: false,
-      message: "Gateway 启动超时或失败，请稍后重试。",
-    };
+    return runTrackedSetupAction("complete", {}, async () => {
+      const ok = await setupManager.complete();
+      if (ok) {
+        analytics.track("setup_completed", latestSetupCompletedProps ?? {});
+        return { success: true };
+      }
+      return {
+        success: false,
+        message: "Gateway 启动超时或失败，请稍后重试。",
+      };
+    });
   });
 }
 
