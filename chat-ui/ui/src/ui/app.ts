@@ -112,6 +112,19 @@ type SharePromptStore = {
   shownVersions: number[];
 };
 
+type OneClawUpdateState = {
+  status: "hidden" | "available" | "downloading";
+  version: string | null;
+  percent: number | null;
+  showBadge: boolean;
+};
+
+type OneClawBridge = {
+  onNavigate?: (cb: (payload: { view: "settings" }) => void) => (() => void) | void;
+  onUpdateState?: (cb: (payload: OneClawUpdateState) => void) => (() => void) | void;
+  getUpdateState?: () => Promise<OneClawUpdateState>;
+};
+
 const SHARE_PROMPT_STORE_KEY = "openclaw.share.prompt.v1";
 const SHARE_PROMPT_TRIGGER_COUNT = 5;
 
@@ -318,6 +331,7 @@ export class OpenClawApp extends LitElement {
     sharePromptSubtitle: { state: true },
     sharePromptText: { state: true },
     sharePromptVersion: { state: true },
+    updateBannerState: { state: true },
   };
 
   // 兼容 class field 的 define 语义：回灌实例字段到 Lit accessor，恢复响应式更新。
@@ -574,6 +588,12 @@ export class OpenClawApp extends LitElement {
   sharePromptSubtitle = t("sharePrompt.subtitle");
   sharePromptText = "";
   sharePromptVersion: number | null = null;
+  updateBannerState: OneClawUpdateState = {
+    status: "hidden",
+    version: null,
+    percent: null,
+    showBadge: false,
+  };
   private sharePromptSendCount = 0;
   private sharePromptShownVersions = new Set<number>();
   private sharePromptCheckInFlight = false;
@@ -591,6 +611,7 @@ export class OpenClawApp extends LitElement {
   private themeMediaHandler: ((event: MediaQueryListEvent) => void) | null = null;
   private topbarObserver: ResizeObserver | null = null;
   private appNavigateCleanup: (() => void) | null = null;
+  private updateStateCleanup: (() => void) | null = null;
 
   createRenderRoot() {
     return this;
@@ -600,6 +621,7 @@ export class OpenClawApp extends LitElement {
     super.connectedCallback();
     handleConnected(this as unknown as Parameters<typeof handleConnected>[0]);
     this.bindAppNavigation();
+    this.bindUpdateState();
   }
 
   protected firstUpdated() {
@@ -609,6 +631,8 @@ export class OpenClawApp extends LitElement {
   disconnectedCallback() {
     this.appNavigateCleanup?.();
     this.appNavigateCleanup = null;
+    this.updateStateCleanup?.();
+    this.updateStateCleanup = null;
     handleDisconnected(this as unknown as Parameters<typeof handleDisconnected>[0]);
     super.disconnectedCallback();
   }
@@ -664,17 +688,53 @@ export class OpenClawApp extends LitElement {
     applySettingsInternal(this as unknown as Parameters<typeof applySettingsInternal>[0], next);
   }
 
+  // 统一读取 preload 暴露的 bridge，避免在多个方法里重复类型断言。
+  private getOneClawBridge(): OneClawBridge | undefined {
+    return (window as unknown as { oneclaw?: OneClawBridge }).oneclaw;
+  }
+
+  // 规范化更新状态 payload，保证渲染层只消费合法值。
+  private applyUpdateBannerState(payload: OneClawUpdateState | null | undefined) {
+    const nextStatus = payload?.status;
+    if (nextStatus !== "hidden" && nextStatus !== "available" && nextStatus !== "downloading") {
+      return;
+    }
+    this.updateBannerState = {
+      status: nextStatus,
+      version: typeof payload.version === "string" && payload.version.trim()
+        ? payload.version.trim()
+        : null,
+      percent: typeof payload.percent === "number" && Number.isFinite(payload.percent)
+        ? Math.max(0, Math.min(100, payload.percent))
+        : null,
+      showBadge: Boolean(payload.showBadge),
+    };
+  }
+
+  // 订阅主进程更新状态事件，并在首屏主动拉取一次当前状态。
+  private bindUpdateState() {
+    if (this.updateStateCleanup) {
+      return;
+    }
+    const bridge = this.getOneClawBridge();
+    if (bridge?.onUpdateState) {
+      const unsubscribe = bridge.onUpdateState((payload) => this.applyUpdateBannerState(payload));
+      this.updateStateCleanup = typeof unsubscribe === "function" ? unsubscribe : null;
+    }
+    if (bridge?.getUpdateState) {
+      void bridge.getUpdateState()
+        .then((payload) => this.applyUpdateBannerState(payload))
+        .catch(() => {
+          // ignore preload bridge fetch errors
+        });
+    }
+  }
+
   private bindAppNavigation() {
     if (this.appNavigateCleanup) {
       return;
     }
-    const bridge = (window as unknown as {
-      oneclaw?: {
-        onNavigate?: (
-          cb: (payload: { view: "settings" }) => void,
-        ) => (() => void) | void;
-      };
-    }).oneclaw;
+    const bridge = this.getOneClawBridge();
     if (!bridge?.onNavigate) {
       return;
     }

@@ -8,10 +8,13 @@ import { registerSettingsIpc } from "./settings-ipc";
 import {
   setupAutoUpdater,
   checkForUpdates,
+  downloadAndInstallUpdate,
+  getUpdateBannerState,
   startAutoCheckSchedule,
   stopAutoCheckSchedule,
   setBeforeQuitForInstallCallback,
   setProgressCallback,
+  setUpdateBannerStateCallback,
 } from "./auto-updater";
 import { isSetupComplete, DEFAULT_PORT, resolveGatewayLogPath } from "./constants";
 import { resolveGatewayAuthToken } from "./gateway-auth";
@@ -302,6 +305,8 @@ ipcMain.on("gateway:start", () => requestGatewayStart("ipc:start"));
 ipcMain.on("gateway:stop", () => requestGatewayStop("ipc:stop"));
 ipcMain.handle("gateway:state", () => gateway.getState());
 ipcMain.on("app:check-updates", () => checkForUpdates(true));
+ipcMain.handle("app:get-update-state", () => getUpdateBannerState());
+ipcMain.handle("app:download-and-install-update", () => downloadAndInstallUpdate());
 ipcMain.handle("app:open-external", (_e, url: string) => shell.openExternal(url));
 
 // Chat UI 侧边栏 IPC
@@ -444,6 +449,10 @@ app.whenReady().then(async () => {
   analytics.init();
   analytics.track("app_launched");
   setupAutoUpdater();
+  // 自动更新状态变化后推送给当前主窗口，驱动侧栏“重启更新”按钮。
+  setUpdateBannerStateCallback((state) => {
+    windowManager.pushUpdateBannerState(state);
+  });
   startAutoCheckSchedule();
 
   // 更新安装前先放行窗口关闭，避免托盘“隐藏而不退出”拦截 quitAndInstall。

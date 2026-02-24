@@ -2,6 +2,7 @@ import { BrowserWindow, app, globalShortcut } from "electron";
 import * as path from "path";
 import * as log from "./logger";
 import { shouldHideWindowOnClose } from "./window-close-policy";
+import type { UpdateBannerState } from "./update-banner-state";
 import {
   WINDOW_WIDTH,
   WINDOW_HEIGHT,
@@ -164,6 +165,14 @@ export class WindowManager {
   // 标记应用进入退出流程（例如手动退出/更新安装）
   prepareForAppQuit(): void {
     this.allowAppQuit = true;
+  }
+
+  // 向渲染层广播更新侧栏状态（若窗口存在）。
+  pushUpdateBannerState(state: UpdateBannerState): void {
+    if (!this.win || this.win.isDestroyed()) {
+      return;
+    }
+    this.win.webContents.send("app:update-state", state);
   }
 
   // 销毁窗口（应用退出前调用）
