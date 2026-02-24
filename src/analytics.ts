@@ -4,8 +4,14 @@ import * as fs from "fs";
 import * as path from "path";
 import { resolveResourcesPath, resolveUserStateDir } from "./constants";
 import * as log from "./logger";
+import {
+  AnalyticsErrorType,
+  buildActionResultProps,
+  buildActionStartedProps,
+  classifyAnalyticsErrorType,
+} from "./analytics-events";
 
-const HEARTBEAT_MS = 60_000;
+const HEARTBEAT_MS = 60 * 60 * 1000;
 const DEFAULT_REQUEST_TIMEOUT_MS = 8_000;
 const DEFAULT_RETRY_DELAYS_MS = [0, 500, 1_500];
 const ANALYTICS_CONFIG_NAME = "analytics-config.json";
@@ -20,6 +26,20 @@ interface AnalyticsConfig {
 }
 
 type AnalyticsEventProps = object;
+export type SetupAction = "verify_key" | "save_config" | "complete";
+export type SettingsAction =
+  | "verify_key"
+  | "save_provider"
+  | "save_channel"
+  | "save_kimi"
+  | "save_advanced";
+
+interface TrackActionResultOptions {
+  success: boolean;
+  latencyMs: number;
+  errorType?: AnalyticsErrorType;
+  props?: Record<string, unknown>;
+}
 
 let analyticsConfig: AnalyticsConfig = {
   enabled: false,
@@ -42,13 +62,13 @@ function getDeviceId(): string {
   try {
     const id = fs.readFileSync(idFile, "utf-8").trim();
     if (id) return id;
-  } catch {}
+  } catch { }
 
   const id = crypto.randomUUID();
   try {
     fs.mkdirSync(dir, { recursive: true });
     fs.writeFileSync(idFile, id, "utf-8");
-  } catch {}
+  } catch { }
   return id;
 }
 
@@ -105,8 +125,8 @@ function normalizeConfig(raw: Partial<AnalyticsConfig>): AnalyticsConfig {
   const retryDelaysMs =
     Array.isArray(raw.retryDelaysMs) && raw.retryDelaysMs.length > 0
       ? raw.retryDelaysMs
-          .map((value) => Number.parseInt(String(value), 10))
-          .filter((value) => Number.isFinite(value) && value >= 0)
+        .map((value) => Number.parseInt(String(value), 10))
+        .filter((value) => Number.isFinite(value) && value >= 0)
       : [...DEFAULT_RETRY_DELAYS_MS];
   const hasCore = captureURL.length > 0 && apiKey.length > 0;
   const enabled = raw.enabled === true && hasCore;
@@ -240,6 +260,65 @@ export function track(event: string, eventProps: AnalyticsEventProps = {}): void
     deviceId = getDeviceId();
   }
   void sendEvent(event, eventProps);
+}
+
+// 暴露统一错误分类，供 setup/settings 处理层复用同一套错误枚举。
+export function classifyErrorType(input: unknown): AnalyticsErrorType {
+  return classifyAnalyticsErrorType(input);
+}
+
+// 统一上报 action_started，保证 setup/settings 事件属性结构一致。
+function trackActionStarted(
+  event: "setup_action_started" | "settings_action_started",
+  action: string,
+  props: Record<string, unknown> = {},
+): void {
+  track(event, buildActionStartedProps(action, props));
+}
+
+// 统一上报 action_result，保证 success/latency/error_type 字段稳定。
+function trackActionResult(
+  event: "setup_action_result" | "settings_action_result",
+  action: string,
+  options: TrackActionResultOptions,
+): void {
+  track(
+    event,
+    buildActionResultProps(action, {
+      success: options.success,
+      latencyMs: options.latencyMs,
+      errorType: options.errorType,
+      extra: options.props,
+    }),
+  );
+}
+
+// 上报 setup 流程动作开始。
+export function trackSetupActionStarted(action: SetupAction, props: Record<string, unknown> = {}): void {
+  trackActionStarted("setup_action_started", action, props);
+}
+
+// 上报 setup 流程动作结果。
+export function trackSetupActionResult(action: SetupAction, options: TrackActionResultOptions): void {
+  trackActionResult("setup_action_result", action, options);
+}
+
+// 上报 setup 流程被用户中断。
+export function trackSetupAbandoned(props: Record<string, unknown> = {}): void {
+  track("setup_abandoned", props);
+}
+
+// 上报 settings 流程动作开始。
+export function trackSettingsActionStarted(
+  action: SettingsAction,
+  props: Record<string, unknown> = {},
+): void {
+  trackActionStarted("settings_action_started", action, props);
+}
+
+// 上报 settings 流程动作结果。
+export function trackSettingsActionResult(action: SettingsAction, options: TrackActionResultOptions): void {
+  trackActionResult("settings_action_result", action, options);
 }
 
 // 停止心跳；埋点是即时发送，不需要额外 flush。

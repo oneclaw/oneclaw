@@ -359,6 +359,22 @@ function updateDockVisibility(): void {
   }
 }
 
+let hasAppFocus = false;
+
+// 仅在“失焦 -> 聚焦”状态跃迁时上报一次，避免窗口切换导致重复埋点。
+function syncAppFocusState(trigger: string): void {
+  const focused = BrowserWindow.getAllWindows().some(
+    (w) => !w.isDestroyed() && w.isFocused(),
+  );
+  if (focused === hasAppFocus) {
+    return;
+  }
+  hasAppFocus = focused;
+  if (focused) {
+    analytics.track("app_focused", { trigger });
+  }
+}
+
 // ── 应用就绪 ──
 
 app.whenReady().then(async () => {
@@ -369,6 +385,13 @@ app.whenReady().then(async () => {
     win.on("show", updateDockVisibility);
     win.on("hide", updateDockVisibility);
     win.on("closed", updateDockVisibility);
+  });
+  app.on("browser-window-focus", () => {
+    syncAppFocusState("browser-window-focus");
+  });
+  app.on("browser-window-blur", () => {
+    // blur 与 focus 可能连续触发，延迟到当前事件循环末尾再判定全局焦点。
+    setTimeout(() => syncAppFocusState("browser-window-blur"), 0);
   });
   // macOS: 最小化应用菜单，保留 Cmd+, 打开设置
   // Windows: 隐藏菜单栏，避免标题栏下方出现菜单条
