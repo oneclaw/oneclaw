@@ -12,16 +12,16 @@ export interface ProviderPreset {
 }
 
 export const PROVIDER_PRESETS: Record<string, ProviderPreset> = {
-  anthropic: { baseUrl: "https://api.anthropic.com/v1",                    api: "anthropic-messages" },
-  openai:    { baseUrl: "https://api.openai.com/v1",                       api: "openai-completions" },
-  google:    { baseUrl: "https://generativelanguage.googleapis.com/v1beta", api: "google-generative-ai" },
+  anthropic: { baseUrl: "https://api.anthropic.com/v1", api: "anthropic-messages" },
+  openai: { baseUrl: "https://api.openai.com/v1", api: "openai-completions" },
+  google: { baseUrl: "https://generativelanguage.googleapis.com/v1beta", api: "google-generative-ai" },
 };
 
 // Moonshot 三个子平台配置
 export const MOONSHOT_SUB_PLATFORMS: Record<string, { baseUrl: string; api: string; providerKey: string }> = {
-  "moonshot-cn": { baseUrl: "https://api.moonshot.cn/v1",  api: "openai-completions",  providerKey: "moonshot" },
-  "moonshot-ai": { baseUrl: "https://api.moonshot.ai/v1",  api: "openai-completions",  providerKey: "moonshot" },
-  "kimi-code":   { baseUrl: "https://api.kimi.com/coding", api: "anthropic-messages",  providerKey: "kimi-coding" },
+  "moonshot-cn": { baseUrl: "https://api.moonshot.cn/v1", api: "openai-completions", providerKey: "moonshot" },
+  "moonshot-ai": { baseUrl: "https://api.moonshot.ai/v1", api: "openai-completions", providerKey: "moonshot" },
+  "kimi-code": { baseUrl: "https://api.kimi.com/coding", api: "anthropic-messages", providerKey: "kimi-coding" },
 };
 
 // ── 构建 Provider 配置对象 ──
@@ -102,7 +102,7 @@ export function writeUserConfig(config: any): void {
 // ── 验证函数 ──
 
 // Anthropic 原生接口验证
-export function verifyAnthropic(apiKey: string): Promise<void> {
+export function verifyAnthropic(apiKey: string, modelID?: string): Promise<void> {
   return jsonRequest("https://api.anthropic.com/v1/messages", {
     method: "POST",
     headers: {
@@ -111,7 +111,7 @@ export function verifyAnthropic(apiKey: string): Promise<void> {
       "content-type": "application/json",
     },
     body: JSON.stringify({
-      model: "claude-haiku-4-5-20251001",
+      model: modelID || "claude-haiku-4-5-20251001",
       max_tokens: 1,
       messages: [{ role: "user", content: "hi" }],
     }),
@@ -134,7 +134,7 @@ export function verifyGoogle(apiKey: string): Promise<void> {
 }
 
 // Moonshot 子平台验证（根据子平台选择不同 URL）
-export function verifyMoonshot(apiKey: string, subPlatform?: string): Promise<void> {
+export function verifyMoonshot(apiKey: string, subPlatform?: string, modelID?: string): Promise<void> {
   const sub = MOONSHOT_SUB_PLATFORMS[subPlatform || "moonshot-cn"];
   const baseUrl = sub.baseUrl;
 
@@ -148,7 +148,7 @@ export function verifyMoonshot(apiKey: string, subPlatform?: string): Promise<vo
         "content-type": "application/json",
       },
       body: JSON.stringify({
-        model: "k2p5",
+        model: modelID || "k2p5",
         max_tokens: 1,
         messages: [{ role: "user", content: "hi" }],
       }),
@@ -197,13 +197,54 @@ export function verifyFeishu(appId: string, appSecret: string): Promise<void> {
   });
 }
 
-// Custom provider 验证
-export function verifyCustom(apiKey: string, baseURL?: string): Promise<void> {
+// Custom provider 验证（根据 API 类型发真实 chat 请求，而非 /models）
+export async function verifyCustom(apiKey: string, baseURL?: string, apiType?: string, modelID?: string): Promise<void> {
   if (!baseURL) throw new Error("Custom provider 需要 Base URL");
-  const url = baseURL.replace(/\/$/, "") + "/models";
-  return jsonRequest(url, {
-    headers: { Authorization: `Bearer ${apiKey}` },
-  });
+  if (!modelID) throw new Error("Custom provider 需要 Model ID");
+  const base = baseURL.replace(/\/$/, "");
+
+  if (apiType === "anthropic-messages") {
+    await jsonRequest(`${base}/v1/messages`, {
+      method: "POST",
+      headers: {
+        "x-api-key": apiKey,
+        "anthropic-version": "2023-06-01",
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        model: modelID,
+        max_tokens: 1,
+        messages: [{ role: "user", content: "hi" }],
+      }),
+    });
+  } else if (apiType === "openai-responses") {
+    // OpenAI Responses API（/v1/responses）
+    await jsonRequest(`${base}/v1/responses`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        model: modelID,
+        input: "hi",
+      }),
+    });
+  } else {
+    // openai-completions（默认）
+    await jsonRequest(`${base}/chat/completions`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        model: modelID,
+        max_tokens: 1,
+        messages: [{ role: "user", content: "hi" }],
+      }),
+    });
+  }
 }
 
 // ── 统一验证入口（根据 provider 名称分派） ──
@@ -213,14 +254,16 @@ export async function verifyProvider(params: {
   apiKey?: string;
   baseURL?: string;
   subPlatform?: string;
+  apiType?: string;
+  modelID?: string;
   appId?: string;
   appSecret?: string;
 }): Promise<{ success: boolean; message?: string }> {
-  const { provider, apiKey, baseURL, subPlatform, appId, appSecret } = params;
+  const { provider, apiKey, baseURL, subPlatform, apiType, modelID, appId, appSecret } = params;
   try {
     switch (provider) {
       case "anthropic":
-        await verifyAnthropic(apiKey!);
+        await verifyAnthropic(apiKey!, modelID);
         break;
       case "openai":
         await verifyOpenAI(apiKey!);
@@ -229,10 +272,10 @@ export async function verifyProvider(params: {
         await verifyGoogle(apiKey!);
         break;
       case "moonshot":
-        await verifyMoonshot(apiKey!, subPlatform);
+        await verifyMoonshot(apiKey!, subPlatform, modelID);
         break;
       case "custom":
-        await verifyCustom(apiKey!, baseURL);
+        await verifyCustom(apiKey!, baseURL, apiType, modelID);
         break;
       case "feishu":
         await verifyFeishu(appId!, appSecret!);
