@@ -14,6 +14,7 @@ import {
 } from "./provider-config";
 import * as log from "./logger";
 import { installCli } from "./cli-integration";
+import { saveKimiSearchConfig } from "./kimi-config";
 interface SetupIpcDeps {
   setupManager: SetupManager;
 }
@@ -126,6 +127,10 @@ export function registerSetupIpc(deps: SetupIpcDeps): void {
         // Moonshot 子平台需要特殊处理
         if (provider === "moonshot") {
           saveMoonshotConfig(config, apiKey, modelID, subPlatform);
+          // 配置 kimi-code 时自动启用搜索插件
+          if (subPlatform === "kimi-code") {
+            saveKimiSearchConfig(config, { enabled: true });
+          }
         } else {
           // 构造 provider 配置
           const providerConfig = buildProviderConfig(provider, apiKey, modelID, baseURL, api, supportImage);

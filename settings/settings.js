@@ -55,6 +55,9 @@
 
   const KIMI_CODE_MODELS = ["k2p5"];
 
+  // 已保存的各 provider 配置缓存（供切换时自动回填）
+  var savedProviders = {};
+
   // ── 国际化 ──
 
   const I18N = {
@@ -158,10 +161,12 @@
       "kimi.saving": "Saving…",
       "kimi.saved": "KimiClaw config saved.",
       "error.noKimiBotToken": "Please paste the command or enter your Bot Token.",
-      "search.title": "Kimi Search",
-      "search.desc": "Enable web search and fetch tools powered by Kimi.",
+      "search.title": "Search Configuration",
+      "search.desc": "Configure web search and content fetch tools.",
       "search.enabled": "Enable",
       "search.apiKeyLabel": "API Key",
+      "search.guideText": "Kimi for Coding API Key enables search.",
+      "search.getKey": "Get API Key →",
       "search.autoKeyHint": "Auto-reusing Kimi Code API Key",
       "search.save": "Save",
       "search.saving": "Saving…",
@@ -318,9 +323,9 @@
       "error.verifyFailed": "验证失败，请检查 API 密钥。",
       "error.connection": "连接错误：",
       "nav.kimi": "KimiClaw",
-      "nav.search": "搜索",
+      "nav.search": "搜索配置",
       "nav.appearance": "外观显示",
-      "nav.backup": "备份与恢复",
+      "nav.backup": "备份恢复",
       "kimi.title": "KimiClaw",
       "kimi.desc": "通过 Kimi 远程遥控 OneClaw",
       "kimi.enabled": "启用状态",
@@ -332,10 +337,12 @@
       "kimi.saving": "保存中…",
       "kimi.saved": "KimiClaw 配置已保存。",
       "error.noKimiBotToken": "请粘贴命令或输入 Bot Token。",
-      "search.title": "Kimi 搜索",
-      "search.desc": "启用 Kimi 驱动的网页搜索和内容抓取工具。",
+      "search.title": "搜索配置",
+      "search.desc": "配置网页搜索和内容抓取工具。",
       "search.enabled": "启用状态",
       "search.apiKeyLabel": "API 密钥",
+      "search.guideText": "Kimi for Coding 的 API Key 可启用搜索功能",
+      "search.getKey": "去控制台获取密钥 →",
       "search.autoKeyHint": "已自动复用 Kimi Code API Key",
       "search.save": "保存",
       "search.saving": "保存中…",
@@ -472,6 +479,9 @@
     // Search tab
     searchEnabled: $("#searchEnabled"),
     searchFields: $("#searchFields"),
+    searchProviderTabs: $("#searchProviderTabs"),
+    searchPlatformLink: $("#searchPlatformLink"),
+    searchGuideText: $("#searchGuideText"),
     searchApiKey: $("#searchApiKey"),
     searchApiKeyGroup: $("#searchApiKeyGroup"),
     searchAutoKeyHint: $("#searchAutoKeyHint"),
@@ -622,6 +632,41 @@
     return checked ? checked.value : "moonshot-cn";
   }
 
+  // 根据 provider + subPlatform 查找已保存的配置
+  function lookupSavedProvider(provider, subPlatform) {
+    if (provider === "moonshot") {
+      var sub = subPlatform || getSubPlatform();
+      var provKey = sub === "kimi-code" ? "kimi-coding" : "moonshot";
+      return savedProviders[provKey] || null;
+    }
+    return savedProviders[provider] || null;
+  }
+
+  // 用已保存的配置回填 UI（apiKey、model、custom 字段）
+  function fillSavedProviderFields(provider, subPlatform) {
+    var saved = lookupSavedProvider(provider, subPlatform);
+    if (!saved) {
+      els.apiKeyInput.value = "";
+      return;
+    }
+    els.apiKeyInput.value = saved.apiKey || "";
+
+    // 回填模型列表和选中项
+    if (provider !== "custom" && saved.configuredModels && saved.configuredModels.length) {
+      var merged = buildMergedModelList(saved.configuredModels, provider, subPlatform);
+      if (merged.length) populateModels(merged);
+    }
+
+    // Custom 专属字段
+    if (provider === "custom") {
+      if (saved.baseURL) els.baseURLInput.value = saved.baseURL;
+      if (saved.api) {
+        var apiRadio = document.querySelector('input[name="apiType"][value="' + saved.api + '"]');
+        if (apiRadio) apiRadio.checked = true;
+      }
+    }
+  }
+
   function switchProvider(provider) {
     currentProvider = provider;
     const config = PROVIDERS[provider];
@@ -631,7 +676,6 @@
     });
 
     els.apiKeyInput.placeholder = config.placeholder;
-    els.apiKeyInput.value = "";
     hideMsg();
 
     updatePlatformLink();
@@ -652,6 +696,9 @@
     if (!isCustom) {
       updateModels();
     }
+
+    // 从缓存回填已保存的 provider 配置
+    fillSavedProviderFields(provider);
   }
 
   function updatePlatformLink() {
@@ -735,6 +782,14 @@
 
       setSaving(false);
       showToast(t("provider.saved"));
+
+      // 保存成功后刷新 savedProviders 缓存
+      try {
+        var refreshResult = await window.oneclaw.settingsGetConfig();
+        if (refreshResult.success && refreshResult.data && refreshResult.data.savedProviders) {
+          savedProviders = refreshResult.data.savedProviders;
+        }
+      } catch { }
     } catch (err) {
       showMsg(t("error.connection") + (err.message || "Unknown error"), "error");
       setSaving(false);
@@ -933,8 +988,8 @@
         '<div class="pairing-item">',
         '  <div class="pairing-item-main">',
         '    <div class="pairing-id">' +
-          escapeHtml(row.display) +
-          '<span class="pairing-meta-inline">' + escapeHtml(row.meta) + "</span></div>",
+        escapeHtml(row.display) +
+        '<span class="pairing-meta-inline">' + escapeHtml(row.meta) + "</span></div>",
         "  </div>",
         '  <div class="pairing-item-actions">' + actionsHtml + "</div>",
         "</div>",
@@ -1914,6 +1969,12 @@
       if (!result.success || !result.data) return;
 
       var data = result.data;
+
+      // 缓存所有已保存 provider 的配置（供切换时回填）
+      if (data.savedProviders) {
+        savedProviders = data.savedProviders;
+      }
+
       var provider = data.provider;
       if (!provider || !PROVIDERS[provider]) return;
 
@@ -2359,6 +2420,8 @@
         if (currentProvider === "moonshot") {
           updateModels();
           updatePlatformLink();
+          // 切换子平台时回填对应配置
+          fillSavedProviderFields("moonshot", getSubPlatform());
         }
       });
     }
@@ -2502,10 +2565,18 @@
       }
     });
 
-    // Search tab — 启用/禁用切换 + Key 可见性
+    // Search tab — 启用/禁用切换 + Key 可见性 + 平台链接
     els.searchEnabled.addEventListener("change", function () { toggleEl(els.searchFields, isSearchEnabled()); });
     els.btnToggleSearchKey.addEventListener("click", togglePasswordVisibility);
     els.btnSearchSave.addEventListener("click", handleSearchSave);
+    if (els.searchPlatformLink) {
+      els.searchPlatformLink.addEventListener("click", function (e) {
+        e.preventDefault();
+        if (window.oneclaw && window.oneclaw.openExternal) {
+          window.oneclaw.openExternal("https://kimi.com/code?utm_source=oneclaw");
+        }
+      });
+    }
 
     // Advanced
     els.btnAdvSave.addEventListener("click", handleAdvSave);

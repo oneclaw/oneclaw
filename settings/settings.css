@@ -518,7 +518,14 @@ select option {
   border: 1px solid rgba(212, 119, 106, 0.25);
 }
 
-/* ── Search 自动复用提示 ── */
+/* ── Search tab 样式 ── */
+
+.search-guide-text {
+  font-size: 12.5px;
+  color: var(--text-secondary);
+  line-height: 1.5;
+  margin: 4px 0 8px;
+}
 
 .search-auto-hint {
   color: var(--accent);
