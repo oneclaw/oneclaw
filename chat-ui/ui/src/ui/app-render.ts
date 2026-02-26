@@ -423,6 +423,13 @@ export function renderApp(state: AppViewState) {
               state.feishuPairingState.pendingCount > 0 ? "channels" : null,
             ),
             onOpenWebUI: () => void handleOpenWebUI(state),
+            onOpenDocs: () => {
+              if (window.oneclaw?.openExternal) {
+                window.oneclaw.openExternal("https://oneclaw.cn/docs");
+              } else {
+                window.open("https://oneclaw.cn/docs", "_blank");
+              }
+            },
             onApplyUpdate: () => void handleApplyUpdate(state),
           })}
 
