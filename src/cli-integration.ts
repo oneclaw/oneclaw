@@ -66,6 +66,41 @@ function escapeForPowerShellSingleQuoted(value: string): string {
   return value.replace(/'/g, "''");
 }
 
+// 构建 Windows PATH 修改脚本，避免分号拼接打断 try/catch 语法。
+export function buildWinPathEnvScript(action: "add" | "remove", binDir: string): string {
+  const safeDir = escapeForPowerShellSingleQuoted(binDir);
+  return [
+    `$target='${safeDir}'`,
+    "function Normalize([string]$p) {",
+    "  if ([string]::IsNullOrWhiteSpace($p)) { return '' }",
+    "  try { return ([System.IO.Path]::GetFullPath($p)).TrimEnd('\\\\').ToLowerInvariant() } catch { return $p.Trim().TrimEnd('\\\\').ToLowerInvariant() }",
+    "}",
+    "$current=[Environment]::GetEnvironmentVariable('Path','User')",
+    "$parts=@()",
+    "if ($current) {",
+    "  $parts=$current -split ';' | ForEach-Object { $_.Trim() } | Where-Object { $_ -ne '' }",
+    "}",
+    "$targetNorm=Normalize $target",
+    "$unique=@()",
+    "$seen=@{}",
+    "foreach ($p in $parts) {",
+    "  $n=Normalize $p",
+    "  if (-not $seen.ContainsKey($n)) {",
+    "    $seen[$n]=$true",
+    "    $unique += $p",
+    "  }",
+    "}",
+    `if ('${action}' -eq 'add') {`,
+    "  if (-not $seen.ContainsKey($targetNorm)) {",
+    "    $unique += $target",
+    "  }",
+    "} else {",
+    "  $unique = $unique | Where-Object { (Normalize $_) -ne $targetNorm }",
+    "}",
+    "[Environment]::SetEnvironmentVariable('Path', ($unique -join ';'), 'User')",
+  ].join("\n");
+}
+
 // 生成 POSIX wrapper 脚本（可测试纯函数），直接转发到内置 Node + gateway entry。
 export function buildPosixWrapperForPaths(nodeBin: string, entry: string): string {
   const safeNodeBin = escapeForPosixDoubleQuoted(nodeBin);
@@ -116,6 +151,7 @@ export function buildWinWrapperForPaths(nodeBin: string, entry: string): string 
     ")",
     'set "OPENCLAW_NO_RESPAWN=1"',
     '"%APP_NODE%" "%APP_ENTRY%" %*',
+    "exit /b %errorlevel%",
     "",
   ].join("\r\n");
 }
@@ -134,11 +170,11 @@ function resolveHomeDir(): string | null {
   return home && home.trim() ? home : null;
 }
 
-// 返回需要注入 PATH 的 shell rc 文件列表。
+// 返回需要注入 PATH 的 shell profile 文件列表（login shell 层级）。
 function resolvePosixRcPaths(): string[] {
   const home = resolveHomeDir();
   if (!home) return [];
-  return [path.join(home, ".zprofile"), path.join(home, ".zshrc"), path.join(home, ".bashrc")];
+  return [path.join(home, ".zprofile"), path.join(home, ".bash_profile")];
 }
 
 // 构建 OneClaw 管理的 rc 注入块，使用绝对路径避免与状态目录配置脱节。
@@ -229,38 +265,7 @@ function removeRcBlock(rcPath: string): void {
 
 // 用 PowerShell 精确修改用户级 PATH，按路径项去重，避免子串误判。
 function winModifyPath(action: "add" | "remove", binDir: string): Promise<void> {
-  const safeDir = escapeForPowerShellSingleQuoted(binDir);
-  const script = [
-    `$target='${safeDir}'`,
-    "function Normalize([string]$p) {",
-    "  if ([string]::IsNullOrWhiteSpace($p)) { return '' }",
-    "  try { return ([System.IO.Path]::GetFullPath($p)).TrimEnd('\\\\').ToLowerInvariant() }",
-    "  catch { return $p.Trim().TrimEnd('\\\\').ToLowerInvariant() }",
-    "}",
-    "$current=[Environment]::GetEnvironmentVariable('Path','User')",
-    "$parts=@()",
-    "if ($current) {",
-    "  $parts=$current -split ';' | ForEach-Object { $_.Trim() } | Where-Object { $_ -ne '' }",
-    "}",
-    "$targetNorm=Normalize $target",
-    "$unique=@()",
-    "$seen=@{}",
-    "foreach ($p in $parts) {",
-    "  $n=Normalize $p",
-    "  if (-not $seen.ContainsKey($n)) {",
-    "    $seen[$n]=$true",
-    "    $unique += $p",
-    "  }",
-    "}",
-    `if ('${action}' -eq 'add') {`,
-    "  if (-not $seen.ContainsKey($targetNorm)) {",
-    "    $unique += $target",
-    "  }",
-    "} else {",
-    "  $unique = $unique | Where-Object { (Normalize $_) -ne $targetNorm }",
-    "}",
-    "[Environment]::SetEnvironmentVariable('Path', ($unique -join ';'), 'User')",
-  ].join(";");
+  const script = buildWinPathEnvScript(action, binDir);
 
   return new Promise((resolve, reject) => {
     execFile(
@@ -281,6 +286,16 @@ function winModifyPath(action: "add" | "remove", binDir: string): Promise<void> 
 // 安装 CLI：生成 wrapper 并注入 PATH，失败仅返回结果，不抛出到 Setup 主流程。
 export async function installCli(): Promise<CliResult> {
   try {
+    // 前置校验：node 和 entry 必须存在，否则生成的 wrapper 必然报错。
+    const nodeBin = resolveNodeBin();
+    const entry = resolveGatewayEntry();
+    if (nodeBin === "node" || !fs.existsSync(nodeBin)) {
+      return { success: false, message: `Node runtime not found: ${nodeBin}` };
+    }
+    if (!fs.existsSync(entry)) {
+      return { success: false, message: `CLI entry not found: ${entry}` };
+    }
+
     if (IS_WIN) {
       const binDir = getWinBinDir();
       fs.mkdirSync(binDir, { recursive: true });

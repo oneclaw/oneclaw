@@ -455,10 +455,7 @@
     imessageEnabled: $("#imessageEnabled"),
     launchAtLoginRow: $("#launchAtLoginRow"),
     launchAtLoginEnabled: $("#launchAtLoginEnabled"),
-    cliStatusText: $("#cliStatusText"),
-    btnCliToggle: $("#btnCliToggle"),
-    btnCliToggleText: $("#btnCliToggleText"),
-    btnCliToggleSpinner: $("#btnCliToggleSpinner"),
+    cliEnabled: $("#cliEnabled"),
     advMsgBox: $("#advMsgBox"),
     btnAdvSave: $("#btnAdvSave"),
     btnAdvSaveText: $("#btnAdvSave .btn-text"),
@@ -1381,31 +1378,14 @@
     }
   }
 
-  // 刷新 CLI 状态与按钮文案，确保安装/卸载动作对用户可见。
+  // 同步开关状态到 CLI 安装状态，操作中禁用开关。
   function renderCliControls() {
-    if (!els.cliStatusText || !els.btnCliToggle || !els.btnCliToggleText || !els.btnCliToggleSpinner) {
-      return;
-    }
-
-    els.cliStatusText.textContent = cliInstalled
-      ? t("advanced.cliStatusInstalled")
-      : t("advanced.cliStatusNotInstalled");
-
-    if (cliOperating) {
-      els.btnCliToggleText.textContent = cliInstalled
-        ? t("advanced.cliUninstalling")
-        : t("advanced.cliInstalling");
-    } else {
-      els.btnCliToggleText.textContent = cliInstalled
-        ? t("advanced.cliUninstall")
-        : t("advanced.cliInstall");
-    }
-
-    els.btnCliToggle.disabled = cliOperating;
-    els.btnCliToggleSpinner.classList.toggle("hidden", !cliOperating);
+    if (!els.cliEnabled) return;
+    els.cliEnabled.checked = cliInstalled;
+    els.cliEnabled.disabled = cliOperating;
   }
 
-  // 读取主进程 CLI 安装状态；若当前版本未提供接口，则安全降级为禁用按钮。
+  // 读取主进程 CLI 安装状态；若当前版本未提供接口，则安全降级为禁用开关。
   async function loadCliStatus() {
     if (
       !window.oneclaw ||
@@ -1413,40 +1393,21 @@
       typeof window.oneclaw.settingsInstallCli !== "function" ||
       typeof window.oneclaw.settingsUninstallCli !== "function"
     ) {
-      if (els.cliStatusText) {
-        els.cliStatusText.textContent = t("advanced.cliStatusUnknown");
-      }
-      if (els.btnCliToggle) {
-        els.btnCliToggle.disabled = true;
-      }
+      if (els.cliEnabled) els.cliEnabled.disabled = true;
       return;
     }
 
     try {
       var result = await window.oneclaw.settingsGetCliStatus();
-      if (!result || !result.success || !result.data) {
-        if (els.cliStatusText) {
-          els.cliStatusText.textContent = t("advanced.cliStatusUnknown");
-        }
-        return;
-      }
+      if (!result || !result.success || !result.data) return;
       cliInstalled = result.data.installed === true;
       renderCliControls();
     } catch (err) {
-      if (els.cliStatusText) {
-        els.cliStatusText.textContent = t("advanced.cliStatusUnknown");
-      }
       console.error("[Settings] loadCliStatus failed:", err);
     }
   }
 
-  // 控制 CLI 按钮 loading 态，避免重复点击导致并发安装/卸载。
-  function setCliOperating(loading) {
-    cliOperating = loading;
-    renderCliControls();
-  }
-
-  // 点击同一个按钮在安装和卸载之间切换，便于老用户迁移。
+  // 开关切换：ON → 安装，OFF → 卸载。
   async function handleCliToggle() {
     if (cliOperating) return;
     hideAdvMsg();
@@ -1457,36 +1418,38 @@
       typeof window.oneclaw.settingsUninstallCli !== "function"
     ) {
       showAdvMsg(t("advanced.cliUnavailable"), "error");
+      renderCliControls();
       return;
     }
 
-    var isUninstall = cliInstalled === true;
-    if (isUninstall && !window.confirm(t("advanced.cliUninstallConfirm"))) {
-      return;
-    }
+    var wantInstall = els.cliEnabled.checked;
 
-    setCliOperating(true);
+    cliOperating = true;
+    renderCliControls();
     try {
-      var result = isUninstall
-        ? await window.oneclaw.settingsUninstallCli()
-        : await window.oneclaw.settingsInstallCli();
+      var result = wantInstall
+        ? await window.oneclaw.settingsInstallCli()
+        : await window.oneclaw.settingsUninstallCli();
 
       if (!result || !result.success) {
         showAdvMsg(result?.message || t("advanced.cliOpFailed"), "error");
         await loadCliStatus();
-        setCliOperating(false);
+        cliOperating = false;
+        renderCliControls();
         return;
       }
 
       await loadCliStatus();
-      setCliOperating(false);
-      showToast(isUninstall ? t("advanced.cliUninstallDone") : t("advanced.cliInstallDone"));
+      cliOperating = false;
+      renderCliControls();
+      showToast(wantInstall ? t("advanced.cliInstallDone") : t("advanced.cliUninstallDone"));
       if (result.message) {
         showAdvMsg(result.message, "success");
       }
     } catch (err) {
       await loadCliStatus();
-      setCliOperating(false);
+      cliOperating = false;
+      renderCliControls();
       showAdvMsg(t("error.connection") + (err?.message || "Unknown error"), "error");
     }
   }
@@ -2419,8 +2382,8 @@
 
     // Advanced
     els.btnAdvSave.addEventListener("click", handleAdvSave);
-    if (els.btnCliToggle) {
-      els.btnCliToggle.addEventListener("click", handleCliToggle);
+    if (els.cliEnabled) {
+      els.cliEnabled.addEventListener("change", handleCliToggle);
     }
 
     // Appearance

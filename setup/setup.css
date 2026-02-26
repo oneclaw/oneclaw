@@ -633,47 +633,6 @@ select option {
   max-width: none;
 }
 
-/* ---- CLI 安装复选框 ---- */
-.cli-checkbox {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 13px;
-  color: var(--text-secondary);
-  cursor: pointer;
-  padding: 4px 0;
-}
-
-.cli-checkbox input[type="checkbox"] {
-  appearance: none;
-  width: 16px;
-  height: 16px;
-  border: 1.5px solid var(--border);
-  border-radius: 3px;
-  background: var(--bg-input);
-  cursor: pointer;
-  position: relative;
-  flex-shrink: 0;
-  transition: border-color var(--transition), background var(--transition);
-}
-
-.cli-checkbox input[type="checkbox"]:checked {
-  background: var(--accent);
-  border-color: var(--accent);
-}
-
-.cli-checkbox input[type="checkbox"]:checked::after {
-  content: "";
-  position: absolute;
-  top: 1px;
-  left: 4px;
-  width: 5px;
-  height: 9px;
-  border: solid #fff;
-  border-width: 0 2px 2px 0;
-  transform: rotate(45deg)
-}
-
 /* ---- 工具类 ---- */
 .hidden {
   display: none !important;
