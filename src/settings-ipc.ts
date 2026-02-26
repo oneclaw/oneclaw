@@ -26,6 +26,7 @@ import { getLatestShareCopyPayload } from "./share-copy";
 import { extractKimiConfig, saveKimiPluginConfig, isKimiPluginBundled, DEFAULT_KIMI_BRIDGE_WS_URL } from "./kimi-config";
 import { ensureGatewayAuthTokenInConfig } from "./gateway-auth";
 import { getLaunchAtLoginState, setLaunchAtLoginEnabled } from "./launch-at-login";
+import { installCli, uninstallCli, isCliInstalled } from "./cli-integration";
 import * as analytics from "./analytics";
 import * as path from "path";
 import * as fs from "fs";
@@ -558,6 +559,43 @@ export function registerSettingsIpc(): void {
         }
       }
     );
+  });
+
+  // ── 读取 CLI 安装状态（设置页用于切换“安装/卸载”按钮文案） ──
+  ipcMain.handle("settings:get-cli-status", async () => {
+    try {
+      return {
+        success: true,
+        data: {
+          installed: isCliInstalled(),
+          command: "openclaw",
+        },
+      };
+    } catch (err: any) {
+      return { success: false, message: err.message || String(err) };
+    }
+  });
+
+  // ── 安装 CLI（老用户迁移入口，默认不阻断其它设置流程） ──
+  ipcMain.handle("settings:install-cli", async () => {
+    const result = await installCli();
+    if (result.success) {
+      analytics.track("cli_installed", { method: "settings" });
+    } else {
+      analytics.track("cli_install_failed", { method: "settings", error: result.message });
+    }
+    return result;
+  });
+
+  // ── 卸载 CLI（移除 wrapper + PATH 注入块） ──
+  ipcMain.handle("settings:uninstall-cli", async () => {
+    const result = await uninstallCli();
+    if (result.success) {
+      analytics.track("cli_uninstalled", { method: "settings" });
+    } else {
+      analytics.track("cli_uninstall_failed", { method: "settings", error: result.message });
+    }
+    return result;
   });
 
   // ── 列出配置备份与恢复元数据 ──

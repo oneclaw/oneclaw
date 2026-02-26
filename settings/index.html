@@ -401,6 +401,20 @@
           </label>
         </div>
 
+        <div class="field-group cli-command-group">
+          <label data-i18n="advanced.cliCommand">Terminal command</label>
+          <div class="cli-command-row">
+            <code class="cli-command-code">openclaw</code>
+            <span class="cli-command-status" id="cliStatusText" data-i18n="advanced.cliStatusUnknown">Status unknown</span>
+          </div>
+          <div class="btn-row">
+            <button class="btn-primary btn-compact" id="btnCliToggle">
+              <span class="btn-text" id="btnCliToggleText" data-i18n="advanced.cliInstall">Install command</span>
+              <span class="btn-spinner hidden" id="btnCliToggleSpinner"></span>
+            </button>
+          </div>
+        </div>
+
         <!-- 消息框 -->
         <div class="msg-box hidden" id="advMsgBox"></div>
 
