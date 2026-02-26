@@ -31,6 +31,7 @@ import {
   extractKimiSearchConfig,
   saveKimiSearchConfig,
   isKimiSearchPluginBundled,
+  writeKimiSearchDedicatedApiKey,
 } from "./kimi-config";
 import { ensureGatewayAuthTokenInConfig } from "./gateway-auth";
 import { getLaunchAtLoginState, setLaunchAtLoginEnabled } from "./launch-at-login";
@@ -538,8 +539,13 @@ export function registerSettingsIpc(): void {
         if (enabled && !isKimiSearchPluginBundled()) {
           return { success: false, message: "Kimi Search 组件缺失，请重新安装 OneClaw。" };
         }
+        // 专属 key 存到 sidecar 文件，不写入 openclaw.json
+        if (typeof apiKey === "string") {
+          writeKimiSearchDedicatedApiKey(apiKey);
+        }
+        // openclaw.json 只写 enabled
         const config = readUserConfig();
-        saveKimiSearchConfig(config, { enabled, apiKey });
+        saveKimiSearchConfig(config, { enabled });
         writeUserConfig(config);
         return { success: true };
       } catch (err: any) {

@@ -518,6 +518,14 @@ select option {
   border: 1px solid rgba(212, 119, 106, 0.25);
 }
 
+/* ── Search 自动复用提示 ── */
+
+.search-auto-hint {
+  color: var(--accent);
+  font-size: 13px;
+  margin: 0;
+}
+
 /* ── 按钮 ── */
 
 .btn-primary {
