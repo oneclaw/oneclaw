@@ -161,8 +161,8 @@
       "search.title": "Kimi Search",
       "search.desc": "Enable web search and fetch tools powered by Kimi.",
       "search.enabled": "Enable",
-      "search.apiKeyLabel": "API Key (optional if Kimi Code is configured)",
-      "search.autoKeyHint": "Auto-reusing Kimi Code API Key.",
+      "search.apiKeyLabel": "API Key",
+      "search.autoKeyHint": "Auto-reusing Kimi Code API Key",
       "search.save": "Save",
       "search.saving": "Saving…",
       "search.saved": "Search config saved. Restart Gateway to apply.",
@@ -335,8 +335,8 @@
       "search.title": "Kimi 搜索",
       "search.desc": "启用 Kimi 驱动的网页搜索和内容抓取工具。",
       "search.enabled": "启用状态",
-      "search.apiKeyLabel": "API 密钥（已配置 Kimi Code 时可留空自动复用）",
-      "search.autoKeyHint": "已自动复用 Kimi Code API Key。",
+      "search.apiKeyLabel": "API 密钥",
+      "search.autoKeyHint": "已自动复用 Kimi Code API Key",
       "search.save": "保存",
       "search.saving": "保存中…",
       "search.saved": "搜索配置已保存，重启 Gateway 后生效。",
@@ -473,6 +473,7 @@
     searchEnabled: $("#searchEnabled"),
     searchFields: $("#searchFields"),
     searchApiKey: $("#searchApiKey"),
+    searchApiKeyGroup: $("#searchApiKeyGroup"),
     searchAutoKeyHint: $("#searchAutoKeyHint"),
     btnToggleSearchKey: $("#btnToggleSearchKey"),
     searchMsgBox: $("#searchMsgBox"),
@@ -1831,16 +1832,18 @@
     }
   }
 
-  // 更新自动复用 key 提示
+  // 更新自动复用 key 提示：无专属 key + 有 kimi-code key → 显示提示 + 隐藏输入框
   function updateSearchAutoKeyHint(data) {
     var hasOwnKey = data.apiKey && data.apiKey.trim();
     var hasKimiCodeKey = data.isKimiCodeConfigured;
-    if (!hasOwnKey && hasKimiCodeKey) {
+    var autoReusing = !hasOwnKey && hasKimiCodeKey;
+    if (autoReusing) {
       els.searchAutoKeyHint.textContent = t("search.autoKeyHint");
-      els.searchAutoKeyHint.className = "msg-box info";
+      els.searchAutoKeyHint.classList.remove("hidden");
     } else {
-      els.searchAutoKeyHint.className = "msg-box info hidden";
+      els.searchAutoKeyHint.classList.add("hidden");
     }
+    toggleEl(els.searchApiKeyGroup, !autoReusing);
   }
 
   // 保存 Search 配置
@@ -1854,8 +1857,8 @@
 
     try {
       var params = { enabled: enabled };
-      // 仅启用时传递 key（空字符串表示清除专属 key，走自动复用）
-      if (enabled) {
+      // 输入框可见时传递 key（空字符串表示清除专属 key，走自动复用）
+      if (enabled && !els.searchApiKeyGroup.classList.contains("hidden")) {
         params.apiKey = els.searchApiKey.value.trim();
       }
       var result = await window.oneclaw.settingsSaveKimiSearchConfig(params);

@@ -391,13 +391,14 @@
 
           <!-- 配置字段（禁用时隐藏） -->
           <div id="searchFields" class="hidden">
-            <!-- 自动复用提示 -->
-            <div class="msg-box info hidden" id="searchAutoKeyHint" data-i18n="search.autoKeyHint">
-              Auto-reusing Kimi Code API Key.
-            </div>
+            <!-- 自动复用提示（复用时显示，隐藏输入框） -->
+            <p class="search-auto-hint hidden" id="searchAutoKeyHint" data-i18n="search.autoKeyHint">
+              Auto-reusing Kimi Code API Key
+            </p>
 
-            <div class="field-group">
-              <label for="searchApiKey" data-i18n="search.apiKeyLabel">API Key (optional if Kimi Code is configured)</label>
+            <!-- API Key 输入（有专属 key 或无 kimi-code 时显示） -->
+            <div class="field-group" id="searchApiKeyGroup">
+              <label for="searchApiKey" data-i18n="search.apiKeyLabel">API Key</label>
               <div class="input-password-wrap">
                 <input type="password" id="searchApiKey" placeholder="sk-..." autocomplete="off" spellcheck="false">
                 <button class="btn-toggle-vis" id="btnToggleSearchKey" type="button" title="Toggle visibility">
