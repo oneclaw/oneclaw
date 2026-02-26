@@ -391,6 +391,17 @@
 
           <!-- 配置字段（禁用时隐藏） -->
           <div id="searchFields" class="hidden">
+            <!-- 搜索供应商选择 -->
+            <div class="provider-tabs" id="searchProviderTabs">
+              <button class="provider-tab active" data-search-provider="kimi">Kimi</button>
+            </div>
+
+            <!-- 引导文字（含获取密钥链接） -->
+            <p class="search-guide-text" id="searchGuideText">
+              <span data-i18n="search.guideText">Kimi for Coding API Key enables search.</span>
+              <a href="#" class="platform-link" id="searchPlatformLink" data-i18n="search.getKey">Get API Key →</a>
+            </p>
+
             <!-- 自动复用提示（复用时显示，隐藏输入框） -->
             <p class="search-auto-hint hidden" id="searchAutoKeyHint" data-i18n="search.autoKeyHint">
               Auto-reusing Kimi Code API Key

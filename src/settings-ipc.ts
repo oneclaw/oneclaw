@@ -221,6 +221,11 @@ export function registerSettingsIpc(): void {
           mergeModels(config.models.providers[provider], modelID, prevModels);
         }
 
+        // 配置 kimi-code 时自动启用搜索插件
+        if (provider === "moonshot" && subPlatform === "kimi-code") {
+          saveKimiSearchConfig(config, { enabled: true });
+        }
+
         writeUserConfig(config);
         return { success: true };
       } catch (err: any) {
@@ -1475,6 +1480,20 @@ function extractProviderInfo(config: any): any {
     }
   }
 
+  // 构建所有已保存 provider 的摘要（供前端切换时自动回填）
+  const savedProviders: Record<string, any> = {};
+  for (const [key, prov] of Object.entries(providers)) {
+    if (!prov || typeof prov !== "object") continue;
+    const p = prov as any;
+    if (!p.apiKey) continue;
+    savedProviders[key] = {
+      apiKey: p.apiKey ?? "",
+      baseURL: p.baseUrl ?? "",
+      api: p.api ?? "",
+      configuredModels: extractModelIds(p),
+    };
+  }
+
   return {
     provider,
     subPlatform,
@@ -1485,6 +1504,7 @@ function extractProviderInfo(config: any): any {
     supportsImage,
     configuredModels,
     raw: primary,
+    savedProviders,
   };
 }
 
