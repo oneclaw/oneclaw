@@ -78,9 +78,9 @@
       "provider.supportImage": "Supports image input",
       "common.cancel": "Cancel",
       "common.confirm": "Confirm",
+      "common.saved": "Saved. Refreshing Gateway.",
       "provider.save": "Save",
       "provider.saving": "Saving…",
-      "provider.saved": "Configuration saved.",
       "provider.currentUsing": "Current: ",
       "feishu.title": "Feishu Integration",
       "feishu.desc": "Connect Feishu to chat with AI directly in your group.",
@@ -90,7 +90,6 @@
       "feishu.getKey": "Open Feishu Console →",
       "feishu.save": "Save",
       "feishu.saving": "Saving…",
-      "feishu.saved": "Feishu integration saved.",
       "feishu.dmPolicy": "DM Access Mode",
       "feishu.dmPolicyPairing": "Access after pairing.",
       "feishu.dmPolicyOpen": "Everyone can access.",
@@ -159,7 +158,6 @@
       "kimi.tokenParsed": "Token parsed: ",
       "kimi.save": "Save",
       "kimi.saving": "Saving…",
-      "kimi.saved": "KimiClaw config saved.",
       "error.noKimiBotToken": "Please paste the command or enter your Bot Token.",
       "search.title": "Search Configuration",
       "search.desc": "Configure web search and content fetch tools.",
@@ -170,7 +168,6 @@
       "search.autoKeyHint": "Auto-reusing Kimi Code API Key",
       "search.save": "Save",
       "search.saving": "Saving…",
-      "search.saved": "Search config saved. Restart Gateway to apply.",
       "nav.advanced": "Advanced",
       "advanced.title": "Advanced",
       "advanced.desc": "Browser tool and messaging channel settings.",
@@ -194,7 +191,6 @@
       "advanced.cliUninstallConfirm": "Uninstall the OneClaw terminal command now?",
       "advanced.save": "Save",
       "advanced.saving": "Saving…",
-      "advanced.saved": "Settings saved.",
       "appearance.title": "Appearance",
       "appearance.desc": "Control theme and chat display preferences.",
       "appearance.theme": "Theme",
@@ -204,7 +200,6 @@
       "appearance.showThinking": "Show thinking output",
       "appearance.save": "Save",
       "appearance.saving": "Saving…",
-      "appearance.saved": "Appearance settings saved.",
       "backup.title": "Backup & Restore",
       "backup.desc": "Restore openclaw.json when config changes break startup.",
       "backup.restoreLastKnownGood": "Restore Last Known Good",
@@ -254,9 +249,9 @@
       "provider.supportImage": "支持图像输入",
       "common.cancel": "取消",
       "common.confirm": "确认",
+      "common.saved": "已保存. 正在刷新 Gateway",
       "provider.save": "保存",
       "provider.saving": "保存中…",
-      "provider.saved": "配置已保存。",
       "provider.currentUsing": "当前使用: ",
       "feishu.title": "飞书集成",
       "feishu.desc": "连接飞书，在群聊中直接与 AI 对话。",
@@ -266,7 +261,6 @@
       "feishu.getKey": "打开飞书开放平台 →",
       "feishu.save": "保存",
       "feishu.saving": "保存中…",
-      "feishu.saved": "飞书集成配置已保存。",
       "feishu.dmPolicy": "私聊访问模式",
       "feishu.dmPolicyPairing": "配对后可访问",
       "feishu.dmPolicyOpen": "所有人可访问",
@@ -335,7 +329,6 @@
       "kimi.tokenParsed": "解析到 Token：",
       "kimi.save": "保存",
       "kimi.saving": "保存中…",
-      "kimi.saved": "KimiClaw 配置已保存。",
       "error.noKimiBotToken": "请粘贴命令或输入 Bot Token。",
       "search.title": "搜索配置",
       "search.desc": "配置网页搜索和内容抓取工具。",
@@ -346,7 +339,6 @@
       "search.autoKeyHint": "已自动复用 Kimi Code API Key",
       "search.save": "保存",
       "search.saving": "保存中…",
-      "search.saved": "搜索配置已保存，重启 Gateway 后生效。",
       "nav.advanced": "高级选项",
       "advanced.title": "高级选项",
       "advanced.desc": "浏览器工具与消息频道设置。",
@@ -370,7 +362,6 @@
       "advanced.cliUninstallConfirm": "确认要卸载 OneClaw 终端命令吗？",
       "advanced.save": "保存",
       "advanced.saving": "保存中…",
-      "advanced.saved": "设置已保存。",
       "appearance.title": "外观显示",
       "appearance.desc": "调整主题和聊天展示相关设置。",
       "appearance.theme": "主题",
@@ -380,7 +371,6 @@
       "appearance.showThinking": "显示思考过程",
       "appearance.save": "保存",
       "appearance.saving": "保存中…",
-      "appearance.saved": "外观显示设置已保存。",
       "backup.title": "备份与恢复",
       "backup.desc": "当配置改坏导致无法启动时，可在这里回退 openclaw.json。",
       "backup.restoreLastKnownGood": "恢复最近可用配置",
@@ -781,7 +771,7 @@
       }
 
       setSaving(false);
-      showToast(t("provider.saved"));
+      showToast(t("common.saved"));
 
       // 保存成功后刷新 savedProviders 缓存
       try {
@@ -1344,7 +1334,7 @@
         var result = await window.oneclaw.settingsSaveChannel({ enabled: false });
         setChSaving(false);
         if (result.success) {
-          showToast(t("feishu.saved"));
+          showToast(t("common.saved"));
           refreshChPairingPanels({ silent: true });
         } else {
           showChMsg(result.message || "Save failed", "error");
@@ -1395,7 +1385,7 @@
       }
 
       setChSaving(false);
-      showToast(t("feishu.saved"));
+      showToast(t("common.saved"));
       refreshChPairingPanels({ silent: true });
     } catch (err) {
       showChMsg(t("error.connection") + (err.message || "Unknown error"), "error");
@@ -1557,7 +1547,7 @@
       });
       setAdvSaving(false);
       if (result.success) {
-        showToast(t("advanced.saved"));
+        showToast(t("common.saved"));
       } else {
         showAdvMsg(result.message || "Save failed", "error");
       }
@@ -1709,7 +1699,7 @@
         }
       }
       setAppearanceSaving(false);
-      showToast(t("appearance.saved"));
+      showToast(t("common.saved"));
     } catch (err) {
       setAppearanceSaving(false);
       showAppearanceMsg(t("error.connection") + ((err && err.message) || "Unknown error"), "error");
@@ -1803,7 +1793,7 @@
         var result = await window.oneclaw.settingsSaveKimiConfig({ enabled: false });
         setKimiSaving(false);
         if (result.success) {
-          showToast(t("kimi.saved"));
+          showToast(t("common.saved"));
         } else {
           showKimiMsg(result.message || "Save failed", "error");
         }
@@ -1833,7 +1823,7 @@
       }
 
       setKimiSaving(false);
-      showToast(t("kimi.saved"));
+      showToast(t("common.saved"));
     } catch (err) {
       setKimiSaving(false);
       showKimiMsg(t("error.connection") + (err.message || "Unknown error"), "error");
@@ -1919,7 +1909,7 @@
       var result = await window.oneclaw.settingsSaveKimiSearchConfig(params);
       setSearchSaving(false);
       if (result.success) {
-        showToast(t("search.saved"));
+        showToast(t("common.saved"));
         // 刷新提示状态
         loadSearchConfig();
       } else {
