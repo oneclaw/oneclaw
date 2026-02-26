@@ -218,10 +218,13 @@
           </label>
         </div>
 
-        <label class="cli-checkbox">
-          <input type="checkbox" id="installCliCheck" checked>
-          <span data-i18n="done.installCli">Add openclaw command to terminal PATH</span>
-        </label>
+        <div class="toggle-row">
+          <span class="toggle-label" data-i18n="done.installCli">Add openclaw command to terminal PATH</span>
+          <label class="toggle-switch">
+            <input type="checkbox" id="installCliCheck" checked>
+            <span class="toggle-slider"></span>
+          </label>
+        </div>
 
         <button class="btn-primary" id="btnStart">
           <span class="btn-text" data-i18n="done.start">Start OneClaw</span>
