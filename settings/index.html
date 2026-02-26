@@ -38,6 +38,13 @@
           </svg>
           <span data-i18n="nav.kimi">KimiClaw</span>
         </li>
+        <li class="nav-item" data-tab="search">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+            <circle cx="7" cy="7" r="4.5" stroke="currentColor" stroke-width="1.3"/>
+            <path d="M10.5 10.5L14 14" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
+          </svg>
+          <span data-i18n="nav.search">Search</span>
+        </li>
         <li class="nav-item" data-tab="appearance">
           <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
             <path d="M1 8s2.5-5 7-5 7 5 7 5-2.5 5-7 5-7-5-7-5z" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
@@ -358,6 +365,61 @@
           <div class="btn-row bottom-actions">
             <button class="btn-primary" id="btnKimiSave">
               <span class="btn-text" data-i18n="kimi.save">Save</span>
+              <span class="btn-spinner hidden"></span>
+            </button>
+          </div>
+        </div>
+      </section>
+
+      <!-- Search Tab -->
+      <section class="tab-panel" id="tabSearch">
+        <h2 data-i18n="search.title">Kimi Search</h2>
+
+        <div class="channel-panel">
+          <div class="channel-desc-row">
+            <p class="desc" data-i18n="search.desc">Enable web search and fetch tools powered by Kimi.</p>
+          </div>
+
+          <!-- 启用/禁用开关 -->
+          <div class="toggle-row">
+            <span class="toggle-label" data-i18n="search.enabled">Enable</span>
+            <label class="toggle-switch">
+              <input type="checkbox" id="searchEnabled">
+              <span class="toggle-slider"></span>
+            </label>
+          </div>
+
+          <!-- 配置字段（禁用时隐藏） -->
+          <div id="searchFields" class="hidden">
+            <!-- 自动复用提示 -->
+            <div class="msg-box info hidden" id="searchAutoKeyHint" data-i18n="search.autoKeyHint">
+              Auto-reusing Kimi Code API Key.
+            </div>
+
+            <div class="field-group">
+              <label for="searchApiKey" data-i18n="search.apiKeyLabel">API Key (optional if Kimi Code is configured)</label>
+              <div class="input-password-wrap">
+                <input type="password" id="searchApiKey" placeholder="sk-..." autocomplete="off" spellcheck="false">
+                <button class="btn-toggle-vis" id="btnToggleSearchKey" type="button" title="Toggle visibility">
+                  <svg class="icon-eye" width="18" height="18" viewBox="0 0 18 18" fill="none">
+                    <path d="M1.5 9C1.5 9 4 3.75 9 3.75C14 3.75 16.5 9 16.5 9C16.5 9 14 14.25 9 14.25C4 14.25 1.5 9 1.5 9Z" stroke="currentColor" stroke-width="1.3"/>
+                    <circle cx="9" cy="9" r="2.25" stroke="currentColor" stroke-width="1.3"/>
+                  </svg>
+                  <svg class="icon-eye-off hidden" width="18" height="18" viewBox="0 0 18 18" fill="none">
+                    <path d="M2.5 2.5L15.5 15.5M7.05 7.05A2.25 2.25 0 0010.95 10.95M1.5 9C1.5 9 4 3.75 9 3.75C10.2 3.75 11.3 4.1 12.25 4.6M16.5 9C16.5 9 14 14.25 9 14.25C7.8 14.25 6.7 13.9 5.75 13.4" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
+                  </svg>
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- 错误 / 成功信息 -->
+          <div class="msg-box hidden" id="searchMsgBox"></div>
+
+          <!-- 保存按钮 -->
+          <div class="btn-row bottom-actions">
+            <button class="btn-primary" id="btnSearchSave">
+              <span class="btn-text" data-i18n="search.save">Save</span>
               <span class="btn-spinner hidden"></span>
             </button>
           </div>

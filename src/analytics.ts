@@ -32,6 +32,7 @@ export type SettingsAction =
   | "save_provider"
   | "save_channel"
   | "save_kimi"
+  | "save_kimi_search"
   | "save_advanced";
 
 interface TrackActionResultOptions {

@@ -23,7 +23,15 @@ import {
   writeUserConfig,
 } from "./provider-config";
 import { getLatestShareCopyPayload } from "./share-copy";
-import { extractKimiConfig, saveKimiPluginConfig, isKimiPluginBundled, DEFAULT_KIMI_BRIDGE_WS_URL } from "./kimi-config";
+import {
+  extractKimiConfig,
+  saveKimiPluginConfig,
+  isKimiPluginBundled,
+  DEFAULT_KIMI_BRIDGE_WS_URL,
+  extractKimiSearchConfig,
+  saveKimiSearchConfig,
+  isKimiSearchPluginBundled,
+} from "./kimi-config";
 import { ensureGatewayAuthTokenInConfig } from "./gateway-auth";
 import { getLaunchAtLoginState, setLaunchAtLoginEnabled } from "./launch-at-login";
 import { installCli, uninstallCli, isCliInstalled } from "./cli-integration";
@@ -503,6 +511,35 @@ export function registerSettingsIpc(): void {
 
         const gatewayToken = ensureGatewayAuthTokenInConfig(config);
         saveKimiPluginConfig(config, { botToken, gatewayToken, wsURL: DEFAULT_KIMI_BRIDGE_WS_URL });
+        writeUserConfig(config);
+        return { success: true };
+      } catch (err: any) {
+        return { success: false, message: err.message || String(err) };
+      }
+    });
+  });
+
+  // ── 读取 Kimi Search 配置 ──
+  ipcMain.handle("settings:get-kimi-search-config", async () => {
+    try {
+      const config = readUserConfig();
+      return { success: true, data: extractKimiSearchConfig(config) };
+    } catch (err: any) {
+      return { success: false, message: err.message };
+    }
+  });
+
+  // ── 保存 Kimi Search 配置 ──
+  ipcMain.handle("settings:save-kimi-search-config", async (_event, params) => {
+    const enabled = params?.enabled === true;
+    const apiKey = typeof params?.apiKey === "string" ? params.apiKey : undefined;
+    return runTrackedSettingsAction("save_kimi_search", { enabled }, async () => {
+      try {
+        if (enabled && !isKimiSearchPluginBundled()) {
+          return { success: false, message: "Kimi Search 组件缺失，请重新安装 OneClaw。" };
+        }
+        const config = readUserConfig();
+        saveKimiSearchConfig(config, { enabled, apiKey });
         writeUserConfig(config);
         return { success: true };
       } catch (err: any) {

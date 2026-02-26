@@ -27,6 +27,7 @@ import {
   restoreLastKnownGoodConfigSnapshot,
 } from "./config-backup";
 import { readUserConfig, writeUserConfig } from "./provider-config";
+import { resolveKimiSearchApiKey } from "./kimi-config";
 import * as log from "./logger";
 import * as analytics from "./analytics";
 
@@ -237,10 +238,24 @@ interface StartMainOptions {
 
 const MAX_GATEWAY_START_ATTEMPTS = 3;
 
+// 从配置同步 search API key 到 gateway 环境变量
+function syncKimiSearchEnv(): void {
+  try {
+    const config = readUserConfig();
+    const key = resolveKimiSearchApiKey(config);
+    if (key) {
+      gateway.setExtraEnv({ KIMI_PLUGIN_API_KEY: key });
+    }
+  } catch {
+    // 配置读取失败不阻塞启动
+  }
+}
+
 // 启动 Gateway（最多尝试 3 次，覆盖 Windows 冷启动慢导致的前两次超时）
 async function ensureGatewayRunning(source: string): Promise<boolean> {
   // 启动前从配置同步 token，避免 Setup 后仍使用旧内存 token。
   gateway.setToken(resolveGatewayAuthToken());
+  syncKimiSearchEnv();
 
   for (let attempt = 1; attempt <= MAX_GATEWAY_START_ATTEMPTS; attempt++) {
     if (attempt === 1) {
@@ -298,6 +313,7 @@ async function startGatewayAndShowMain(source: string, opts: StartMainOptions = 
 // 手动控制 Gateway：统一入口，确保启动前同步最新 token。
 function requestGatewayStart(source: string): void {
   gateway.setToken(resolveGatewayAuthToken());
+  syncKimiSearchEnv();
   gateway.start().catch((err) => {
     log.error(`Gateway 启动失败(${source}): ${err}`);
   });
@@ -305,6 +321,7 @@ function requestGatewayStart(source: string): void {
 
 function requestGatewayRestart(source: string): void {
   gateway.setToken(resolveGatewayAuthToken());
+  syncKimiSearchEnv();
   gateway.restart().catch((err) => {
     log.error(`Gateway 重启失败(${source}): ${err}`);
   });
