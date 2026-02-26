@@ -96,3 +96,75 @@ export function extractKimiConfig(config: any): { enabled: boolean; botToken: st
     wsURL: entry.config?.bridge?.url ?? "",
   };
 }
+
+// ── Kimi Search 配置 ──
+
+// 按优先级解析 kimi-search 的 API key：专属 key > 复用 kimi-code provider key
+export function resolveKimiSearchApiKey(config: any): string {
+  // 1. 用户在 Search 设置中手动填写的专属 key
+  const searchEntry = config?.plugins?.entries?.[KIMI_SEARCH_PLUGIN_ID];
+  const dedicatedKey = searchEntry?.config?.apiKey;
+  if (typeof dedicatedKey === "string" && dedicatedKey.trim()) {
+    return dedicatedKey.trim();
+  }
+
+  // 2. 复用 kimi-code provider 的 key
+  const kimiCodingKey = config?.models?.providers?.["kimi-coding"]?.apiKey;
+  if (typeof kimiCodingKey === "string" && kimiCodingKey.trim()) {
+    return kimiCodingKey.trim();
+  }
+
+  return "";
+}
+
+// 提取 kimi-search 配置（供 settings 回显）
+export function extractKimiSearchConfig(config: any): {
+  enabled: boolean;
+  apiKey: string;
+  kimiCodeApiKey: string;
+  isKimiCodeConfigured: boolean;
+} {
+  const searchEntry = config?.plugins?.entries?.[KIMI_SEARCH_PLUGIN_ID];
+  const dedicatedKey = searchEntry?.config?.apiKey ?? "";
+  const kimiCodingKey = config?.models?.providers?.["kimi-coding"]?.apiKey ?? "";
+  return {
+    enabled: searchEntry?.enabled === true,
+    apiKey: typeof dedicatedKey === "string" ? dedicatedKey : "",
+    kimiCodeApiKey: typeof kimiCodingKey === "string" ? kimiCodingKey : "",
+    isKimiCodeConfigured: typeof kimiCodingKey === "string" && kimiCodingKey.trim().length > 0,
+  };
+}
+
+// 写入 kimi-search 配置
+export function saveKimiSearchConfig(config: any, params: { enabled: boolean; apiKey?: string }): void {
+  config.plugins ??= {};
+  config.plugins.entries ??= {};
+
+  const existing =
+    typeof config.plugins.entries[KIMI_SEARCH_PLUGIN_ID] === "object" &&
+    config.plugins.entries[KIMI_SEARCH_PLUGIN_ID] !== null
+      ? config.plugins.entries[KIMI_SEARCH_PLUGIN_ID]
+      : {};
+  const existingConfig =
+    typeof existing.config === "object" && existing.config !== null
+      ? existing.config
+      : {};
+
+  config.plugins.entries[KIMI_SEARCH_PLUGIN_ID] = {
+    ...existing,
+    enabled: params.enabled,
+    config: {
+      ...existingConfig,
+      ...(typeof params.apiKey === "string" ? { apiKey: params.apiKey.trim() } : {}),
+    },
+  };
+}
+
+// 检查 kimi-search 插件是否随应用内置
+export function isKimiSearchPluginBundled(): boolean {
+  const pluginDir = path.join(resolveGatewayCwd(), "extensions", KIMI_SEARCH_PLUGIN_ID);
+  const hasEntry =
+    fs.existsSync(path.join(pluginDir, "index.ts")) ||
+    fs.existsSync(path.join(pluginDir, "dist", "index.js"));
+  return hasEntry && fs.existsSync(path.join(pluginDir, "openclaw.plugin.json"));
+}

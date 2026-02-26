@@ -41,6 +41,7 @@ export class GatewayProcess {
   private state: GatewayState = "stopped";
   private port: number;
   private token: string;
+  private extraEnv: Record<string, string> = {};
   private lastCrashTime = 0;
   private onStateChange?: (state: GatewayState) => void;
 
@@ -67,6 +68,11 @@ export class GatewayProcess {
     const trimmed = token.trim();
     if (!trimmed) return;
     this.token = trimmed;
+  }
+
+  // 设置额外环境变量（在 start 前调用，spawn 时展开到子进程）
+  setExtraEnv(env: Record<string, string>): void {
+    this.extraEnv = { ...this.extraEnv, ...env };
   }
 
   // 启动 Gateway 子进程
@@ -131,6 +137,7 @@ export class GatewayProcess {
         OPENCLAW_GATEWAY_TOKEN: this.token,
         OPENCLAW_NPM_BIN: resolveNpmBin(),
         PATH: envPath,
+        ...this.extraEnv,
       },
       stdio: ["ignore", "pipe", "pipe"],
       windowsHide: true,

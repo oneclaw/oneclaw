@@ -144,6 +144,7 @@
       "error.verifyFailed": "Verification failed. Please check your API key.",
       "error.connection": "Connection error: ",
       "nav.kimi": "KimiClaw",
+      "nav.search": "Search",
       "nav.appearance": "Appearance",
       "nav.backup": "Backup & Restore",
       "kimi.title": "KimiClaw",
@@ -157,6 +158,14 @@
       "kimi.saving": "Saving…",
       "kimi.saved": "KimiClaw config saved.",
       "error.noKimiBotToken": "Please paste the command or enter your Bot Token.",
+      "search.title": "Kimi Search",
+      "search.desc": "Enable web search and fetch tools powered by Kimi.",
+      "search.enabled": "Enable",
+      "search.apiKeyLabel": "API Key (optional if Kimi Code is configured)",
+      "search.autoKeyHint": "Auto-reusing Kimi Code API Key.",
+      "search.save": "Save",
+      "search.saving": "Saving…",
+      "search.saved": "Search config saved. Restart Gateway to apply.",
       "nav.advanced": "Advanced",
       "advanced.title": "Advanced",
       "advanced.desc": "Browser tool and messaging channel settings.",
@@ -309,6 +318,7 @@
       "error.verifyFailed": "验证失败，请检查 API 密钥。",
       "error.connection": "连接错误：",
       "nav.kimi": "KimiClaw",
+      "nav.search": "搜索",
       "nav.appearance": "外观显示",
       "nav.backup": "备份与恢复",
       "kimi.title": "KimiClaw",
@@ -322,6 +332,14 @@
       "kimi.saving": "保存中…",
       "kimi.saved": "KimiClaw 配置已保存。",
       "error.noKimiBotToken": "请粘贴命令或输入 Bot Token。",
+      "search.title": "Kimi 搜索",
+      "search.desc": "启用 Kimi 驱动的网页搜索和内容抓取工具。",
+      "search.enabled": "启用状态",
+      "search.apiKeyLabel": "API 密钥（已配置 Kimi Code 时可留空自动复用）",
+      "search.autoKeyHint": "已自动复用 Kimi Code API Key。",
+      "search.save": "保存",
+      "search.saving": "保存中…",
+      "search.saved": "搜索配置已保存，重启 Gateway 后生效。",
       "nav.advanced": "高级选项",
       "advanced.title": "高级选项",
       "advanced.desc": "浏览器工具与消息频道设置。",
@@ -451,6 +469,16 @@
     btnKimiSave: $("#btnKimiSave"),
     btnKimiSaveText: $("#btnKimiSave .btn-text"),
     btnKimiSaveSpinner: $("#btnKimiSave .btn-spinner"),
+    // Search tab
+    searchEnabled: $("#searchEnabled"),
+    searchFields: $("#searchFields"),
+    searchApiKey: $("#searchApiKey"),
+    searchAutoKeyHint: $("#searchAutoKeyHint"),
+    btnToggleSearchKey: $("#btnToggleSearchKey"),
+    searchMsgBox: $("#searchMsgBox"),
+    btnSearchSave: $("#btnSearchSave"),
+    btnSearchSaveText: $("#btnSearchSave .btn-text"),
+    btnSearchSaveSpinner: $("#btnSearchSave .btn-spinner"),
     // Advanced tab
     imessageEnabled: $("#imessageEnabled"),
     launchAtLoginRow: $("#launchAtLoginRow"),
@@ -497,6 +525,7 @@
   let chPairingRequests = [];
   let chApprovedEntries = [];
   let kimiSaving = false;
+  let searchSaving = false;
   let advSaving = false;
   let cliOperating = false;
   let cliInstalled = false;
@@ -1755,6 +1784,95 @@
     }
   }
 
+  // ── Search Tab ──
+
+  // Search 消息框
+  function showSearchMsg(msg, type) {
+    els.searchMsgBox.textContent = msg;
+    els.searchMsgBox.className = "msg-box " + type;
+  }
+
+  function hideSearchMsg() {
+    els.searchMsgBox.classList.add("hidden");
+    els.searchMsgBox.textContent = "";
+    els.searchMsgBox.className = "msg-box hidden";
+  }
+
+  function setSearchSaving(loading) {
+    searchSaving = loading;
+    els.btnSearchSave.disabled = loading;
+    els.btnSearchSaveText.textContent = loading ? t("search.saving") : t("search.save");
+    els.btnSearchSaveSpinner.classList.toggle("hidden", !loading);
+  }
+
+  function isSearchEnabled() {
+    return els.searchEnabled.checked;
+  }
+
+  // 加载 Search 配置
+  async function loadSearchConfig() {
+    try {
+      var result = await window.oneclaw.settingsGetKimiSearchConfig();
+      if (!result.success || !result.data) return;
+
+      var data = result.data;
+      els.searchEnabled.checked = !!data.enabled;
+      toggleEl(els.searchFields, !!data.enabled);
+
+      // 回填专属 key
+      if (data.apiKey) {
+        els.searchApiKey.value = data.apiKey;
+      }
+
+      // 自动复用提示
+      updateSearchAutoKeyHint(data);
+    } catch (err) {
+      console.error("[Settings] loadSearchConfig failed:", err);
+    }
+  }
+
+  // 更新自动复用 key 提示
+  function updateSearchAutoKeyHint(data) {
+    var hasOwnKey = data.apiKey && data.apiKey.trim();
+    var hasKimiCodeKey = data.isKimiCodeConfigured;
+    if (!hasOwnKey && hasKimiCodeKey) {
+      els.searchAutoKeyHint.textContent = t("search.autoKeyHint");
+      els.searchAutoKeyHint.className = "msg-box info";
+    } else {
+      els.searchAutoKeyHint.className = "msg-box info hidden";
+    }
+  }
+
+  // 保存 Search 配置
+  async function handleSearchSave() {
+    if (searchSaving) return;
+
+    var enabled = isSearchEnabled();
+
+    setSearchSaving(true);
+    hideSearchMsg();
+
+    try {
+      var params = { enabled: enabled };
+      // 仅启用时传递 key（空字符串表示清除专属 key，走自动复用）
+      if (enabled) {
+        params.apiKey = els.searchApiKey.value.trim();
+      }
+      var result = await window.oneclaw.settingsSaveKimiSearchConfig(params);
+      setSearchSaving(false);
+      if (result.success) {
+        showToast(t("search.saved"));
+        // 刷新提示状态
+        loadSearchConfig();
+      } else {
+        showSearchMsg(result.message || "Save failed", "error");
+      }
+    } catch (err) {
+      setSearchSaving(false);
+      showSearchMsg(t("error.connection") + (err.message || "Unknown error"), "error");
+    }
+  }
+
   // ── 从配置 + 预设合并出模型列表（配置优先，预设补充） ──
 
   function buildMergedModelList(configuredModels, provider, subPlatform) {
@@ -1937,6 +2055,7 @@
       loadCurrentConfig(),
       loadChannelConfig(),
       loadKimiConfig(),
+      loadSearchConfig(),
       loadAdvancedConfig(),
       loadBackupData(),
       refreshGatewayState(),
@@ -2380,6 +2499,11 @@
       }
     });
 
+    // Search tab — 启用/禁用切换 + Key 可见性
+    els.searchEnabled.addEventListener("change", function () { toggleEl(els.searchFields, isSearchEnabled()); });
+    els.btnToggleSearchKey.addEventListener("click", togglePasswordVisibility);
+    els.btnSearchSave.addEventListener("click", handleSearchSave);
+
     // Advanced
     els.btnAdvSave.addEventListener("click", handleAdvSave);
     if (els.cliEnabled) {
@@ -2449,6 +2573,7 @@
     loadCurrentConfig();
     loadChannelConfig();
     loadKimiConfig();
+    loadSearchConfig();
     loadAdvancedConfig();
     loadAppearanceSettings();
     refreshGatewayState();

@@ -47,6 +47,9 @@ contextBridge.exposeInMainWorld("oneclaw", {
   settingsGetKimiConfig: () => ipcRenderer.invoke("settings:get-kimi-config"),
   settingsSaveKimiConfig: (params: Record<string, unknown>) =>
     ipcRenderer.invoke("settings:save-kimi-config", params),
+  settingsGetKimiSearchConfig: () => ipcRenderer.invoke("settings:get-kimi-search-config"),
+  settingsSaveKimiSearchConfig: (params: Record<string, unknown>) =>
+    ipcRenderer.invoke("settings:save-kimi-search-config", params),
   settingsGetAdvanced: () => ipcRenderer.invoke("settings:get-advanced"),
   settingsSaveAdvanced: (params: Record<string, unknown>) =>
     ipcRenderer.invoke("settings:save-advanced", params),
