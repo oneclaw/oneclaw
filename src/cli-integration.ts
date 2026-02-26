@@ -66,10 +66,8 @@ function escapeForPowerShellSingleQuoted(value: string): string {
   return value.replace(/'/g, "''");
 }
 
-// 生成 POSIX wrapper 脚本，直接转发到应用内置 Node + gateway entry。
-function buildPosixWrapper(): string {
-  const nodeBin = resolveNodeBin();
-  const entry = resolveGatewayEntry();
+// 生成 POSIX wrapper 脚本（可测试纯函数），直接转发到内置 Node + gateway entry。
+export function buildPosixWrapperForPaths(nodeBin: string, entry: string): string {
   const safeNodeBin = escapeForPosixDoubleQuoted(nodeBin);
   const safeEntry = escapeForPosixDoubleQuoted(entry);
 
@@ -86,15 +84,19 @@ function buildPosixWrapper(): string {
     '  echo "Error: OneClaw entry not found at $APP_ENTRY" >&2',
     "  exit 127",
     "fi",
+    "export OPENCLAW_NO_RESPAWN=1",
     'exec "$APP_NODE" "$APP_ENTRY" "$@"',
     "",
   ].join("\n");
 }
 
-// 生成 Windows wrapper 脚本，直接转发到应用内置 Node + gateway entry。
-function buildWinWrapper(): string {
-  const nodeBin = resolveNodeBin();
-  const entry = resolveGatewayEntry();
+// 读取当前运行时路径并生成 POSIX wrapper，避免调用方重复拼路径。
+function buildPosixWrapper(): string {
+  return buildPosixWrapperForPaths(resolveNodeBin(), resolveGatewayEntry());
+}
+
+// 生成 Windows wrapper 脚本（可测试纯函数），直接转发到内置 Node + gateway entry。
+export function buildWinWrapperForPaths(nodeBin: string, entry: string): string {
   const safeNodeBin = escapeForCmdSetValue(nodeBin);
   const safeEntry = escapeForCmdSetValue(entry);
 
@@ -112,9 +114,15 @@ function buildWinWrapper(): string {
     "  echo Error: OneClaw entry not found. 1>&2",
     "  exit /b 127",
     ")",
+    'set "OPENCLAW_NO_RESPAWN=1"',
     '"%APP_NODE%" "%APP_ENTRY%" %*',
     "",
   ].join("\r\n");
+}
+
+// 读取当前运行时路径并生成 Windows wrapper，避免调用方重复拼路径。
+function buildWinWrapper(): string {
+  return buildWinWrapperForPaths(resolveNodeBin(), resolveGatewayEntry());
 }
 
 // 返回用户 home 目录，优先 HOME，回退 os.homedir()，失败时返回 null。
@@ -130,13 +138,20 @@ function resolveHomeDir(): string | null {
 function resolvePosixRcPaths(): string[] {
   const home = resolveHomeDir();
   if (!home) return [];
-  return [path.join(home, ".zshrc"), path.join(home, ".bashrc")];
+  return [path.join(home, ".zprofile"), path.join(home, ".zshrc"), path.join(home, ".bashrc")];
 }
 
 // 构建 OneClaw 管理的 rc 注入块，使用绝对路径避免与状态目录配置脱节。
 function buildRcBlock(binDir: string): string {
   const safeBinDir = escapeForPosixDoubleQuoted(binDir);
-  return [RC_BLOCK_START, `export PATH="${safeBinDir}:$PATH"`, RC_BLOCK_END].join("\n");
+  return [
+    RC_BLOCK_START,
+    'case ":$PATH:" in',
+    `  *:"${safeBinDir}":*) ;;`,
+    `  *) export PATH="${safeBinDir}:$PATH" ;;`,
+    "esac",
+    RC_BLOCK_END,
+  ].join("\n");
 }
 
 // 从 rc 文本移除 OneClaw 管理块，仅删除带完整标记的块，避免误伤用户自定义行。

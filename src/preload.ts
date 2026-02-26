@@ -50,6 +50,9 @@ contextBridge.exposeInMainWorld("oneclaw", {
   settingsGetAdvanced: () => ipcRenderer.invoke("settings:get-advanced"),
   settingsSaveAdvanced: (params: Record<string, unknown>) =>
     ipcRenderer.invoke("settings:save-advanced", params),
+  settingsGetCliStatus: () => ipcRenderer.invoke("settings:get-cli-status"),
+  settingsInstallCli: () => ipcRenderer.invoke("settings:install-cli"),
+  settingsUninstallCli: () => ipcRenderer.invoke("settings:uninstall-cli"),
   settingsListConfigBackups: () => ipcRenderer.invoke("settings:list-config-backups"),
   settingsRestoreConfigBackup: (params: Record<string, unknown>) =>
     ipcRenderer.invoke("settings:restore-config-backup", params),

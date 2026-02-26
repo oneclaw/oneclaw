@@ -276,6 +276,35 @@ button, input, select, label, a {
   color: var(--text-secondary);
 }
 
+/* CLI 命令区：展示命令名、安装状态与操作按钮。 */
+.cli-command-group {
+  gap: 10px;
+}
+
+.cli-command-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.cli-command-code {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 8px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: var(--bg-input);
+  color: var(--text-primary);
+  font-size: 12px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+}
+
+.cli-command-status {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
 .field-hint {
   margin: 0;
   font-size: 12px;
