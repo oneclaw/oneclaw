@@ -150,19 +150,31 @@ export function extractKimiSearchConfig(config: any): {
   enabled: boolean;
   apiKey: string;
   isKimiCodeConfigured: boolean;
+  serviceBaseUrl: string;
 } {
   const searchEntry = config?.plugins?.entries?.[KIMI_SEARCH_PLUGIN_ID];
   const dedicatedKey = readKimiSearchDedicatedApiKey();
   const kimiCodingKey = config?.models?.providers?.["kimi-coding"]?.apiKey ?? "";
+
+  // 从插件 config.search.baseUrl 反推 serviceBaseUrl（去掉末尾 /search）
+  const searchBaseUrl = searchEntry?.config?.search?.baseUrl ?? "";
+  const serviceBaseUrl = typeof searchBaseUrl === "string" && searchBaseUrl.endsWith("/search")
+    ? searchBaseUrl.slice(0, -"/search".length)
+    : "";
+
   return {
     enabled: searchEntry?.enabled === true,
     apiKey: dedicatedKey,
     isKimiCodeConfigured: typeof kimiCodingKey === "string" && kimiCodingKey.trim().length > 0,
+    serviceBaseUrl,
   };
 }
 
-// 写入 kimi-search 启用状态（只写 enabled，不碰 config，避免 schema 校验失败）
-export function saveKimiSearchConfig(config: any, params: { enabled: boolean }): void {
+// 写入 kimi-search 配置（enabled + 可选的自定义 service base URL）
+export function saveKimiSearchConfig(
+  config: any,
+  params: { enabled: boolean; serviceBaseUrl?: string },
+): void {
   config.plugins ??= {};
   config.plugins.entries ??= {};
 
@@ -172,12 +184,21 @@ export function saveKimiSearchConfig(config: any, params: { enabled: boolean }):
       ? config.plugins.entries[KIMI_SEARCH_PLUGIN_ID]
       : {};
 
-  // 只保留 enabled，清除可能残留的 config 字段
-  config.plugins.entries[KIMI_SEARCH_PLUGIN_ID] = {
-    ...existing,
-    enabled: params.enabled,
-  };
-  delete config.plugins.entries[KIMI_SEARCH_PLUGIN_ID].config;
+  const entry: any = { ...existing, enabled: params.enabled };
+
+  // 有自定义 base URL 时写入 search/fetch 端点，空字符串则清除回默认
+  const baseUrl = params.serviceBaseUrl?.trim();
+  if (baseUrl) {
+    entry.config = {
+      ...(typeof existing.config === "object" && existing.config !== null ? existing.config : {}),
+      search: { baseUrl: `${baseUrl}/search` },
+      fetch: { baseUrl: `${baseUrl}/fetch` },
+    };
+  } else {
+    delete entry.config;
+  }
+
+  config.plugins.entries[KIMI_SEARCH_PLUGIN_ID] = entry;
 }
 
 // 检查 kimi-search 插件是否随应用内置

@@ -533,6 +533,30 @@ select option {
   margin: 0;
 }
 
+.search-advanced {
+  margin-top: 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 0;
+}
+
+.search-advanced summary {
+  cursor: pointer;
+  padding: 8px 12px;
+  font-size: 13px;
+  color: var(--text-secondary);
+  user-select: none;
+}
+
+.search-advanced[open] summary {
+  border-bottom: 1px solid var(--border);
+}
+
+.search-advanced .field-group {
+  padding: 12px;
+  margin: 0;
+}
+
 /* ── 按钮 ── */
 
 .btn-primary {

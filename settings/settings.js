@@ -168,6 +168,9 @@
       "search.autoKeyHint": "Auto-reusing Kimi Code API Key",
       "search.save": "Save",
       "search.saving": "Saving…",
+      "search.advancedToggle": "Advanced",
+      "search.serviceBaseUrlLabel": "Service Base URL",
+      "search.serviceBaseUrlHint": "Leave empty to use the default endpoint. /search and /fetch will be appended automatically.",
       "nav.advanced": "Advanced",
       "advanced.title": "Advanced",
       "advanced.desc": "Browser tool and messaging channel settings.",
@@ -339,6 +342,9 @@
       "search.autoKeyHint": "已自动复用 Kimi Code API Key",
       "search.save": "保存",
       "search.saving": "保存中…",
+      "search.advancedToggle": "高级配置",
+      "search.serviceBaseUrlLabel": "服务地址",
+      "search.serviceBaseUrlHint": "留空使用默认地址。系统会自动追加 /search 和 /fetch 路径。",
       "nav.advanced": "高级选项",
       "advanced.title": "高级选项",
       "advanced.desc": "浏览器工具与消息频道设置。",
@@ -476,6 +482,7 @@
     searchApiKeyGroup: $("#searchApiKeyGroup"),
     searchAutoKeyHint: $("#searchAutoKeyHint"),
     btnToggleSearchKey: $("#btnToggleSearchKey"),
+    searchServiceBaseUrl: $("#searchServiceBaseUrl"),
     searchMsgBox: $("#searchMsgBox"),
     btnSearchSave: $("#btnSearchSave"),
     btnSearchSaveText: $("#btnSearchSave .btn-text"),
@@ -1870,6 +1877,9 @@
         els.searchApiKey.value = data.apiKey;
       }
 
+      // 回填自定义服务地址
+      els.searchServiceBaseUrl.value = data.serviceBaseUrl || "";
+
       // 自动复用提示
       updateSearchAutoKeyHint(data);
     } catch (err) {
@@ -1906,6 +1916,8 @@
       if (enabled && !els.searchApiKeyGroup.classList.contains("hidden")) {
         params.apiKey = els.searchApiKey.value.trim();
       }
+      // 自定义服务地址（空字符串表示恢复默认）
+      params.serviceBaseUrl = els.searchServiceBaseUrl.value.trim();
       var result = await window.oneclaw.settingsSaveKimiSearchConfig(params);
       setSearchSaving(false);
       if (result.success) {

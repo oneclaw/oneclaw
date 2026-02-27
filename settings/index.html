@@ -423,6 +423,16 @@
                 </button>
               </div>
             </div>
+
+            <!-- 高级配置：自定义 Service Base URL -->
+            <details class="search-advanced" id="searchAdvanced">
+              <summary data-i18n="search.advancedToggle">Advanced</summary>
+              <div class="field-group">
+                <label for="searchServiceBaseUrl" data-i18n="search.serviceBaseUrlLabel">Service Base URL</label>
+                <input type="text" id="searchServiceBaseUrl" placeholder="https://api.kimi.com/coding/v1" autocomplete="off" spellcheck="false">
+                <p class="field-hint" data-i18n="search.serviceBaseUrlHint">Leave empty to use the default endpoint. /search and /fetch will be appended automatically.</p>
+              </div>
+            </details>
           </div>
 
           <!-- 错误 / 成功信息 -->

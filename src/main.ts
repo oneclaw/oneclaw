@@ -363,7 +363,9 @@ ipcMain.on("app:open-webui", () => {
 ipcMain.handle("gateway:port", () => gateway.getPort());
 
 registerSetupIpc({ setupManager });
-registerSettingsIpc();
+registerSettingsIpc({
+  requestGatewayRestart: () => requestGatewayRestart("settings:kimi-search"),
+});
 
 // ── 退出 ──
 
