@@ -149,8 +149,12 @@ async function runTrackedSettingsAction<T extends SettingsActionResult>(
   }
 }
 
+interface SettingsIpcOptions {
+  requestGatewayRestart?: () => void;
+}
+
 // 注册 Settings 相关 IPC
-export function registerSettingsIpc(): void {
+export function registerSettingsIpc(opts: SettingsIpcOptions = {}): void {
   // ── 读取当前 provider/model 配置（apiKey 掩码返回） ──
   ipcMain.handle("settings:get-config", async () => {
     try {
@@ -539,6 +543,7 @@ export function registerSettingsIpc(): void {
   ipcMain.handle("settings:save-kimi-search-config", async (_event, params) => {
     const enabled = params?.enabled === true;
     const apiKey = typeof params?.apiKey === "string" ? params.apiKey : undefined;
+    const serviceBaseUrl = typeof params?.serviceBaseUrl === "string" ? params.serviceBaseUrl : undefined;
     return runTrackedSettingsAction("save_kimi_search", { enabled }, async () => {
       try {
         if (enabled && !isKimiSearchPluginBundled()) {
@@ -548,10 +553,11 @@ export function registerSettingsIpc(): void {
         if (typeof apiKey === "string") {
           writeKimiSearchDedicatedApiKey(apiKey);
         }
-        // openclaw.json 只写 enabled
         const config = readUserConfig();
-        saveKimiSearchConfig(config, { enabled });
+        saveKimiSearchConfig(config, { enabled, serviceBaseUrl });
         writeUserConfig(config);
+        // 完整重启 gateway，确保环境变量（API key）同步到子进程
+        opts.requestGatewayRestart?.();
         return { success: true };
       } catch (err: any) {
         return { success: false, message: err.message || String(err) };
