@@ -155,6 +155,11 @@ interface SettingsIpcOptions {
 
 // 注册 Settings 相关 IPC
 export function registerSettingsIpc(opts: SettingsIpcOptions = {}): void {
+  // 写入配置后自动重启 gateway，避免新增 handler 遗漏重启调用
+  const writeUserConfigAndRestart: typeof writeUserConfig = (config) => {
+    writeUserConfig(config);
+    opts.requestGatewayRestart?.();
+  };
   // ── 读取当前 provider/model 配置（apiKey 掩码返回） ──
   ipcMain.handle("settings:get-config", async () => {
     try {
@@ -230,7 +235,7 @@ export function registerSettingsIpc(opts: SettingsIpcOptions = {}): void {
           saveKimiSearchConfig(config, { enabled: true });
         }
 
-        writeUserConfig(config);
+        writeUserConfigAndRestart(config);
         return { success: true };
       } catch (err: any) {
         return { success: false, message: err.message || String(err) };
@@ -304,7 +309,7 @@ export function registerSettingsIpc(opts: SettingsIpcOptions = {}): void {
         // 仅禁用 → 不校验凭据
         if (enabled === false) {
           config.plugins.entries.feishu = { ...(config.plugins.entries.feishu ?? {}), enabled: false };
-          writeUserConfig(config);
+          writeUserConfigAndRestart(config);
           // 禁用飞书时关闭“首配自动批准”窗口，但保留已消费标记，防止重复自动批准。
           closeFeishuFirstPairingWindow();
           return { success: true };
@@ -357,7 +362,7 @@ export function registerSettingsIpc(opts: SettingsIpcOptions = {}): void {
         } else {
           config.session.dmScope = dmScope;
         }
-        writeUserConfig(config);
+        writeUserConfigAndRestart(config);
         // 保存完成后按当前策略维护首配窗口，确保仅在 pairing 且无授权用户时才开启。
         reconcileFeishuFirstPairingWindow(config);
         return { success: true };
@@ -429,7 +434,7 @@ export function registerSettingsIpc(opts: SettingsIpcOptions = {}): void {
         id,
       ]);
       config.channels.feishu.groupAllowFrom = nextGroupAllowFrom;
-      writeUserConfig(config);
+      writeUserConfigAndRestart(config);
       return { success: true };
     } catch (err: any) {
       return { success: false, message: err.message || String(err) };
@@ -458,7 +463,7 @@ export function registerSettingsIpc(opts: SettingsIpcOptions = {}): void {
           delete config.channels.feishu.groupAllowFrom;
         }
         removeFeishuAlias("group", id);
-        writeUserConfig(config);
+        writeUserConfigAndRestart(config);
         return { success: true };
       }
 
@@ -473,7 +478,7 @@ export function registerSettingsIpc(opts: SettingsIpcOptions = {}): void {
       const nextStoreAllowFrom = readFeishuAllowFromStore().filter((entry) => entry !== id);
       writeFeishuAllowFromStore(nextStoreAllowFrom);
       removeFeishuAlias("user", id);
-      writeUserConfig(config);
+      writeUserConfigAndRestart(config);
       return { success: true };
     } catch (err: any) {
       return { success: false, message: err.message || String(err) };
@@ -508,7 +513,7 @@ export function registerSettingsIpc(opts: SettingsIpcOptions = {}): void {
           if (config.plugins.entries["kimi-search"]) {
             config.plugins.entries["kimi-search"].enabled = false;
           }
-          writeUserConfig(config);
+          writeUserConfigAndRestart(config);
           return { success: true };
         }
 
@@ -521,7 +526,7 @@ export function registerSettingsIpc(opts: SettingsIpcOptions = {}): void {
 
         const gatewayToken = ensureGatewayAuthTokenInConfig(config);
         saveKimiPluginConfig(config, { botToken, gatewayToken, wsURL: DEFAULT_KIMI_BRIDGE_WS_URL });
-        writeUserConfig(config);
+        writeUserConfigAndRestart(config);
         return { success: true };
       } catch (err: any) {
         return { success: false, message: err.message || String(err) };
@@ -555,9 +560,7 @@ export function registerSettingsIpc(opts: SettingsIpcOptions = {}): void {
         }
         const config = readUserConfig();
         saveKimiSearchConfig(config, { enabled, serviceBaseUrl });
-        writeUserConfig(config);
-        // 完整重启 gateway，确保环境变量（API key）同步到子进程
-        opts.requestGatewayRestart?.();
+        writeUserConfigAndRestart(config);
         return { success: true };
       } catch (err: any) {
         return { success: false, message: err.message || String(err) };
@@ -606,7 +609,7 @@ export function registerSettingsIpc(opts: SettingsIpcOptions = {}): void {
             setLaunchAtLoginEnabled(app, launchAtLogin);
           }
 
-          writeUserConfig(config);
+          writeUserConfigAndRestart(config);
           return { success: true };
         } catch (err: any) {
           return { success: false, message: err.message || String(err) };
