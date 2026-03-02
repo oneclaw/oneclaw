@@ -174,6 +174,7 @@
       "nav.advanced": "Advanced",
       "advanced.title": "Advanced",
       "advanced.desc": "Browser tool and messaging channel settings.",
+      "advanced.sessionMemory": "Auto-save session memory on /new",
       "advanced.browserProfile": "Browser Profile",
       "advanced.browserOpenclaw": "Standalone browser instance",
       "advanced.browserChrome": "Chrome extension",
@@ -348,6 +349,7 @@
       "nav.advanced": "高级选项",
       "advanced.title": "高级选项",
       "advanced.desc": "浏览器工具与消息频道设置。",
+      "advanced.sessionMemory": "开新对话时自动保存会话记忆",
       "advanced.browserProfile": "浏览器配置",
       "advanced.browserOpenclaw": "独立浏览器(建议)",
       "advanced.browserChrome": "Chrome 扩展",
@@ -488,6 +490,7 @@
     btnSearchSaveText: $("#btnSearchSave .btn-text"),
     btnSearchSaveSpinner: $("#btnSearchSave .btn-spinner"),
     // Advanced tab
+    sessionMemoryEnabled: $("#sessionMemoryEnabled"),
     imessageEnabled: $("#imessageEnabled"),
     launchAtLoginRow: $("#launchAtLoginRow"),
     launchAtLoginEnabled: $("#launchAtLoginEnabled"),
@@ -1446,6 +1449,8 @@
       // 回填 browser profile radio
       var radio = document.querySelector('input[name="browserProfile"][value="' + data.browserProfile + '"]');
       if (radio) radio.checked = true;
+      // 回填 session-memory hook toggle
+      els.sessionMemoryEnabled.checked = data.sessionMemoryEnabled !== false;
       // 回填 iMessage toggle
       els.imessageEnabled.checked = !!data.imessageEnabled;
       // 按平台能力展示并回填开机启动开关
@@ -1545,12 +1550,14 @@
     var browserProfile = document.querySelector('input[name="browserProfile"]:checked').value;
     var imessageEnabled = els.imessageEnabled.checked;
     var launchAtLogin = els.launchAtLoginEnabled ? !!els.launchAtLoginEnabled.checked : false;
+    var sessionMemoryEnabled = !!els.sessionMemoryEnabled.checked;
 
     try {
       var result = await window.oneclaw.settingsSaveAdvanced({
         browserProfile: browserProfile,
         imessageEnabled: imessageEnabled,
         launchAtLogin: launchAtLogin,
+        sessionMemoryEnabled: sessionMemoryEnabled,
       });
       setAdvSaving(false);
       if (result.success) {

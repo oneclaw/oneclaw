@@ -238,6 +238,23 @@ interface StartMainOptions {
 
 const MAX_GATEWAY_START_ATTEMPTS = 3;
 
+// 存量用户迁移：首次升级时默认开启 session-memory hook（幂等，只在 hooks.internal 未配置时写入）
+function migrateSessionMemoryHook(): void {
+  try {
+    const config = readUserConfig();
+    if (config.hooks?.internal) return;
+    config.hooks ??= {};
+    config.hooks.internal = {
+      enabled: true,
+      entries: { "session-memory": { enabled: true } },
+    };
+    writeUserConfig(config);
+    log.info("[migrate] 已为存量用户默认开启 session-memory hook");
+  } catch {
+    // 迁移失败不阻塞启动
+  }
+}
+
 // 从配置同步 search API key 到 gateway 环境变量
 function syncKimiSearchEnv(): void {
   try {
@@ -549,6 +566,8 @@ app.whenReady().then(async () => {
     // 无配置 → 先走 Setup，Gateway 在 Setup 完成回调里启动
     setupManager.showSetup();
   } else {
+    // 存量用户迁移：首次升级时默认开启 session-memory hook
+    migrateSessionMemoryHook();
     await startGatewayAndShowMain("app:startup");
   }
 });

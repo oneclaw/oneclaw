@@ -167,12 +167,30 @@ export function registerSetupIpc(deps: SetupIpcDeps): void {
   });
 
   // ── Setup 完成（Gateway 启动 + 窗口切换由 setOnComplete 回调统一处理） ──
-  ipcMain.handle("setup:complete", async (_event, params?: { installCli?: boolean; launchAtLogin?: boolean }) => {
+  ipcMain.handle("setup:complete", async (_event, params?: { installCli?: boolean; launchAtLogin?: boolean; sessionMemory?: boolean }) => {
     const launchAtLogin = typeof params?.launchAtLogin === "boolean" ? params.launchAtLogin : undefined;
-    return runTrackedSetupAction("complete", { launch_at_login: launchAtLogin }, async () => {
+    const sessionMemory = params?.sessionMemory !== false;
+    return runTrackedSetupAction("complete", { launch_at_login: launchAtLogin, session_memory: sessionMemory }, async () => {
       if (typeof launchAtLogin === "boolean") {
         setLaunchAtLoginEnabled(app, launchAtLogin);
       }
+
+      // 写入 session-memory hook 配置
+      try {
+        const config = readUserConfig();
+        config.hooks ??= {};
+        config.hooks.internal = {
+          enabled: true,
+          entries: {
+            ...config.hooks.internal?.entries,
+            "session-memory": { enabled: sessionMemory },
+          },
+        };
+        writeUserConfig(config);
+      } catch (err: any) {
+        log.error(`[setup] 写入 hooks 配置失败: ${err?.message ?? err}`);
+      }
+
       const ok = await setupManager.complete();
       if (!ok) {
         return {

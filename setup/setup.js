@@ -75,6 +75,7 @@
       "done.feature2": "Generate and execute code in real time",
       "done.feature3": "Manage multiple conversations and contexts",
       "done.feature4": "Switch providers or models anytime in Settings",
+      "done.sessionMemory": "Auto-save session memory on /new",
       "done.launchAtLogin": "Launch at login",
       "done.installCli": "Add openclaw command to terminal PATH",
       "done.start": "Start OneClaw",
@@ -112,6 +113,7 @@
       "done.feature2": "实时生成并执行代码",
       "done.feature3": "管理多个对话和上下文",
       "done.feature4": "随时在设置中切换服务商或模型",
+      "done.sessionMemory": "开新对话时自动保存会话记忆",
       "done.launchAtLogin": "开机启动",
       "done.installCli": "将 openclaw 命令添加到终端 PATH",
       "done.start": "启动 OneClaw",
@@ -154,6 +156,7 @@
     btnVerifyText: $("#btnVerify .btn-text"),
     btnVerifySpinner: $("#btnVerify .btn-spinner"),
     // Step 3 — 完成
+    sessionMemoryEnabled: $("#sessionMemoryEnabled"),
     installCliCheck: $("#installCliCheck"),
     btnStart: $("#btnStart"),
     btnStartText: $("#btnStart .btn-text"),
@@ -383,6 +386,7 @@
     try {
       const payload = {
         installCli: els.installCliCheck.checked,
+        sessionMemory: !!els.sessionMemoryEnabled.checked,
       };
       if (launchAtLoginSupported) {
         payload.launchAtLogin = !!els.launchAtLoginEnabled.checked;

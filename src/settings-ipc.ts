@@ -573,6 +573,9 @@ export function registerSettingsIpc(opts: SettingsIpcOptions = {}): void {
     try {
       const config = readUserConfig();
       const launchAtLoginState = getLaunchAtLoginState(app);
+      // session-memory hook：未配置过视为开启（存量用户默认开启）
+      const sessionMemoryEntry = config?.hooks?.internal?.entries?.["session-memory"];
+      const sessionMemoryEnabled = sessionMemoryEntry?.enabled !== false;
       return {
         success: true,
         data: {
@@ -580,6 +583,7 @@ export function registerSettingsIpc(opts: SettingsIpcOptions = {}): void {
           imessageEnabled: config?.channels?.imessage?.enabled !== false,
           launchAtLoginSupported: launchAtLoginState.supported,
           launchAtLogin: launchAtLoginState.enabled,
+          sessionMemoryEnabled,
         },
       };
     } catch (err: any) {
@@ -591,9 +595,10 @@ export function registerSettingsIpc(opts: SettingsIpcOptions = {}): void {
   ipcMain.handle("settings:save-advanced", async (_event, params) => {
     const { browserProfile, imessageEnabled } = params;
     const launchAtLogin = typeof params?.launchAtLogin === "boolean" ? params.launchAtLogin : undefined;
+    const sessionMemoryEnabled = typeof params?.sessionMemoryEnabled === "boolean" ? params.sessionMemoryEnabled : undefined;
     return runTrackedSettingsAction(
       "save_advanced",
-      { browser_profile: browserProfile, imessage_enabled: imessageEnabled, launch_at_login: launchAtLogin },
+      { browser_profile: browserProfile, imessage_enabled: imessageEnabled, launch_at_login: launchAtLogin, session_memory: sessionMemoryEnabled },
       async () => {
         try {
           const config = readUserConfig();
@@ -607,6 +612,15 @@ export function registerSettingsIpc(opts: SettingsIpcOptions = {}): void {
 
           if (typeof launchAtLogin === "boolean") {
             setLaunchAtLoginEnabled(app, launchAtLogin);
+          }
+
+          // 写入 session-memory hook 开关
+          if (typeof sessionMemoryEnabled === "boolean") {
+            config.hooks ??= {};
+            config.hooks.internal ??= { enabled: true, entries: {} };
+            config.hooks.internal.enabled = true;
+            config.hooks.internal.entries ??= {};
+            config.hooks.internal.entries["session-memory"] = { enabled: sessionMemoryEnabled };
           }
 
           writeUserConfigAndRestart(config);
