@@ -50,14 +50,19 @@ function resolveDevTargetPath(): string {
   return path.join(app.getAppPath(), "resources", "targets", `${process.platform}-${process.arch}`);
 }
 
-/** Node.js 二进制（dev 模式优先用 package:resources 下载的，无则降级系统 node） */
+/** Node.js 二进制（packaged 复用 Electron binary + ELECTRON_RUN_AS_NODE；dev 优先用下载的） */
 export function resolveNodeBin(): string {
   if (!app.isPackaged) {
     const exe = IS_WIN ? "node.exe" : "node";
     const bundled = path.join(resolveDevTargetPath(), "runtime", exe);
     return fs.existsSync(bundled) ? bundled : "node";
   }
-  return path.join(resolveResourcesPath(), "runtime", IS_WIN ? "node.exe" : "node");
+  return process.execPath;
+}
+
+/** packaged 模式需要的额外环境变量（让 Electron binary 作为纯 Node.js 运行） */
+export function resolveNodeExtraEnv(): Record<string, string> {
+  return app.isPackaged ? { ELECTRON_RUN_AS_NODE: "1" } : {};
 }
 
 /** npm CLI（dev 模式优先用 package:resources 下载的，无则降级系统 npm） */

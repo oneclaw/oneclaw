@@ -26,9 +26,13 @@
     "@types/node": "^22.15.0",
     "electron": "^40.2.1",
     "electron-builder": "^26.7.0",
+    "isbinaryfile": "^5.0.0",
     "typescript": "^5.9.3"
   },
   "engines": {
     "node": ">=22.12.0"
+  },
+  "overrides": {
+    "isbinaryfile": "$isbinaryfile"
   }
 }

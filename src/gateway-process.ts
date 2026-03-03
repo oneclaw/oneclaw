@@ -10,6 +10,7 @@ import {
   CRASH_COOLDOWN_MS,
   resolveGatewayLogPath,
   resolveNodeBin,
+  resolveNodeExtraEnv,
   resolveNpmBin,
   resolveGatewayEntry,
   resolveGatewayCwd,
@@ -130,6 +131,7 @@ export class GatewayProcess {
       cwd,
       env: {
         ...process.env,
+        ...resolveNodeExtraEnv(),
         NODE_ENV: "production",
         // 禁止 openclaw 入口在子进程内二次 respawn，避免 Windows 闪烁控制台窗口
         OPENCLAW_NO_RESPAWN: "1",
@@ -226,6 +228,7 @@ export class GatewayProcess {
         windowsHide: true,
         env: {
           ...process.env,
+          ...resolveNodeExtraEnv(),
           OPENCLAW_NO_RESPAWN: "1",
           OPENCLAW_LENIENT_CONFIG: "1",
         },

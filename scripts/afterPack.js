@@ -88,7 +88,79 @@ exports.default = async function afterPack(context) {
     fs.copyFileSync(src, dest);
     console.log(`[afterPack] 已注入 ${name}`);
   }
+
+  // ── 用 Electron binary 替换独立 Node.js（节省 80-100MB） ──
+  const productName = context.packager.appInfo.productFilename;
+  replaceNodeBinary(platform, targetBase, productName);
 };
+
+// ── 用 Electron binary 代理替换独立 Node.js ──
+//
+// packaged 模式下 process.execPath 就是 Electron binary，配合
+// ELECTRON_RUN_AS_NODE=1 即可作为纯 Node.js 使用。
+// macOS 写入代理 shell 脚本（供 npm wrapper 链式调用 "$dir/node"）；
+// Windows 删除 node.exe 并重写 npm.cmd / npx.cmd 直接调用 <productName>.exe。
+
+function replaceNodeBinary(platform, targetBase, productName) {
+  const runtimeDir = path.join(targetBase, "runtime");
+
+  if (platform === "darwin") {
+    // macOS: runtime/ → resources/ → Resources/ → Contents/MacOS/<productName>
+    const nodePath = path.join(runtimeDir, "node");
+    if (fs.existsSync(nodePath)) {
+      const sizeMB = (fs.statSync(nodePath).size / 1048576).toFixed(1);
+      fs.unlinkSync(nodePath);
+      console.log(`[afterPack] 已删除 runtime/node (${sizeMB} MB)`);
+    }
+
+    // 代理脚本：设置 ELECTRON_RUN_AS_NODE=1，exec 到 Electron binary
+    // 注意：脚本内容必须纯 ASCII，UTF-8 多字节字符会触发
+    // @electron/osx-sign 内 isbinaryfile 的 protobuf 解析崩溃
+    const proxyScript = [
+      "#!/bin/sh",
+      "# Proxy script - run Electron binary as Node.js runtime",
+      'export ELECTRON_RUN_AS_NODE=1',
+      `exec "$(dirname "$0")/../../../MacOS/${productName}" "$@"`,
+      "",
+    ].join("\n");
+
+    fs.writeFileSync(nodePath, proxyScript, "utf-8");
+    fs.chmodSync(nodePath, 0o755);
+    console.log(`[afterPack] 已写入 macOS node 代理脚本`);
+  } else if (platform === "win32") {
+    // Windows: runtime/ → resources/ → resources/ → <install>/<productName>.exe
+    const nodeExePath = path.join(runtimeDir, "node.exe");
+    if (fs.existsSync(nodeExePath)) {
+      const sizeMB = (fs.statSync(nodeExePath).size / 1048576).toFixed(1);
+      fs.unlinkSync(nodeExePath);
+      console.log(`[afterPack] 已删除 runtime/node.exe (${sizeMB} MB)`);
+    }
+
+    // 重写 npm.cmd — 注入 ELECTRON_RUN_AS_NODE=1，指向 Electron binary
+    const npmCmdPath = path.join(runtimeDir, "npm.cmd");
+    if (fs.existsSync(npmCmdPath)) {
+      const npmScript = [
+        "@echo off",
+        'set "ELECTRON_RUN_AS_NODE=1"',
+        `"%~dp0..\\..\\..\\${productName}.exe" "%~dp0node_modules\\npm\\bin\\npm-cli.js" %*`,
+      ].join("\r\n") + "\r\n";
+      fs.writeFileSync(npmCmdPath, npmScript, "utf-8");
+      console.log(`[afterPack] 已重写 npm.cmd`);
+    }
+
+    // 重写 npx.cmd — 同上
+    const npxCmdPath = path.join(runtimeDir, "npx.cmd");
+    if (fs.existsSync(npxCmdPath)) {
+      const npxScript = [
+        "@echo off",
+        'set "ELECTRON_RUN_AS_NODE=1"',
+        `"%~dp0..\\..\\..\\${productName}.exe" "%~dp0node_modules\\npm\\bin\\npx-cli.js" %*`,
+      ].join("\r\n") + "\r\n";
+      fs.writeFileSync(npxCmdPath, npxScript, "utf-8");
+      console.log(`[afterPack] 已重写 npx.cmd`);
+    }
+  }
+}
 
 // ── 递归复制目录（保留文件权限） ──
 

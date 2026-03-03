@@ -2,6 +2,7 @@ import { app, ipcMain } from "electron";
 import { spawn } from "child_process";
 import {
   resolveNodeBin,
+  resolveNodeExtraEnv,
   resolveGatewayEntry,
   resolveGatewayCwd,
   resolveResourcesPath,
@@ -991,6 +992,7 @@ async function runGatewayCli(args: string[]): Promise<CliRunResult> {
       cwd,
       env: {
         ...process.env,
+        ...resolveNodeExtraEnv(),
         // 统一关闭入口二次 respawn，保证所有短命 CLI 子命令都静默运行
         OPENCLAW_NO_RESPAWN: "1",
         PATH: envPath,
