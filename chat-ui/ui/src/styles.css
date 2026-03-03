@@ -137,52 +137,145 @@
 .oneclaw-sidebar__nav {
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  padding: 4px 8px 10px;
+  gap: 0;
+  padding: 4px 0 0;
   flex: 1;
-  overflow-y: auto;
+  min-height: 0;
   -webkit-app-region: no-drag;
-}
-
-.oneclaw-sidebar__section {
-  display: grid;
-  gap: 8px;
-  padding: 6px 6px 0;
 }
 
 .oneclaw-sidebar__section-title {
   font-size: 11px;
   color: var(--muted);
   letter-spacing: 0.05em;
-  text-transform: uppercase;
 }
 
-.oneclaw-sidebar__section--agent {
-  padding-top: 2px;
+/* 会话列表标题行：标题 + 新建按钮 */
+.oneclaw-sidebar__session-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 10px 2px;
 }
 
-.oneclaw-sidebar__divider {
-  height: 1px;
-  margin: 2px 6px 0;
-  background: var(--border);
+.oneclaw-sidebar__session-add {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  padding: 0;
+  transition: background 0.1s, color 0.1s;
 }
-
-.oneclaw-sidebar__select-wrap {
-  position: relative;
+.oneclaw-sidebar__session-add svg {
+  width: 14px;
+  height: 14px;
+  stroke: currentColor;
+  fill: none;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
-
-.oneclaw-sidebar__select {
-  appearance: none;
-  width: 100%;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background: var(--bg-elevated);
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23888' stroke-width='2'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
-  background-repeat: no-repeat;
-  background-position: right 12px center;
+.oneclaw-sidebar__session-add:hover {
+  background: var(--bg-hover);
   color: var(--text);
-  padding: 8px 34px 8px 10px;
+}
+
+/* 会话列表容器 */
+.oneclaw-sidebar__session-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: 2px 6px;
+  flex: 1;
+  overflow-y: auto;
+  min-height: 0;
+}
+
+/* 单个会话项 */
+.oneclaw-sidebar__session-item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 7px 8px;
+  border-radius: 6px;
+  cursor: pointer;
   font-size: 13px;
+  color: var(--muted);
+  transition: background 0.1s, color 0.1s;
+  position: relative;
+  -webkit-app-region: no-drag;
+}
+.oneclaw-sidebar__session-item:hover {
+  background: var(--bg-hover);
+  color: var(--text);
+}
+
+/* 选中态：微妙的背景色 */
+.oneclaw-sidebar__session-item.active {
+  color: var(--text-strong);
+  background: var(--bg-hover);
+}
+
+/* 会话名称：溢出省略 */
+.oneclaw-sidebar__session-name {
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+  user-select: none;
+}
+
+/* 行内编辑输入框 */
+.oneclaw-sidebar__session-edit {
+  flex: 1;
+  min-width: 0;
+  border: 1px solid var(--accent);
+  border-radius: 4px;
+  background: var(--bg-elevated);
+  color: var(--text);
+  padding: 2px 6px;
+  font-size: 13px;
+  font-family: inherit;
+  outline: none;
+}
+
+/* 操作按钮（编辑、删除）：默认隐藏，hover 时显示 */
+.oneclaw-sidebar__session-action {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border: none;
+  border-radius: 3px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  padding: 0;
+  flex-shrink: 0;
+}
+.oneclaw-sidebar__session-action svg {
+  width: 12px;
+  height: 12px;
+  stroke: currentColor;
+  fill: none;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.oneclaw-sidebar__session-item:hover .oneclaw-sidebar__session-action {
+  display: flex;
+}
+.oneclaw-sidebar__session-action:hover {
+  background: var(--bg-hover);
+  color: var(--text);
 }
 
 .oneclaw-sidebar__item {

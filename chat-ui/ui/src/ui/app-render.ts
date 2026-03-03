@@ -16,6 +16,7 @@ import { renderChat } from "./views/chat.ts";
 import { renderExecApprovalPrompt } from "./views/exec-approval.ts";
 import { renderGatewayUrlConfirmation } from "./views/gateway-url-confirmation.ts";
 import { renderSharePrompt } from "./views/share-prompt.ts";
+import { patchSession, loadSessions } from "./controllers/sessions.ts";
 
 declare global {
   interface Window {
@@ -84,72 +85,51 @@ function resolveSessionOptionLabel(
 ): string {
   const displayName = typeof row?.displayName === "string" ? row.displayName.trim() : "";
   const label = typeof row?.label === "string" ? row.label.trim() : "";
-  if (displayName && displayName !== key) {
-    return `${displayName} (${key})`;
-  }
+  // 有别名时只显示别名，不附带 key
   if (label && label !== key) {
-    return `${label} (${key})`;
+    return label;
+  }
+  if (displayName && displayName !== key) {
+    return displayName;
   }
   return key;
 }
 
-type SessionDefaultsSnapshot = {
-  mainSessionKey?: string;
-  mainKey?: string;
-};
-
-function resolveMainSessionKey(state: AppViewState): string | null {
-  const snapshot = state.hello?.snapshot as { sessionDefaults?: SessionDefaultsSnapshot } | undefined;
-  const mainSessionKey = snapshot?.sessionDefaults?.mainSessionKey?.trim();
-  if (mainSessionKey) {
-    return mainSessionKey;
-  }
-  const mainKey = snapshot?.sessionDefaults?.mainKey?.trim();
-  if (mainKey) {
-    return mainKey;
-  }
-  if (state.sessionsResult?.sessions?.some((row) => row.key === "main")) {
-    return "main";
-  }
-  return null;
-}
-
-function resolveSessionOptions(state: AppViewState): Array<{ key: string; label: string }> {
+function resolveSessionOptions(
+  state: AppViewState,
+): Array<{ key: string; label: string; updatedAt?: number }> {
   const sessions = state.sessionsResult?.sessions ?? [];
   const current = state.sessionKey?.trim() || "main";
-  const mainSessionKey = resolveMainSessionKey(state);
-  const mainSession = mainSessionKey
-    ? sessions.find((entry) => entry.key === mainSessionKey)
-    : undefined;
-  const currentSession = sessions.find((entry) => entry.key === current);
   const seen = new Set<string>();
-  const options: Array<{ key: string; label: string }> = [];
+  const options: Array<{ key: string; label: string; updatedAt?: number }> = [];
 
   const pushOption = (
     key: string,
-    row?: (NonNullable<AppViewState["sessionsResult"]>["sessions"][number] | undefined),
+    row?: NonNullable<AppViewState["sessionsResult"]>["sessions"][number],
+    isCurrentSession = false,
   ) => {
     const trimmedKey = String(key || "").trim();
     if (!trimmedKey || seen.has(trimmedKey)) {
       return;
     }
     seen.add(trimmedKey);
+    // 当前活跃会话若无 updatedAt，视为"刚刚使用"排到最前
     options.push({
       key: trimmedKey,
       label: resolveSessionOptionLabel(trimmedKey, row),
+      updatedAt: row?.updatedAt ?? (isCurrentSession ? Date.now() : undefined),
     });
   };
 
-  // 与原版 Web UI 保持一致：优先展示 main 会话，然后展示当前会话。
-  if (mainSessionKey) {
-    pushOption(mainSessionKey, mainSession);
-  }
-  pushOption(current, currentSession);
-
-  // 最后补齐 sessions.list 返回的其他会话。
+  // 收集所有会话（含当前会话和 API 列表）
+  const currentSession = sessions.find((entry) => entry.key === current);
+  pushOption(current, currentSession, true);
   for (const session of sessions) {
     pushOption(session.key, session);
   }
+
+  // 按 updatedAt 降序排列（最近使用的在前，无时间戳的在末尾）
+  options.sort((a, b) => (b.updatedAt ?? 0) - (a.updatedAt ?? 0));
 
   if (options.length === 0) {
     return [{ key: current, label: current }];
@@ -162,6 +142,35 @@ function handleSessionChange(state: AppViewState, nextSessionKey: string) {
     return;
   }
   applySessionKey(state, nextSessionKey, true);
+}
+
+// 侧边栏重命名回调：修改会话 label 后刷新列表
+async function patchSessionFromSidebar(state: AppViewState, key: string, newLabel: string) {
+  await patchSession(state as any, key, { label: newLabel || null });
+}
+
+// 侧边栏删除回调：确认后删除会话，删除当前会话时自动跳转
+async function deleteSessionFromSidebar(state: AppViewState, key: string) {
+  const s = state as any;
+  if (!s.client || !s.connected) {
+    return;
+  }
+  const confirmed = window.confirm(t("sidebar.deleteSession"));
+  if (!confirmed) {
+    return;
+  }
+  try {
+    await s.client.request("sessions.delete", { key, deleteTranscript: true });
+  } catch {
+    // Gateway 可能对不存在的会话返回错误，忽略即可
+  }
+  await loadSessions(s);
+  // 删除的是当前活跃会话时，切换到列表中第一个有效会话
+  if (key === state.sessionKey) {
+    const sessions = state.sessionsResult?.sessions ?? [];
+    const nextKey = sessions[0]?.key ?? "main";
+    applySessionKey(state, nextKey, true);
+  }
 }
 
 function setOneClawView(state: AppViewState, next: "chat" | "settings") {
@@ -178,6 +187,23 @@ function setOneClawView(state: AppViewState, next: "chat" | "settings") {
 function openSettingsView(state: AppViewState, tabHint: "channels" | null = null) {
   state.settingsTabHint = tabHint;
   setOneClawView(state, "settings");
+}
+
+// 新建会话：同步写入本地列表后再切换，异步同步到 Gateway 供跨终端访问
+function createNewSession(state: AppViewState) {
+  const id = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
+  const newKey = `agent:main:${id}`;
+  const label = t("chat.newSession");
+  setOneClawView(state, "chat");
+  // 先把新会话插入本地列表，UI 立即可见正确的名称
+  const sessions = state.sessionsResult?.sessions ?? [];
+  state.sessionsResult = {
+    ...state.sessionsResult,
+    sessions: [{ key: newKey, label, updatedAt: Date.now() }, ...sessions],
+  };
+  applySessionKey(state, newKey, true);
+  // 异步持久化到 Gateway（label 是 Gateway 原生字段，跨终端共享）
+  void patchSession(state as any, newKey, { label });
 }
 
 function confirmAndCreateNewSession(state: AppViewState) {
@@ -388,7 +414,6 @@ export function renderApp(state: AppViewState) {
   const sessionOptions = resolveSessionOptions(state);
   const oneclawView = state.settings.oneclawView ?? "chat";
   const settingsActive = oneclawView === "settings";
-  const chatActive = oneclawView === "chat";
   const updateBannerState = state.updateBannerState;
 
   return html`
@@ -401,16 +426,20 @@ export function renderApp(state: AppViewState) {
             connected: state.connected,
             currentSessionKey,
             sessionOptions,
-            chatActive,
             settingsActive,
             updateStatus: updateBannerState.status,
             updateVersion: updateBannerState.version,
             updatePercent: updateBannerState.percent,
             updateShowBadge: updateBannerState.showBadge,
             refreshDisabled: state.chatLoading || !state.connected,
-            onOpenChat: () => setOneClawView(state, "chat"),
-            onNewChat: () => confirmAndCreateNewSession(state),
             onSelectSession: (nextSessionKey: string) => handleSessionChange(state, nextSessionKey),
+            onNewChat: () => createNewSession(state),
+            onRenameSession: (key: string, newLabel: string) => {
+              void patchSessionFromSidebar(state, key, newLabel);
+            },
+            onDeleteSession: (key: string) => {
+              void deleteSessionFromSidebar(state, key);
+            },
             onRefresh: () => void handleRefreshChat(state),
             onToggleSidebar: () => {
               state.applySettings({

@@ -12,8 +12,7 @@ import oneClawLogo from "../assets/openclaw-favicon.svg";
 export type SidebarProps = {
   connected: boolean;
   currentSessionKey: string;
-  sessionOptions: Array<{ key: string; label: string }>;
-  chatActive: boolean;
+  sessionOptions: Array<{ key: string; label: string; updatedAt?: number }>;
   settingsActive: boolean;
   updateStatus: "hidden" | "available" | "downloading";
   updateVersion: string | null;
@@ -21,15 +20,53 @@ export type SidebarProps = {
   updateShowBadge: boolean;
   refreshDisabled: boolean;
   onToggleSidebar: () => void;
-  onOpenChat: () => void;
   onSelectSession: (sessionKey: string) => void;
-  onRefresh: () => void;
   onNewChat: () => void;
+  onRenameSession: (key: string, newLabel: string) => void;
+  onDeleteSession: (key: string) => void;
+  onRefresh: () => void;
   onOpenSettings: () => void;
   onOpenWebUI: () => void;
   onOpenDocs: () => void;
   onApplyUpdate: () => void;
 };
+
+// 双击会话名触发内联重命名：创建 input 替换 span，Enter 保存，Escape 取消
+function startInlineRename(
+  span: HTMLSpanElement,
+  sessionKey: string,
+  currentLabel: string,
+  onRename: (key: string, newLabel: string) => void,
+) {
+  const input = document.createElement("input");
+  input.type = "text";
+  input.className = "oneclaw-sidebar__session-edit";
+  input.value = currentLabel;
+  let saved = false;
+  const save = () => {
+    if (saved) return;
+    saved = true;
+    const val = input.value.trim();
+    if (val && val !== currentLabel) {
+      onRename(sessionKey, val);
+    }
+    input.replaceWith(span);
+  };
+  input.addEventListener("keydown", (ev: KeyboardEvent) => {
+    if (ev.key === "Enter") {
+      ev.preventDefault();
+      save();
+    } else if (ev.key === "Escape") {
+      ev.preventDefault();
+      saved = true;
+      input.replaceWith(span);
+    }
+  });
+  input.addEventListener("blur", save);
+  span.replaceWith(input);
+  input.focus();
+  input.select();
+}
 
 export function renderSidebar(props: SidebarProps) {
   const statusClass = props.connected ? "ok" : "";
@@ -79,59 +116,66 @@ export function renderSidebar(props: SidebarProps) {
       </div>
 
       <nav class="oneclaw-sidebar__nav">
-        <button
-          class="oneclaw-sidebar__item ${props.chatActive ? "active" : ""}"
-          type="button"
-          @click=${props.onOpenChat}
-          title=${t("sidebar.chat")}
-        >
-          <span class="oneclaw-sidebar__icon">${icons.messageSquare}</span>
-          <span class="oneclaw-sidebar__label">${t("sidebar.chat")}</span>
-        </button>
+        <!-- 会话列表标题行 -->
+        <div class="oneclaw-sidebar__session-header">
+          <span class="oneclaw-sidebar__section-title">${t("sidebar.agent")}</span>
+          <button
+            class="oneclaw-sidebar__session-add"
+            type="button"
+            @click=${props.onNewChat}
+            title=${t("sidebar.newChat")}
+            aria-label=${t("sidebar.newChat")}
+          >
+            ${icons.plus}
+          </button>
+        </div>
 
-        <button
-          class="oneclaw-sidebar__item"
-          type="button"
-          @click=${props.onNewChat}
-          title=${t("sidebar.newChat")}
-        >
-          <span class="oneclaw-sidebar__icon">${icons.plus}</span>
-          <span class="oneclaw-sidebar__label">${t("sidebar.newChat")}</span>
-        </button>
-
-        <button
-          class="oneclaw-sidebar__item"
-          type="button"
-          @click=${props.onOpenWebUI}
-          title=${t("sidebar.openWebUI")}
-        >
-          <span class="oneclaw-sidebar__icon">${icons.externalLink}</span>
-          <span class="oneclaw-sidebar__label">${t("sidebar.openWebUI")}</span>
-        </button>
-
-        <div class="oneclaw-sidebar__divider"></div>
-
-        <div class="oneclaw-sidebar__section oneclaw-sidebar__section--agent">
-          <label class="oneclaw-sidebar__section-title" for="oneclaw-session-select">
-            ${t("sidebar.agent")}
-          </label>
-          <div class="oneclaw-sidebar__select-wrap">
-            <select
-              id="oneclaw-session-select"
-              class="oneclaw-sidebar__select"
-              .value=${props.currentSessionKey}
-              @change=${(event: Event) => {
-                const nextSessionKey = (event.target as HTMLSelectElement).value;
-                props.onSelectSession(nextSessionKey);
-              }}
-            >
-              ${repeat(
-                props.sessionOptions,
-                (session) => session.key,
-                (session) => html`<option value=${session.key}>${session.label}</option>`,
-              )}
-            </select>
-          </div>
+        <!-- 会话列表 -->
+        <div class="oneclaw-sidebar__session-list">
+          ${repeat(
+            props.sessionOptions,
+            (s) => s.key,
+            (s) => {
+              const isActive = s.key === props.currentSessionKey;
+              return html`
+                <div
+                  class="oneclaw-sidebar__session-item ${isActive ? "active" : ""}"
+                  @click=${() => props.onSelectSession(s.key)}
+                >
+                  <span
+                    class="oneclaw-sidebar__session-name"
+                    title=${s.label}
+                  >${s.label}</span>
+                  <button
+                    class="oneclaw-sidebar__session-action"
+                    type="button"
+                    @click=${(e: Event) => {
+                      e.stopPropagation();
+                      const item = (e.currentTarget as HTMLElement).closest(".oneclaw-sidebar__session-item")!;
+                      const span = item.querySelector(".oneclaw-sidebar__session-name") as HTMLSpanElement;
+                      startInlineRename(span, s.key, s.label, props.onRenameSession);
+                    }}
+                    title=${t("sidebar.rename")}
+                    aria-label=${t("sidebar.rename")}
+                  >
+                    ${icons.edit}
+                  </button>
+                  <button
+                    class="oneclaw-sidebar__session-action"
+                    type="button"
+                    @click=${(e: Event) => {
+                      e.stopPropagation();
+                      props.onDeleteSession(s.key);
+                    }}
+                    title=${t("sidebar.delete")}
+                    aria-label=${t("sidebar.delete")}
+                  >
+                    ${icons.x}
+                  </button>
+                </div>
+              `;
+            },
+          )}
         </div>
       </nav>
 
@@ -177,6 +221,16 @@ export function renderSidebar(props: SidebarProps) {
         >
           <span class="oneclaw-sidebar__icon">${icons.book}</span>
           <span class="oneclaw-sidebar__label">${t("sidebar.docs")}</span>
+        </button>
+
+        <button
+          class="oneclaw-sidebar__item"
+          type="button"
+          @click=${props.onOpenWebUI}
+          title=${t("sidebar.fullUI")}
+        >
+          <span class="oneclaw-sidebar__icon">${icons.externalLink}</span>
+          <span class="oneclaw-sidebar__label">${t("sidebar.fullUI")}</span>
         </button>
 
         <div class="oneclaw-sidebar__status-row">

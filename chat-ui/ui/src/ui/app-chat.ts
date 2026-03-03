@@ -6,7 +6,8 @@ import { scheduleChatScroll } from "./app-scroll.ts";
 import { setLastActiveSessionKey } from "./app-settings.ts";
 import { resetToolStream } from "./app-tool-stream.ts";
 import { abortChatRun, loadChatHistory, sendChatMessage } from "./controllers/chat.ts";
-import { loadSessions } from "./controllers/sessions.ts";
+import { loadSessions, patchSession } from "./controllers/sessions.ts";
+import { t } from "./i18n.ts";
 import { normalizeBasePath } from "./navigation.ts";
 import { generateUUID } from "./uuid.ts";
 
@@ -22,9 +23,9 @@ export type ChatHost = {
   hello: GatewayHelloOk | null;
   chatAvatarUrl: string | null;
   refreshSessionsAfterChat: Set<string>;
+  sessionsResult: { sessions: Array<{ key: string; label?: string }> } | null;
 };
 
-export const CHAT_SESSIONS_ACTIVE_MINUTES = 120;
 
 export function isChatBusy(host: ChatHost) {
   return host.chatSending || Boolean(host.chatRunId);
@@ -103,6 +104,30 @@ function enqueueChatMessage(
   ];
 }
 
+// 首条消息自动重命名：会话 label 仍为默认"新对话"时，用消息前缀替换
+const SESSION_NAME_MAX_LEN = 20;
+function autoRenameOnFirstMessage(host: ChatHost, message: string) {
+  const defaultLabel = t("chat.newSession");
+  const sessions = host.sessionsResult?.sessions ?? [];
+  const current = sessions.find((s) => s.key === host.sessionKey);
+  if (!current || current.label !== defaultLabel) {
+    return;
+  }
+  const firstLine = message.split("\n")[0]?.trim() ?? "";
+  if (!firstLine) {
+    return;
+  }
+  const label =
+    firstLine.length > SESSION_NAME_MAX_LEN
+      ? firstLine.slice(0, SESSION_NAME_MAX_LEN) + "…"
+      : firstLine;
+  // 本地立即更新，异步持久化到 Gateway
+  current.label = label;
+  void patchSession(host as unknown as Parameters<typeof patchSession>[0], host.sessionKey, {
+    label,
+  });
+}
+
 async function sendChatMessageNow(
   host: ChatHost,
   message: string,
@@ -125,6 +150,7 @@ async function sendChatMessageNow(
     host.chatAttachments = opts.previousAttachments;
   }
   if (ok) {
+    autoRenameOnFirstMessage(host, message);
     setLastActiveSessionKey(
       host as unknown as Parameters<typeof setLastActiveSessionKey>[0],
       host.sessionKey,
@@ -218,9 +244,7 @@ export async function handleSendChat(
 export async function refreshChat(host: ChatHost, opts?: { scheduleScroll?: boolean }) {
   await Promise.all([
     loadChatHistory(host as unknown as OpenClawApp),
-    loadSessions(host as unknown as OpenClawApp, {
-      activeMinutes: CHAT_SESSIONS_ACTIVE_MINUTES,
-    }),
+    loadSessions(host as unknown as OpenClawApp),
     refreshChatAvatar(host),
   ]);
   if (opts?.scheduleScroll !== false) {
