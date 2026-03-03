@@ -137,10 +137,12 @@ function resolveSessionOptions(
   return options;
 }
 
+// 侧边栏点击会话：切换 session 并确保回到对话视图
 function handleSessionChange(state: AppViewState, nextSessionKey: string) {
   if (!nextSessionKey.trim()) {
     return;
   }
+  setOneClawView(state, "chat");
   applySessionKey(state, nextSessionKey, true);
 }
 
@@ -202,8 +204,8 @@ function createNewSession(state: AppViewState) {
     sessions: [{ key: newKey, label, updatedAt: Date.now() }, ...sessions],
   };
   applySessionKey(state, newKey, true);
-  // 异步持久化到 Gateway（label 是 Gateway 原生字段，跨终端共享）
-  void patchSession(state as any, newKey, { label });
+  // 注意：此时 Gateway 尚无此会话（无消息），sessions.patch 不会生效。
+  // label 持久化在首条消息发送后由 autoRenameOnFirstMessage (app-chat.ts) 完成。
 }
 
 function confirmAndCreateNewSession(state: AppViewState) {

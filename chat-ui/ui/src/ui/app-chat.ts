@@ -104,28 +104,32 @@ function enqueueChatMessage(
   ];
 }
 
-// 首条消息自动重命名：会话 label 仍为默认"新对话"时，用消息前缀替换
+// 首条消息发送后同步 label 到 Gateway（此时会话已存在）
 const SESSION_NAME_MAX_LEN = 20;
-function autoRenameOnFirstMessage(host: ChatHost, message: string) {
-  const defaultLabel = t("chat.newSession");
+function syncSessionLabelAfterSend(host: ChatHost, message: string) {
   const sessions = host.sessionsResult?.sessions ?? [];
   const current = sessions.find((s) => s.key === host.sessionKey);
-  if (!current || current.label !== defaultLabel) {
+  if (!current) {
     return;
   }
-  const firstLine = message.split("\n")[0]?.trim() ?? "";
-  if (!firstLine) {
-    return;
+  const defaultLabel = t("chat.newSession");
+  // 默认名称 → 用消息第一行前缀替换
+  if (current.label === defaultLabel) {
+    const firstLine = message.split("\n")[0]?.trim() ?? "";
+    if (firstLine) {
+      current.label =
+        firstLine.length > SESSION_NAME_MAX_LEN
+          ? firstLine.slice(0, SESSION_NAME_MAX_LEN) + "…"
+          : firstLine;
+    }
   }
-  const label =
-    firstLine.length > SESSION_NAME_MAX_LEN
-      ? firstLine.slice(0, SESSION_NAME_MAX_LEN) + "…"
-      : firstLine;
-  // 本地立即更新，异步持久化到 Gateway
-  current.label = label;
-  void patchSession(host as unknown as Parameters<typeof patchSession>[0], host.sessionKey, {
-    label,
-  });
+  // 只要 label 和 key 不同就持久化（覆盖默认重命名和用户手动重命名两种场景）
+  const label = current.label?.trim();
+  if (label && label !== host.sessionKey) {
+    void patchSession(host as unknown as Parameters<typeof patchSession>[0], host.sessionKey, {
+      label,
+    });
+  }
 }
 
 async function sendChatMessageNow(
@@ -150,7 +154,7 @@ async function sendChatMessageNow(
     host.chatAttachments = opts.previousAttachments;
   }
   if (ok) {
-    autoRenameOnFirstMessage(host, message);
+    syncSessionLabelAfterSend(host, message);
     setLastActiveSessionKey(
       host as unknown as Parameters<typeof setLastActiveSessionKey>[0],
       host.sessionKey,
