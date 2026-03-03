@@ -46,6 +46,9 @@ export class GatewayProcess {
   private lastCrashTime = 0;
   private onStateChange?: (state: GatewayState) => void;
 
+  // 世代计数器：每次 spawn 递增，exit handler 只处理同代进程的退出
+  private generation = 0;
+
   constructor(opts: GatewayOptions) {
     this.port = opts.port ?? DEFAULT_PORT;
     this.token = opts.token;
@@ -79,6 +82,12 @@ export class GatewayProcess {
   // 启动 Gateway 子进程
   async start(): Promise<void> {
     if (this.state === "running" || this.state === "starting") return;
+
+    // 前一次 stop 还未完成，等待其结束再启动
+    if (this.state === "stopping") {
+      diagLog("start() 等待前一次 stop 完成");
+      await this.waitForStopped(6000);
+    }
 
     // 崩溃冷却期
     const elapsed = Date.now() - this.lastCrashTime;
@@ -124,8 +133,11 @@ export class GatewayProcess {
     const runtimeDir = path.join(resolveResourcesPath(), "runtime");
     const envPath = runtimeDir + path.delimiter + (process.env.PATH ?? "");
 
+    // 递增世代，标记本次 spawn 的身份
+    const gen = ++this.generation;
+
     const args = [entry, "gateway", "run", "--port", String(this.port), "--bind", "loopback"];
-    diagLog(`spawn: ${nodeBin} ${args.join(" ")}`);
+    diagLog(`spawn: ${nodeBin} ${args.join(" ")} (gen=${gen})`);
 
     this.proc = spawn(nodeBin, args, {
       cwd,
@@ -163,9 +175,13 @@ export class GatewayProcess {
       diagLog(`stderr: ${s.trimEnd()}`);
     });
 
-    // 退出处理
+    // 退出处理：通过世代号隔离，只有同代进程的退出才影响状态机
     this.proc.on("exit", (code, signal) => {
-      diagLog(`child exit: code=${code} signal=${signal} prevState=${this.state}`);
+      diagLog(`child exit: code=${code} signal=${signal} gen=${gen} currentGen=${this.generation} prevState=${this.state}`);
+      if (gen !== this.generation) {
+        diagLog(`SKIP: 旧世代 exit 事件 (gen=${gen}, current=${this.generation})，不影响状态机`);
+        return;
+      }
       if (this.state === "stopping") {
         this.setState("stopped");
       } else if (this.state === "running") {
@@ -206,12 +222,12 @@ export class GatewayProcess {
     this.setState("stopping");
     this.proc.kill("SIGTERM");
 
-    // 5s 强制终止兜底
+    // 5s 强制终止兜底（用 exitCode 判断进程是否真正退出，而非 killed 标志）
     const p = this.proc;
     setTimeout(() => {
-      if (p && !p.killed) {
+      if (p && p.exitCode == null) {
+        diagLog("WARN: SIGTERM 超时，发送 SIGKILL");
         p.kill("SIGKILL");
-        this.setState("stopped");
       }
     }, 5000);
   }
@@ -249,10 +265,10 @@ export class GatewayProcess {
     diagLog("WARN: 等待端口释放超时，继续尝试启动");
   }
 
-  // 重启
+  // 重启：等旧进程真正退出后再启动
   async restart(): Promise<void> {
     this.stop();
-    await sleep(1000);
+    await this.waitForStopped(6000);
     await this.start();
   }
 
@@ -285,6 +301,18 @@ export class GatewayProcess {
       await sleep(HEALTH_POLL_INTERVAL_MS);
     }
     return false;
+  }
+
+  // 轮询等待状态变为 stopped（用于 restart 和 start 前等待旧进程结束）
+  private async waitForStopped(timeoutMs: number): Promise<void> {
+    const deadline = Date.now() + timeoutMs;
+    while (this.state === "stopping" && Date.now() < deadline) {
+      await sleep(100);
+    }
+    if (this.state === "stopping") {
+      diagLog("WARN: waitForStopped 超时，强制标记 stopped");
+      this.setState("stopped");
+    }
   }
 
   // 仅当同一子进程仍存活时才认为启动检查有效，避免旧端口进程误判
