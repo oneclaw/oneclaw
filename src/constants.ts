@@ -57,6 +57,16 @@ export function resolveNodeBin(): string {
     const bundled = path.join(resolveDevTargetPath(), "runtime", exe);
     return fs.existsSync(bundled) ? bundled : "node";
   }
+  // macOS：使用 Helper binary（Info.plist 含 LSUIElement=true，不产生 Dock 弹跳图标）
+  if (!IS_WIN) {
+    const contentsDir = path.resolve(path.dirname(process.execPath), "..");
+    const exeName = path.basename(process.execPath);
+    const helperName = `${exeName} Helper`;
+    const helperPath = path.join(
+      contentsDir, "Frameworks", `${helperName}.app`, "Contents", "MacOS", helperName,
+    );
+    if (fs.existsSync(helperPath)) return helperPath;
+  }
   return process.execPath;
 }
 

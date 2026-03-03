@@ -105,7 +105,8 @@ function replaceNodeBinary(platform, targetBase, productName) {
   const runtimeDir = path.join(targetBase, "runtime");
 
   if (platform === "darwin") {
-    // macOS: runtime/ → resources/ → Resources/ → Contents/MacOS/<productName>
+    // macOS: 使用 Helper binary（LSUIElement=true，不产生 Dock 弹跳图标）
+    // 路径: runtime/ → resources/ → Resources/ → Contents/Frameworks/<name> Helper.app/...
     const nodePath = path.join(runtimeDir, "node");
     if (fs.existsSync(nodePath)) {
       const sizeMB = (fs.statSync(nodePath).size / 1048576).toFixed(1);
@@ -113,20 +114,22 @@ function replaceNodeBinary(platform, targetBase, productName) {
       console.log(`[afterPack] 已删除 runtime/node (${sizeMB} MB)`);
     }
 
-    // 代理脚本：设置 ELECTRON_RUN_AS_NODE=1，exec 到 Electron binary
+    // 代理脚本：设置 ELECTRON_RUN_AS_NODE=1，exec 到 Helper binary
     // 注意：脚本内容必须纯 ASCII，UTF-8 多字节字符会触发
     // @electron/osx-sign 内 isbinaryfile 的 protobuf 解析崩溃
+    const helperName = `${productName} Helper`;
+    const helperRelPath = `Frameworks/${helperName}.app/Contents/MacOS/${helperName}`;
     const proxyScript = [
       "#!/bin/sh",
-      "# Proxy script - run Electron binary as Node.js runtime",
+      "# Proxy script - run Electron Helper binary as Node.js runtime",
       'export ELECTRON_RUN_AS_NODE=1',
-      `exec "$(dirname "$0")/../../../MacOS/${productName}" "$@"`,
+      `exec "$(dirname "$0")/../../../${helperRelPath}" "$@"`,
       "",
     ].join("\n");
 
     fs.writeFileSync(nodePath, proxyScript, "utf-8");
     fs.chmodSync(nodePath, 0o755);
-    console.log(`[afterPack] 已写入 macOS node 代理脚本`);
+    console.log(`[afterPack] 已写入 macOS node 代理脚本 (-> ${helperRelPath})`);
   } else if (platform === "win32") {
     // Windows: runtime/ → resources/ → resources/ → <install>/<productName>.exe
     const nodeExePath = path.join(runtimeDir, "node.exe");
