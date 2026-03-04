@@ -136,7 +136,8 @@ export class GatewayProcess {
     // 递增世代，标记本次 spawn 的身份
     const gen = ++this.generation;
 
-    const args = [entry, "gateway", "run", "--port", String(this.port), "--bind", "loopback"];
+    // 不传 --port 和 --bind，让 gateway 自行从配置文件/环境变量解析
+    const args = [entry, "gateway", "run"];
     diagLog(`spawn: ${nodeBin} ${args.join(" ")} (gen=${gen})`);
 
     this.proc = spawn(nodeBin, args, {

@@ -1,6 +1,6 @@
 import * as fs from "fs";
 import * as path from "path";
-import { DEFAULT_PORT, resolveGatewayCwd, resolveUserStateDir } from "./constants";
+import { resolveGatewayPort, resolveGatewayCwd, resolveUserStateDir } from "./constants";
 
 export const KIMI_PLUGIN_ID = "kimi-claw";
 export const KIMI_SEARCH_PLUGIN_ID = "kimi-search";
@@ -44,7 +44,7 @@ export function saveKimiPluginConfig(config: any, params: SaveKimiPluginParams):
         ...(typeof existingConfig.gateway === "object" && existingConfig.gateway !== null
           ? existingConfig.gateway
           : {}),
-        url: `ws://127.0.0.1:${DEFAULT_PORT}`,
+        url: `ws://127.0.0.1:${resolveGatewayPort()}`,
         token: params.gatewayToken,
         agentId: "main",
       },

@@ -1,5 +1,5 @@
 import * as crypto from "crypto";
-import { DEFAULT_PORT } from "./constants";
+import { resolveGatewayPort } from "./constants";
 
 const TAG = "[gateway-rpc]";
 
@@ -22,7 +22,7 @@ export function callGatewayRpc(
 ): Promise<RpcResult> {
   return new Promise((resolve) => {
     let settled = false;
-    const url = `ws://127.0.0.1:${DEFAULT_PORT}/`;
+    const url = `ws://127.0.0.1:${resolveGatewayPort()}/`;
     const connectId = crypto.randomUUID();
     const reqId = crypto.randomUUID();
 

@@ -17,7 +17,7 @@ import {
   setProgressCallback,
   setUpdateBannerStateCallback,
 } from "./auto-updater";
-import { isSetupComplete, DEFAULT_PORT, resolveGatewayLogPath } from "./constants";
+import { isSetupComplete, resolveGatewayPort, resolveGatewayLogPath } from "./constants";
 import { resolveGatewayAuthToken } from "./gateway-auth";
 import {
   getConfigRecoveryData,
@@ -102,7 +102,7 @@ process.on("unhandledRejection", (reason) => {
 
 let feishuPairingMonitor: FeishuPairingMonitor | null = null;
 const gateway = new GatewayProcess({
-  port: DEFAULT_PORT,
+  port: resolveGatewayPort(),
   token: resolveGatewayAuthToken({ persist: false }),
   onStateChange: () => {
     tray.updateMenu();

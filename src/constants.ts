@@ -8,6 +8,24 @@ import { isSetupCompleteFromConfig } from "./setup-completion";
 export const DEFAULT_PORT = 18789;
 export const DEFAULT_BIND = "loopback";
 
+// 从用户配置/环境变量解析 Gateway 端口（与 openclaw 内部逻辑一致）
+export function resolveGatewayPort(): number {
+  const envRaw = process.env.OPENCLAW_GATEWAY_PORT?.trim();
+  if (envRaw) {
+    const parsed = Number.parseInt(envRaw, 10);
+    if (Number.isFinite(parsed) && parsed > 0) return parsed;
+  }
+  try {
+    const raw = fs.readFileSync(resolveUserConfigPath(), "utf-8");
+    const cfg = JSON.parse(raw);
+    const configPort = cfg?.gateway?.port;
+    if (typeof configPort === "number" && Number.isFinite(configPort) && configPort > 0) {
+      return configPort;
+    }
+  } catch {}
+  return DEFAULT_PORT;
+}
+
 // ── 健康检查 ──
 
 // Windows 冷启动可能受 Defender/磁盘预热影响，30s 容易误判失败。
