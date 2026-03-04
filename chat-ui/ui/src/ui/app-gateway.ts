@@ -173,8 +173,9 @@ export function connectGateway(host: GatewayHost) {
       if (host.client !== client) {
         return;
       }
-      console.warn(`[gateway] onGap expected=${expected} received=${received}`);
-      host.lastError = `event gap detected (expected seq ${expected}, got ${received}); refresh recommended`;
+      // 序列号跳跃 → 自动重连获取完整 snapshot，无需用户手动刷新
+      console.warn(`[gateway] onGap expected=${expected} received=${received}, auto-reconnecting`);
+      connectGateway(host);
     },
   });
   host.client = client;
