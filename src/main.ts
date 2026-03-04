@@ -255,6 +255,20 @@ function migrateSessionMemoryHook(): void {
   }
 }
 
+// 禁止 openclaw gateway 自行检查 npm 更新（OneClaw 整包打包，用户无法独立更新 gateway）
+function migrateDisableGatewayUpdateCheck(): void {
+  try {
+    const config = readUserConfig();
+    if (config.update?.checkOnStart === false) return;
+    config.update ??= {};
+    config.update.checkOnStart = false;
+    writeUserConfig(config);
+    log.info("[migrate] 已禁用 gateway 启动更新检查（update.checkOnStart=false）");
+  } catch {
+    // 迁移失败不阻塞启动
+  }
+}
+
 // 从配置同步 search API key 到 gateway 环境变量
 function syncKimiSearchEnv(): void {
   try {
@@ -566,8 +580,9 @@ app.whenReady().then(async () => {
     // 无配置 → 先走 Setup，Gateway 在 Setup 完成回调里启动
     setupManager.showSetup();
   } else {
-    // 存量用户迁移：首次升级时默认开启 session-memory hook
+    // 存量用户迁移
     migrateSessionMemoryHook();
+    migrateDisableGatewayUpdateCheck();
     await startGatewayAndShowMain("app:startup");
   }
 });

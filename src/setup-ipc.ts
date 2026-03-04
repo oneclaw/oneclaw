@@ -152,6 +152,10 @@ export function registerSetupIpc(deps: SetupIpcDeps): void {
         config.channels.imessage ??= {};
         config.channels.imessage.enabled = false;
 
+        // 禁止 gateway 自行检查 npm 更新（OneClaw 整包打包，用户无法独立更新 gateway）
+        config.update ??= {};
+        config.update.checkOnStart = false;
+
         // Step 2 不写 wizard，避免生成 schema 未识别字段。
         // Setup 完成标记仅在 Step 3（Gateway 成功启动）后写入 wizard.lastRunAt。
         delete config.wizard;
