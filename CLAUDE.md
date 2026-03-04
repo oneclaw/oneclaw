@@ -8,7 +8,7 @@ OneClaw is a cross-platform desktop app that wraps the [openclaw](https://github
 
 ```
 Electron Main Process
-  ├── Gateway child process  (Node.js 22 → openclaw entry.js, port 18789)
+  ├── Gateway child process  (Node.js 22 → openclaw entry.js, port configurable, default 18789)
   └── BrowserWindow          (loads Lit Chat UI via file://, connects to gateway via WebSocket)
 ```
 
@@ -30,7 +30,7 @@ The main process spawns a gateway subprocess, waits for its health check, then o
 
 ```
 oneclaw/
-├── src/                    # 25 TypeScript modules (6127 LOC) + 6 test files
+├── src/                    # 25 TypeScript modules (6571 LOC) + 6 test files
 │   ├── main.ts             # App entry, lifecycle, IPC, Dock toggle, config recovery
 │   ├── constants.ts        # Path resolution (dev vs packaged), health check params
 │   ├── gateway-process.ts  # Child process state machine + diagnostics
@@ -75,7 +75,8 @@ oneclaw/
 │   ├── dist-all-parallel.sh    # Parallel cross-platform build
 │   └── clean.sh
 ├── assets/                 # Icons: .icns, .ico, .png, tray templates
-├── .github/workflows/      # CI: build-release.yml + publish-share-copy.yml
+├── docs/                   # Plans and documentation
+├── .github/workflows/      # CI: build-release.yml + publish-release.yml + publish-share-copy.yml
 ├── electron-builder.yml    # Build config (DMG + ZIP for mac, NSIS for win)
 ├── tsconfig.json           # target ES2022, module CommonJS
 └── .env                    # Signing keys + analytics config (gitignored)
@@ -121,17 +122,23 @@ npm run clean                # Remove all generated files
 
 State machine: `stopped → starting → running → stopping → stopped`
 
+**Generation tracking:** Each `spawn()` call increments a generation counter. The exit handler only processes exits matching the current generation, preventing stale process exits from corrupting the state machine during rapid restart cycles.
+
 Startup sequence:
 1. Inject env vars: `OPENCLAW_LENIENT_CONFIG=1`, `OPENCLAW_GATEWAY_TOKEN`, `OPENCLAW_NPM_BIN`, `OPENCLAW_NO_RESPAWN=1`
 2. Prepend bundled runtime to `PATH`
 3. Resolve entry: try `openclaw.mjs` first, fall back to `gateway-entry.mjs` (legacy)
-4. Spawn: `<node> <entry.js> gateway run --port 18789 --bind loopback`
-5. Poll `GET http://127.0.0.1:18789/` every 500ms, 90s timeout
-6. Verify child PID is still alive (avoid port collision false positives)
+4. Resolve port: env `OPENCLAW_GATEWAY_PORT` > config `gateway.port` > default `18789`
+5. Spawn: `<node> <entry.js> gateway run --port <resolved> --bind loopback`
+6. Disable gateway's own npm update check (`update.checkOnStart = false`) — OneClaw is packaged as a whole unit, users can't independently update the gateway
+7. Poll `GET http://127.0.0.1:<port>/` every 500ms, 90s timeout
+8. Verify child PID is still alive (avoid port collision false positives)
 
 Main process retries gateway startup **3 times** before showing an error dialog. This covers Windows cold-start slowness (Defender scanning, disk warmup). On success, the current config is snapshotted as "last known good" for recovery.
 
 All stdout/stderr is captured to `~/.openclaw/gateway.log` for diagnostics.
+
+**Automatic restart:** Gateway automatically restarts after user config changes (provider switch, model change, etc.) to pick up the new settings.
 
 ### Token Injection (`window.ts`)
 
@@ -344,6 +351,10 @@ Electron 40 defaults to sandbox mode. 42 IPC methods + 4 event listeners are exp
 
 15. **AGENTS.md is a symlink to CLAUDE.md.** Don't create separate content — they share the same file.
 
+16. **Gateway port is configurable.** Resolution order: env `OPENCLAW_GATEWAY_PORT` > config `gateway.port` in `openclaw.json` > default `18789`. Don't hardcode port numbers — use `resolveGatewayPort()` from `constants.ts`.
+
+17. **Gateway npm update check is disabled.** OneClaw writes `update.checkOnStart = false` to the gateway config at startup. The gateway cannot self-update inside a packaged Electron app.
+
 ## Architecture Diagram
 
 ```
@@ -380,7 +391,7 @@ Electron 40 defaults to sandbox mode. 42 IPC methods + 4 event listeners are exp
      ┌─────────────┴─────────────┐
      │   Gateway Child Process   │
      │   Node.js 22 + openclaw   │
-     │   :18789 loopback only    │
+     │   :configurable loopback  │
      └─────────────┬─────────────┘
                    │ HTTP + WebSocket
      ┌─────────────┴─────────────┐
