@@ -151,7 +151,7 @@ async function patchSessionFromSidebar(state: AppViewState, key: string, newLabe
   await patchSession(state as any, key, { label: newLabel || null });
 }
 
-// 侧边栏删除回调：确认后删除会话，删除当前会话时自动跳转
+// 侧边栏删除回调：归档对话 → 删除会话 → UI 即时更新
 async function deleteSessionFromSidebar(state: AppViewState, key: string) {
   const s = state as any;
   if (!s.client || !s.connected) {
@@ -161,18 +161,37 @@ async function deleteSessionFromSidebar(state: AppViewState, key: string) {
   if (!confirmed) {
     return;
   }
+
+  // 立刻从本地列表移除，UI 即时响应
+  const sessions = state.sessionsResult?.sessions ?? [];
+  state.sessionsResult = {
+    ...state.sessionsResult,
+    sessions: sessions.filter((entry) => entry.key !== key),
+  };
+
+  // 删除当前活跃会话时，立刻切换到下一个
+  if (key === state.sessionKey) {
+    const remaining = state.sessionsResult?.sessions ?? [];
+    const nextKey = remaining[0]?.key ?? "main";
+    applySessionKey(state, nextKey, true);
+  }
+
+  // 触发 session-memory hook → 对话摘要归档到 ~/memory/*.md
+  try {
+    await s.client.request("sessions.reset", { key, reason: "new" });
+  } catch {
+    // 本地独有会话 gateway 不认识，忽略
+  }
+
+  // gateway 后端删除
   try {
     await s.client.request("sessions.delete", { key, deleteTranscript: true });
   } catch {
-    // Gateway 可能对不存在的会话返回错误，忽略即可
+    // main 会话等 gateway 可能拒绝，已在上面本地移除
   }
+
+  // 与 gateway 同步最终列表
   await loadSessions(s);
-  // 删除的是当前活跃会话时，切换到列表中第一个有效会话
-  if (key === state.sessionKey) {
-    const sessions = state.sessionsResult?.sessions ?? [];
-    const nextKey = sessions[0]?.key ?? "main";
-    applySessionKey(state, nextKey, true);
-  }
 }
 
 function setOneClawView(state: AppViewState, next: "chat" | "settings") {
