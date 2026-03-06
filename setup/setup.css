@@ -633,6 +633,50 @@ select option {
   max-width: none;
 }
 
+/* ---- Step 0 冲突检测页 ---- */
+.step0-content {
+  align-items: stretch;
+}
+
+#step0 h1 {
+  text-align: left;
+}
+
+.conflict-details {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 14px;
+  background: rgba(230, 126, 34, 0.08);
+  border: 1px solid rgba(230, 126, 34, 0.2);
+  border-radius: var(--radius-md);
+}
+
+.conflict-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--text-secondary);
+  line-height: 1.4;
+}
+
+.conflict-icon {
+  flex-shrink: 0;
+}
+
+.conflict-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 4px;
+}
+
+.conflict-actions .btn-primary,
+.conflict-actions .btn-secondary {
+  width: 100%;
+}
+
 /* ---- 工具类 ---- */
 .hidden {
   display: none !important;
