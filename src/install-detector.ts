@@ -142,11 +142,14 @@ async function getPortProcessInfo(port: number): Promise<{ pid: number; name: st
 
 // ── 全局 npm 安装检测 ──
 
-// 检测全局 openclaw npm 安装路径，排除 OneClaw 自有 CLI wrapper
-async function detectGlobalOpenclaw(): Promise<{ installed: boolean; path: string }> {
+// 需要检测的命令名列表（openclaw 官方包 + openclaw-cn 中国区分支）
+const OPENCLAW_COMMANDS = ["openclaw", "openclaw-cn"];
+
+// 检测单个命令的全局安装路径，排除 OneClaw 自有 CLI wrapper
+async function detectSingleCommand(name: string): Promise<{ installed: boolean; path: string }> {
   const cmd = IS_WIN ? "where" : "which";
   try {
-    const out = await execFileAsync(cmd, ["openclaw"]);
+    const out = await execFileAsync(cmd, [name]);
     const resolvedPath = out.split("\n")[0].trim();
     if (!resolvedPath) return { installed: false, path: "" };
 
@@ -165,6 +168,15 @@ async function detectGlobalOpenclaw(): Promise<{ installed: boolean; path: strin
     // which/where 找不到命令时返回非零退出码
     return { installed: false, path: "" };
   }
+}
+
+// 检测全局 openclaw / openclaw-cn 安装，任一命中即视为已安装
+async function detectGlobalOpenclaw(): Promise<{ installed: boolean; path: string }> {
+  const results = await Promise.all(OPENCLAW_COMMANDS.map(detectSingleCommand));
+  for (const r of results) {
+    if (r.installed) return r;
+  }
+  return { installed: false, path: "" };
 }
 
 // ── 导出函数 ──
@@ -211,16 +223,24 @@ export async function killPortProcess(pid: number): Promise<boolean> {
   }
 }
 
-// 全局卸载 openclaw npm 包
+// 需要卸载的 npm 包列表（openclaw 官方包 + openclaw-cn 中国区分支）
+const OPENCLAW_PACKAGES = ["openclaw", "openclaw-cn"];
+
+// 全局卸载所有 openclaw 相关 npm 包
 export async function uninstallGlobalOpenclaw(): Promise<boolean> {
-  log.info("[install-detector] uninstalling global openclaw");
-  try {
-    await execFileAsync("npm", ["uninstall", "-g", "openclaw"], 30_000);
-    return true;
-  } catch (err) {
-    log.error(`[install-detector] npm uninstall failed: ${err instanceof Error ? err.message : String(err)}`);
-    return false;
+  log.info("[install-detector] uninstalling global openclaw packages");
+  const npm = IS_WIN ? "npm.cmd" : "npm";
+  let allOk = true;
+  for (const pkg of OPENCLAW_PACKAGES) {
+    try {
+      await execFileAsync(npm, ["uninstall", "-g", pkg], 30_000);
+    } catch (err) {
+      // 未安装的包卸载报错是正常的，只记录日志
+      log.info(`[install-detector] npm uninstall -g ${pkg}: ${err instanceof Error ? err.message : String(err)}`);
+      allOk = false;
+    }
   }
+  return allOk;
 }
 
 // 递归删除用户状态目录（~/.openclaw/）
