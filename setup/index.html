@@ -17,6 +17,57 @@
   <!-- 步骤容器 -->
   <div class="steps-container" id="stepsContainer">
 
+    <!-- Step 0: 环境检测（冲突时显示） -->
+    <section class="step" id="step0">
+      <div class="step-content step0-content">
+        <div class="logo-area">
+          <svg width="56" height="56" viewBox="0 0 56 56" fill="none">
+            <rect width="56" height="56" rx="14" fill="#e67e22"/>
+            <path d="M28 16L28 32" stroke="white" stroke-width="3" stroke-linecap="round"/>
+            <circle cx="28" cy="38" r="2" fill="white"/>
+          </svg>
+        </div>
+        <h1 data-i18n="conflict.title">Existing OpenClaw Detected</h1>
+        <p class="subtitle" data-i18n="conflict.subtitle">An existing OpenClaw installation was found on your system. This may cause port conflicts.</p>
+
+        <div class="conflict-details" id="conflictDetails">
+          <div class="conflict-item hidden" id="conflictPort">
+            <span class="conflict-icon">
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                <circle cx="8" cy="8" r="6" stroke="#e67e22" stroke-width="1.5"/>
+                <path d="M8 5V9M8 11V11.01" stroke="#e67e22" stroke-width="1.5" stroke-linecap="round"/>
+              </svg>
+            </span>
+            <span id="conflictPortText"></span>
+          </div>
+          <div class="conflict-item hidden" id="conflictGlobal">
+            <span class="conflict-icon">
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                <circle cx="8" cy="8" r="6" stroke="#e67e22" stroke-width="1.5"/>
+                <path d="M8 5V9M8 11V11.01" stroke="#e67e22" stroke-width="1.5" stroke-linecap="round"/>
+              </svg>
+            </span>
+            <span id="conflictGlobalText"></span>
+          </div>
+        </div>
+
+        <div class="error-msg hidden" id="conflictError"></div>
+
+        <div class="conflict-actions">
+          <button class="btn-primary" id="btnUninstall">
+            <span class="btn-text" data-i18n="conflict.uninstall">Uninstall old version & continue</span>
+            <span class="btn-spinner hidden"></span>
+          </button>
+          <button class="btn-secondary" id="btnChangePort">
+            <span class="btn-text" data-i18n="conflict.changePort">Use a different port</span>
+            <span class="btn-spinner hidden"></span>
+          </button>
+        </div>
+
+        <div class="status-msg hidden" id="conflictStatus"></div>
+      </div>
+    </section>
+
     <!-- Step 1: 欢迎页 -->
     <section class="step active" id="step1">
       <div class="step-content">
