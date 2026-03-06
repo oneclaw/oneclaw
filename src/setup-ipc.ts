@@ -156,6 +156,10 @@ export function registerSetupIpc(deps: SetupIpcDeps): void {
         config.update ??= {};
         config.update.checkOnStart = false;
 
+        // 开箱即用：显式启用全部工具（openclaw 2026.3.2 起默认 messaging，只有消息类工具）
+        config.tools ??= {};
+        config.tools.profile = "full";
+
         // Step 2 不写 wizard，避免生成 schema 未识别字段。
         // Setup 完成标记仅在 Step 3（Gateway 成功启动）后写入 wizard.lastRunAt。
         delete config.wizard;
