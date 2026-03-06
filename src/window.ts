@@ -70,13 +70,24 @@ export class WindowManager {
     this.win.removeMenu();
 
     // DevTools 快捷键: F12 / Cmd+Shift+I / Ctrl+Shift+I
-    this.win.webContents.on("before-input-event", (_event, input) => {
+    // 同时拦截鼠标导航按钮(Button4/Button5)，避免在 file:// 协议下导致白屏
+    this.win.webContents.on("before-input-event", (event, input) => {
+      // DevTools 快捷键
       if (
         input.key === "F12" ||
         (input.control && input.shift && input.key.toLowerCase() === "i") ||
         (input.meta && input.shift && input.key.toLowerCase() === "i")
       ) {
         this.win?.webContents.toggleDevTools();
+        return;
+      }
+
+      // 拦截鼠标后退(Button4)和前进(Button5)按钮
+      // 在 file:// 协议下，这些按钮可能触发浏览器历史导航到无效路径，导致白屏
+      // input.button: 3 = Button4 (后退), 4 = Button5 (前进)
+      if (input.type === "mouseButton" && (input.button === 3 || input.button === 4)) {
+        event.preventDefault();
+        log.info(`已拦截鼠标导航按钮: Button${input.button + 1}`);
       }
     });
 
