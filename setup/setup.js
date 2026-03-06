@@ -81,6 +81,15 @@
       "done.start": "Start OneClaw",
       "done.starting": "Starting Gateway…",
       "done.startFailed": "Gateway failed to start. Please click Start OneClaw to retry.",
+      "conflict.title": "Existing OpenClaw Detected",
+      "conflict.subtitle": "An existing OpenClaw installation was found on your system. This may cause port conflicts with OneClaw.",
+      "conflict.portInUse": "Port {port} is in use by process: {process} (PID: {pid})",
+      "conflict.globalInstalled": "Global installation found: {path}",
+      "conflict.uninstall": "Uninstall old version & continue",
+      "conflict.changePort": "Use a different port",
+      "conflict.uninstalling": "Uninstalling…",
+      "conflict.changingPort": "Resolving…",
+      "conflict.failed": "Operation failed: ",
       "error.noKey": "Please enter your API key.",
       "error.noBaseUrl": "Please enter the Base URL.",
       "error.noModelId": "Please enter the Model ID.",
@@ -119,6 +128,15 @@
       "done.start": "启动 OneClaw",
       "done.starting": "正在启动 Gateway…",
       "done.startFailed": 'Gateway 启动失败，请点击"启动 OneClaw"重试。',
+      "conflict.title": "检测到已安装的 OpenClaw",
+      "conflict.subtitle": "系统中已存在 OpenClaw 安装，可能与 OneClaw 产生端口冲突。",
+      "conflict.portInUse": "端口 {port} 被占用，进程: {process} (PID: {pid})",
+      "conflict.globalInstalled": "全局安装路径: {path}",
+      "conflict.uninstall": "卸载旧版并继续",
+      "conflict.changePort": "使用其他端口继续",
+      "conflict.uninstalling": "正在卸载…",
+      "conflict.changingPort": "正在处理…",
+      "conflict.failed": "操作失败：",
       "error.noKey": "请输入 API 密钥。",
       "error.noBaseUrl": "请输入接口地址。",
       "error.noModelId": "请输入模型 ID。",
@@ -155,6 +173,20 @@
     btnVerify: $("#btnVerify"),
     btnVerifyText: $("#btnVerify .btn-text"),
     btnVerifySpinner: $("#btnVerify .btn-spinner"),
+    // Step 0 — 冲突检测
+    conflictDetails: $("#conflictDetails"),
+    conflictPort: $("#conflictPort"),
+    conflictPortText: $("#conflictPortText"),
+    conflictGlobal: $("#conflictGlobal"),
+    conflictGlobalText: $("#conflictGlobalText"),
+    conflictError: $("#conflictError"),
+    btnUninstall: $("#btnUninstall"),
+    btnUninstallText: document.querySelector("#btnUninstall .btn-text"),
+    btnUninstallSpinner: document.querySelector("#btnUninstall .btn-spinner"),
+    btnChangePort: $("#btnChangePort"),
+    btnChangePortText: document.querySelector("#btnChangePort .btn-text"),
+    btnChangePortSpinner: document.querySelector("#btnChangePort .btn-spinner"),
+    conflictStatus: $("#conflictStatus"),
     // Step 3 — 完成
     sessionMemoryEnabled: $("#sessionMemoryEnabled"),
     installCliCheck: $("#installCliCheck"),
@@ -173,6 +205,8 @@
   let starting = false;
   let currentLang = "en";
   let launchAtLoginSupported = false;
+  let detectionResult = null;
+  let resolving = false;
 
   // ---- 语言检测（从 URL ?lang= 参数读取） ----
   function detectLang() {
@@ -197,10 +231,16 @@
   // ---- 步骤切换 ----
   function goToStep(step) {
     currentStep = step;
-    els.progressFill.style.width = `${Math.round(step * 100 / 3)}%`;
+    // Step 0 不算进度条，进度条从 Step 1 开始
+    if (step === 0) {
+      els.progressFill.style.width = "0%";
+    } else {
+      els.progressFill.style.width = `${Math.round(step * 100 / 3)}%`;
+    }
 
+    // steps NodeList 顺序: step0(index=0), step1(index=1), step2(index=2), step3(index=3)
     els.steps.forEach((el, i) => {
-      el.classList.toggle("active", i + 1 === step);
+      el.classList.toggle("active", i === step);
     });
   }
 
@@ -208,6 +248,114 @@
   function getSubPlatform() {
     const checked = document.querySelector('input[name="subPlatform"]:checked');
     return checked ? checked.value : "moonshot-cn";
+  }
+
+  // ---- 环境检测（Step 0） ----
+
+  // 检查系统中是否已有 OpenClaw 安装
+  async function checkExistingInstallation() {
+    if (!window.oneclaw?.detectInstallation) {
+      goToStep(1);
+      return;
+    }
+    try {
+      const res = await window.oneclaw.detectInstallation();
+      if (!res?.success || !res.data) {
+        goToStep(1);
+        return;
+      }
+      detectionResult = res.data;
+      const hasConflict = detectionResult.portInUse || detectionResult.globalInstalled;
+      if (!hasConflict) {
+        goToStep(1);
+        return;
+      }
+      // 展示冲突详情
+      if (detectionResult.portInUse) {
+        els.conflictPortText.textContent = t("conflict.portInUse")
+          .replace("{port}", "18789")
+          .replace("{process}", detectionResult.portProcess || "unknown")
+          .replace("{pid}", String(detectionResult.portPid || "?"));
+        els.conflictPort.classList.remove("hidden");
+      }
+      if (detectionResult.globalInstalled) {
+        els.conflictGlobalText.textContent = t("conflict.globalInstalled")
+          .replace("{path}", detectionResult.globalPath || "openclaw");
+        els.conflictGlobal.classList.remove("hidden");
+      }
+      goToStep(0);
+    } catch {
+      // 检测失败不阻断流程
+      goToStep(1);
+    }
+  }
+
+  // 卸载旧版
+  async function handleUninstall() {
+    if (resolving) return;
+    resolving = true;
+    setConflictBtnState(els.btnUninstall, els.btnUninstallText, els.btnUninstallSpinner, true, t("conflict.uninstalling"));
+    els.btnChangePort.disabled = true;
+    hideConflictError();
+
+    try {
+      const res = await window.oneclaw.resolveConflict({
+        action: "uninstall",
+        pid: detectionResult?.portPid || 0,
+      });
+      if (res?.success) {
+        goToStep(1);
+      } else {
+        showConflictError(t("conflict.failed") + (res?.message || ""));
+      }
+    } catch (err) {
+      showConflictError(t("conflict.failed") + (err.message || ""));
+    } finally {
+      resolving = false;
+      setConflictBtnState(els.btnUninstall, els.btnUninstallText, els.btnUninstallSpinner, false, t("conflict.uninstall"));
+      els.btnChangePort.disabled = false;
+    }
+  }
+
+  // 使用其他端口
+  async function handleChangePort() {
+    if (resolving) return;
+    resolving = true;
+    setConflictBtnState(els.btnChangePort, els.btnChangePortText, els.btnChangePortSpinner, true, t("conflict.changingPort"));
+    els.btnUninstall.disabled = true;
+    hideConflictError();
+
+    try {
+      const res = await window.oneclaw.resolveConflict({ action: "change-port" });
+      if (res?.success) {
+        goToStep(1);
+      } else {
+        showConflictError(t("conflict.failed") + (res?.message || ""));
+      }
+    } catch (err) {
+      showConflictError(t("conflict.failed") + (err.message || ""));
+    } finally {
+      resolving = false;
+      setConflictBtnState(els.btnChangePort, els.btnChangePortText, els.btnChangePortSpinner, false, t("conflict.changePort"));
+      els.btnUninstall.disabled = false;
+    }
+  }
+
+  // 冲突页按钮状态控制
+  function setConflictBtnState(btn, textEl, spinnerEl, loading, text) {
+    btn.disabled = loading;
+    textEl.textContent = text;
+    spinnerEl.classList.toggle("hidden", !loading);
+  }
+
+  function showConflictError(msg) {
+    els.conflictError.textContent = msg;
+    els.conflictError.classList.remove("hidden");
+  }
+
+  function hideConflictError() {
+    els.conflictError.classList.add("hidden");
+    els.conflictError.textContent = "";
   }
 
   // ---- Provider 切换 ----
@@ -474,6 +622,8 @@
 
   // ---- 事件绑定 ----
   function bindEvents() {
+    els.btnUninstall.addEventListener("click", handleUninstall);
+    els.btnChangePort.addEventListener("click", handleChangePort);
     els.btnToStep2.addEventListener("click", () => goToStep(2));
     els.btnBackToStep1.addEventListener("click", () => goToStep(1));
 
@@ -519,7 +669,7 @@
     applyI18n();
     bindEvents();
     switchProvider("anthropic");
-    goToStep(1);
+    checkExistingInstallation();
     loadLaunchAtLoginState();
   }
 
