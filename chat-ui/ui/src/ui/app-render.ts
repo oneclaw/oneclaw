@@ -234,6 +234,10 @@ let skillsSubTab: "installed" | "store" = "installed";
 
 // ── 技能商店状态 ──
 
+// 商店模式：浏览（按排序）或搜索
+type StoreMode = "trending" | "downloads" | "updated" | "search";
+let storeMode: StoreMode = "trending";
+
 const skillStoreState: SkillStoreState = {
   skills: [],
   installedSlugs: new Set(),
@@ -245,7 +249,6 @@ const skillStoreState: SkillStoreState = {
   installingSlugs: new Set(),
 };
 let skillStoreDataLoaded = false;
-let skillStoreSearchTimer: ReturnType<typeof setTimeout> | null = null;
 
 // 加载技能列表（初次或切换排序时调用）
 async function loadSkillStoreData(state: AppViewState, append = false) {
@@ -893,45 +896,73 @@ export function renderApp(state: AppViewState) {
                             : html`
                                 ${(["trending", "downloads", "updated"] as const).map((key) => html`
                                   <button
-                                    class="skill-store__sort-btn ${skillStoreState.sort === key ? "active" : ""}"
+                                    class="skill-store__sort-btn ${storeMode === key ? "active" : ""}"
                                     type="button"
                                     @click=${() => {
+                                      storeMode = key;
                                       skillStoreState.sort = key;
+                                      skillStoreState.skills = [];
                                       skillStoreState.nextCursor = null;
                                       skillStoreState.searchQuery = "";
+                                      skillStoreState.error = null;
                                       skillStoreDataLoaded = false;
+                                      state.requestUpdate();
                                       void loadSkillStoreData(state);
                                     }}
                                   >${t(`skillStore.sort${key.charAt(0).toUpperCase() + key.slice(1)}`)}</button>
                                 `)}
+                                <button
+                                  class="skill-store__sort-btn ${storeMode === "search" ? "active" : ""}"
+                                  type="button"
+                                  @click=${() => {
+                                    storeMode = "search";
+                                    skillStoreState.skills = [];
+                                    skillStoreState.nextCursor = null;
+                                    skillStoreState.searchQuery = "";
+                                    skillStoreState.error = null;
+                                    state.requestUpdate();
+                                    requestAnimationFrame(() => {
+                                      (state.renderRoot?.querySelector(".skill-store__search-input") as HTMLInputElement)?.focus();
+                                    });
+                                  }}
+                                  title="${t("skillStore.search")}"
+                                ><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg></button>
                               `
                           }
                         </div>
                       </div>
 
-                      <!-- 共享搜索框 -->
-                      <div class="skill-store__toolbar">
-                        <div class="skill-store__search">
-                          <input
-                            class="skill-store__search-input"
-                            type="text"
-                            placeholder=${t(skillsSubTab === "installed" ? "skills.search" : "skillStore.search")}
-                            .value=${skillsSubTab === "installed" ? ((state as any).skillsFilter ?? "") : skillStoreState.searchQuery}
-                            @input=${(e: Event) => {
-                              const val = (e.target as HTMLInputElement).value;
-                              if (skillsSubTab === "installed") {
-                                (state as any).skillsFilter = val;
-                                state.requestUpdate();
-                              } else {
-                                skillStoreState.searchQuery = val;
-                                state.requestUpdate();
-                                if (skillStoreSearchTimer) clearTimeout(skillStoreSearchTimer);
-                                skillStoreSearchTimer = setTimeout(() => void searchSkillStore(state), 300);
-                              }
-                            }}
-                          />
-                        </div>
-                      </div>
+                      <!-- 搜索框：已安装 tab 始终显示，商店 tab 仅搜索模式显示 -->
+                      ${skillsSubTab === "installed" || storeMode === "search"
+                        ? html`
+                          <div class="skill-store__toolbar">
+                            <div class="skill-store__search">
+                              <input
+                                class="skill-store__search-input"
+                                type="text"
+                                placeholder=${t(skillsSubTab === "installed" ? "skills.search" : "skillStore.search")}
+                                .value=${skillsSubTab === "installed" ? ((state as any).skillsFilter ?? "") : skillStoreState.searchQuery}
+                                @input=${(e: Event) => {
+                                  const val = (e.target as HTMLInputElement).value;
+                                  if (skillsSubTab === "installed") {
+                                    (state as any).skillsFilter = val;
+                                    state.requestUpdate();
+                                  } else {
+                                    skillStoreState.searchQuery = val;
+                                    state.requestUpdate();
+                                  }
+                                }}
+                                @keydown=${(e: KeyboardEvent) => {
+                                  if (e.key === "Enter" && skillsSubTab === "store") {
+                                    void searchSkillStore(state);
+                                  }
+                                }}
+                              />
+                            </div>
+                          </div>
+                        `
+                        : nothing
+                      }
 
                       <!-- 标签页内容 -->
                       ${skillsSubTab === "installed"

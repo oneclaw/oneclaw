@@ -146,8 +146,8 @@ function mapItem(raw: any): SkillSummary {
     slug: raw.slug ?? "",
     name: raw.displayName ?? raw.slug ?? "",
     description: raw.summary ?? "",
-    version: raw.tags?.latest ?? raw.latestVersion?.version ?? "0.0.0",
-    downloads: raw.stats?.downloads ?? 0,
+    version: raw.tags?.latest ?? raw.latestVersion?.version ?? raw.version ?? "",
+    downloads: raw.stats?.downloads ?? raw.downloads ?? 0,
     highlighted: true,
     updatedAt: raw.updatedAt ? new Date(raw.updatedAt).toISOString() : "",
     author: raw.author ?? raw.owner ?? "",
@@ -176,7 +176,7 @@ async function listSkills(opts: {
   };
 }
 
-// 搜索精选技能
+// 搜索技能（不限 highlighted，搜全量）
 async function searchSkills(opts: {
   q: string;
   limit?: number;
@@ -184,7 +184,6 @@ async function searchSkills(opts: {
   const base = registryUrl();
   const params = new URLSearchParams();
   params.set("q", opts.q);
-  params.set("highlightedOnly", "true");
   if (opts.limit) params.set("limit", String(opts.limit));
   const raw = await jsonGet<any>(`${base}/api/v1/search?${params}`);
   // 搜索接口返回 results 数组，兼容 items/skills 回退
