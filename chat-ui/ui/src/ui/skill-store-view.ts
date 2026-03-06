@@ -73,9 +73,8 @@ function renderSkillCard(
         <div class="skill-store__card-info">
           <div class="skill-store__card-name">${skill.name}</div>
           <div class="skill-store__card-meta">
-            ${skill.author ? html`<span class="skill-store__card-author">${skill.author}</span>` : nothing}
-            v${skill.version}
-            <span class="skill-store__card-downloads">${formatDownloads(skill.downloads)} ${t("skillStore.downloads")}</span>
+            ${skill.version ? html`v${skill.version}` : nothing}
+            ${skill.downloads > 0 ? html`<span class="skill-store__card-downloads">${formatDownloads(skill.downloads)} ${t("skillStore.downloads")}</span>` : nothing}
           </div>
         </div>
         <div class="skill-store__card-action">
