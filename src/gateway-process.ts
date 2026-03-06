@@ -8,6 +8,7 @@ import {
   HEALTH_TIMEOUT_MS,
   HEALTH_POLL_INTERVAL_MS,
   CRASH_COOLDOWN_MS,
+  IS_WIN,
   resolveGatewayLogPath,
   resolveNodeBin,
   resolveNodeExtraEnv,
@@ -15,6 +16,9 @@ import {
   resolveGatewayEntry,
   resolveGatewayCwd,
   resolveResourcesPath,
+  resolveClawhubEntry,
+  resolveUserBinDir,
+  resolveUserStateDir,
 } from "./constants";
 
 // 诊断日志（固定写入 ~/.openclaw/gateway.log，便于用户定位）
@@ -136,9 +140,13 @@ export class GatewayProcess {
       await this.stopExistingGateway(nodeBin, entry, cwd);
     }
 
-    // 组装 PATH，内嵌 runtime 优先
+    // 确保 clawhub CLI wrapper 就绪
+    ensureClawhubWrapper(nodeBin);
+
+    // 组装 PATH：用户 bin 目录 + 内嵌 runtime 优先
+    const userBinDir = resolveUserBinDir();
     const runtimeDir = path.join(resolveResourcesPath(), "runtime");
-    const envPath = runtimeDir + path.delimiter + (process.env.PATH ?? "");
+    const envPath = userBinDir + path.delimiter + runtimeDir + path.delimiter + (process.env.PATH ?? "");
 
     // 递增世代，标记本次 spawn 的身份
     const gen = ++this.generation;
@@ -344,4 +352,54 @@ function sleep(ms: number): Promise<void> {
 function maskToken(token: string): string {
   if (token.length <= 8) return "***";
   return `${token.slice(0, 4)}...${token.slice(-4)}`;
+}
+
+// 生成 clawhub CLI wrapper 脚本（每次 gateway 启动时确保最新）
+function ensureClawhubWrapper(nodeBin: string): void {
+  const clawhubEntry = resolveClawhubEntry();
+  if (!fs.existsSync(clawhubEntry)) {
+    diagLog(`clawhub 入口不存在，跳过 wrapper 生成: ${clawhubEntry}`);
+    return;
+  }
+
+  const binDir = resolveUserBinDir();
+  fs.mkdirSync(binDir, { recursive: true });
+
+  // 默认 workdir 指向 ~/.openclaw/workspace
+  const workdir = path.join(resolveUserStateDir(), "workspace");
+
+  if (IS_WIN) {
+    const wrapper = [
+      "@echo off",
+      "REM OneClaw clawhub CLI - auto-generated, do not edit",
+      "setlocal",
+      `set "APP_NODE=${nodeBin.replace(/"/g, '""')}"`,
+      `set "APP_ENTRY=${clawhubEntry.replace(/"/g, '""')}"`,
+      `set "APP_WORKDIR=${workdir.replace(/"/g, '""')}"`,
+      'set "ELECTRON_RUN_AS_NODE=1"',
+      '"%APP_NODE%" "%APP_ENTRY%" --workdir "%APP_WORKDIR%" %*',
+      "exit /b %errorlevel%",
+      "",
+    ].join("\r\n");
+    fs.writeFileSync(path.join(binDir, "clawhub.cmd"), wrapper, "utf-8");
+  } else {
+    const safeNode = nodeBin.replace(/(["\\$`])/g, "\\$1");
+    const safeEntry = clawhubEntry.replace(/(["\\$`])/g, "\\$1");
+    const safeWorkdir = workdir.replace(/(["\\$`])/g, "\\$1");
+    const wrapper = [
+      "#!/usr/bin/env bash",
+      "# OneClaw clawhub CLI - auto-generated, do not edit",
+      `APP_NODE="${safeNode}"`,
+      `APP_ENTRY="${safeEntry}"`,
+      `APP_WORKDIR="${safeWorkdir}"`,
+      "export ELECTRON_RUN_AS_NODE=1",
+      'exec "$APP_NODE" "$APP_ENTRY" --workdir "$APP_WORKDIR" "$@"',
+      "",
+    ].join("\n");
+    const wrapperPath = path.join(binDir, "clawhub");
+    fs.writeFileSync(wrapperPath, wrapper, "utf-8");
+    fs.chmodSync(wrapperPath, 0o755);
+  }
+
+  diagLog(`clawhub wrapper 已生成: ${binDir}`);
 }

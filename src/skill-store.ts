@@ -1,15 +1,20 @@
-import { ipcMain } from "electron";
-import { resolveUserStateDir } from "./constants";
-import { readUserConfig } from "./provider-config";
+import { app, ipcMain } from "electron";
+import { resolveUserStateDir, resolveUserBinDir, resolveNodeBin, resolveClawhubEntry, IS_WIN } from "./constants";
+import { execFile } from "child_process";
 import * as fs from "fs";
 import * as path from "path";
 import * as https from "https";
 import * as http from "http";
-import * as zlib from "zlib";
+import * as log from "./logger";
 
 const DEFAULT_REGISTRY = "https://clawhub.ai";
 const FETCH_TIMEOUT_MS = 15_000;
-const SKILLS_DIR_NAME = "skills";
+const SKILL_STORE_CONFIG = "skill-store.json";
+
+// 开发模式下打印网络请求日志
+const debugLog = (msg: string) => {
+  if (!app.isPackaged) log.info(`[skill-store] ${msg}`);
+};
 
 // ── 类型定义 ──
 
@@ -21,6 +26,7 @@ export type SkillSummary = {
   downloads: number;
   highlighted: boolean;
   updatedAt: string;
+  author: string;
 };
 
 export type SkillDetail = SkillSummary & {
@@ -34,13 +40,54 @@ type ListResult = {
   nextCursor: string | null;
 };
 
+// ── 独立配置文件读写（不污染 gateway 的 openclaw.json） ──
+
+// 技能商店配置文件路径：~/.openclaw/skill-store.json
+function skillStoreConfigPath(): string {
+  return path.join(resolveUserStateDir(), SKILL_STORE_CONFIG);
+}
+
+// 读取技能商店独立配置
+function readSkillStoreConfig(): Record<string, any> {
+  try {
+    return JSON.parse(fs.readFileSync(skillStoreConfigPath(), "utf-8"));
+  } catch {
+    return {};
+  }
+}
+
+// 写入技能商店独立配置
+function writeSkillStoreConfig(data: Record<string, any>): void {
+  fs.mkdirSync(path.dirname(skillStoreConfigPath()), { recursive: true });
+  fs.writeFileSync(skillStoreConfigPath(), JSON.stringify(data, null, 2) + "\n", "utf-8");
+}
+
+// ── Registry URL 公开接口（供 settings-ipc 使用） ──
+
+// 读取 registry URL（空字符串表示使用默认值）
+export function readSkillStoreRegistry(): string {
+  const config = readSkillStoreConfig();
+  return typeof config?.registryUrl === "string" ? config.registryUrl : "";
+}
+
+// 写入 registry URL（空值时清除）
+export function writeSkillStoreRegistry(url: string): void {
+  const config = readSkillStoreConfig();
+  if (url) {
+    config.registryUrl = url;
+  } else {
+    delete config.registryUrl;
+  }
+  writeSkillStoreConfig(config);
+}
+
 // ── Registry URL 解析 ──
 
 // 读取用户自定义 registry 地址，未配置时回退官方默认值
 function registryUrl(): string {
   try {
-    const config = readUserConfig();
-    const custom = config?.skillStore?.registryUrl;
+    const config = readSkillStoreConfig();
+    const custom = config?.registryUrl;
     if (typeof custom === "string" && custom.trim()) {
       return custom.trim().replace(/\/+$/, "");
     }
@@ -54,11 +101,14 @@ function registryUrl(): string {
 
 // 通用 JSON GET 请求，带超时控制
 function jsonGet<T>(url: string): Promise<T> {
+  debugLog(`GET ${url}`);
+  const startMs = Date.now();
   return new Promise((resolve, reject) => {
     const parsed = new URL(url);
     const mod = parsed.protocol === "https:" ? https : http;
     const req = mod.get(url, { timeout: FETCH_TIMEOUT_MS }, (res) => {
       if (res.statusCode && (res.statusCode < 200 || res.statusCode >= 300)) {
+        debugLog(`GET ${url} → ${res.statusCode} (${Date.now() - startMs}ms)`);
         res.resume();
         reject(new Error(`HTTP ${res.statusCode}`));
         return;
@@ -66,49 +116,42 @@ function jsonGet<T>(url: string): Promise<T> {
       const chunks: Buffer[] = [];
       res.on("data", (chunk: Buffer) => chunks.push(chunk));
       res.on("end", () => {
+        const body = Buffer.concat(chunks).toString("utf-8");
+        debugLog(`GET ${url} → ${res.statusCode} ${body.length}B (${Date.now() - startMs}ms)\n${body}`);
         try {
-          const body = Buffer.concat(chunks).toString("utf-8");
           resolve(JSON.parse(body) as T);
         } catch (err) {
+          debugLog(`GET ${url} → JSON parse error: ${err}`);
           reject(err);
         }
       });
     });
-    req.on("error", reject);
+    req.on("error", (err) => {
+      debugLog(`GET ${url} → error: ${err.message} (${Date.now() - startMs}ms)`);
+      reject(err);
+    });
     req.on("timeout", () => {
+      debugLog(`GET ${url} → timeout (${Date.now() - startMs}ms)`);
       req.destroy();
       reject(new Error("request timeout"));
     });
   });
 }
 
-// 下载二进制内容（ZIP），返回 Buffer
-function downloadBuffer(url: string): Promise<Buffer> {
-  return new Promise((resolve, reject) => {
-    const parsed = new URL(url);
-    const mod = parsed.protocol === "https:" ? https : http;
-    const req = mod.get(url, { timeout: FETCH_TIMEOUT_MS * 2 }, (res) => {
-      // 跟随重定向
-      if (res.statusCode && res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
-        downloadBuffer(res.headers.location).then(resolve, reject);
-        res.resume();
-        return;
-      }
-      if (res.statusCode && (res.statusCode < 200 || res.statusCode >= 300)) {
-        res.resume();
-        reject(new Error(`HTTP ${res.statusCode}`));
-        return;
-      }
-      const chunks: Buffer[] = [];
-      res.on("data", (chunk: Buffer) => chunks.push(chunk));
-      res.on("end", () => resolve(Buffer.concat(chunks)));
-    });
-    req.on("error", reject);
-    req.on("timeout", () => {
-      req.destroy();
-      reject(new Error("download timeout"));
-    });
-  });
+// ── API 响应 → 前端类型映射 ──
+
+// 将 API 返回的原始条目转为前端 SkillSummary
+function mapItem(raw: any): SkillSummary {
+  return {
+    slug: raw.slug ?? "",
+    name: raw.displayName ?? raw.slug ?? "",
+    description: raw.summary ?? "",
+    version: raw.tags?.latest ?? raw.latestVersion?.version ?? "0.0.0",
+    downloads: raw.stats?.downloads ?? 0,
+    highlighted: true,
+    updatedAt: raw.updatedAt ? new Date(raw.updatedAt).toISOString() : "",
+    author: raw.author ?? raw.owner ?? "",
+  };
 }
 
 // ── API 调用 ──
@@ -125,7 +168,12 @@ async function listSkills(opts: {
   if (opts.sort) params.set("sort", opts.sort);
   if (opts.limit) params.set("limit", String(opts.limit));
   if (opts.cursor) params.set("cursor", opts.cursor);
-  return jsonGet<ListResult>(`${base}/api/v1/skills?${params}`);
+  const raw = await jsonGet<any>(`${base}/api/v1/skills?${params}`);
+  const items = Array.isArray(raw.items) ? raw.items : Array.isArray(raw.skills) ? raw.skills : [];
+  return {
+    skills: items.map(mapItem),
+    nextCursor: raw.nextCursor ?? null,
+  };
 }
 
 // 搜索精选技能
@@ -138,139 +186,95 @@ async function searchSkills(opts: {
   params.set("q", opts.q);
   params.set("highlightedOnly", "true");
   if (opts.limit) params.set("limit", String(opts.limit));
-  return jsonGet<{ skills: SkillSummary[] }>(`${base}/api/v1/skills/search?${params}`);
+  const raw = await jsonGet<any>(`${base}/api/v1/search?${params}`);
+  // 搜索接口返回 results 数组，兼容 items/skills 回退
+  const items = Array.isArray(raw.results) ? raw.results : Array.isArray(raw.items) ? raw.items : [];
+  return { skills: items.map(mapItem) };
 }
 
 // 获取技能详情
 async function getSkillDetail(slug: string): Promise<SkillDetail> {
   const base = registryUrl();
-  return jsonGet<SkillDetail>(`${base}/api/v1/skills/${encodeURIComponent(slug)}`);
+  const raw = await jsonGet<any>(`${base}/api/v1/skills/${encodeURIComponent(slug)}`);
+  return {
+    ...mapItem(raw),
+    readme: raw.readme ?? "",
+    author: raw.author ?? raw.owner ?? "",
+    tags: Array.isArray(raw.tagsList) ? raw.tagsList : [],
+  };
 }
 
-// ── 本地安装目录 ──
+// ── clawhub CLI 调用 ──
 
-// 技能安装根目录：~/.openclaw/skills/
+// workspace 目录：~/.openclaw/workspace
+function workspaceDir(): string {
+  return path.join(resolveUserStateDir(), "workspace");
+}
+
+// 技能安装根目录：~/.openclaw/workspace/skills/
 function skillsBaseDir(): string {
-  return path.join(resolveUserStateDir(), SKILLS_DIR_NAME);
+  return path.join(workspaceDir(), "skills");
 }
 
-// 单个技能安装目录
-function skillDir(slug: string): string {
-  return path.join(skillsBaseDir(), slug);
+// 执行 clawhub CLI 命令，返回 stdout
+function execClawhub(args: string[]): Promise<{ stdout: string; stderr: string }> {
+  const nodeBin = resolveNodeBin();
+  const clawhubEntry = resolveClawhubEntry();
+  const registry = registryUrl();
+  const workdir = workspaceDir();
+
+  // 构建完整参数：node clawhub-entry --workdir <workdir> --registry <registry> --no-input <args>
+  const fullArgs = [clawhubEntry, "--workdir", workdir, "--registry", registry, "--no-input", ...args];
+  debugLog(`exec: ${nodeBin} ${fullArgs.join(" ")}`);
+
+  return new Promise((resolve, reject) => {
+    // 组装 PATH，确保内嵌 node 和 clawhub wrapper 可找到
+    const userBinDir = resolveUserBinDir();
+    const envPath = userBinDir + path.delimiter + (process.env.PATH ?? "");
+
+    execFile(nodeBin, fullArgs, {
+      timeout: 60_000,
+      env: {
+        ...process.env,
+        ELECTRON_RUN_AS_NODE: "1",
+        PATH: envPath,
+      },
+      windowsHide: true,
+    }, (err, stdout, stderr) => {
+      const out = typeof stdout === "string" ? stdout : "";
+      const errOut = typeof stderr === "string" ? stderr : "";
+      debugLog(`exec result: exit=${err ? (err as any).code ?? "error" : 0} stdout=${out.length}B stderr=${errOut.length}B`);
+      if (errOut.trim()) debugLog(`exec stderr: ${errOut.trim()}`);
+      if (err) {
+        reject(new Error(errOut.trim() || err.message));
+        return;
+      }
+      resolve({ stdout: out, stderr: errOut });
+    });
+  });
 }
 
-// ── ZIP 解压（纯 Node.js 内置 zlib，解析 ZIP central directory） ──
-
-// 最小 ZIP 解压：只处理 store + deflate 两种压缩方式
-function extractZip(zipBuf: Buffer, destDir: string): void {
-  // ZIP end-of-central-directory 签名
-  const EOCD_SIG = 0x06054b50;
-  const LOCAL_SIG = 0x04034b50;
-
-  // 从末尾搜索 EOCD
-  let eocdOffset = -1;
-  for (let i = zipBuf.length - 22; i >= 0; i--) {
-    if (zipBuf.readUInt32LE(i) === EOCD_SIG) {
-      eocdOffset = i;
-      break;
-    }
-  }
-  if (eocdOffset < 0) throw new Error("invalid ZIP: EOCD not found");
-
-  const cdOffset = zipBuf.readUInt32LE(eocdOffset + 16);
-  const cdEntries = zipBuf.readUInt16LE(eocdOffset + 10);
-
-  let pos = cdOffset;
-  for (let i = 0; i < cdEntries; i++) {
-    // 读取 central directory entry
-    const fnLen = zipBuf.readUInt16LE(pos + 28);
-    const extraLen = zipBuf.readUInt16LE(pos + 30);
-    const commentLen = zipBuf.readUInt16LE(pos + 32);
-    const localOffset = zipBuf.readUInt32LE(pos + 42);
-    const fileName = zipBuf.subarray(pos + 46, pos + 46 + fnLen).toString("utf-8");
-    pos += 46 + fnLen + extraLen + commentLen;
-
-    // 跳过目录条目
-    if (fileName.endsWith("/")) {
-      fs.mkdirSync(path.join(destDir, fileName), { recursive: true });
-      continue;
-    }
-
-    // 读取 local file header 获取实际数据
-    if (zipBuf.readUInt32LE(localOffset) !== LOCAL_SIG) continue;
-    const method = zipBuf.readUInt16LE(localOffset + 8);
-    const compSize = zipBuf.readUInt32LE(localOffset + 18);
-    const localFnLen = zipBuf.readUInt16LE(localOffset + 26);
-    const localExtraLen = zipBuf.readUInt16LE(localOffset + 28);
-    const dataStart = localOffset + 30 + localFnLen + localExtraLen;
-    const rawData = zipBuf.subarray(dataStart, dataStart + compSize);
-
-    // 安全路径校验：禁止 .. 路径穿越
-    const normalizedName = path.normalize(fileName);
-    if (normalizedName.startsWith("..") || path.isAbsolute(normalizedName)) continue;
-
-    const filePath = path.join(destDir, normalizedName);
-    fs.mkdirSync(path.dirname(filePath), { recursive: true });
-
-    if (method === 0) {
-      // store（无压缩）
-      fs.writeFileSync(filePath, rawData);
-    } else if (method === 8) {
-      // deflate
-      const inflated = zlib.inflateRawSync(rawData);
-      fs.writeFileSync(filePath, inflated);
-    }
-    // 其他压缩方式忽略
-  }
-}
-
-// ── 安装 / 卸载 ──
-
-// 安装技能：下载 ZIP → 解压到 ~/.openclaw/skills/<slug>/ → 校验 SKILL.md 存在
-async function installSkill(slug: string, tag = "latest"): Promise<{ success: boolean; message?: string }> {
+// 通过 clawhub CLI 安装技能
+async function installSkill(slug: string): Promise<{ success: boolean; message?: string }> {
   try {
-    const base = registryUrl();
-    const params = new URLSearchParams();
-    params.set("slug", slug);
-    params.set("tag", tag);
-    const zipUrl = `${base}/api/v1/download?${params}`;
-    const zipBuf = await downloadBuffer(zipUrl);
-
-    const dest = skillDir(slug);
-    // 清除旧版本
-    if (fs.existsSync(dest)) {
-      fs.rmSync(dest, { recursive: true, force: true });
-    }
-    fs.mkdirSync(dest, { recursive: true });
-
-    extractZip(zipBuf, dest);
-
-    // 校验：必须包含 SKILL.md
-    if (!fs.existsSync(path.join(dest, "SKILL.md"))) {
-      fs.rmSync(dest, { recursive: true, force: true });
-      return { success: false, message: "Invalid skill package: missing SKILL.md" };
-    }
-
+    await execClawhub(["install", slug]);
     return { success: true };
   } catch (err: any) {
     return { success: false, message: err?.message ?? String(err) };
   }
 }
 
-// 卸载技能：删除整个目录
-function uninstallSkill(slug: string): { success: boolean; message?: string } {
+// 通过 clawhub CLI 卸载技能
+async function uninstallSkill(slug: string): Promise<{ success: boolean; message?: string }> {
   try {
-    const dest = skillDir(slug);
-    if (fs.existsSync(dest)) {
-      fs.rmSync(dest, { recursive: true, force: true });
-    }
+    await execClawhub(["uninstall", "--yes", slug]);
     return { success: true };
   } catch (err: any) {
     return { success: false, message: err?.message ?? String(err) };
   }
 }
 
-// 列出本地已安装的技能 slug
+// 列出本地已安装的技能 slug（直接读目录，不依赖 CLI）
 function listInstalledSkills(): string[] {
   const base = skillsBaseDir();
   if (!fs.existsSync(base)) return [];
@@ -289,48 +293,65 @@ function listInstalledSkills(): string[] {
 // 注册技能商店相关 IPC handler
 export function registerSkillStoreIpc(): void {
   ipcMain.handle("skill-store:list", async (_event, params) => {
+    debugLog(`ipc list sort=${params?.sort} limit=${params?.limit} cursor=${params?.cursor ?? "none"}`);
     try {
       const result = await listSkills({
         sort: params?.sort,
         limit: params?.limit,
         cursor: params?.cursor,
       });
+      debugLog(`ipc list → ${result.skills?.length ?? 0} skills`);
       return { success: true, data: result };
     } catch (err: any) {
+      debugLog(`ipc list → error: ${err?.message}`);
       return { success: false, message: err?.message ?? String(err) };
     }
   });
 
   ipcMain.handle("skill-store:search", async (_event, params) => {
+    debugLog(`ipc search q="${params?.q}" limit=${params?.limit}`);
     try {
       const result = await searchSkills({
         q: params?.q ?? "",
         limit: params?.limit,
       });
+      debugLog(`ipc search → ${result.skills?.length ?? 0} skills`);
       return { success: true, data: result };
     } catch (err: any) {
+      debugLog(`ipc search → error: ${err?.message}`);
       return { success: false, message: err?.message ?? String(err) };
     }
   });
 
   ipcMain.handle("skill-store:detail", async (_event, params) => {
+    debugLog(`ipc detail slug=${params?.slug}`);
     try {
       const result = await getSkillDetail(params?.slug ?? "");
+      debugLog(`ipc detail → ${result.name ?? "unknown"}`);
       return { success: true, data: result };
     } catch (err: any) {
+      debugLog(`ipc detail → error: ${err?.message}`);
       return { success: false, message: err?.message ?? String(err) };
     }
   });
 
   ipcMain.handle("skill-store:install", async (_event, params) => {
-    return installSkill(params?.slug ?? "", params?.tag ?? "latest");
+    debugLog(`ipc install slug=${params?.slug}`);
+    const result = await installSkill(params?.slug ?? "");
+    debugLog(`ipc install → ${result.success ? "ok" : result.message}`);
+    return result;
   });
 
   ipcMain.handle("skill-store:uninstall", async (_event, params) => {
-    return uninstallSkill(params?.slug ?? "");
+    debugLog(`ipc uninstall slug=${params?.slug}`);
+    const result = await uninstallSkill(params?.slug ?? "");
+    debugLog(`ipc uninstall → ${result.success ? "ok" : result.message}`);
+    return result;
   });
 
   ipcMain.handle("skill-store:list-installed", async () => {
-    return { success: true, data: listInstalledSkills() };
+    const installed = listInstalledSkills();
+    debugLog(`ipc list-installed → [${installed.join(", ")}]`);
+    return { success: true, data: installed };
   });
 }

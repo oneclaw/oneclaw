@@ -731,10 +731,11 @@ function installDependencies(opts, gatewayDir) {
   const source = sourceInfo.source;
   log(`安装 openclaw 依赖 (来源: ${source}) ...`);
 
-  // 写入 package.json
+  // 写入 package.json（openclaw + clawhub 一起安装）
   const pkg = {
     dependencies: {
       openclaw: source,
+      clawhub: "latest",
     },
   };
   fs.writeFileSync(path.join(gatewayDir, "package.json"), JSON.stringify(pkg, null, 2));
@@ -1110,6 +1111,7 @@ function verifyOutput(targetPaths, platform) {
     path.join(targetRel, "gateway", "node_modules", "openclaw", "openclaw.mjs"),
     path.join(targetRel, "gateway", "node_modules", "openclaw", "dist", "entry.js"),
     path.join(targetRel, "gateway", "node_modules", "openclaw", "dist", "control-ui", "index.html"),
+    path.join(targetRel, "gateway", "node_modules", "clawhub", "bin", "clawdhub.js"),
     path.join(targetRel, "analytics-config.json"),
     path.join(targetRel, "app-icon.png"),
   ];

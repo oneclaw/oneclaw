@@ -7,7 +7,7 @@ export type UiSettings = {
   token: string;
   sessionKey: string;
   lastActiveSessionKey: string;
-  oneclawView: "chat" | "settings" | "skillStore";
+  oneclawView: "chat" | "settings" | "skills";
   theme: ThemeMode;
   chatFocusMode: boolean;
   chatShowThinking: boolean;

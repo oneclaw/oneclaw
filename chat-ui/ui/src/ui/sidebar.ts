@@ -14,7 +14,7 @@ export type SidebarProps = {
   currentSessionKey: string;
   sessionOptions: Array<{ key: string; label: string; updatedAt?: number }>;
   settingsActive: boolean;
-  skillStoreActive: boolean;
+  skillsActive: boolean;
   updateStatus: "hidden" | "available" | "downloading";
   updateVersion: string | null;
   updatePercent: number | null;
@@ -216,7 +216,7 @@ export function renderSidebar(props: SidebarProps) {
         </button>
 
         <button
-          class="oneclaw-sidebar__item ${props.skillStoreActive ? "active" : ""}"
+          class="oneclaw-sidebar__item ${props.skillsActive ? "active" : ""}"
           type="button"
           @click=${props.onOpenSkillStore}
           title=${t("sidebar.skillStore")}

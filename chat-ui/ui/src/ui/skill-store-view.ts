@@ -1,9 +1,9 @@
 /**
- * 技能商店视图：搜索栏 + 排序栏 + 技能卡片列表 + 加载更多。
+ * 技能管理视图：搜索栏 + 排序栏 + 技能卡片列表 + 加载更多。
+ * 已安装技能排在前面，未安装技能排在后面。
  */
 import { html, nothing } from "lit";
 import { t } from "./i18n.ts";
-import { icons } from "./icons.ts";
 
 export type SkillItem = {
   slug: string;
@@ -13,6 +13,7 @@ export type SkillItem = {
   downloads: number;
   highlighted: boolean;
   updatedAt: string;
+  author: string;
 };
 
 export type SkillStoreState = {
@@ -27,35 +28,30 @@ export type SkillStoreState = {
 };
 
 export type SkillStoreCallbacks = {
-  onSearch: (query: string) => void;
-  onSortChange: (sort: "updated" | "trending" | "downloads") => void;
   onInstall: (slug: string) => void;
   onUninstall: (slug: string) => void;
-  onLoadMore: () => void;
-  onBackToChat: () => void;
 };
+
+// 字母头像颜色表（根据 slug 哈希取色）
+const AVATAR_COLORS = [
+  "#c0392b", "#d35400", "#e67e22", "#f39c12",
+  "#27ae60", "#1abc9c", "#16a085", "#2980b9",
+  "#3498db", "#8e44ad", "#9b59b6", "#34495e",
+];
+
+// 根据 slug 生成确定性颜色
+function avatarColor(slug: string): string {
+  let hash = 0;
+  for (let i = 0; i < slug.length; i++) {
+    hash = ((hash << 5) - hash + slug.charCodeAt(i)) | 0;
+  }
+  return AVATAR_COLORS[Math.abs(hash) % AVATAR_COLORS.length];
+}
 
 // 格式化下载数：>1000 显示 1.2k
 function formatDownloads(n: number): string {
   if (n >= 1000) return `${(n / 1000).toFixed(1)}k`;
   return String(n);
-}
-
-// 渲染排序按钮
-function renderSortButton(
-  label: string,
-  value: string,
-  current: string,
-  onClick: () => void,
-) {
-  const active = value === current ? "active" : "";
-  return html`
-    <button
-      class="skill-store__sort-btn ${active}"
-      type="button"
-      @click=${onClick}
-    >${label}</button>
-  `;
 }
 
 // 渲染单个技能卡片
@@ -66,13 +62,18 @@ function renderSkillCard(
   onInstall: () => void,
   onUninstall: () => void,
 ) {
+  const letter = (skill.name || skill.slug || "?").charAt(0).toUpperCase();
+  const bgColor = avatarColor(skill.slug);
   return html`
     <div class="skill-store__card">
       <div class="skill-store__card-header">
-        <div class="skill-store__card-icon">${icons.puzzle}</div>
+        <div class="skill-store__card-icon" style="background: ${bgColor}; color: #fff;">
+          <span class="skill-store__card-letter">${letter}</span>
+        </div>
         <div class="skill-store__card-info">
           <div class="skill-store__card-name">${skill.name}</div>
           <div class="skill-store__card-meta">
+            ${skill.author ? html`<span class="skill-store__card-author">${skill.author}</span>` : nothing}
             v${skill.version}
             <span class="skill-store__card-downloads">${formatDownloads(skill.downloads)} ${t("skillStore.downloads")}</span>
           </div>
@@ -102,74 +103,44 @@ function renderSkillCard(
   `;
 }
 
-// 技能商店主视图
+// 已安装技能排在前面
+function sortSkills(skills: SkillItem[], installedSlugs: Set<string>): SkillItem[] {
+  return [...skills].sort((a, b) => {
+    const ai = installedSlugs.has(a.slug) ? 0 : 1;
+    const bi = installedSlugs.has(b.slug) ? 0 : 1;
+    return ai - bi;
+  });
+}
+
+// 技能管理主视图
 export function renderSkillStoreView(
   state: SkillStoreState,
   callbacks: SkillStoreCallbacks,
 ) {
+  const sorted = sortSkills(state.skills, state.installedSlugs);
   return html`
-    <section class="skill-store">
-      <div class="skill-store__header">
-        <h2 class="skill-store__title">${t("skillStore.title")}</h2>
-        <button
-          class="skill-store__back"
-          type="button"
-          @click=${callbacks.onBackToChat}
-        >${t("skillStore.backToChat")}</button>
-      </div>
+    ${state.error
+      ? html`<div class="skill-store__error">${state.error}</div>`
+      : nothing}
 
-      <div class="skill-store__toolbar">
-        <div class="skill-store__search">
-          <input
-            class="skill-store__search-input"
-            type="text"
-            placeholder=${t("skillStore.search")}
-            .value=${state.searchQuery}
-            @input=${(e: Event) => callbacks.onSearch((e.target as HTMLInputElement).value)}
-          />
-        </div>
-        <div class="skill-store__sort">
-          ${renderSortButton(t("skillStore.sortUpdated"), "updated", state.sort, () => callbacks.onSortChange("updated"))}
-          ${renderSortButton(t("skillStore.sortTrending"), "trending", state.sort, () => callbacks.onSortChange("trending"))}
-          ${renderSortButton(t("skillStore.sortDownloads"), "downloads", state.sort, () => callbacks.onSortChange("downloads"))}
-        </div>
-      </div>
+    ${sorted.length === 0 && !state.loading && !state.error
+      ? html`<div class="skill-store__empty">${t("skillStore.empty")}</div>`
+      : nothing}
 
-      ${state.error
-        ? html`<div class="skill-store__error">${state.error}</div>`
-        : nothing}
+    <div class="skill-store__list">
+      ${sorted.map((skill) =>
+        renderSkillCard(
+          skill,
+          state.installedSlugs.has(skill.slug),
+          state.installingSlugs.has(skill.slug),
+          () => callbacks.onInstall(skill.slug),
+          () => callbacks.onUninstall(skill.slug),
+        ),
+      )}
+    </div>
 
-      ${state.skills.length === 0 && !state.loading && !state.error
-        ? html`<div class="skill-store__empty">${t("skillStore.empty")}</div>`
-        : nothing}
-
-      <div class="skill-store__list">
-        ${state.skills.map((skill) =>
-          renderSkillCard(
-            skill,
-            state.installedSlugs.has(skill.slug),
-            state.installingSlugs.has(skill.slug),
-            () => callbacks.onInstall(skill.slug),
-            () => callbacks.onUninstall(skill.slug),
-          ),
-        )}
-      </div>
-
-      ${state.loading
-        ? html`<div class="skill-store__loading">${t("chat.loading")}</div>`
-        : nothing}
-
-      ${!state.loading && state.nextCursor && state.skills.length > 0
-        ? html`
-            <div class="skill-store__load-more">
-              <button
-                class="skill-store__btn skill-store__btn--load-more"
-                type="button"
-                @click=${callbacks.onLoadMore}
-              >${t("skillStore.loadMore")}</button>
-            </div>
-          `
-        : nothing}
-    </section>
+    ${state.loading
+      ? html`<div class="skill-store__loading">${t("chat.loading")}</div>`
+      : nothing}
   `;
 }

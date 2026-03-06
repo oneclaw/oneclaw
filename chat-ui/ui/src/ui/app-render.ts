@@ -18,6 +18,16 @@ import { renderGatewayUrlConfirmation } from "./views/gateway-url-confirmation.t
 import { renderSharePrompt } from "./views/share-prompt.ts";
 import { patchSession, loadSessions } from "./controllers/sessions.ts";
 import { renderSkillStoreView, type SkillStoreState } from "./skill-store-view.ts";
+import type { SkillStatusEntry } from "./types.ts";
+import {
+  loadSkills,
+  updateSkillEnabled,
+  updateSkillEdit,
+  saveSkillApiKey,
+  installSkill,
+  type SkillsState,
+  type SkillMessageMap,
+} from "./controllers/skills.ts";
 
 declare global {
   interface Window {
@@ -201,7 +211,7 @@ async function deleteSessionFromSidebar(state: AppViewState, key: string) {
   await loadSessions(s);
 }
 
-function setOneClawView(state: AppViewState, next: "chat" | "settings" | "skillStore") {
+function setOneClawView(state: AppViewState, next: "chat" | "settings" | "skills") {
   if ((state.settings.oneclawView ?? "chat") === next) {
     return;
   }
@@ -217,6 +227,11 @@ function openSettingsView(state: AppViewState, tabHint: "channels" | null = null
   setOneClawView(state, "settings");
 }
 
+// ── 技能页子标签 ──
+
+// "installed" = 已安装/内置技能（gateway RPC），"store" = 技能商店（clawhub API）
+let skillsSubTab: "installed" | "store" = "installed";
+
 // ── 技能商店状态 ──
 
 const skillStoreState: SkillStoreState = {
@@ -225,7 +240,7 @@ const skillStoreState: SkillStoreState = {
   loading: false,
   error: null,
   searchQuery: "",
-  sort: "updated",
+  sort: "trending",
   nextCursor: null,
   installingSlugs: new Set(),
 };
@@ -245,9 +260,10 @@ async function loadSkillStoreData(state: AppViewState, append = false) {
       cursor: append ? skillStoreState.nextCursor : undefined,
     });
     if (result?.success && result.data) {
+      const skills = Array.isArray(result.data.skills) ? result.data.skills : [];
       skillStoreState.skills = append
-        ? [...skillStoreState.skills, ...result.data.skills]
-        : result.data.skills;
+        ? [...skillStoreState.skills, ...skills]
+        : skills;
       skillStoreState.nextCursor = result.data.nextCursor ?? null;
     } else {
       skillStoreState.error = result?.message ?? t("skillStore.error");
@@ -278,7 +294,7 @@ async function searchSkillStore(state: AppViewState) {
   try {
     const result = await window.oneclaw.skillStoreSearch({ q, limit: 20 });
     if (result?.success && result.data) {
-      skillStoreState.skills = result.data.skills;
+      skillStoreState.skills = Array.isArray(result.data.skills) ? result.data.skills : [];
       skillStoreState.nextCursor = null;
     } else {
       skillStoreState.error = result?.message ?? t("skillStore.error");
@@ -332,10 +348,194 @@ async function uninstallSkillFromStore(state: AppViewState, slug: string) {
   state.requestUpdate();
 }
 
-// 打开技能商店视图
-function openSkillStoreView(state: AppViewState) {
-  setOneClawView(state, "skillStore");
-  if (!skillStoreDataLoaded) {
+// 从已安装页面卸载技能（调用 clawhub uninstall 后刷新技能列表）
+async function uninstallLocalSkill(state: AppViewState, slug: string) {
+  if (!window.oneclaw?.skillStoreUninstall) return;
+  state.skillsBusyKey = slug;
+  state.requestUpdate();
+  try {
+    await window.oneclaw.skillStoreUninstall({ slug });
+    // 刷新已安装列表和商店已安装标记
+    void loadSkills(state as unknown as SkillsState);
+    await refreshInstalledSlugs();
+  } catch { /* ignore */ }
+  state.skillsBusyKey = "";
+  state.requestUpdate();
+}
+
+// ── 已安装技能视图（本地化重写） ──
+
+// 分组定义：id → i18n key
+const SKILL_GROUPS = [
+  { id: "workspace", i18nKey: "skills.groupWorkspace", sources: ["openclaw-workspace"] },
+  { id: "built-in", i18nKey: "skills.groupBuiltIn", sources: ["openclaw-bundled"] },
+  { id: "installed", i18nKey: "skills.groupInstalled", sources: ["openclaw-managed"] },
+  { id: "extra", i18nKey: "skills.groupExtra", sources: ["openclaw-extra"] },
+];
+
+// 按来源分组
+function groupLocalSkills(skills: SkillStatusEntry[]) {
+  const groups = new Map<string, { id: string; label: string; skills: SkillStatusEntry[] }>();
+  for (const def of SKILL_GROUPS) {
+    groups.set(def.id, { id: def.id, label: t(def.i18nKey), skills: [] });
+  }
+  const builtInDef = SKILL_GROUPS.find((g) => g.id === "built-in");
+  const other = { id: "other", label: t("skills.groupOther"), skills: [] as SkillStatusEntry[] };
+  for (const skill of skills) {
+    const match = skill.bundled
+      ? builtInDef
+      : SKILL_GROUPS.find((g) => g.sources.includes(skill.source));
+    if (match) {
+      groups.get(match.id)?.skills.push(skill);
+    } else {
+      other.skills.push(skill);
+    }
+  }
+  const ordered = SKILL_GROUPS
+    .map((g) => groups.get(g.id))
+    .filter((g): g is NonNullable<typeof g> => Boolean(g && g.skills.length > 0));
+  if (other.skills.length > 0) ordered.push(other);
+  return ordered;
+}
+
+// 字母头像颜色
+const SKILL_COLORS = [
+  "#c0392b", "#d35400", "#e67e22", "#f39c12",
+  "#27ae60", "#1abc9c", "#2980b9", "#8e44ad",
+  "#3498db", "#16a085", "#9b59b6", "#34495e",
+];
+function skillColor(key: string): string {
+  let h = 0;
+  for (let i = 0; i < key.length; i++) h = ((h << 5) - h + key.charCodeAt(i)) | 0;
+  return SKILL_COLORS[Math.abs(h) % SKILL_COLORS.length];
+}
+
+// 截断描述
+function clamp(text: string | undefined, max: number): string {
+  if (!text) return "";
+  return text.length > max ? text.slice(0, max) + "…" : text;
+}
+
+// 渲染已安装技能视图
+function renderInstalledSkillsView(state: AppViewState) {
+  const report = state.skillsReport;
+  const allSkills = report?.skills ?? [];
+  const filter = ((state as any).skillsFilter ?? "").trim().toLowerCase();
+  const filtered = filter
+    ? allSkills.filter((s: SkillStatusEntry) =>
+        [s.name, s.description, s.source].join(" ").toLowerCase().includes(filter),
+      )
+    : allSkills;
+  const groups = groupLocalSkills(filtered);
+  const busy = state.skillsBusyKey;
+  const messages = state.skillMessages as SkillMessageMap;
+
+  return html`
+    ${state.skillsError
+      ? html`<div class="skill-store__error">${state.skillsError}</div>`
+      : nothing}
+
+    ${filtered.length === 0 && !state.skillsLoading
+      ? html`<div class="skill-store__empty">${t("skills.empty")}</div>`
+      : nothing}
+
+    ${groups.map((group) => html`
+      <details class="skills-group" open>
+        <summary class="skills-group__header">
+          <span>${group.label}</span>
+          <span class="skills-group__count">${group.skills.length}</span>
+          <span class="skills-group__chevron"></span>
+        </summary>
+        <div class="skill-store__list">
+          ${group.skills.map((skill: SkillStatusEntry) => {
+            const key = skill.skillKey ?? "";
+            const isBusy = busy === key;
+            const msg = messages[key] ?? null;
+            const letter = (skill.emoji || (skill.name ?? "?").charAt(0)).toUpperCase();
+            const missing = [
+              ...(skill.missing?.bins ?? []).map((b: string) => `bin:${b}`),
+              ...(skill.missing?.env ?? []).map((e: string) => `env:${e}`),
+              ...(skill.missing?.config ?? []).map((c: string) => `config:${c}`),
+              ...(skill.missing?.os ?? []).map((o: string) => `os:${o}`),
+            ];
+            return html`
+              <div class="skill-store__card">
+                <div class="skill-store__card-header">
+                  <div class="skill-store__card-icon" style="background: ${skillColor(key)}; color: #fff;">
+                    <span class="skill-store__card-letter">${letter}</span>
+                  </div>
+                  <div class="skill-store__card-info">
+                    <div class="skill-store__card-name">${skill.name ?? key}</div>
+                    <div class="skill-store__card-meta">
+                      <span class="skills-badge">${skill.source}</span>
+                      <span class="skills-badge ${skill.eligible ? "skills-badge--ok" : "skills-badge--warn"}">
+                        ${skill.eligible ? t("skills.eligible") : t("skills.blocked")}
+                      </span>
+                      ${skill.disabled
+                        ? html`<span class="skills-badge skills-badge--warn">${t("skills.disabled")}</span>`
+                        : nothing}
+                    </div>
+                  </div>
+                  <div class="skill-store__card-action">
+                    <button
+                      class="skill-store__btn ${skill.disabled ? "skill-store__btn--install" : "skill-store__btn--installed"}"
+                      type="button"
+                      ?disabled=${isBusy}
+                      @click=${() => void updateSkillEnabled(state as unknown as SkillsState, key, !!skill.disabled)}
+                    >${skill.disabled ? t("skills.enable") : t("skills.disable")}</button>
+                    ${skill.source !== "openclaw-bundled"
+                      ? html`
+                        <button
+                          class="skill-store__btn skill-store__btn--installed"
+                          type="button"
+                          ?disabled=${isBusy}
+                          @click=${() => void uninstallLocalSkill(state, skill.name ?? key)}
+                        >${t("skillStore.uninstall")}</button>`
+                      : nothing}
+                  </div>
+                </div>
+                <div class="skill-store__card-desc">${clamp(skill.description as string, 160)}</div>
+                ${missing.length > 0
+                  ? html`<div class="skills-missing">${t("skills.missing")}: ${missing.join(", ")}</div>`
+                  : nothing}
+                ${msg
+                  ? html`<div class="skills-msg ${msg.kind === "error" ? "skills-msg--error" : "skills-msg--ok"}">${msg.message}</div>`
+                  : nothing}
+                ${skill.primaryEnv
+                  ? html`
+                    <div class="skills-apikey-row">
+                      <input
+                        class="skill-store__search-input"
+                        type="password"
+                        placeholder="API key (${skill.primaryEnv})"
+                        .value=${state.skillEdits[key] ?? ""}
+                        @input=${(e: Event) => updateSkillEdit(state as unknown as SkillsState, key, (e.target as HTMLInputElement).value)}
+                      />
+                      <button
+                        class="skill-store__btn skill-store__btn--install"
+                        type="button"
+                        ?disabled=${isBusy}
+                        @click=${() => void saveSkillApiKey(state as unknown as SkillsState, key)}
+                      >${t("skills.saveKey")}</button>
+                    </div>
+                  `
+                  : nothing}
+              </div>
+            `;
+          })}
+        </div>
+      </details>
+    `)}
+  `;
+}
+
+// 打开技能管理视图（默认显示已安装技能）
+function openSkillsView(state: AppViewState, subTab: "installed" | "store" = "installed") {
+  skillsSubTab = subTab;
+  setOneClawView(state, "skills");
+  if (subTab === "installed") {
+    void loadSkills(state as unknown as SkillsState);
+  } else if (!skillStoreDataLoaded) {
     void loadSkillStoreData(state);
   }
 }
@@ -565,7 +765,7 @@ export function renderApp(state: AppViewState) {
   const sessionOptions = resolveSessionOptions(state);
   const oneclawView = state.settings.oneclawView ?? "chat";
   const settingsActive = oneclawView === "settings";
-  const skillStoreActive = oneclawView === "skillStore";
+  const skillsActive = oneclawView === "skills";
   const updateBannerState = state.updateBannerState;
 
   return html`
@@ -579,7 +779,7 @@ export function renderApp(state: AppViewState) {
             currentSessionKey,
             sessionOptions,
             settingsActive,
-            skillStoreActive,
+            skillsActive,
             updateStatus: updateBannerState.status,
             updateVersion: updateBannerState.version,
             updatePercent: updateBannerState.percent,
@@ -604,7 +804,7 @@ export function renderApp(state: AppViewState) {
               state,
               state.feishuPairingState.pendingCount > 0 ? "channels" : null,
             ),
-            onOpenSkillStore: () => openSkillStoreView(state),
+            onOpenSkillStore: () => openSkillsView(state),
             onOpenWebUI: () => void handleOpenWebUI(state),
             onOpenDocs: () => {
               if (window.oneclaw?.openExternal) {
@@ -642,26 +842,108 @@ export function renderApp(state: AppViewState) {
           ${renderFeishuPairingNotice(state)}
           ${settingsActive
             ? renderOneClawSettingsPage(state)
-            : skillStoreActive
-              ? renderSkillStoreView(skillStoreState, {
-                  onSearch: (query: string) => {
-                    skillStoreState.searchQuery = query;
-                    state.requestUpdate();
-                    if (skillStoreSearchTimer) clearTimeout(skillStoreSearchTimer);
-                    skillStoreSearchTimer = setTimeout(() => void searchSkillStore(state), 300);
-                  },
-                  onSortChange: (sort) => {
-                    skillStoreState.sort = sort;
-                    skillStoreState.nextCursor = null;
-                    skillStoreState.searchQuery = "";
-                    skillStoreDataLoaded = false;
-                    void loadSkillStoreData(state);
-                  },
-                  onInstall: (slug) => void installSkillFromStore(state, slug),
-                  onUninstall: (slug) => void uninstallSkillFromStore(state, slug),
-                  onLoadMore: () => void loadSkillStoreData(state, true),
-                  onBackToChat: () => setOneClawView(state, "chat"),
-                })
+            : skillsActive
+              ? html`
+                  <div class="skills-scroll" @scroll=${(e: Event) => {
+                    if (skillsSubTab !== "store") return;
+                    if (skillStoreState.loading || !skillStoreState.nextCursor) return;
+                    const el = e.target as HTMLElement;
+                    if (el.scrollTop + el.clientHeight >= el.scrollHeight - 200) {
+                      void loadSkillStoreData(state, true);
+                    }
+                  }}>
+                    <section class="skill-store">
+                      <div class="skill-store__header">
+                        <h2 class="skill-store__title">${t("skillStore.title")}</h2>
+                      </div>
+
+                      <!-- 标签栏 + 右侧操作区 -->
+                      <div class="skills-tab-bar">
+                        <button
+                          class="skills-tab-btn ${skillsSubTab === "installed" ? "active" : ""}"
+                          type="button"
+                          @click=${() => {
+                            skillsSubTab = "installed";
+                            void loadSkills(state as unknown as SkillsState);
+                            state.requestUpdate();
+                          }}
+                        >${t("skills.tabInstalled")}</button>
+                        <button
+                          class="skills-tab-btn ${skillsSubTab === "store" ? "active" : ""}"
+                          type="button"
+                          @click=${() => {
+                            skillsSubTab = "store";
+                            if (!skillStoreDataLoaded) {
+                              void loadSkillStoreData(state);
+                            }
+                            state.requestUpdate();
+                          }}
+                        >${t("skills.tabStore")}</button>
+                        <div class="skills-tab-bar__actions">
+                          ${skillsSubTab === "installed"
+                            ? html`
+                                <span class="skills-count">${t("skills.shown").replace("{n}", String((state.skillsReport?.skills ?? []).length))}</span>
+                                <button
+                                  class="skill-store__sort-btn"
+                                  type="button"
+                                  ?disabled=${state.skillsLoading}
+                                  @click=${() => void loadSkills(state as unknown as SkillsState)}
+                                >${state.skillsLoading ? t("skills.refreshing") : t("skills.refresh")}</button>
+                              `
+                            : html`
+                                ${(["trending", "downloads", "updated"] as const).map((key) => html`
+                                  <button
+                                    class="skill-store__sort-btn ${skillStoreState.sort === key ? "active" : ""}"
+                                    type="button"
+                                    @click=${() => {
+                                      skillStoreState.sort = key;
+                                      skillStoreState.nextCursor = null;
+                                      skillStoreState.searchQuery = "";
+                                      skillStoreDataLoaded = false;
+                                      void loadSkillStoreData(state);
+                                    }}
+                                  >${t(`skillStore.sort${key.charAt(0).toUpperCase() + key.slice(1)}`)}</button>
+                                `)}
+                              `
+                          }
+                        </div>
+                      </div>
+
+                      <!-- 共享搜索框 -->
+                      <div class="skill-store__toolbar">
+                        <div class="skill-store__search">
+                          <input
+                            class="skill-store__search-input"
+                            type="text"
+                            placeholder=${t(skillsSubTab === "installed" ? "skills.search" : "skillStore.search")}
+                            .value=${skillsSubTab === "installed" ? ((state as any).skillsFilter ?? "") : skillStoreState.searchQuery}
+                            @input=${(e: Event) => {
+                              const val = (e.target as HTMLInputElement).value;
+                              if (skillsSubTab === "installed") {
+                                (state as any).skillsFilter = val;
+                                state.requestUpdate();
+                              } else {
+                                skillStoreState.searchQuery = val;
+                                state.requestUpdate();
+                                if (skillStoreSearchTimer) clearTimeout(skillStoreSearchTimer);
+                                skillStoreSearchTimer = setTimeout(() => void searchSkillStore(state), 300);
+                              }
+                            }}
+                          />
+                        </div>
+                      </div>
+
+                      <!-- 标签页内容 -->
+                      ${skillsSubTab === "installed"
+                        ? renderInstalledSkillsView(state)
+                        : renderSkillStoreView(skillStoreState, {
+                            onInstall: (slug) => void installSkillFromStore(state, slug),
+                            onUninstall: (slug) => void uninstallSkillFromStore(state, slug),
+                          })
+                      }
+                    </section>
+                  </div>
+                `
               : html`
                 ${renderChat({
                   sessionKey: state.sessionKey,

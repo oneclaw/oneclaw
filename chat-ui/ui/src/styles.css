@@ -622,21 +622,6 @@
   color: var(--fg);
 }
 
-.skill-store__back {
-  background: none;
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  padding: 6px 14px;
-  font-size: 13px;
-  color: var(--fg-muted);
-  cursor: pointer;
-  transition: border-color 0.15s, color 0.15s;
-}
-.skill-store__back:hover {
-  border-color: var(--accent);
-  color: var(--accent);
-}
-
 .skill-store__toolbar {
   display: flex;
   gap: 12px;
@@ -671,7 +656,8 @@
 
 .skill-store__sort {
   display: flex;
-  gap: 4px;
+  gap: 8px;
+  align-items: center;
 }
 
 .skill-store__sort-btn {
@@ -719,23 +705,18 @@
 
 .skill-store__card-icon {
   flex-shrink: 0;
-  width: 36px;
-  height: 36px;
+  width: 40px;
+  height: 40px;
   display: flex;
   align-items: center;
   justify-content: center;
   border-radius: 8px;
-  background: var(--accent-muted);
-  color: var(--accent);
 }
-.skill-store__card-icon svg {
-  width: 20px;
-  height: 20px;
-  fill: none;
-  stroke: currentColor;
-  stroke-width: 1.5;
-  stroke-linecap: round;
-  stroke-linejoin: round;
+.skill-store__card-letter {
+  font-size: 18px;
+  font-weight: 700;
+  line-height: 1;
+  user-select: none;
 }
 
 .skill-store__card-info {
@@ -761,12 +742,17 @@
   align-items: center;
 }
 
+.skill-store__card-author {
+  font-weight: 500;
+}
 .skill-store__card-downloads {
   opacity: 0.7;
 }
 
 .skill-store__card-action {
   flex-shrink: 0;
+  display: flex;
+  gap: 6px;
 }
 
 .skill-store__card-desc {
@@ -835,4 +821,151 @@
 
 .skill-store__load-more {
   margin-top: 16px;
+}
+
+/* 技能页滚动容器 */
+.skills-scroll {
+  flex: 1;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+.skills-scroll::-webkit-scrollbar {
+  display: none;
+}
+
+/* 技能页子标签栏 */
+.skills-tab-bar {
+  display: flex;
+  gap: 0;
+  align-items: center;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 16px;
+}
+.skills-tab-bar__actions {
+  margin-left: auto;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.skills-tab-btn {
+  padding: 10px 20px;
+  border: none;
+  background: none;
+  color: var(--fg-muted);
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  transition: color 0.15s, border-color 0.15s;
+}
+.skills-tab-btn:hover {
+  color: var(--fg);
+}
+.skills-tab-btn.active {
+  color: var(--fg);
+  border-bottom-color: var(--accent, #c0392b);
+}
+
+/* 已安装技能：分组折叠 */
+.skills-group {
+  margin-bottom: 8px;
+}
+.skills-group__header {
+  display: flex;
+  align-items: center;
+  padding: 10px 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--fg-muted);
+  cursor: pointer;
+  user-select: none;
+  list-style: none;
+}
+.skills-group__header::-webkit-details-marker {
+  display: none;
+}
+/* 分组数量 badge */
+.skills-group__count {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--fg-muted);
+  background: var(--bg-input, #f0f0f0);
+  padding: 1px 8px;
+  border-radius: 10px;
+  margin-left: 6px;
+}
+/* 折叠箭头（推至最右） */
+.skills-group__chevron {
+  margin-left: auto;
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-right: 2px solid currentColor;
+  border-bottom: 2px solid currentColor;
+  transform: rotate(-45deg);
+  transition: transform 0.2s;
+  flex-shrink: 0;
+}
+.skills-group[open] > .skills-group__header > .skills-group__chevron {
+  transform: rotate(45deg);
+}
+
+/* 已安装技能：筛选行 */
+.skills-count {
+  font-size: 13px;
+  color: var(--fg-muted);
+  white-space: nowrap;
+}
+
+/* 已安装技能：状态 badge */
+.skills-badge {
+  display: inline-block;
+  font-size: 11px;
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: var(--bg-input, #f0f0f0);
+  color: var(--fg-muted);
+}
+.skills-badge--ok {
+  background: #dcfce7;
+  color: #15803d;
+}
+.skills-badge--warn {
+  background: #fef2f2;
+  color: #dc2626;
+}
+
+/* 已安装技能：缺失依赖提示 */
+.skills-missing {
+  margin-top: 6px;
+  font-size: 12px;
+  color: var(--fg-muted);
+}
+
+/* 已安装技能：操作结果消息 */
+.skills-msg {
+  margin-top: 6px;
+  font-size: 12px;
+}
+.skills-msg--ok {
+  color: #15803d;
+}
+.skills-msg--error {
+  color: #dc2626;
+}
+
+/* 已安装技能：API key 输入行 */
+.skills-apikey-row {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+}
+.skills-apikey-row .skill-store__search-input {
+  flex: 1;
+  font-size: 13px;
+  padding: 6px 10px;
+}
+.skills-apikey-row .skill-store__btn {
+  flex-shrink: 0;
 }

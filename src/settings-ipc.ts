@@ -24,6 +24,7 @@ import {
   writeUserConfig,
 } from "./provider-config";
 import { getLatestShareCopyPayload } from "./share-copy";
+import { readSkillStoreRegistry, writeSkillStoreRegistry } from "./skill-store";
 import {
   extractKimiConfig,
   saveKimiPluginConfig,
@@ -585,7 +586,7 @@ export function registerSettingsIpc(opts: SettingsIpcOptions = {}): void {
           launchAtLoginSupported: launchAtLoginState.supported,
           launchAtLogin: launchAtLoginState.enabled,
           sessionMemoryEnabled,
-          clawHubRegistry: config?.skillStore?.registryUrl ?? "",
+          clawHubRegistry: readSkillStoreRegistry(),
         },
       };
     } catch (err: any) {
@@ -626,19 +627,9 @@ export function registerSettingsIpc(opts: SettingsIpcOptions = {}): void {
             config.hooks.internal.entries["session-memory"] = { enabled: sessionMemoryEnabled };
           }
 
-          // 写入 ClawHub Registry URL（空值时清除，回退默认）
+          // ClawHub Registry URL 写入独立文件（不污染 gateway config）
           if (clawHubRegistry !== undefined) {
-            if (clawHubRegistry) {
-              config.skillStore ??= {};
-              config.skillStore.registryUrl = clawHubRegistry;
-            } else {
-              if (config.skillStore) {
-                delete config.skillStore.registryUrl;
-                if (Object.keys(config.skillStore).length === 0) {
-                  delete config.skillStore;
-                }
-              }
-            }
+            writeSkillStoreRegistry(clawHubRegistry);
           }
 
           writeUserConfigAndRestart(config);

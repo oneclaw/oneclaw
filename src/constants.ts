@@ -117,6 +117,16 @@ export function resolveGatewayCwd(): string {
   return path.join(resolveResourcesPath(), "gateway", "node_modules", "openclaw");
 }
 
+/** clawhub CLI bin 入口（与 openclaw 同一 node_modules） */
+export function resolveClawhubEntry(): string {
+  return path.join(resolveResourcesPath(), "gateway", "node_modules", "clawhub", "bin", "clawdhub.js");
+}
+
+/** 用户 bin 目录（~/.openclaw/bin/，存放 CLI wrapper 脚本） */
+export function resolveUserBinDir(): string {
+  return path.join(resolveUserStateDir(), "bin");
+}
+
 /** 用户状态目录（~/.openclaw/） */
 export function resolveUserStateDir(): string {
   if (process.env.OPENCLAW_STATE_DIR) return process.env.OPENCLAW_STATE_DIR;
