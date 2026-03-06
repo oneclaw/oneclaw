@@ -15,8 +15,19 @@ import {
 import * as log from "./logger";
 import { installCli } from "./cli-integration";
 import { saveKimiSearchConfig } from "./kimi-config";
+import {
+  detectExistingInstallation,
+  killPortProcess,
+  uninstallGlobalOpenclaw,
+  removeUserStateDir,
+  findAvailablePort,
+} from "./install-detector";
+import { DEFAULT_PORT, resolveUserStateDir } from "./constants";
+import * as path from "path";
+import * as fs from "fs";
 interface SetupIpcDeps {
   setupManager: SetupManager;
+  gateway?: { setPort: (port: number) => void };
 }
 
 let latestSetupCompletedProps: Record<string, string> | null = null;
@@ -77,6 +88,57 @@ async function runTrackedSetupAction<T extends SetupActionResult>(
 // 注册 Setup 相关 IPC
 export function registerSetupIpc(deps: SetupIpcDeps): void {
   const { setupManager } = deps;
+
+  // ── 环境检测：检查已有 OpenClaw 安装 ──
+  ipcMain.handle("setup:detect-installation", async () => {
+    try {
+      const result = await detectExistingInstallation();
+      return { success: true, data: result };
+    } catch (err: any) {
+      log.error(`[setup] 环境检测失败: ${err?.message ?? err}`);
+      return { success: true, data: { portInUse: false, portProcess: "", portPid: 0, globalInstalled: false, globalPath: "" } };
+    }
+  });
+
+  // ── 冲突处理：卸载旧版或修改端口 ──
+  ipcMain.handle("setup:resolve-conflict", async (_event, params: { action: "uninstall" | "change-port"; pid?: number }) => {
+    const { action, pid } = params;
+    try {
+      if (action === "uninstall") {
+        if (pid && pid > 0) {
+          await killPortProcess(pid);
+        }
+        await uninstallGlobalOpenclaw();
+        removeUserStateDir();
+        log.info("[setup] 旧版 OpenClaw 卸载完成");
+        return { success: true };
+      }
+
+      if (action === "change-port") {
+        const newPort = await findAvailablePort(DEFAULT_PORT + 1);
+        const stateDir = resolveUserStateDir();
+        const configPath = path.join(stateDir, "openclaw.json");
+        let config: any = {};
+        try {
+          fs.mkdirSync(stateDir, { recursive: true });
+          if (fs.existsSync(configPath)) {
+            config = JSON.parse(fs.readFileSync(configPath, "utf-8"));
+          }
+        } catch {}
+        config.gateway ??= {};
+        config.gateway.port = newPort;
+        fs.writeFileSync(configPath, JSON.stringify(config, null, 2));
+        deps.gateway?.setPort(newPort);
+        log.info(`[setup] 端口冲突已解决，切换到端口 ${newPort}`);
+        return { success: true, port: newPort };
+      }
+
+      return { success: false, message: "未知操作" };
+    } catch (err: any) {
+      log.error(`[setup] 冲突处理失败: ${err?.message ?? err}`);
+      return { success: false, message: err?.message ?? String(err) };
+    }
+  });
 
   // ── 读取系统开机启动状态（Setup Step 3 开关回填） ──
   ipcMain.handle("setup:get-launch-at-login", async () => {
