@@ -599,3 +599,240 @@
     width: calc(100vw - 24px);
   }
 }
+
+/* ── 技能商店 ── */
+
+.skill-store {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 24px 16px;
+}
+
+.skill-store__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 20px;
+}
+
+.skill-store__title {
+  font-size: 20px;
+  font-weight: 600;
+  margin: 0;
+  color: var(--fg);
+}
+
+.skill-store__back {
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 6px 14px;
+  font-size: 13px;
+  color: var(--fg-muted);
+  cursor: pointer;
+  transition: border-color 0.15s, color 0.15s;
+}
+.skill-store__back:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.skill-store__toolbar {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+
+.skill-store__search {
+  flex: 1;
+  min-width: 160px;
+}
+
+.skill-store__search-input {
+  width: 100%;
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg-input);
+  color: var(--fg);
+  font-size: 14px;
+  outline: none;
+  transition: border-color 0.15s;
+  box-sizing: border-box;
+}
+.skill-store__search-input:focus {
+  border-color: var(--accent);
+}
+.skill-store__search-input::placeholder {
+  color: var(--fg-muted);
+}
+
+.skill-store__sort {
+  display: flex;
+  gap: 4px;
+}
+
+.skill-store__sort-btn {
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 6px 12px;
+  font-size: 13px;
+  color: var(--fg-muted);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.skill-store__sort-btn:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.skill-store__sort-btn.active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+
+.skill-store__list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.skill-store__card {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 16px;
+  background: var(--bg-card);
+  transition: border-color 0.15s;
+}
+.skill-store__card:hover {
+  border-color: var(--accent-muted);
+}
+
+.skill-store__card-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.skill-store__card-icon {
+  flex-shrink: 0;
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  background: var(--accent-muted);
+  color: var(--accent);
+}
+.skill-store__card-icon svg {
+  width: 20px;
+  height: 20px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.skill-store__card-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.skill-store__card-name {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--fg);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.skill-store__card-meta {
+  font-size: 12px;
+  color: var(--fg-muted);
+  margin-top: 2px;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.skill-store__card-downloads {
+  opacity: 0.7;
+}
+
+.skill-store__card-action {
+  flex-shrink: 0;
+}
+
+.skill-store__card-desc {
+  margin-top: 8px;
+  font-size: 13px;
+  color: var(--fg-muted);
+  line-height: 1.5;
+}
+
+.skill-store__btn {
+  border: none;
+  border-radius: 6px;
+  padding: 6px 16px;
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.15s;
+  white-space: nowrap;
+}
+
+.skill-store__btn--install {
+  background: var(--accent);
+  color: #fff;
+}
+.skill-store__btn--install:hover:not(:disabled) {
+  background: var(--accent-hover);
+}
+.skill-store__btn--install:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.skill-store__btn--installed {
+  background: none;
+  border: 1px solid var(--border);
+  color: var(--fg-muted);
+}
+.skill-store__btn--installed:hover:not(:disabled) {
+  border-color: #dc2626;
+  color: #dc2626;
+}
+
+.skill-store__btn--load-more {
+  background: none;
+  border: 1px solid var(--border);
+  color: var(--fg-muted);
+  width: 100%;
+  padding: 10px;
+}
+.skill-store__btn--load-more:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.skill-store__loading,
+.skill-store__empty,
+.skill-store__error {
+  text-align: center;
+  padding: 32px 16px;
+  font-size: 14px;
+  color: var(--fg-muted);
+}
+
+.skill-store__error {
+  color: #dc2626;
+}
+
+.skill-store__load-more {
+  margin-top: 16px;
+}

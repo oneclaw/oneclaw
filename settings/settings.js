@@ -193,6 +193,8 @@
       "advanced.cliUnavailable": "CLI action is not available in this app version.",
       "advanced.cliOpFailed": "CLI operation failed.",
       "advanced.cliUninstallConfirm": "Uninstall the OneClaw terminal command now?",
+      "advanced.clawHubRegistry": "ClawHub Registry",
+      "advanced.clawHubRegistryPlaceholder": "https://clawhub.ai",
       "advanced.save": "Save",
       "advanced.saving": "Saving…",
       "appearance.title": "Appearance",
@@ -368,6 +370,8 @@
       "advanced.cliUnavailable": "当前应用版本不支持该 CLI 操作。",
       "advanced.cliOpFailed": "CLI 操作失败。",
       "advanced.cliUninstallConfirm": "确认要卸载 OneClaw 终端命令吗？",
+      "advanced.clawHubRegistry": "ClawHub Registry",
+      "advanced.clawHubRegistryPlaceholder": "https://clawhub.ai",
       "advanced.save": "保存",
       "advanced.saving": "保存中…",
       "appearance.title": "外观显示",
@@ -490,6 +494,7 @@
     btnSearchSaveText: $("#btnSearchSave .btn-text"),
     btnSearchSaveSpinner: $("#btnSearchSave .btn-spinner"),
     // Advanced tab
+    clawHubRegistry: $("#clawHubRegistry"),
     sessionMemoryEnabled: $("#sessionMemoryEnabled"),
     imessageEnabled: $("#imessageEnabled"),
     launchAtLoginRow: $("#launchAtLoginRow"),
@@ -1446,6 +1451,10 @@
       }
 
       var data = result.data;
+      // 回填 ClawHub Registry
+      if (els.clawHubRegistry) {
+        els.clawHubRegistry.value = data.clawHubRegistry || "";
+      }
       // 回填 browser profile radio
       var radio = document.querySelector('input[name="browserProfile"][value="' + data.browserProfile + '"]');
       if (radio) radio.checked = true;
@@ -1551,6 +1560,7 @@
     var imessageEnabled = els.imessageEnabled.checked;
     var launchAtLogin = els.launchAtLoginEnabled ? !!els.launchAtLoginEnabled.checked : false;
     var sessionMemoryEnabled = !!els.sessionMemoryEnabled.checked;
+    var clawHubRegistry = els.clawHubRegistry ? els.clawHubRegistry.value.trim() : "";
 
     try {
       var result = await window.oneclaw.settingsSaveAdvanced({
@@ -1558,6 +1568,7 @@
         imessageEnabled: imessageEnabled,
         launchAtLogin: launchAtLogin,
         sessionMemoryEnabled: sessionMemoryEnabled,
+        clawHubRegistry: clawHubRegistry,
       });
       setAdvSaving(false);
       if (result.success) {

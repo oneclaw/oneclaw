@@ -5,6 +5,7 @@ import { TrayManager } from "./tray";
 import { SetupManager } from "./setup-manager";
 import { registerSetupIpc } from "./setup-ipc";
 import { registerSettingsIpc } from "./settings-ipc";
+import { registerSkillStoreIpc } from "./skill-store";
 import { FeishuPairingMonitor } from "./feishu-pairing-monitor";
 import {
   setupAutoUpdater,
@@ -397,6 +398,7 @@ registerSetupIpc({ setupManager, gateway });
 registerSettingsIpc({
   requestGatewayRestart: () => requestGatewayRestart("settings:kimi-search"),
 });
+registerSkillStoreIpc();
 
 // ── 退出 ──
 

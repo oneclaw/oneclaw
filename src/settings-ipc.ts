@@ -585,6 +585,7 @@ export function registerSettingsIpc(opts: SettingsIpcOptions = {}): void {
           launchAtLoginSupported: launchAtLoginState.supported,
           launchAtLogin: launchAtLoginState.enabled,
           sessionMemoryEnabled,
+          clawHubRegistry: config?.skillStore?.registryUrl ?? "",
         },
       };
     } catch (err: any) {
@@ -597,6 +598,7 @@ export function registerSettingsIpc(opts: SettingsIpcOptions = {}): void {
     const { browserProfile, imessageEnabled } = params;
     const launchAtLogin = typeof params?.launchAtLogin === "boolean" ? params.launchAtLogin : undefined;
     const sessionMemoryEnabled = typeof params?.sessionMemoryEnabled === "boolean" ? params.sessionMemoryEnabled : undefined;
+    const clawHubRegistry = typeof params?.clawHubRegistry === "string" ? params.clawHubRegistry.trim() : undefined;
     return runTrackedSettingsAction(
       "save_advanced",
       { browser_profile: browserProfile, imessage_enabled: imessageEnabled, launch_at_login: launchAtLogin, session_memory: sessionMemoryEnabled },
@@ -622,6 +624,21 @@ export function registerSettingsIpc(opts: SettingsIpcOptions = {}): void {
             config.hooks.internal.enabled = true;
             config.hooks.internal.entries ??= {};
             config.hooks.internal.entries["session-memory"] = { enabled: sessionMemoryEnabled };
+          }
+
+          // 写入 ClawHub Registry URL（空值时清除，回退默认）
+          if (clawHubRegistry !== undefined) {
+            if (clawHubRegistry) {
+              config.skillStore ??= {};
+              config.skillStore.registryUrl = clawHubRegistry;
+            } else {
+              if (config.skillStore) {
+                delete config.skillStore.registryUrl;
+                if (Object.keys(config.skillStore).length === 0) {
+                  delete config.skillStore;
+                }
+              }
+            }
           }
 
           writeUserConfigAndRestart(config);

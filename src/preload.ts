@@ -66,6 +66,20 @@ contextBridge.exposeInMainWorld("oneclaw", {
   settingsResetConfigAndRelaunch: () => ipcRenderer.invoke("settings:reset-config-and-relaunch"),
   settingsGetShareCopy: () => ipcRenderer.invoke("settings:get-share-copy"),
 
+  // 技能商店
+  skillStoreList: (params?: Record<string, unknown>) =>
+    ipcRenderer.invoke("skill-store:list", params),
+  skillStoreSearch: (params?: Record<string, unknown>) =>
+    ipcRenderer.invoke("skill-store:search", params),
+  skillStoreDetail: (params?: Record<string, unknown>) =>
+    ipcRenderer.invoke("skill-store:detail", params),
+  skillStoreInstall: (params?: Record<string, unknown>) =>
+    ipcRenderer.invoke("skill-store:install", params),
+  skillStoreUninstall: (params?: Record<string, unknown>) =>
+    ipcRenderer.invoke("skill-store:uninstall", params),
+  skillStoreListInstalled: () =>
+    ipcRenderer.invoke("skill-store:list-installed"),
+
   onSettingsNavigate: (cb: (payload: { tab: string; notice: string }) => void) => {
     ipcRenderer.on("settings:navigate", (_e, payload) => cb(payload));
   },

@@ -44,6 +44,24 @@ const dict: Record<Locale, Record<string, string>> = {
     "feishu.approveFailed": "飞书配对批准失败",
     "feishu.rejectFailed": "飞书配对拒绝失败",
 
+    // 技能商店
+    "sidebar.skillStore": "技能商店",
+    "skillStore.title": "技能商店",
+    "skillStore.search": "搜索技能…",
+    "skillStore.sortUpdated": "最新",
+    "skillStore.sortTrending": "热门",
+    "skillStore.sortDownloads": "下载量",
+    "skillStore.install": "安装",
+    "skillStore.installed": "已安装",
+    "skillStore.uninstall": "卸载",
+    "skillStore.installing": "安装中…",
+    "skillStore.loadMore": "加载更多",
+    "skillStore.empty": "暂无技能",
+    "skillStore.error": "加载失败，请稍后再试",
+    "skillStore.version": "版本",
+    "skillStore.downloads": "下载量",
+    "skillStore.backToChat": "返回对话",
+
     // OneClaw settings page
     "settings.title": "设置",
     "settings.subtitle": "管理外观显示与聊天展示偏好",
@@ -132,6 +150,24 @@ const dict: Record<Locale, Record<string, string>> = {
     "feishu.pendingUnknown": "Unknown user",
     "feishu.approveFailed": "Failed to approve Feishu pairing",
     "feishu.rejectFailed": "Failed to reject Feishu pairing",
+
+    // Skill Store
+    "sidebar.skillStore": "Skill Store",
+    "skillStore.title": "Skill Store",
+    "skillStore.search": "Search skills…",
+    "skillStore.sortUpdated": "Latest",
+    "skillStore.sortTrending": "Trending",
+    "skillStore.sortDownloads": "Downloads",
+    "skillStore.install": "Install",
+    "skillStore.installed": "Installed",
+    "skillStore.uninstall": "Uninstall",
+    "skillStore.installing": "Installing…",
+    "skillStore.loadMore": "Load more",
+    "skillStore.empty": "No skills found",
+    "skillStore.error": "Failed to load. Please try again later.",
+    "skillStore.version": "Version",
+    "skillStore.downloads": "Downloads",
+    "skillStore.backToChat": "Back to chat",
 
     // OneClaw settings page
     "settings.title": "Settings",

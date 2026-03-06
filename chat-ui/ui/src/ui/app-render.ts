@@ -17,6 +17,7 @@ import { renderExecApprovalPrompt } from "./views/exec-approval.ts";
 import { renderGatewayUrlConfirmation } from "./views/gateway-url-confirmation.ts";
 import { renderSharePrompt } from "./views/share-prompt.ts";
 import { patchSession, loadSessions } from "./controllers/sessions.ts";
+import { renderSkillStoreView, type SkillStoreState } from "./skill-store-view.ts";
 
 declare global {
   interface Window {
@@ -26,6 +27,12 @@ declare global {
       openExternal?: (url: string) => unknown;
       getGatewayPort?: () => Promise<number>;
       downloadAndInstallUpdate?: () => Promise<boolean>;
+      skillStoreList?: (params?: Record<string, unknown>) => Promise<any>;
+      skillStoreSearch?: (params?: Record<string, unknown>) => Promise<any>;
+      skillStoreDetail?: (params?: Record<string, unknown>) => Promise<any>;
+      skillStoreInstall?: (params?: Record<string, unknown>) => Promise<any>;
+      skillStoreUninstall?: (params?: Record<string, unknown>) => Promise<any>;
+      skillStoreListInstalled?: () => Promise<any>;
     };
   }
 }
@@ -194,7 +201,7 @@ async function deleteSessionFromSidebar(state: AppViewState, key: string) {
   await loadSessions(s);
 }
 
-function setOneClawView(state: AppViewState, next: "chat" | "settings") {
+function setOneClawView(state: AppViewState, next: "chat" | "settings" | "skillStore") {
   if ((state.settings.oneclawView ?? "chat") === next) {
     return;
   }
@@ -208,6 +215,129 @@ function setOneClawView(state: AppViewState, next: "chat" | "settings") {
 function openSettingsView(state: AppViewState, tabHint: "channels" | null = null) {
   state.settingsTabHint = tabHint;
   setOneClawView(state, "settings");
+}
+
+// ── 技能商店状态 ──
+
+const skillStoreState: SkillStoreState = {
+  skills: [],
+  installedSlugs: new Set(),
+  loading: false,
+  error: null,
+  searchQuery: "",
+  sort: "updated",
+  nextCursor: null,
+  installingSlugs: new Set(),
+};
+let skillStoreDataLoaded = false;
+let skillStoreSearchTimer: ReturnType<typeof setTimeout> | null = null;
+
+// 加载技能列表（初次或切换排序时调用）
+async function loadSkillStoreData(state: AppViewState, append = false) {
+  if (!window.oneclaw?.skillStoreList) return;
+  skillStoreState.loading = true;
+  skillStoreState.error = null;
+  state.requestUpdate();
+  try {
+    const result = await window.oneclaw.skillStoreList({
+      sort: skillStoreState.sort,
+      limit: 20,
+      cursor: append ? skillStoreState.nextCursor : undefined,
+    });
+    if (result?.success && result.data) {
+      skillStoreState.skills = append
+        ? [...skillStoreState.skills, ...result.data.skills]
+        : result.data.skills;
+      skillStoreState.nextCursor = result.data.nextCursor ?? null;
+    } else {
+      skillStoreState.error = result?.message ?? t("skillStore.error");
+    }
+    // 同步已安装列表
+    await refreshInstalledSlugs();
+  } catch {
+    skillStoreState.error = t("skillStore.error");
+  } finally {
+    skillStoreState.loading = false;
+    skillStoreDataLoaded = true;
+    state.requestUpdate();
+  }
+}
+
+// 搜索技能
+async function searchSkillStore(state: AppViewState) {
+  if (!window.oneclaw?.skillStoreSearch) return;
+  const q = skillStoreState.searchQuery.trim();
+  if (!q) {
+    skillStoreDataLoaded = false;
+    await loadSkillStoreData(state);
+    return;
+  }
+  skillStoreState.loading = true;
+  skillStoreState.error = null;
+  state.requestUpdate();
+  try {
+    const result = await window.oneclaw.skillStoreSearch({ q, limit: 20 });
+    if (result?.success && result.data) {
+      skillStoreState.skills = result.data.skills;
+      skillStoreState.nextCursor = null;
+    } else {
+      skillStoreState.error = result?.message ?? t("skillStore.error");
+    }
+  } catch {
+    skillStoreState.error = t("skillStore.error");
+  } finally {
+    skillStoreState.loading = false;
+    state.requestUpdate();
+  }
+}
+
+// 刷新已安装列表
+async function refreshInstalledSlugs() {
+  if (!window.oneclaw?.skillStoreListInstalled) return;
+  try {
+    const result = await window.oneclaw.skillStoreListInstalled();
+    if (result?.success && Array.isArray(result.data)) {
+      skillStoreState.installedSlugs = new Set(result.data);
+    }
+  } catch { /* ignore */ }
+}
+
+// 安装技能
+async function installSkillFromStore(state: AppViewState, slug: string) {
+  if (!window.oneclaw?.skillStoreInstall) return;
+  skillStoreState.installingSlugs.add(slug);
+  state.requestUpdate();
+  try {
+    const result = await window.oneclaw.skillStoreInstall({ slug });
+    if (result?.success) {
+      skillStoreState.installedSlugs.add(slug);
+    }
+  } catch { /* ignore */ }
+  skillStoreState.installingSlugs.delete(slug);
+  state.requestUpdate();
+}
+
+// 卸载技能
+async function uninstallSkillFromStore(state: AppViewState, slug: string) {
+  if (!window.oneclaw?.skillStoreUninstall) return;
+  skillStoreState.installingSlugs.add(slug);
+  state.requestUpdate();
+  try {
+    const result = await window.oneclaw.skillStoreUninstall({ slug });
+    if (result?.success) {
+      skillStoreState.installedSlugs.delete(slug);
+    }
+  } catch { /* ignore */ }
+  skillStoreState.installingSlugs.delete(slug);
+  state.requestUpdate();
+}
+
+// 打开技能商店视图
+function openSkillStoreView(state: AppViewState) {
+  setOneClawView(state, "skillStore");
+  if (!skillStoreDataLoaded) {
+    void loadSkillStoreData(state);
+  }
 }
 
 // 新建会话：同步写入本地列表后再切换，异步同步到 Gateway 供跨终端访问
@@ -435,6 +565,7 @@ export function renderApp(state: AppViewState) {
   const sessionOptions = resolveSessionOptions(state);
   const oneclawView = state.settings.oneclawView ?? "chat";
   const settingsActive = oneclawView === "settings";
+  const skillStoreActive = oneclawView === "skillStore";
   const updateBannerState = state.updateBannerState;
 
   return html`
@@ -448,6 +579,7 @@ export function renderApp(state: AppViewState) {
             currentSessionKey,
             sessionOptions,
             settingsActive,
+            skillStoreActive,
             updateStatus: updateBannerState.status,
             updateVersion: updateBannerState.version,
             updatePercent: updateBannerState.percent,
@@ -472,6 +604,7 @@ export function renderApp(state: AppViewState) {
               state,
               state.feishuPairingState.pendingCount > 0 ? "channels" : null,
             ),
+            onOpenSkillStore: () => openSkillStoreView(state),
             onOpenWebUI: () => void handleOpenWebUI(state),
             onOpenDocs: () => {
               if (window.oneclaw?.openExternal) {
@@ -509,7 +642,27 @@ export function renderApp(state: AppViewState) {
           ${renderFeishuPairingNotice(state)}
           ${settingsActive
             ? renderOneClawSettingsPage(state)
-            : html`
+            : skillStoreActive
+              ? renderSkillStoreView(skillStoreState, {
+                  onSearch: (query: string) => {
+                    skillStoreState.searchQuery = query;
+                    state.requestUpdate();
+                    if (skillStoreSearchTimer) clearTimeout(skillStoreSearchTimer);
+                    skillStoreSearchTimer = setTimeout(() => void searchSkillStore(state), 300);
+                  },
+                  onSortChange: (sort) => {
+                    skillStoreState.sort = sort;
+                    skillStoreState.nextCursor = null;
+                    skillStoreState.searchQuery = "";
+                    skillStoreDataLoaded = false;
+                    void loadSkillStoreData(state);
+                  },
+                  onInstall: (slug) => void installSkillFromStore(state, slug),
+                  onUninstall: (slug) => void uninstallSkillFromStore(state, slug),
+                  onLoadMore: () => void loadSkillStoreData(state, true),
+                  onBackToChat: () => setOneClawView(state, "chat"),
+                })
+              : html`
                 ${renderChat({
                   sessionKey: state.sessionKey,
                   onSessionKeyChange: (next) => applySessionKey(state, next),
