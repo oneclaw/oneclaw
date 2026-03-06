@@ -22,6 +22,9 @@ contextBridge.exposeInMainWorld("oneclaw", {
     ipcRenderer.invoke("setup:save-config", params),
   setupGetLaunchAtLogin: () => ipcRenderer.invoke("setup:get-launch-at-login"),
   completeSetup: (params?: Record<string, unknown>) => ipcRenderer.invoke("setup:complete", params),
+  detectInstallation: () => ipcRenderer.invoke("setup:detect-installation"),
+  resolveConflict: (params: Record<string, unknown>) =>
+    ipcRenderer.invoke("setup:resolve-conflict", params),
 
   // Settings 相关
   settingsGetConfig: () => ipcRenderer.invoke("settings:get-config"),
