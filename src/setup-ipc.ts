@@ -22,9 +22,7 @@ import {
   removeUserStateDir,
   findAvailablePort,
 } from "./install-detector";
-import { DEFAULT_PORT, resolveUserStateDir } from "./constants";
-import * as path from "path";
-import * as fs from "fs";
+import { DEFAULT_PORT } from "./constants";
 interface SetupIpcDeps {
   setupManager: SetupManager;
   gateway?: { setPort: (port: number) => void };
@@ -116,18 +114,10 @@ export function registerSetupIpc(deps: SetupIpcDeps): void {
 
       if (action === "change-port") {
         const newPort = await findAvailablePort(DEFAULT_PORT + 1);
-        const stateDir = resolveUserStateDir();
-        const configPath = path.join(stateDir, "openclaw.json");
-        let config: any = {};
-        try {
-          fs.mkdirSync(stateDir, { recursive: true });
-          if (fs.existsSync(configPath)) {
-            config = JSON.parse(fs.readFileSync(configPath, "utf-8"));
-          }
-        } catch {}
+        const config = readUserConfig();
         config.gateway ??= {};
         config.gateway.port = newPort;
-        fs.writeFileSync(configPath, JSON.stringify(config, null, 2));
+        writeUserConfig(config);
         deps.gateway?.setPort(newPort);
         log.info(`[setup] 端口冲突已解决，切换到端口 ${newPort}`);
         return { success: true, port: newPort };
