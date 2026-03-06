@@ -264,10 +264,34 @@ async function installSkill(slug: string): Promise<{ success: boolean; message?:
   }
 }
 
+// 根据名称或 slug 解析实际安装目录名
+function resolveInstalledSlug(nameOrSlug: string): string {
+  const installed = listInstalledSkills();
+  // 直接匹配目录名
+  if (installed.includes(nameOrSlug)) return nameOrSlug;
+  // 从 SKILL.md 读取 name 字段反查（支持 frontmatter `name:` 和 Markdown `# title`）
+  const base = skillsBaseDir();
+  const needle = nameOrSlug.toLowerCase();
+  for (const dir of installed) {
+    try {
+      const md = fs.readFileSync(path.join(base, dir, "SKILL.md"), "utf-8");
+      // frontmatter: name: xxx
+      const fm = md.match(/^name:\s*["']?(.+?)["']?\s*$/m);
+      if (fm && fm[1].trim().toLowerCase() === needle) return dir;
+      // Markdown heading: # xxx
+      const h1 = md.match(/^#\s+(.+)/m);
+      if (h1 && h1[1].trim().toLowerCase() === needle) return dir;
+    } catch { /* skip */ }
+  }
+  return nameOrSlug;
+}
+
 // 通过 clawhub CLI 卸载技能
 async function uninstallSkill(slug: string): Promise<{ success: boolean; message?: string }> {
   try {
-    await execClawhub(["uninstall", "--yes", slug]);
+    const resolved = resolveInstalledSlug(slug);
+    debugLog(`uninstall: "${slug}" → resolved="${resolved}"`);
+    await execClawhub(["uninstall", "--yes", resolved]);
     return { success: true };
   } catch (err: any) {
     return { success: false, message: err?.message ?? String(err) };
