@@ -63,6 +63,13 @@ export class GatewayProcess {
     return this.port;
   }
 
+  // 更新端口（在 start 前调用，用于冲突解决场景）
+  setPort(port: number): void {
+    if (port > 0 && port <= 65535) {
+      this.port = port;
+    }
+  }
+
   getToken(): string {
     return this.token;
   }
