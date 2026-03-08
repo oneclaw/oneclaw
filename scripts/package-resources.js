@@ -706,6 +706,36 @@ function pruneLlamaPackages(nmDir) {
   }
 }
 
+// 移除 @ffmpeg-installer 预编译二进制（35-68MB），视频缩略图功能降级但不崩溃
+function pruneFFmpegBinaries(nmDir) {
+  const ffmpegDir = path.join(nmDir, "@ffmpeg-installer");
+  if (!fs.existsSync(ffmpegDir)) return;
+
+  const sizeBefore = fs.readdirSync(ffmpegDir, { withFileTypes: true })
+    .filter((e) => e.isDirectory())
+    .reduce((sum, e) => {
+      const dir = path.join(ffmpegDir, e.name);
+      try {
+        const stat = fs.statSync(dir);
+        return sum + (stat.isDirectory() ? getDirSize(dir) : 0);
+      } catch { return sum; }
+    }, 0);
+
+  rmDir(ffmpegDir);
+  const savedMB = (sizeBefore / 1048576).toFixed(1);
+  log(`已移除 @ffmpeg-installer 预编译二进制 (${savedMB} MB)`);
+}
+
+// 递归计算目录大小
+function getDirSize(dir) {
+  let total = 0;
+  for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+    const full = path.join(dir, entry.name);
+    total += entry.isDirectory() ? getDirSize(full) : fs.statSync(full).size;
+  }
+  return total;
+}
+
 // 清理 node_modules/.bin 中的悬挂符号链接（避免 afterPack 拷贝时报 ENOENT）
 function pruneDanglingBinLinks(nmDir) {
   const binDir = path.join(nmDir, ".bin");
@@ -1051,6 +1081,7 @@ async function bundleNpmPackagePlugin(plugin, gatewayDir, targetId, opts) {
   // 裁剪插件的 node_modules
   pruneNodeModules(pluginNm);
   pruneLlamaPackages(pluginNm);
+  pruneFFmpegBinaries(pluginNm);
   pruneDarwinUniversalNativePackages(pluginNm, opts.platform);
   pruneDanglingBinLinks(pluginNm);
 
