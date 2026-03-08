@@ -5,8 +5,9 @@
   "description": "OneClaw desktop app — cross-platform Electron shell for openclaw",
   "main": "dist/main.js",
   "scripts": {
+    "generate:settings-icons": "node scripts/generate-settings-icons.js",
     "build:chat": "cd chat-ui/ui && npm install --prefer-offline && npx vite build",
-    "build": "npm run build:chat && tsc -p tsconfig.json",
+    "build": "npm run generate:settings-icons && npm run build:chat && tsc -p tsconfig.json",
     "predev": "npm run build",
     "dev": "electron .",
     "package:resources": "node scripts/run-with-env.js node scripts/package-resources.js",
@@ -27,6 +28,7 @@
     "electron": "^40.2.1",
     "electron-builder": "^26.7.0",
     "isbinaryfile": "^5.0.0",
+    "lucide": "^0.577.0",
     "typescript": "^5.9.3"
   },
   "engines": {
