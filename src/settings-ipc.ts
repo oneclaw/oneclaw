@@ -41,6 +41,12 @@ import {
   isQqbotPluginBundled,
   saveQqbotConfig,
 } from "./qqbot-config";
+import {
+  extractDingtalkConfig,
+  isDingtalkPluginBundled,
+  saveDingtalkConfig,
+  DEFAULT_DINGTALK_SESSION_TIMEOUT_MS,
+} from "./dingtalk-config";
 import { ensureGatewayAuthTokenInConfig } from "./gateway-auth";
 import { getLaunchAtLoginState, setLaunchAtLoginEnabled } from "./launch-at-login";
 import { installCli, uninstallCli, isCliInstalled } from "./cli-integration";
@@ -394,6 +400,14 @@ export function registerSettingsIpc(opts: SettingsIpcOptions = {}): void {
     return "QQ Bot 组件缺失，请重新安装 OneClaw。";
   }
 
+  function resolveDingtalkMissingMessage(): string {
+    // dev 模式最常见的问题是还没执行 package:resources，把钉钉插件注入目标资源目录。
+    if (!app.isPackaged) {
+      return `开发模式未检测到钉钉连接器插件，请先运行 npm run package:resources（当前目标：${process.platform}-${process.arch}）。`;
+    }
+    return "钉钉连接器组件缺失，请重新安装 OneClaw。";
+  }
+
   ipcMain.handle("settings:get-qqbot-config", async () => {
     try {
       const config = readUserConfig();
@@ -445,6 +459,78 @@ export function registerSettingsIpc(opts: SettingsIpcOptions = {}): void {
             appId,
             clientSecret,
             markdownSupport,
+          });
+          writeUserConfigAndRestart(config);
+          return { success: true };
+        } catch (err: any) {
+          return { success: false, message: err.message || String(err) };
+        }
+      }
+    );
+  });
+
+  // ── 读取钉钉配置 ──
+  ipcMain.handle("settings:get-dingtalk-config", async () => {
+    try {
+      const config = readUserConfig();
+      const bundled = isDingtalkPluginBundled();
+      return {
+        success: true,
+        data: {
+          ...extractDingtalkConfig(config),
+          bundled,
+          bundleMessage: bundled ? "" : resolveDingtalkMissingMessage(),
+        },
+      };
+    } catch (err: any) {
+      return { success: false, message: err.message || String(err) };
+    }
+  });
+
+  // ── 保存钉钉配置（支持 enabled=false 仅切换开关） ──
+  ipcMain.handle("settings:save-dingtalk-config", async (_event, params) => {
+    const enabled = params?.enabled === true;
+    const clientId = typeof params?.clientId === "string" ? params.clientId.trim() : "";
+    const clientSecret = typeof params?.clientSecret === "string" ? params.clientSecret.trim() : "";
+    const rawSessionTimeout = params?.sessionTimeout;
+    const sessionTimeout =
+      typeof rawSessionTimeout === "number"
+        ? rawSessionTimeout
+        : typeof rawSessionTimeout === "string"
+          ? Number(rawSessionTimeout.trim())
+          : DEFAULT_DINGTALK_SESSION_TIMEOUT_MS;
+
+    return runTrackedSettingsAction(
+      "save_channel",
+      { platform: "dingtalk", enabled, session_timeout: sessionTimeout },
+      async () => {
+        try {
+          const config = readUserConfig();
+
+          if (!enabled) {
+            saveDingtalkConfig(config, { enabled: false });
+            writeUserConfigAndRestart(config);
+            return { success: true };
+          }
+
+          if (!clientId) {
+            return { success: false, message: "钉钉 Client ID / AppKey 不能为空。" };
+          }
+          if (!clientSecret) {
+            return { success: false, message: "钉钉 Client Secret / AppSecret 不能为空。" };
+          }
+          if (!Number.isFinite(sessionTimeout) || sessionTimeout <= 0) {
+            return { success: false, message: "会话超时必须是大于 0 的毫秒数。" };
+          }
+          if (!isDingtalkPluginBundled()) {
+            return { success: false, message: resolveDingtalkMissingMessage() };
+          }
+
+          saveDingtalkConfig(config, {
+            enabled: true,
+            clientId,
+            clientSecret,
+            sessionTimeout,
           });
           writeUserConfigAndRestart(config);
           return { success: true };

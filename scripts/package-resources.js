@@ -27,6 +27,7 @@ const KIMI_CLAW_CACHE_FILE = "kimi-claw-latest.tgz";
 const KIMI_SEARCH_DEFAULT_TGZ_URL = `${KIMI_CLAW_BASE_URL}/openclaw-kimi-search-0.1.2.tgz`;
 const KIMI_SEARCH_CACHE_FILE = "openclaw-kimi-search-0.1.2.tgz";
 const QQBOT_PACKAGE_NAME = "@sliverp/qqbot";
+const DINGTALK_CONNECTOR_PACKAGE_NAME = "@dingtalk-real-ai/dingtalk-connector";
 
 // 计算目标产物的唯一标识
 function getTargetId(platform, arch) {
@@ -570,6 +571,37 @@ function getQqbotPackageSource() {
   };
 }
 
+// 确定钉钉连接器安装来源：查询 npm latest stable
+function getDingtalkConnectorPackageSource() {
+  // 显式覆盖（调试 / 私有 tgz / 本地 file: 逃生舱）
+  const explicitSource = readEnvText("ONECLAW_DINGTALK_CONNECTOR_PACKAGE_SOURCE");
+  if (explicitSource) {
+    log(`使用 ONECLAW_DINGTALK_CONNECTOR_PACKAGE_SOURCE 指定来源: ${explicitSource}`);
+    return {
+      source: explicitSource,
+      stampSource: `explicit:${DINGTALK_CONNECTOR_PACKAGE_NAME}@${explicitSource}`,
+    };
+  }
+
+  const latestVersion = readRemoteLatestVersion(DINGTALK_CONNECTOR_PACKAGE_NAME, {
+    cwd: ROOT,
+    env: process.env,
+    logError(message) {
+      log(message);
+    },
+  });
+
+  if (!latestVersion) {
+    die(`无法从 npm 获取 ${DINGTALK_CONNECTOR_PACKAGE_NAME} 最新版本（检查网络或设置 ONECLAW_DINGTALK_CONNECTOR_PACKAGE_SOURCE 手动指定）`);
+  }
+
+  log(`使用 ${DINGTALK_CONNECTOR_PACKAGE_NAME}@${latestVersion}（来源: npm latest）`);
+  return {
+    source: latestVersion,
+    stampSource: `remote:${DINGTALK_CONNECTOR_PACKAGE_NAME}@${latestVersion}`,
+  };
+}
+
 // 读取 gateway 依赖平台戳
 function readGatewayStamp(stampPath) {
   try {
@@ -735,7 +767,8 @@ function installDependencies(opts, gatewayDir) {
   const stampPath = path.join(gatewayDir, ".gateway-stamp");
   const sourceInfo = getPackageSource();
   const qqbotSourceInfo = getQqbotPackageSource();
-  const targetStamp = `${opts.platform}-${opts.arch}|${sourceInfo.stampSource}|${qqbotSourceInfo.stampSource}`;
+  const dingtalkSourceInfo = getDingtalkConnectorPackageSource();
+  const targetStamp = `${opts.platform}-${opts.arch}|${sourceInfo.stampSource}|${qqbotSourceInfo.stampSource}|${dingtalkSourceInfo.stampSource}`;
 
   // 增量检测：stamp 匹配 + entry.js 存在 → 跳过安装
   const installedEntry = path.join(gatewayDir, "node_modules", "openclaw", "dist", "entry.js");
@@ -770,6 +803,7 @@ function installDependencies(opts, gatewayDir) {
       openclaw: source,
       clawhub: "latest",
       [QQBOT_PACKAGE_NAME]: qqbotSourceInfo.source,
+      [DINGTALK_CONNECTOR_PACKAGE_NAME]: dingtalkSourceInfo.source,
     },
   };
   fs.writeFileSync(path.join(gatewayDir, "package.json"), JSON.stringify(pkg, null, 2));
@@ -801,7 +835,7 @@ function installDependencies(opts, gatewayDir) {
   log("node_modules 裁剪完成");
 }
 
-// ─── Step 2.5: 注入 bundled 插件（kimi-claw + kimi-search + qqbot） ───
+// ─── Step 2.5: 注入 bundled 插件（kimi-claw + kimi-search + qqbot + dingtalk） ───
 
 // 插件定义（id → 下载/缓存参数）
 const BUNDLED_PLUGINS = [
@@ -827,6 +861,11 @@ const BUNDLED_PLUGINS = [
   {
     id: "qqbot",
     packageName: QQBOT_PACKAGE_NAME,
+    requiredFiles: ["package.json", "openclaw.plugin.json"],
+  },
+  {
+    id: "dingtalk-connector",
+    packageName: DINGTALK_CONNECTOR_PACKAGE_NAME,
     requiredFiles: ["package.json", "openclaw.plugin.json"],
   },
 ];
@@ -1232,6 +1271,7 @@ function verifyOutput(targetPaths, platform) {
     path.join(targetRel, "gateway", "node_modules", "openclaw", "extensions", "kimi-claw", "openclaw.plugin.json"),
     path.join(targetRel, "gateway", "node_modules", "openclaw", "extensions", "kimi-search", "openclaw.plugin.json"),
     path.join(targetRel, "gateway", "node_modules", "openclaw", "extensions", "qqbot", "openclaw.plugin.json"),
+    path.join(targetRel, "gateway", "node_modules", "openclaw", "extensions", "dingtalk-connector", "openclaw.plugin.json"),
   );
 
   let allOk = true;
@@ -1282,7 +1322,7 @@ async function main() {
 
   console.log();
 
-  // Step 2.5: 注入 bundled 插件（kimi-claw + kimi-search + qqbot）
+  // Step 2.5: 注入 bundled 插件（kimi-claw + kimi-search + qqbot + dingtalk）
   log("Step 2.5: 注入 bundled 插件");
   await bundleAllPlugins(targetPaths.gatewayDir, targetPaths.targetId);
 

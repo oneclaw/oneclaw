@@ -118,9 +118,11 @@
       "nav.chat": "Chat Integration",
       "nav.feishu": "Feishu Integration",
       "chat.title": "Chat Integration",
-      "chat.desc": "Connect Feishu, Kimi, or QQ and chat with AI directly inside your messaging app.",
+      "chat.desc": "Connect Feishu, DingTalk, Kimi, or QQ and chat with AI directly inside your messaging app.",
       "chat.platformFeishu": "Feishu",
       "chat.platformFeishuMeta": "Lark / Feishu bot",
+      "chat.platformDingtalk": "DingTalk",
+      "chat.platformDingtalkMeta": "DingTalk stream connector",
       "chat.platformKimi": "KimiClaw",
       "chat.platformKimiMeta": "Kimi bot bridge",
       "chat.platformQq": "QQ",
@@ -201,6 +203,17 @@
       "feishu.approvedRemoved": "Authorization removed.",
       "feishu.kindUser": "User",
       "feishu.kindGroup": "Group",
+      "dingtalk.desc": "Connect DingTalk so users can talk to OneClaw directly in DingTalk.",
+      "dingtalk.enabled": "Enable",
+      "dingtalk.clientId": "Client ID / AppKey",
+      "dingtalk.clientSecret": "Client Secret / AppSecret",
+      "dingtalk.sessionTimeout": "Session Timeout (ms)",
+      "dingtalk.sessionTimeoutHint": "Default is 1800000 ms (30 minutes).",
+      "dingtalk.gatewayHint": "OneClaw will auto-use the current gateway token and enable the required chatCompletions HTTP endpoint.",
+      "dingtalk.docs": "Setup Guide →",
+      "dingtalk.getKey": "Open DingTalk Open Platform →",
+      "dingtalk.save": "Save",
+      "dingtalk.saving": "Saving…",
       "qq.desc": "Connect QQ Bot so users can talk to OneClaw directly in QQ.",
       "qq.enabled": "Enable",
       "qq.appId": "QQ Bot App ID",
@@ -217,6 +230,10 @@
       "error.invalidGroupId": "Only group IDs starting with oc_ are allowed.",
       "error.noAppId": "Please enter the Feishu App ID.",
       "error.noAppSecret": "Please enter the App Secret.",
+      "error.noDingtalkClientId": "Please enter the DingTalk Client ID / AppKey.",
+      "error.noDingtalkClientSecret": "Please enter the DingTalk Client Secret / AppSecret.",
+      "error.invalidDingtalkSessionTimeout": "Please enter a valid session timeout in milliseconds.",
+      "error.dingtalkNotBundled": "DingTalk connector is missing. Please reinstall OneClaw.",
       "error.noQqAppId": "Please enter the QQ Bot App ID.",
       "error.noQqClientSecret": "Please enter the QQ Bot Client Secret.",
       "error.qqNotBundled": "QQ Bot component is missing. Please reinstall OneClaw.",
@@ -324,9 +341,11 @@
       "nav.chat": "聊天集成",
       "nav.feishu": "飞书集成",
       "chat.title": "聊天集成",
-      "chat.desc": "连接飞书、Kimi 或 QQ，让用户直接在聊天软件里和 OneClaw 对话。",
+      "chat.desc": "连接飞书、钉钉、Kimi 或 QQ，让用户直接在聊天软件里和 OneClaw 对话。",
       "chat.platformFeishu": "飞书",
       "chat.platformFeishuMeta": "Lark / 飞书机器人",
+      "chat.platformDingtalk": "钉钉",
+      "chat.platformDingtalkMeta": "钉钉 Stream 连接器",
       "chat.platformKimi": "KimiClaw",
       "chat.platformKimiMeta": "Kimi 远程机器人",
       "chat.platformQq": "QQ",
@@ -407,6 +426,17 @@
       "feishu.approvedRemoved": "已移除授权。",
       "feishu.kindUser": "用户",
       "feishu.kindGroup": "群聊",
+      "dingtalk.desc": "连接钉钉，让用户直接在钉钉里和 OneClaw 对话。",
+      "dingtalk.enabled": "启用状态",
+      "dingtalk.clientId": "Client ID / AppKey",
+      "dingtalk.clientSecret": "Client Secret / AppSecret",
+      "dingtalk.sessionTimeout": "会话超时（毫秒）",
+      "dingtalk.sessionTimeoutHint": "默认 1800000 毫秒（30 分钟）。",
+      "dingtalk.gatewayHint": "OneClaw 会自动复用当前 Gateway token，并补齐所需的 chatCompletions HTTP 端点。",
+      "dingtalk.docs": "配置指南 →",
+      "dingtalk.getKey": "打开钉钉开放平台 →",
+      "dingtalk.save": "保存",
+      "dingtalk.saving": "保存中…",
       "qq.desc": "连接 QQ Bot，让用户直接在 QQ 中和 OneClaw 对话。",
       "qq.enabled": "启用状态",
       "qq.appId": "QQ Bot App ID",
@@ -423,6 +453,10 @@
       "error.invalidGroupId": "仅允许填写以 oc_ 开头的群 ID。",
       "error.noAppId": "请输入飞书应用 ID。",
       "error.noAppSecret": "请输入应用密钥。",
+      "error.noDingtalkClientId": "请输入钉钉 Client ID / AppKey。",
+      "error.noDingtalkClientSecret": "请输入钉钉 Client Secret / AppSecret。",
+      "error.invalidDingtalkSessionTimeout": "请输入有效的会话超时毫秒值。",
+      "error.dingtalkNotBundled": "钉钉连接器组件缺失，请重新安装 OneClaw。",
       "error.noQqAppId": "请输入 QQ Bot App ID。",
       "error.noQqClientSecret": "请输入 QQ Bot Client Secret。",
       "error.qqNotBundled": "QQ Bot 组件缺失，请重新安装 OneClaw。",
@@ -585,6 +619,18 @@
     chGroupDialogInput: $("#chGroupDialogInput"),
     btnChGroupDialogCancel: $("#btnChGroupDialogCancel"),
     btnChGroupDialogConfirm: $("#btnChGroupDialogConfirm"),
+    dingtalkEnabled: $("#dingtalkEnabled"),
+    dingtalkFields: $("#dingtalkFields"),
+    dingtalkClientId: $("#dingtalkClientId"),
+    dingtalkClientSecret: $("#dingtalkClientSecret"),
+    dingtalkSessionTimeout: $("#dingtalkSessionTimeout"),
+    btnToggleDingtalkSecret: $("#btnToggleDingtalkSecret"),
+    dingtalkDocsLink: $("#dingtalkDocsLink"),
+    dingtalkConsoleLink: $("#dingtalkConsoleLink"),
+    dingtalkMsgBox: $("#dingtalkMsgBox"),
+    btnDingtalkSave: $("#btnDingtalkSave"),
+    btnDingtalkSaveText: $("#btnDingtalkSave .btn-text"),
+    btnDingtalkSaveSpinner: $("#btnDingtalkSave .btn-spinner"),
     qqEnabled: $("#qqEnabled"),
     qqFields: $("#qqFields"),
     qqAppId: $("#qqAppId"),
@@ -669,6 +715,7 @@
   let chApprovedRemovingKey = "";
   let chPairingRequests = [];
   let chApprovedEntries = [];
+  let dingtalkSaving = false;
   let qqSaving = false;
   let kimiSaving = false;
   let searchSaving = false;
@@ -688,6 +735,7 @@
   let startupNotice = "";
   const CHAT_PLATFORM_PANEL_IDS = {
     feishu: "chatPlatformFeishu",
+    dingtalk: "chatPlatformDingtalk",
     kimi: "chatPlatformKimi",
     qqbot: "chatPlatformQqbot",
   };
@@ -695,6 +743,8 @@
     channel: "channels",
     chat: "channels",
     feishu: "channels",
+    dingtalk: "channels",
+    "dingtalk-connector": "channels",
     kimi: "channels",
     qq: "channels",
     qqbot: "channels",
@@ -746,18 +796,26 @@
     return TAB_ALIAS_MAP[raw] || raw;
   }
 
-  // 兼容 feishu / qq / qqbot 这类历史入口，把它们映射到聊天集成子平台。
+  // 兼容 feishu / dingtalk / qq / qqbot 这类历史入口，把它们映射到聊天集成子平台。
   function normalizeChatPlatformName(platformName) {
     var raw = String(platformName || "").trim().toLowerCase();
+    if (raw === "dingtalk" || raw === "dingtalk-connector") return "dingtalk";
     if (raw === "qq" || raw === "qqbot") return "qqbot";
     if (raw === "kimi") return "kimi";
     return "feishu";
   }
 
-  // 当外部直接传 feishu / qqbot 这类 tab 时，自动选中对应子平台。
+  // 当外部直接传 feishu / dingtalk / qqbot 这类 tab 时，自动选中对应子平台。
   function inferChatPlatformFromTab(tabName) {
     var raw = String(tabName || "").trim().toLowerCase();
-    if (raw === "feishu" || raw === "kimi" || raw === "qq" || raw === "qqbot") {
+    if (
+      raw === "feishu" ||
+      raw === "dingtalk" ||
+      raw === "dingtalk-connector" ||
+      raw === "kimi" ||
+      raw === "qq" ||
+      raw === "qqbot"
+    ) {
       return normalizeChatPlatformName(raw);
     }
     return "";
@@ -1736,6 +1794,138 @@
     }
   }
 
+  // ── DingTalk ──
+
+  // 钉钉消息框与其它平台分离，避免不同平台的状态提示互相覆盖。
+  function showDingtalkMsg(msg, type) {
+    els.dingtalkMsgBox.textContent = msg;
+    els.dingtalkMsgBox.className = "msg-box " + type;
+  }
+
+  // 清空钉钉平台上的错误 / 成功提示。
+  function hideDingtalkMsg() {
+    els.dingtalkMsgBox.classList.add("hidden");
+    els.dingtalkMsgBox.textContent = "";
+    els.dingtalkMsgBox.className = "msg-box hidden";
+  }
+
+  // 同步钉钉保存按钮的 loading 状态。
+  function setDingtalkSaving(loading) {
+    dingtalkSaving = loading;
+    els.btnDingtalkSave.disabled = loading;
+    els.btnDingtalkSaveText.textContent = loading ? t("dingtalk.saving") : t("dingtalk.save");
+    els.btnDingtalkSaveSpinner.classList.toggle("hidden", !loading);
+  }
+
+  // 读取当前钉钉平台是否启用。
+  function isDingtalkEnabled() {
+    return !!(els.dingtalkEnabled && els.dingtalkEnabled.checked);
+  }
+
+  // 统一解析会话超时输入；留空时回退到 30 分钟默认值。
+  function parseDingtalkSessionTimeout() {
+    var raw = String(els.dingtalkSessionTimeout.value || "").trim();
+    if (!raw) return 1800000;
+    var parsed = Number(raw);
+    if (!Number.isFinite(parsed) || parsed <= 0) {
+      return NaN;
+    }
+    return Math.floor(parsed);
+  }
+
+  // 保存钉钉配置，自动复用当前 Gateway token，只让设置页管理核心字段。
+  async function handleDingtalkSave() {
+    if (dingtalkSaving) return;
+
+    var enabled = isDingtalkEnabled();
+    if (!enabled) {
+      setDingtalkSaving(true);
+      hideDingtalkMsg();
+      try {
+        var disableResult = await window.oneclaw.settingsSaveDingtalkConfig({ enabled: false });
+        setDingtalkSaving(false);
+        if (disableResult.success) {
+          showToast(t("common.saved"));
+        } else {
+          showDingtalkMsg(disableResult.message || "Save failed", "error");
+        }
+      } catch (err) {
+        setDingtalkSaving(false);
+        showDingtalkMsg(t("error.connection") + (err.message || "Unknown error"), "error");
+      }
+      return;
+    }
+
+    var clientId = String(els.dingtalkClientId.value || "").trim();
+    var clientSecret = String(els.dingtalkClientSecret.value || "").trim();
+    var sessionTimeout = parseDingtalkSessionTimeout();
+    if (!clientId) { showDingtalkMsg(t("error.noDingtalkClientId"), "error"); return; }
+    if (!clientSecret) { showDingtalkMsg(t("error.noDingtalkClientSecret"), "error"); return; }
+    if (!Number.isFinite(sessionTimeout) || sessionTimeout <= 0) {
+      showDingtalkMsg(t("error.invalidDingtalkSessionTimeout"), "error");
+      return;
+    }
+
+    setDingtalkSaving(true);
+    hideDingtalkMsg();
+
+    try {
+      var verifyResult = await window.oneclaw.settingsVerifyKey({
+        provider: "dingtalk",
+        clientId: clientId,
+        clientSecret: clientSecret,
+      });
+      if (!verifyResult.success) {
+        showDingtalkMsg(verifyResult.message || t("error.verifyFailed"), "error");
+        setDingtalkSaving(false);
+        return;
+      }
+
+      var saveResult = await window.oneclaw.settingsSaveDingtalkConfig({
+        enabled: true,
+        clientId: clientId,
+        clientSecret: clientSecret,
+        sessionTimeout: sessionTimeout,
+      });
+      if (!saveResult.success) {
+        showDingtalkMsg(saveResult.message || "Save failed", "error");
+        setDingtalkSaving(false);
+        return;
+      }
+
+      setDingtalkSaving(false);
+      showToast(t("common.saved"));
+    } catch (err) {
+      showDingtalkMsg(t("error.connection") + (err.message || "Unknown error"), "error");
+      setDingtalkSaving(false);
+    }
+  }
+
+  // 回填钉钉配置，并在未打包插件时给出前置提示。
+  async function loadDingtalkConfig() {
+    try {
+      var result = await window.oneclaw.settingsGetDingtalkConfig();
+      if (!result.success || !result.data) return;
+
+      var data = result.data;
+      if (data.clientId) els.dingtalkClientId.value = data.clientId;
+      if (data.clientSecret) els.dingtalkClientSecret.value = data.clientSecret;
+      els.dingtalkSessionTimeout.value = String(data.sessionTimeout || 1800000);
+
+      var enabled = !!data.enabled && !!data.clientId;
+      els.dingtalkEnabled.checked = enabled;
+      toggleEl(els.dingtalkFields, enabled);
+
+      if (data.bundled === false) {
+        showDingtalkMsg(data.bundleMessage || t("error.dingtalkNotBundled"), "error");
+      } else {
+        hideDingtalkMsg();
+      }
+    } catch (err) {
+      console.error("[Settings] loadDingtalkConfig failed:", err);
+    }
+  }
+
   // ── QQ Bot ──
 
   // QQ 消息框与飞书分离，避免两个平台互相覆盖状态提示。
@@ -2551,6 +2741,7 @@
     await Promise.allSettled([
       loadCurrentConfig(),
       loadChannelConfig(),
+      loadDingtalkConfig(),
       loadQqbotConfig(),
       loadKimiConfig(),
       loadSearchConfig(),
@@ -3001,6 +3192,45 @@
       if (e.key === "Enter") handleChSave();
     });
 
+    // DingTalk tab — 启用/禁用切换 + Secret 可见性
+    if (els.dingtalkEnabled) {
+      els.dingtalkEnabled.addEventListener("change", function () {
+        toggleEl(els.dingtalkFields, isDingtalkEnabled());
+      });
+    }
+    if (els.btnToggleDingtalkSecret) {
+      els.btnToggleDingtalkSecret.addEventListener("click", togglePasswordVisibility);
+    }
+    if (els.dingtalkDocsLink) {
+      els.dingtalkDocsLink.addEventListener("click", function (e) {
+        e.preventDefault();
+        if (window.oneclaw && window.oneclaw.openExternal) {
+          window.oneclaw.openExternal("https://github.com/DingTalk-Real-AI/dingtalk-openclaw-connector");
+        }
+      });
+    }
+    if (els.dingtalkConsoleLink) {
+      els.dingtalkConsoleLink.addEventListener("click", function (e) {
+        e.preventDefault();
+        if (window.oneclaw && window.oneclaw.openExternal) {
+          window.oneclaw.openExternal("https://open.dingtalk.com/");
+        }
+      });
+    }
+    if (els.btnDingtalkSave) {
+      els.btnDingtalkSave.addEventListener("click", handleDingtalkSave);
+    }
+    if (els.dingtalkClientSecret) {
+      els.dingtalkClientSecret.addEventListener("keydown", function (e) {
+        if (e.key === "Enter") handleDingtalkSave();
+      });
+    }
+    if (els.dingtalkSessionTimeout) {
+      els.dingtalkSessionTimeout.addEventListener("keydown", function (e) {
+        if (e.key === "Enter") handleDingtalkSave();
+      });
+    }
+
     // QQ Bot tab — 启用/禁用切换 + Secret 可见性
     if (els.qqEnabled) {
       els.qqEnabled.addEventListener("change", function () {
@@ -3129,6 +3359,7 @@
     applyRecoveryNotice(startupNotice);
     loadCurrentConfig();
     loadChannelConfig();
+    loadDingtalkConfig();
     loadQqbotConfig();
     loadKimiConfig();
     loadSearchConfig();

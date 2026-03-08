@@ -318,6 +318,49 @@ export function verifyQqbot(appId: string, clientSecret: string): Promise<void> 
   });
 }
 
+// 钉钉应用凭据验证（通过 accessToken 接口校验 clientId/AppKey + clientSecret/AppSecret）。
+export function verifyDingtalk(clientId: string, clientSecret: string): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const body = JSON.stringify({ appKey: clientId, appSecret: clientSecret });
+    const req = https.request(
+      {
+        hostname: "api.dingtalk.com",
+        path: "/v1.0/oauth2/accessToken",
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        timeout: 15000,
+      },
+      (res) => {
+        let data = "";
+        res.on("data", (d) => (data += d));
+        res.on("end", () => {
+          try {
+            const json = JSON.parse(data);
+            if (typeof json.accessToken === "string" && json.accessToken.trim()) {
+              resolve();
+              return;
+            }
+            reject(
+              new Error(
+                json.message ||
+                json.msg ||
+                json.errmsg ||
+                `钉钉验证失败: ${data.slice(0, 200)}`
+              )
+            );
+          } catch {
+            reject(new Error(`钉钉响应解析失败: ${data.slice(0, 200)}`));
+          }
+        });
+      }
+    );
+    req.on("error", (e) => reject(new Error(`网络错误: ${e.message}`)));
+    req.on("timeout", () => { req.destroy(); reject(new Error("请求超时")); });
+    req.write(body);
+    req.end();
+  });
+}
+
 // Custom provider 验证（根据 API 类型发真实 chat 请求，而非 /models）
 export async function verifyCustom(apiKey: string, baseURL?: string, apiType?: string, modelID?: string): Promise<void> {
   if (!baseURL) throw new Error("Custom provider 需要 Base URL");
@@ -381,6 +424,7 @@ export async function verifyProvider(params: {
   apiType?: string;
   modelID?: string;
   appId?: string;
+  clientId?: string;
   appSecret?: string;
   clientSecret?: string;
   customPreset?: string;
@@ -393,6 +437,7 @@ export async function verifyProvider(params: {
     apiType,
     modelID,
     appId,
+    clientId,
     appSecret,
     clientSecret,
     customPreset,
@@ -424,6 +469,9 @@ export async function verifyProvider(params: {
         break;
       case "qqbot":
         await verifyQqbot(appId!, clientSecret!);
+        break;
+      case "dingtalk":
+        await verifyDingtalk(clientId!, clientSecret!);
         break;
       default:
         return { success: false, message: `未知 Provider: ${provider}` };

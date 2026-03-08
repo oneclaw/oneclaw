@@ -38,6 +38,9 @@ contextBridge.exposeInMainWorld("oneclaw", {
   settingsGetQqbotConfig: () => ipcRenderer.invoke("settings:get-qqbot-config"),
   settingsSaveQqbotConfig: (params: Record<string, unknown>) =>
     ipcRenderer.invoke("settings:save-qqbot-config", params),
+  settingsGetDingtalkConfig: () => ipcRenderer.invoke("settings:get-dingtalk-config"),
+  settingsSaveDingtalkConfig: (params: Record<string, unknown>) =>
+    ipcRenderer.invoke("settings:save-dingtalk-config", params),
   settingsListFeishuPairing: () =>
     ipcRenderer.invoke("settings:list-feishu-pairing"),
   settingsListFeishuApproved: () =>
