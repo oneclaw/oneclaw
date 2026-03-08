@@ -12,7 +12,7 @@ const dict: Record<Locale, Record<string, string>> = {
     "sidebar.brand": "OneClaw",
     "sidebar.newChat": "新建对话",
     "sidebar.settings": "设置",
-    "sidebar.docs": "文档",
+    "sidebar.docs": "教程文档",
     "sidebar.updateReady": "重新启动即可更新",
     "sidebar.updateDownloading": "正在下载更新 {percent}%",
     "sidebar.agent": "会话列表",

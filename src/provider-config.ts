@@ -93,7 +93,7 @@ export const CUSTOM_PROVIDER_PRESETS: Record<string, CustomProviderPreset> = {
     baseUrl: "https://coding.dashscope.aliyuncs.com/v1",
     api: "openai-completions",
     placeholder: "sk-sp-...",
-    models: ["qwen-coder-plus-latest", "qwen-plus-latest", "qwen-max-latest", "qwen-turbo-latest"],
+    models: ["qwen3.5-plus", "kimi-k2.5", "glm-5", "MiniMax-M2.5",],
   },
 };
 

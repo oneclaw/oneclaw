@@ -102,7 +102,7 @@
     "qwen-coding": {
       providerKey: "qwen",
       placeholder: "sk-sp-...",
-      models: ["qwen-coder-plus-latest", "qwen-plus-latest", "qwen-max-latest", "qwen-turbo-latest"],
+      models: ["qwen3.5-plus", "kimi-k2.5", "glm-5", "MiniMax-M2.5",],
     },
   };
 
@@ -131,6 +131,7 @@
       "provider.apiType": "API Type",
       "provider.supportImage": "Supports image input",
       "provider.preset": "Preset",
+      "provider.presetManual": "Manual",
       "provider.customModelId": "Custom Model ID",
       "provider.customModelOption": "Custom Model…",
       "common.cancel": "Cancel",
@@ -315,6 +316,7 @@
       "provider.apiType": "接口类型",
       "provider.supportImage": "支持图像输入",
       "provider.preset": "预设",
+      "provider.presetManual": "手动配置",
       "provider.customModelId": "自定义模型 ID",
       "provider.customModelOption": "自定义模型…",
       "common.cancel": "取消",

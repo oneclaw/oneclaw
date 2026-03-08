@@ -94,7 +94,7 @@
     "qwen-coding": {
       providerKey: "qwen",
       placeholder: "sk-sp-...",
-      models: ["qwen-coder-plus-latest", "qwen-plus-latest", "qwen-max-latest", "qwen-turbo-latest"],
+      models: ["qwen3.5-plus", "kimi-k2.5", "glm-5", "MiniMax-M2.5",],
     },
   };
 
@@ -120,6 +120,7 @@
       "config.modelId": "Model ID",
       "config.apiType": "API Type",
       "config.preset": "Preset",
+      "config.presetManual": "Manual",
       "config.customModelId": "Custom Model ID",
       "config.customModelOption": "Custom Model…",
       "config.custom": "Custom",
@@ -173,6 +174,7 @@
       "config.modelId": "模型 ID",
       "config.apiType": "接口类型",
       "config.preset": "预设",
+      "config.presetManual": "手动配置",
       "config.customModelId": "自定义模型 ID",
       "config.customModelOption": "自定义模型…",
       "config.custom": "自定义",
