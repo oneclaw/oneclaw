@@ -11,6 +11,8 @@
       placeholder: "sk-ant-...",
       platformUrl: "https://console.anthropic.com?utm_source=oneclaw",
       models: [
+        "claude-sonnet-4-6",
+        "claude-opus-4-6",
         "claude-sonnet-4-5-20250929",
         "claude-opus-4-5-20251101",
         "claude-haiku-4-5-20251001",
@@ -24,12 +26,12 @@
     openai: {
       placeholder: "sk-...",
       platformUrl: "https://platform.openai.com?utm_source=oneclaw",
-      models: ["gpt-5.2", "gpt-5.2-codex"],
+      models: ["gpt-5.4", "gpt-5.2", "gpt-5.2-codex"],
     },
     google: {
       placeholder: "AI...",
       platformUrl: "https://aistudio.google.com?utm_source=oneclaw",
-      models: ["gemini-3-pro-preview", "gemini-3-flash-preview"],
+      models: ["gemini-3.1-pro", "gemini-3.1-flash", "gemini-3-pro-preview", "gemini-3-flash-preview"],
     },
     custom: {
       placeholder: "",
