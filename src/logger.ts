@@ -15,12 +15,22 @@ try {
   }
 } catch {}
 
+// 使用 WriteStream 异步缓冲写入，避免高频 appendFileSync 阻塞主进程
+let logStream: fs.WriteStream | null = null;
+
+function getLogStream(): fs.WriteStream {
+  if (!logStream) {
+    logStream = fs.createWriteStream(LOG_PATH, { flags: "a" });
+    logStream.on("error", () => {});
+  }
+  return logStream;
+}
+
 // 写一行日志到文件 + console 镜像
 function write(level: string, msg: string): void {
   const line = `[${new Date().toISOString()}] [${level}] ${msg}\n`;
   try {
-    fs.mkdirSync(path.dirname(LOG_PATH), { recursive: true });
-    fs.appendFileSync(LOG_PATH, line);
+    getLogStream().write(line);
   } catch {}
 
   if (level === "ERROR") {

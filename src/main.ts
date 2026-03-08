@@ -37,9 +37,9 @@ function formatConsoleLevel(level: number): string {
   return map[level] ?? `LEVEL_${level}`;
 }
 
-// 过滤渲染层高频请求日志，避免 node.list 等轮询刷屏污染主日志。
+// 过滤渲染层高频日志，避免 onEvent/request 等每秒数百次的消息阻塞主进程
 function isNoisyRendererConsoleMessage(message: string): boolean {
-  return message.startsWith("[gateway] request sent ");
+  return message.startsWith("[gateway] request sent ") || message.startsWith("[gateway] onEvent ");
 }
 
 function attachRendererDebugHandlers(label: string, webContents: Electron.WebContents): void {

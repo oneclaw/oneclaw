@@ -166,7 +166,6 @@ export function connectGateway(host: GatewayHost) {
       if (host.client !== client) {
         return;
       }
-      console.debug("[gateway] onEvent", evt.event, evt.seq, evt.type);
       handleGatewayEvent(host, evt);
     },
     onGap: ({ expected, received }) => {
@@ -192,10 +191,11 @@ export function handleGatewayEvent(host: GatewayHost, evt: GatewayEventFrame) {
 }
 
 function handleGatewayEventUnsafe(host: GatewayHost, evt: GatewayEventFrame) {
-  host.eventLogBuffer = [
-    { ts: Date.now(), event: evt.event, payload: evt.payload },
-    ...host.eventLogBuffer,
-  ].slice(0, 250);
+  // 直接 unshift + 截断，避免每个事件都 spread 整个数组造成 GC 风暴
+  host.eventLogBuffer.unshift({ ts: Date.now(), event: evt.event, payload: evt.payload });
+  if (host.eventLogBuffer.length > 250) {
+    host.eventLogBuffer.length = 250;
+  }
   if (host.tab === "debug") {
     host.eventLog = host.eventLogBuffer;
   }
