@@ -24,6 +24,79 @@ export const MOONSHOT_SUB_PLATFORMS: Record<string, { baseUrl: string; api: stri
   "kimi-code": { baseUrl: "https://api.kimi.com/coding", api: "anthropic-messages", providerKey: "kimi-coding" },
 };
 
+// Custom tab 内置预设（国产 provider 快捷配置）
+export interface CustomProviderPreset extends ProviderPreset {
+  providerKey: string;
+  placeholder: string;
+  models: string[];
+}
+
+export const CUSTOM_PROVIDER_PRESETS: Record<string, CustomProviderPreset> = {
+  "minimax": {
+    providerKey: "minimax",
+    baseUrl: "https://api.minimax.io/anthropic",
+    api: "anthropic-messages",
+    placeholder: "eyJ...",
+    models: ["MiniMax-M2.5", "MiniMax-M2.5-highspeed"],
+  },
+  "minimax-cn": {
+    providerKey: "minimax-cn",
+    baseUrl: "https://api.minimaxi.com/anthropic",
+    api: "anthropic-messages",
+    placeholder: "eyJ...",
+    models: ["MiniMax-M2.5", "MiniMax-M2.5-highspeed"],
+  },
+  "zai-global": {
+    providerKey: "zai",
+    baseUrl: "https://api.z.ai/api/paas/v4",
+    api: "openai-completions",
+    placeholder: "...",
+    models: ["glm-5", "glm-4.7", "glm-4.7-flash", "glm-4.7-flashx"],
+  },
+  "zai-cn": {
+    providerKey: "zai",
+    baseUrl: "https://open.bigmodel.cn/api/paas/v4",
+    api: "openai-completions",
+    placeholder: "...",
+    models: ["glm-5", "glm-4.7", "glm-4.7-flash", "glm-4.7-flashx"],
+  },
+  "zai-cn-coding": {
+    providerKey: "zai",
+    baseUrl: "https://open.bigmodel.cn/api/coding/paas/v4",
+    api: "openai-completions",
+    placeholder: "...",
+    models: ["glm-5", "glm-4.7", "glm-4.7-flash", "glm-4.7-flashx"],
+  },
+  "volcengine": {
+    providerKey: "volcengine",
+    baseUrl: "https://ark.cn-beijing.volces.com/api/v3",
+    api: "openai-completions",
+    placeholder: "...",
+    models: ["doubao-seed-1-8-251228", "doubao-seed-code-preview-251028", "deepseek-v3-2-251201"],
+  },
+  "volcengine-coding": {
+    providerKey: "volcengine",
+    baseUrl: "https://ark.cn-beijing.volces.com/api/coding",
+    api: "openai-completions",
+    placeholder: "...",
+    models: ["doubao-seed-1-8-251228", "doubao-seed-code-preview-251028", "deepseek-v3-2-251201"],
+  },
+  "qwen": {
+    providerKey: "qwen",
+    baseUrl: "https://dashscope.aliyuncs.com/compatible-mode/v1",
+    api: "openai-completions",
+    placeholder: "sk-...",
+    models: ["qwen-coder-plus-latest", "qwen-plus-latest", "qwen-max-latest", "qwen-turbo-latest"],
+  },
+  "qwen-coding": {
+    providerKey: "qwen",
+    baseUrl: "https://coding.dashscope.aliyuncs.com/v1",
+    api: "openai-completions",
+    placeholder: "sk-sp-...",
+    models: ["qwen-coder-plus-latest", "qwen-plus-latest", "qwen-max-latest", "qwen-turbo-latest"],
+  },
+};
+
 // ── 构建 Provider 配置对象 ──
 
 export function buildProviderConfig(
@@ -32,7 +105,8 @@ export function buildProviderConfig(
   modelID: string,
   baseURL?: string,
   api?: string,
-  supportImage?: boolean
+  supportImage?: boolean,
+  customPreset?: string
 ): Record<string, unknown> {
   const preset = PROVIDER_PRESETS[provider];
 
@@ -42,6 +116,17 @@ export function buildProviderConfig(
       apiKey,
       baseUrl: preset.baseUrl,
       api: preset.api,
+      models: [{ id: modelID, name: modelID, input: ["text", "image"] }],
+    };
+  }
+
+  // Custom 内置预设命中时，使用预设的 baseUrl 和 api
+  const customPre = customPreset ? CUSTOM_PROVIDER_PRESETS[customPreset] : undefined;
+  if (customPre) {
+    return {
+      apiKey,
+      baseUrl: customPre.baseUrl,
+      api: customPre.api,
       models: [{ id: modelID, name: modelID, input: ["text", "image"] }],
     };
   }
@@ -261,8 +346,9 @@ export async function verifyProvider(params: {
   modelID?: string;
   appId?: string;
   appSecret?: string;
+  customPreset?: string;
 }): Promise<{ success: boolean; message?: string }> {
-  const { provider, apiKey, baseURL, subPlatform, apiType, modelID, appId, appSecret } = params;
+  const { provider, apiKey, baseURL, subPlatform, apiType, modelID, appId, appSecret, customPreset } = params;
   try {
     switch (provider) {
       case "anthropic":
@@ -277,9 +363,14 @@ export async function verifyProvider(params: {
       case "moonshot":
         await verifyMoonshot(apiKey!, subPlatform, modelID);
         break;
-      case "custom":
-        await verifyCustom(apiKey!, baseURL, apiType, modelID);
+      case "custom": {
+        // 内置预设命中时，使用预设的 baseUrl 和 api 进行验证
+        const customPre = customPreset ? CUSTOM_PROVIDER_PRESETS[customPreset] : undefined;
+        const effectiveBaseURL = customPre ? customPre.baseUrl : baseURL;
+        const effectiveApiType = customPre ? customPre.api : apiType;
+        await verifyCustom(apiKey!, effectiveBaseURL, effectiveApiType, modelID);
         break;
+      }
       case "feishu":
         await verifyFeishu(appId!, appSecret!);
         break;

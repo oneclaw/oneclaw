@@ -6,6 +6,7 @@ import { getLaunchAtLoginState, setLaunchAtLoginEnabled } from "./launch-at-logi
 import {
   PROVIDER_PRESETS,
   MOONSHOT_SUB_PLATFORMS,
+  CUSTOM_PROVIDER_PRESETS,
   verifyProvider,
   buildProviderConfig,
   saveMoonshotConfig,
@@ -158,11 +159,13 @@ export function registerSetupIpc(deps: SetupIpcDeps): void {
       api,
       subPlatform,
       supportImage,
+      customPreset,
     } = params;
     const trackedProps = {
       provider,
       model: modelID,
       sub_platform: subPlatform || undefined,
+      custom_preset: customPreset || undefined,
     };
     return runTrackedSetupAction("save_config", trackedProps, async () => {
       try {
@@ -184,10 +187,14 @@ export function registerSetupIpc(deps: SetupIpcDeps): void {
             saveKimiSearchConfig(config, { enabled: true });
           }
         } else {
+          // 内置预设命中时，使用预设的 providerKey 作为配置键
+          const customPre = customPreset ? CUSTOM_PROVIDER_PRESETS[customPreset] : undefined;
+          const configKey = customPre ? customPre.providerKey : provider;
+
           // 构造 provider 配置
-          const providerConfig = buildProviderConfig(provider, apiKey, modelID, baseURL, api, supportImage);
-          config.models.providers[provider] = providerConfig;
-          config.agents.defaults.model.primary = `${provider}/${modelID}`;
+          const providerConfig = buildProviderConfig(provider, apiKey, modelID, baseURL, api, supportImage, customPreset);
+          config.models.providers[configKey] = providerConfig;
+          config.agents.defaults.model.primary = `${configKey}/${modelID}`;
         }
 
         // 统一 gateway 鉴权配置：local 模式 + 持久化 token（单一真相源）

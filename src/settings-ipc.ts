@@ -17,6 +17,7 @@ import {
 import {
   PROVIDER_PRESETS,
   MOONSHOT_SUB_PLATFORMS,
+  CUSTOM_PROVIDER_PRESETS,
   verifyProvider,
   buildProviderConfig,
   saveMoonshotConfig,
@@ -195,11 +196,12 @@ export function registerSettingsIpc(opts: SettingsIpcOptions = {}): void {
 
   // ── 保存 provider 配置 ──
   ipcMain.handle("settings:save-provider", async (_event, params) => {
-    const { provider, apiKey, modelID, baseURL, api, subPlatform, supportImage } = params;
+    const { provider, apiKey, modelID, baseURL, api, subPlatform, supportImage, customPreset } = params;
     const trackedProps = {
       provider,
       model: modelID,
       sub_platform: subPlatform || undefined,
+      custom_preset: customPreset || undefined,
     };
     return runTrackedSettingsAction("save_provider", trackedProps, async () => {
       try {
@@ -223,13 +225,16 @@ export function registerSettingsIpc(opts: SettingsIpcOptions = {}): void {
           // 合并：保留已有模型，确保选中模型在列表中
           mergeModels(config.models.providers[provKey], modelID, prevModels);
         } else {
-          const prevModels: any[] = config.models.providers[provider]?.models ?? [];
+          // 内置预设命中时，使用预设的 providerKey 作为配置键
+          const customPre = customPreset ? CUSTOM_PROVIDER_PRESETS[customPreset] : undefined;
+          const configKey = customPre ? customPre.providerKey : provider;
+          const prevModels: any[] = config.models.providers[configKey]?.models ?? [];
 
-          const providerConfig = buildProviderConfig(provider, apiKey, modelID, baseURL, api, supportImage);
-          config.models.providers[provider] = providerConfig;
-          config.agents.defaults.model.primary = `${provider}/${modelID}`;
+          const providerConfig = buildProviderConfig(provider, apiKey, modelID, baseURL, api, supportImage, customPreset);
+          config.models.providers[configKey] = providerConfig;
+          config.agents.defaults.model.primary = `${configKey}/${modelID}`;
 
-          mergeModels(config.models.providers[provider], modelID, prevModels);
+          mergeModels(config.models.providers[configKey], modelID, prevModels);
         }
 
         // 配置 kimi-code 时自动启用搜索插件
@@ -1470,6 +1475,7 @@ function extractProviderInfo(config: any): any {
 
   let provider = providerKey;
   let subPlatform = "";
+  let customPreset = "";
   let apiKey = "";
   let baseURL = "";
   let api = "";
@@ -1504,6 +1510,17 @@ function extractProviderInfo(config: any): any {
     baseURL = prov?.baseUrl ?? "";
     api = prov?.api ?? "";
     configuredModels = extractModelIds(prov);
+
+    // 检查是否匹配某个 custom 预设（通过 providerKey + baseUrl 反查）
+    const matchedPreset = Object.entries(CUSTOM_PROVIDER_PRESETS).find(
+      ([, preset]) => preset.providerKey === providerKey && preset.baseUrl === baseURL
+    );
+    if (matchedPreset) {
+      // 映射回 custom provider + 预设 key，前端可恢复下拉状态
+      provider = "custom";
+      customPreset = matchedPreset[0];
+    }
+
     // 从当前选中模型（primary）推断 custom provider 是否支持图像，避免读取到旧模型条目。
     const models = Array.isArray(prov?.models) ? prov.models : [];
     const matchedModel = models.find((item: any) => item && typeof item === "object" && item.id === modelID);
@@ -1530,6 +1547,7 @@ function extractProviderInfo(config: any): any {
   return {
     provider,
     subPlatform,
+    customPreset,
     modelID,
     apiKey,
     baseURL,

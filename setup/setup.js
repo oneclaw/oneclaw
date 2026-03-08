@@ -49,6 +49,55 @@
   // Kimi Code 子平台使用独立模型列表
   const KIMI_CODE_MODELS = ["k2p5"];
 
+  // Custom tab 内置预设
+  const CUSTOM_PRESETS = {
+    "minimax": {
+      providerKey: "minimax",
+      placeholder: "eyJ...",
+      models: ["MiniMax-M2.5", "MiniMax-M2.5-highspeed"],
+    },
+    "minimax-cn": {
+      providerKey: "minimax-cn",
+      placeholder: "eyJ...",
+      models: ["MiniMax-M2.5", "MiniMax-M2.5-highspeed"],
+    },
+    "zai-global": {
+      providerKey: "zai",
+      placeholder: "...",
+      models: ["glm-5", "glm-4.7", "glm-4.7-flash", "glm-4.7-flashx"],
+    },
+    "zai-cn": {
+      providerKey: "zai",
+      placeholder: "...",
+      models: ["glm-5", "glm-4.7", "glm-4.7-flash", "glm-4.7-flashx"],
+    },
+    "zai-cn-coding": {
+      providerKey: "zai",
+      placeholder: "...",
+      models: ["glm-5", "glm-4.7", "glm-4.7-flash", "glm-4.7-flashx"],
+    },
+    "volcengine": {
+      providerKey: "volcengine",
+      placeholder: "...",
+      models: ["doubao-seed-1-8-251228", "doubao-seed-code-preview-251028", "deepseek-v3-2-251201"],
+    },
+    "volcengine-coding": {
+      providerKey: "volcengine",
+      placeholder: "...",
+      models: ["doubao-seed-1-8-251228", "doubao-seed-code-preview-251028", "deepseek-v3-2-251201"],
+    },
+    "qwen": {
+      providerKey: "qwen",
+      placeholder: "sk-...",
+      models: ["qwen-coder-plus-latest", "qwen-plus-latest", "qwen-max-latest", "qwen-turbo-latest"],
+    },
+    "qwen-coding": {
+      providerKey: "qwen",
+      placeholder: "sk-sp-...",
+      models: ["qwen-coder-plus-latest", "qwen-plus-latest", "qwen-max-latest", "qwen-turbo-latest"],
+    },
+  };
+
   // ---- 国际化文案 ----
   const I18N = {
     en: {
@@ -70,6 +119,9 @@
       "config.model": "Model",
       "config.modelId": "Model ID",
       "config.apiType": "API Type",
+      "config.preset": "Preset",
+      "config.customModelId": "Custom Model ID",
+      "config.customModelOption": "Custom Model…",
       "config.custom": "Custom",
       "config.back": "Back",
       "config.verify": "Verify & Continue",
@@ -120,6 +172,9 @@
       "config.model": "模型",
       "config.modelId": "模型 ID",
       "config.apiType": "接口类型",
+      "config.preset": "预设",
+      "config.customModelId": "自定义模型 ID",
+      "config.customModelOption": "自定义模型…",
       "config.custom": "自定义",
       "config.back": "返回",
       "config.verify": "验证并继续",
@@ -176,6 +231,10 @@
     apiTypeGroup: $("#apiTypeGroup"),
     imageSupportGroup: $("#imageSupportGroup"),
     imageSupport: $("#imageSupport"),
+    customPresetGroup: $("#customPresetGroup"),
+    customPreset: $("#customPreset"),
+    customModelInputGroup: $("#customModelInputGroup"),
+    customModelInput: $("#customModelInput"),
     errorMsg: $("#errorMsg"),
     btnBackToStep1: $("#btnBackToStep1"),
     btnVerify: $("#btnVerify"),
@@ -371,35 +430,84 @@
     currentProvider = provider;
     const config = PROVIDERS[provider];
 
-    // 高亮当前 tab
     $$(".provider-tab").forEach((tab) => {
       tab.classList.toggle("active", tab.dataset.provider === provider);
     });
 
-    // 更新 API Key 占位符
     els.apiKeyInput.placeholder = config.placeholder;
     els.apiKeyInput.value = "";
-
     hideError();
-
-    // 平台链接
     updatePlatformLink();
-
-    // Moonshot 子平台
     toggleEl(els.subPlatformGroup, config.hasSubPlatform === true);
 
-    // Custom 专属字段
     const isCustom = provider === "custom";
-    toggleEl(els.baseURLGroup, isCustom);
-    toggleEl(els.modelInputGroup, isCustom);
-    toggleEl(els.apiTypeGroup, isCustom);
-    toggleEl(els.imageSupportGroup, isCustom);
+    // 预设下拉仅 Custom tab 显示
+    toggleEl(els.customPresetGroup, isCustom);
 
-    // 模型选择
-    toggleEl(els.modelSelectGroup, !isCustom);
-
-    if (!isCustom) {
+    if (isCustom) {
+      els.customPreset.value = "";
+      applyCustomPreset("");
+    } else {
+      toggleEl(els.baseURLGroup, false);
+      toggleEl(els.modelInputGroup, false);
+      toggleEl(els.apiTypeGroup, false);
+      toggleEl(els.imageSupportGroup, false);
+      toggleEl(els.customModelInputGroup, false);
+      toggleEl(els.modelSelectGroup, true);
       updateModels();
+    }
+  }
+
+  // 自定义 Model ID 哨兵值（下拉最后一项）
+  const CUSTOM_MODEL_SENTINEL = "__custom__";
+
+  // 根据预设切换 Custom tab 的字段显隐
+  function applyCustomPreset(presetKey) {
+    const preset = CUSTOM_PRESETS[presetKey];
+
+    if (preset) {
+      // 预设模式：隐藏手动字段，显示模型下拉
+      toggleEl(els.baseURLGroup, false);
+      toggleEl(els.apiTypeGroup, false);
+      toggleEl(els.imageSupportGroup, false);
+      toggleEl(els.modelInputGroup, false);
+      toggleEl(els.modelSelectGroup, true);
+      toggleEl(els.customModelInputGroup, false);
+
+      els.apiKeyInput.placeholder = preset.placeholder;
+      els.customModelInput.value = "";
+      populatePresetModels(preset.models);
+      updatePlatformLink();
+    } else {
+      // 手动模式：恢复原始 Custom 行为
+      toggleEl(els.baseURLGroup, true);
+      toggleEl(els.apiTypeGroup, true);
+      toggleEl(els.imageSupportGroup, true);
+      toggleEl(els.modelInputGroup, true);
+      toggleEl(els.modelSelectGroup, false);
+      toggleEl(els.customModelInputGroup, false);
+
+      els.apiKeyInput.placeholder = "";
+      updatePlatformLink();
+    }
+  }
+
+  // 填充预设模型列表，末尾追加"自定义模型"选项
+  function populatePresetModels(models) {
+    populateModels(models);
+    const opt = document.createElement("option");
+    opt.value = CUSTOM_MODEL_SENTINEL;
+    opt.textContent = t("config.customModelOption");
+    els.modelSelect.appendChild(opt);
+  }
+
+  // 模型下拉切换时，判断是否显示自定义输入框
+  function handleModelSelectChange() {
+    if (currentProvider !== "custom" || !els.customPreset.value) return;
+    const isCustomModel = els.modelSelect.value === CUSTOM_MODEL_SENTINEL;
+    toggleEl(els.customModelInputGroup, isCustomModel);
+    if (isCustomModel) {
+      els.customModelInput.focus();
     }
   }
 
@@ -409,6 +517,11 @@
     // Moonshot 子平台各有独立 URL
     if (currentProvider === "moonshot") {
       url = SUB_PLATFORM_URLS[getSubPlatform()] || "";
+    }
+    // Custom 预设的平台链接
+    if (currentProvider === "custom") {
+      const preset = CUSTOM_PRESETS[els.customPreset.value];
+      url = preset ? preset.platformUrl : "";
     }
     if (url) {
       // Moonshot 子平台显示带平台名的链接文本
@@ -498,20 +611,37 @@
     };
 
     if (currentProvider === "custom") {
-      const baseURL = ($("#baseURL").value || "").trim();
-      const modelID = (els.modelInput.value || "").trim();
-      if (!baseURL) {
-        showError(t("error.noBaseUrl"));
-        return null;
+      const presetKey = els.customPreset.value;
+      if (presetKey) {
+        // 预设模式：选了"自定义模型"时用输入框，否则用下拉值
+        if (els.modelSelect.value === CUSTOM_MODEL_SENTINEL) {
+          const customModel = (els.customModelInput.value || "").trim();
+          if (!customModel) {
+            showError(t("error.noModelId"));
+            return null;
+          }
+          params.modelID = customModel;
+        } else {
+          params.modelID = els.modelSelect.value;
+        }
+        params.customPreset = presetKey;
+      } else {
+        // 手动模式
+        const baseURL = ($("#baseURL").value || "").trim();
+        const modelID = (els.modelInput.value || "").trim();
+        if (!baseURL) {
+          showError(t("error.noBaseUrl"));
+          return null;
+        }
+        if (!modelID) {
+          showError(t("error.noModelId"));
+          return null;
+        }
+        params.baseURL = baseURL;
+        params.modelID = modelID;
+        params.apiType = document.querySelector('input[name="apiType"]:checked').value;
+        params.supportImage = els.imageSupport.checked;
       }
-      if (!modelID) {
-        showError(t("error.noModelId"));
-        return null;
-      }
-      params.baseURL = baseURL;
-      params.modelID = modelID;
-      params.apiType = document.querySelector('input[name="apiType"]:checked').value;
-      params.supportImage = els.imageSupport.checked;
     } else {
       params.modelID = els.modelSelect.value;
     }
@@ -534,6 +664,7 @@
       api: params.apiType || "",
       subPlatform: params.subPlatform || "",
       supportImage: params.supportImage ?? true,
+      customPreset: params.customPreset || "",
     };
   }
 
@@ -654,6 +785,14 @@
         }
       });
     }
+
+    // Custom 预设切换
+    els.customPreset.addEventListener("change", () => {
+      applyCustomPreset(els.customPreset.value);
+    });
+
+    // 模型下拉切换 → 控制自定义模型输入框显隐
+    els.modelSelect.addEventListener("change", handleModelSelectChange);
 
     // 平台链接点击 → 用系统浏览器打开
     els.platformLink.addEventListener("click", (e) => {

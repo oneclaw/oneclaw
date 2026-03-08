@@ -57,6 +57,55 @@
 
   const KIMI_CODE_MODELS = ["k2p5"];
 
+  // Custom tab 内置预设
+  const CUSTOM_PRESETS = {
+    "minimax": {
+      providerKey: "minimax",
+      placeholder: "eyJ...",
+      models: ["MiniMax-M2.5", "MiniMax-M2.5-highspeed"],
+    },
+    "minimax-cn": {
+      providerKey: "minimax-cn",
+      placeholder: "eyJ...",
+      models: ["MiniMax-M2.5", "MiniMax-M2.5-highspeed"],
+    },
+    "zai-global": {
+      providerKey: "zai",
+      placeholder: "...",
+      models: ["glm-5", "glm-4.7", "glm-4.7-flash", "glm-4.7-flashx"],
+    },
+    "zai-cn": {
+      providerKey: "zai",
+      placeholder: "...",
+      models: ["glm-5", "glm-4.7", "glm-4.7-flash", "glm-4.7-flashx"],
+    },
+    "zai-cn-coding": {
+      providerKey: "zai",
+      placeholder: "...",
+      models: ["glm-5", "glm-4.7", "glm-4.7-flash", "glm-4.7-flashx"],
+    },
+    "volcengine": {
+      providerKey: "volcengine",
+      placeholder: "...",
+      models: ["doubao-seed-1-8-251228", "doubao-seed-code-preview-251028", "deepseek-v3-2-251201"],
+    },
+    "volcengine-coding": {
+      providerKey: "volcengine",
+      placeholder: "...",
+      models: ["doubao-seed-1-8-251228", "doubao-seed-code-preview-251028", "deepseek-v3-2-251201"],
+    },
+    "qwen": {
+      providerKey: "qwen",
+      placeholder: "sk-...",
+      models: ["qwen-coder-plus-latest", "qwen-plus-latest", "qwen-max-latest", "qwen-turbo-latest"],
+    },
+    "qwen-coding": {
+      providerKey: "qwen",
+      placeholder: "sk-sp-...",
+      models: ["qwen-coder-plus-latest", "qwen-plus-latest", "qwen-max-latest", "qwen-turbo-latest"],
+    },
+  };
+
   // 已保存的各 provider 配置缓存（供切换时自动回填）
   var savedProviders = {};
 
@@ -81,6 +130,9 @@
       "provider.modelId": "Model ID",
       "provider.apiType": "API Type",
       "provider.supportImage": "Supports image input",
+      "provider.preset": "Preset",
+      "provider.customModelId": "Custom Model ID",
+      "provider.customModelOption": "Custom Model…",
       "common.cancel": "Cancel",
       "common.confirm": "Confirm",
       "common.saved": "Saved. Refreshing Gateway.",
@@ -262,6 +314,9 @@
       "provider.modelId": "模型 ID",
       "provider.apiType": "接口类型",
       "provider.supportImage": "支持图像输入",
+      "provider.preset": "预设",
+      "provider.customModelId": "自定义模型 ID",
+      "provider.customModelOption": "自定义模型…",
       "common.cancel": "取消",
       "common.confirm": "确认",
       "common.saved": "已保存. 正在刷新 Gateway",
@@ -451,6 +506,10 @@
     apiTypeGroup: $("#apiTypeGroup"),
     imageSupportGroup: $("#imageSupportGroup"),
     supportImageCheckbox: $("#supportImage"),
+    customPresetGroup: $("#customPresetGroup"),
+    customPreset: $("#customPreset"),
+    customModelInputGroup: $("#customModelInputGroup"),
+    customModelInput: $("#customModelInput"),
     msgBox: $("#msgBox"),
     btnSave: $("#btnSave"),
     btnSaveText: $("#btnSave .btn-text"),
@@ -655,6 +714,15 @@
       var provKey = sub === "kimi-code" ? "kimi-coding" : "moonshot";
       return savedProviders[provKey] || null;
     }
+    // Custom 预设：用预设的 providerKey 查找已保存配置
+    if (provider === "custom") {
+      var presetKey = els.customPreset.value;
+      var preset = presetKey ? CUSTOM_PRESETS[presetKey] : null;
+      if (preset) {
+        return savedProviders[preset.providerKey] || savedProviders["custom"] || null;
+      }
+      return savedProviders["custom"] || null;
+    }
     return savedProviders[provider] || null;
   }
 
@@ -698,18 +766,20 @@
     toggleEl(els.subPlatformGroup, config.hasSubPlatform === true);
 
     const isCustom = provider === "custom";
-    toggleEl(els.baseURLGroup, isCustom);
-    toggleEl(els.modelInputGroup, isCustom);
-    toggleEl(els.apiTypeGroup, isCustom);
-    toggleEl(els.imageSupportGroup, isCustom);
-    toggleEl(els.modelSelectGroup, !isCustom);
+    // 预设下拉仅 Custom tab 显示
+    toggleEl(els.customPresetGroup, isCustom);
 
-    // Custom 切换时重置 checkbox 为默认勾选
     if (isCustom) {
+      els.customPreset.value = "";
       els.supportImageCheckbox.checked = true;
-    }
-
-    if (!isCustom) {
+      applyCustomPreset("");
+    } else {
+      toggleEl(els.baseURLGroup, false);
+      toggleEl(els.modelInputGroup, false);
+      toggleEl(els.apiTypeGroup, false);
+      toggleEl(els.imageSupportGroup, false);
+      toggleEl(els.customModelInputGroup, false);
+      toggleEl(els.modelSelectGroup, true);
       updateModels();
     }
 
@@ -717,10 +787,68 @@
     fillSavedProviderFields(provider);
   }
 
+  // 自定义 Model ID 哨兵值（下拉最后一项）
+  var CUSTOM_MODEL_SENTINEL = "__custom__";
+
+  // 根据预设切换 Custom tab 的字段显隐
+  function applyCustomPreset(presetKey) {
+    var preset = CUSTOM_PRESETS[presetKey];
+
+    if (preset) {
+      // 预设模式：隐藏手动字段，显示模型下拉
+      toggleEl(els.baseURLGroup, false);
+      toggleEl(els.apiTypeGroup, false);
+      toggleEl(els.imageSupportGroup, false);
+      toggleEl(els.modelInputGroup, false);
+      toggleEl(els.modelSelectGroup, true);
+      toggleEl(els.customModelInputGroup, false);
+
+      els.apiKeyInput.placeholder = preset.placeholder;
+      els.customModelInput.value = "";
+      populatePresetModels(preset.models);
+      updatePlatformLink();
+    } else {
+      // 手动模式：恢复原始 Custom 行为
+      toggleEl(els.baseURLGroup, true);
+      toggleEl(els.apiTypeGroup, true);
+      toggleEl(els.imageSupportGroup, true);
+      toggleEl(els.modelInputGroup, true);
+      toggleEl(els.modelSelectGroup, false);
+      toggleEl(els.customModelInputGroup, false);
+
+      els.apiKeyInput.placeholder = "";
+      updatePlatformLink();
+    }
+  }
+
+  // 填充预设模型列表，末尾追加"自定义模型"选项
+  function populatePresetModels(models) {
+    populateModels(models);
+    var opt = document.createElement("option");
+    opt.value = CUSTOM_MODEL_SENTINEL;
+    opt.textContent = t("provider.customModelOption");
+    els.modelSelect.appendChild(opt);
+  }
+
+  // 模型下拉切换时，判断是否显示自定义输入框
+  function handleModelSelectChange() {
+    if (currentProvider !== "custom" || !els.customPreset.value) return;
+    var isCustomModel = els.modelSelect.value === CUSTOM_MODEL_SENTINEL;
+    toggleEl(els.customModelInputGroup, isCustomModel);
+    if (isCustomModel) {
+      els.customModelInput.focus();
+    }
+  }
+
   function updatePlatformLink() {
     var url = PROVIDERS[currentProvider].platformUrl || "";
     if (currentProvider === "moonshot") {
       url = SUB_PLATFORM_URLS[getSubPlatform()] || "";
+    }
+    // Custom 预设的平台链接
+    if (currentProvider === "custom") {
+      var preset = CUSTOM_PRESETS[els.customPreset.value];
+      url = preset ? preset.platformUrl : "";
     }
     if (url) {
       // Moonshot 子平台显示带平台名的链接文本
@@ -752,6 +880,30 @@
       opt.textContent = m;
       els.modelSelect.appendChild(opt);
     });
+  }
+
+  // 在模型下拉中选中指定 model，不存在则追加
+  function selectOrAppendModel(modelID) {
+    for (var i = 0; i < els.modelSelect.options.length; i++) {
+      if (els.modelSelect.options[i].value === modelID) {
+        els.modelSelect.selectedIndex = i;
+        return;
+      }
+    }
+    var opt = document.createElement("option");
+    opt.value = modelID;
+    opt.textContent = modelID;
+    els.modelSelect.appendChild(opt);
+    els.modelSelect.value = modelID;
+  }
+
+  // 合并预设模型列表和已配置模型列表（去重）
+  function mergePresetAndConfigModels(presetModels, configModels) {
+    var seen = {};
+    var result = [];
+    presetModels.forEach(function (m) { seen[m] = true; result.push(m); });
+    configModels.forEach(function (m) { if (!seen[m]) { result.push(m); } });
+    return result;
   }
 
   // ── 密码可见性切换（通用） ──
@@ -820,14 +972,28 @@
     var params = { provider: currentProvider, apiKey: apiKey };
 
     if (currentProvider === "custom") {
-      var baseURL = (els.baseURLInput.value || "").trim();
-      var modelID = (els.modelInput.value || "").trim();
-      if (!baseURL) { showMsg(t("error.noBaseUrl"), "error"); return null; }
-      if (!modelID) { showMsg(t("error.noModelId"), "error"); return null; }
-      params.baseURL = baseURL;
-      params.modelID = modelID;
-      params.apiType = document.querySelector('input[name="apiType"]:checked').value;
-      params.supportImage = els.supportImageCheckbox.checked;
+      var presetKey = els.customPreset.value;
+      if (presetKey) {
+        // 预设模式：选了"自定义模型"时用输入框，否则用下拉值
+        if (els.modelSelect.value === CUSTOM_MODEL_SENTINEL) {
+          var customModel = (els.customModelInput.value || "").trim();
+          if (!customModel) { showMsg(t("error.noModelId"), "error"); return null; }
+          params.modelID = customModel;
+        } else {
+          params.modelID = els.modelSelect.value;
+        }
+        params.customPreset = presetKey;
+      } else {
+        // 手动模式
+        var baseURL = (els.baseURLInput.value || "").trim();
+        var modelID = (els.modelInput.value || "").trim();
+        if (!baseURL) { showMsg(t("error.noBaseUrl"), "error"); return null; }
+        if (!modelID) { showMsg(t("error.noModelId"), "error"); return null; }
+        params.baseURL = baseURL;
+        params.modelID = modelID;
+        params.apiType = document.querySelector('input[name="apiType"]:checked').value;
+        params.supportImage = els.supportImageCheckbox.checked;
+      }
     } else {
       params.modelID = els.modelSelect.value;
     }
@@ -847,6 +1013,7 @@
       baseURL: params.baseURL || "",
       api: params.apiType || "",
       subPlatform: params.subPlatform || "",
+      customPreset: params.customPreset || "",
     };
     // Custom 专属：图像支持
     if (params.supportImage !== undefined) {
@@ -2026,8 +2193,26 @@
         els.apiKeyInput.value = data.apiKey;
       }
 
-      // 用配置中的模型列表 + 预设合并后重新填充下拉
-      if (provider !== "custom") {
+      // Custom 预设恢复：后端返回 customPreset 时选中对应下拉项
+      if (provider === "custom" && data.customPreset && CUSTOM_PRESETS[data.customPreset]) {
+        els.customPreset.value = data.customPreset;
+        applyCustomPreset(data.customPreset);
+
+        // 恢复模型选择：检查 modelID 是否在预设列表中
+        if (data.modelID) {
+          var presetModels = CUSTOM_PRESETS[data.customPreset].models;
+          var inPreset = presetModels.indexOf(data.modelID) >= 0;
+          if (inPreset) {
+            els.modelSelect.value = data.modelID;
+          } else {
+            // 模型不在预设列表中 → 选中"自定义模型"并填入输入框
+            els.modelSelect.value = CUSTOM_MODEL_SENTINEL;
+            els.customModelInput.value = data.modelID;
+            toggleEl(els.customModelInputGroup, true);
+          }
+        }
+      } else if (provider !== "custom") {
+        // 用配置中的模型列表 + 预设合并后重新填充下拉
         var merged = buildMergedModelList(
           data.configuredModels,
           provider,
@@ -2039,27 +2224,10 @@
 
         // 选中 primary model
         if (data.modelID) {
-          var found = false;
-          for (var i = 0; i < els.modelSelect.options.length; i++) {
-            if (els.modelSelect.options[i].value === data.modelID) {
-              els.modelSelect.selectedIndex = i;
-              found = true;
-              break;
-            }
-          }
-          // 仍未找到（理论上不会，合并已覆盖）→ 追加
-          if (!found) {
-            var opt = document.createElement("option");
-            opt.value = data.modelID;
-            opt.textContent = data.modelID;
-            els.modelSelect.appendChild(opt);
-            els.modelSelect.value = data.modelID;
-          }
+          selectOrAppendModel(data.modelID);
         }
-      }
-
-      // Custom 专属字段
-      if (provider === "custom") {
+      } else {
+        // 纯手动 Custom 字段回填
         if (data.modelID) els.modelInput.value = data.modelID;
         if (data.baseURL) els.baseURLInput.value = data.baseURL;
         if (data.api) {
@@ -2460,6 +2628,14 @@
         }
       });
     }
+
+    // Custom 预设切换
+    els.customPreset.addEventListener("change", function () {
+      applyCustomPreset(els.customPreset.value);
+    });
+
+    // 模型下拉切换 → 控制自定义模型输入框显隐
+    els.modelSelect.addEventListener("change", handleModelSelectChange);
 
     // 平台链接
     els.platformLink.addEventListener("click", function (e) {
