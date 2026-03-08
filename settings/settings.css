@@ -190,6 +190,12 @@ button, input, select, label, a {
   white-space: nowrap;
 }
 
+.channel-links {
+  display: flex;
+  gap: 16px;
+  white-space: nowrap;
+}
+
 /* ── 当前 provider 状态指示 ── */
 
 .current-provider-status {

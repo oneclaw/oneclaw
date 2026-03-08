@@ -62,6 +62,9 @@
       "config.baseUrl": "Base URL",
       "config.apiKey": "API Key",
       "config.getKey": "Get API Key →",
+      "config.getKey.kimi-code": "Get Key (Kimi for Code) →",
+      "config.getKey.moonshot-cn": "Get Key (Moonshot.cn) →",
+      "config.getKey.moonshot-ai": "Get Key (Moonshot.ai) →",
       "config.model": "Model",
       "config.modelId": "Model ID",
       "config.apiType": "API Type",
@@ -109,6 +112,9 @@
       "config.baseUrl": "接口地址",
       "config.apiKey": "API 密钥",
       "config.getKey": "获取密钥 →",
+      "config.getKey.kimi-code": "获取密钥 (Kimi for Code) →",
+      "config.getKey.moonshot-cn": "获取密钥 (Moonshot.cn) →",
+      "config.getKey.moonshot-ai": "获取密钥 (Moonshot.ai) →",
       "config.model": "模型",
       "config.modelId": "模型 ID",
       "config.apiType": "接口类型",
@@ -247,7 +253,7 @@
   // ---- 获取当前 Moonshot 子平台 ----
   function getSubPlatform() {
     const checked = document.querySelector('input[name="subPlatform"]:checked');
-    return checked ? checked.value : "moonshot-cn";
+    return checked ? checked.value : "kimi-code";
   }
 
   // ---- 环境检测（Step 0） ----
@@ -403,7 +409,11 @@
       url = SUB_PLATFORM_URLS[getSubPlatform()] || "";
     }
     if (url) {
-      els.platformLink.textContent = t("config.getKey");
+      // Moonshot 子平台显示带平台名的链接文本
+      var linkKey = currentProvider === "moonshot"
+        ? "config.getKey." + getSubPlatform()
+        : "config.getKey";
+      els.platformLink.textContent = t(linkKey);
       els.platformLink.dataset.url = url;
       els.platformLink.classList.remove("hidden");
     } else {

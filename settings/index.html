@@ -96,16 +96,16 @@
           <label data-i18n="provider.platform">Platform</label>
           <div class="radio-group">
             <label class="radio-item">
-              <input type="radio" name="subPlatform" value="moonshot-cn" checked>
-              <span>Moonshot CN</span>
+              <input type="radio" name="subPlatform" value="kimi-code" checked>
+              <span>Kimi 会员订阅</span>
+            </label>
+            <label class="radio-item">
+              <input type="radio" name="subPlatform" value="moonshot-cn">
+              <span>Moonshot CN（中国）</span>
             </label>
             <label class="radio-item">
               <input type="radio" name="subPlatform" value="moonshot-ai">
-              <span>Moonshot AI</span>
-            </label>
-            <label class="radio-item">
-              <input type="radio" name="subPlatform" value="kimi-code">
-              <span>Kimi 会员订阅</span>
+              <span>Moonshot AI（Global）</span>
             </label>
           </div>
         </div>
@@ -194,7 +194,10 @@
         <div id="channelFeishu" class="channel-panel">
           <div class="channel-desc-row">
             <p class="desc" data-i18n="feishu.desc">Connect Feishu to chat with AI directly in your group.</p>
-            <a href="#" class="platform-link" id="chConsoleLink" data-i18n="feishu.getKey">Open Feishu Console →</a>
+            <div class="channel-links">
+              <a href="#" class="platform-link" id="chDocsLink" data-i18n="feishu.docs">Setup Guide →</a>
+              <a href="#" class="platform-link" id="chConsoleLink" data-i18n="feishu.getKey">Open Feishu Console →</a>
+            </div>
           </div>
 
           <!-- 启用/禁用开关 -->

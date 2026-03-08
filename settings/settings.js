@@ -72,6 +72,9 @@
       "provider.baseUrl": "Base URL",
       "provider.apiKey": "API Key",
       "provider.getKey": "Get API Key →",
+      "provider.getKey.kimi-code": "Get Key (Kimi for Code) →",
+      "provider.getKey.moonshot-cn": "Get Key (Moonshot.cn) →",
+      "provider.getKey.moonshot-ai": "Get Key (Moonshot.ai) →",
       "provider.model": "Model",
       "provider.modelId": "Model ID",
       "provider.apiType": "API Type",
@@ -87,6 +90,7 @@
       "feishu.enabled": "Enable",
       "feishu.appId": "Feishu App ID",
       "feishu.appSecret": "App Secret",
+      "feishu.docs": "Setup Guide →",
       "feishu.getKey": "Open Feishu Console →",
       "feishu.save": "Save",
       "feishu.saving": "Saving…",
@@ -249,6 +253,9 @@
       "provider.baseUrl": "接口地址",
       "provider.apiKey": "API 密钥",
       "provider.getKey": "获取密钥 →",
+      "provider.getKey.kimi-code": "获取密钥 (Kimi for Code) →",
+      "provider.getKey.moonshot-cn": "获取密钥 (Moonshot.cn) →",
+      "provider.getKey.moonshot-ai": "获取密钥 (Moonshot.ai) →",
       "provider.model": "模型",
       "provider.modelId": "模型 ID",
       "provider.apiType": "接口类型",
@@ -264,6 +271,7 @@
       "feishu.enabled": "启用状态",
       "feishu.appId": "飞书应用 ID",
       "feishu.appSecret": "应用密钥",
+      "feishu.docs": "配置指南 →",
       "feishu.getKey": "打开飞书开放平台 →",
       "feishu.save": "保存",
       "feishu.saving": "保存中…",
@@ -455,6 +463,7 @@
     chGroupPolicy: $("#chGroupPolicy"),
     chPairingSection: $("#chPairingSection"),
     btnToggleChSecret: $("#btnToggleChSecret"),
+    chDocsLink: $("#chDocsLink"),
     chConsoleLink: $("#chConsoleLink"),
     chMsgBox: $("#chMsgBox"),
     btnChSave: $("#btnChSave"),
@@ -634,7 +643,7 @@
 
   function getSubPlatform() {
     const checked = document.querySelector('input[name="subPlatform"]:checked');
-    return checked ? checked.value : "moonshot-cn";
+    return checked ? checked.value : "kimi-code";
   }
 
   // 根据 provider + subPlatform 查找已保存的配置
@@ -712,7 +721,11 @@
       url = SUB_PLATFORM_URLS[getSubPlatform()] || "";
     }
     if (url) {
-      els.platformLink.textContent = t("provider.getKey");
+      // Moonshot 子平台显示带平台名的链接文本
+      var linkKey = currentProvider === "moonshot"
+        ? "provider.getKey." + getSubPlatform()
+        : "provider.getKey";
+      els.platformLink.textContent = t(linkKey);
       els.platformLink.dataset.url = url;
       els.platformLink.classList.remove("hidden");
     } else {
@@ -2487,6 +2500,12 @@
       });
     }
     els.btnToggleChSecret.addEventListener("click", togglePasswordVisibility);
+    els.chDocsLink.addEventListener("click", function (e) {
+      e.preventDefault();
+      if (window.oneclaw && window.oneclaw.openExternal) {
+        window.oneclaw.openExternal("https://oneclaw.cn/docs/tutorials/feishu-bot.html");
+      }
+    });
     els.chConsoleLink.addEventListener("click", function (e) {
       e.preventDefault();
       if (window.oneclaw && window.oneclaw.openExternal) {
