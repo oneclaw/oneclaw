@@ -8,6 +8,9 @@ export type Locale = "zh" | "en";
 
 const dict: Record<Locale, Record<string, string>> = {
   zh: {
+    // App
+    "app.windowTitle": "OneClaw 一键安装OpenClaw",
+
     // Sidebar
     "sidebar.brand": "OneClaw",
     "sidebar.newChat": "新建对话",
@@ -133,6 +136,9 @@ const dict: Record<Locale, Record<string, string>> = {
     "error.disconnected": "已断开与 Gateway 的连接。",
   },
   en: {
+    // App
+    "app.windowTitle": "OneClaw - One-click installer for OpenClaw",
+
     // Sidebar
     "sidebar.brand": "OneClaw",
     "sidebar.newChat": "New Chat",

@@ -22,6 +22,13 @@ interface NavigateOptions {
   view: "settings";
 }
 
+function resolveMainWindowTitle(): string {
+  // 主窗口标题直接解释产品定位，方便用户在系统标题栏里理解 OneClaw 是什么。
+  return app.getLocale().startsWith("zh")
+    ? "OneClaw 一键安装OpenClaw"
+    : "OneClaw - One-click installer for OpenClaw";
+}
+
 function maskToken(token: string): string {
   if (token.length <= 8) {
     return "***";
@@ -46,13 +53,14 @@ export class WindowManager {
       `创建主窗口: port=${opts.port} onboarding=${Boolean(opts.onboarding)} token=${opts.token ? maskToken(opts.token) : "none"}`,
     );
 
+    const title = resolveMainWindowTitle();
     this.win = new BrowserWindow({
       width: WINDOW_WIDTH,
       height: WINDOW_HEIGHT,
       minWidth: WINDOW_MIN_WIDTH,
       minHeight: WINDOW_MIN_HEIGHT,
       show: false,
-      title: "OneClaw",
+      title,
       autoHideMenuBar: true,
       webPreferences: {
         contextIsolation: true,
@@ -60,7 +68,6 @@ export class WindowManager {
         preload: path.join(__dirname, "preload.js"),
       },
     });
-    const title = "OneClaw";
     this.win.on("page-title-updated", (event) => {
       event.preventDefault();
       this.win?.setTitle(title);
