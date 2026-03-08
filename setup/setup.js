@@ -124,6 +124,7 @@
       "config.customModelId": "Custom Model ID",
       "config.customModelOption": "Custom Model…",
       "config.custom": "Custom",
+      "config.docsLink": "Tutorial Docs →",
       "config.back": "Back",
       "config.verify": "Verify & Continue",
       "config.imageSupport": "Model supports image input",
@@ -178,6 +179,7 @@
       "config.customModelId": "自定义模型 ID",
       "config.customModelOption": "自定义模型…",
       "config.custom": "自定义",
+      "config.docsLink": "教程文档 →",
       "config.back": "返回",
       "config.verify": "验证并继续",
       "config.imageSupport": "模型支持图片输入",
@@ -222,6 +224,7 @@
     // Step 2
     providerTabs: $("#providerTabs"),
     platformLink: $("#platformLink"),
+    docsLink: $("#docsLink"),
     subPlatformGroup: $("#subPlatformGroup"),
     baseURLGroup: $("#baseURLGroup"),
     apiKeyInput: $("#apiKey"),
@@ -802,6 +805,14 @@
       const url = els.platformLink.dataset.url;
       if (url && window.oneclaw?.openExternal) {
         window.oneclaw.openExternal(url);
+      }
+    });
+
+    // 教程文档链接 → 用系统浏览器打开
+    els.docsLink.addEventListener("click", (e) => {
+      e.preventDefault();
+      if (window.oneclaw?.openExternal) {
+        window.oneclaw.openExternal("https://oneclaw.cn/docs");
       }
     });
 

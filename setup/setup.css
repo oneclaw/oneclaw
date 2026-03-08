@@ -145,6 +145,12 @@ h2 {
   max-width: none;
 }
 
+/* 教程文档链接行 */
+.docs-link-row {
+  margin: 2px 0 0;
+  font-size: 12.5px;
+}
+
 #step3 .step-content {
   align-items: stretch;
   gap: 16px;
