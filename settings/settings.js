@@ -115,7 +115,16 @@
     en: {
       "title": "Settings",
       "nav.provider": "Model",
+      "nav.chat": "Chat Integration",
       "nav.feishu": "Feishu Integration",
+      "chat.title": "Chat Integration",
+      "chat.desc": "Connect Feishu, Kimi, or QQ and chat with AI directly inside your messaging app.",
+      "chat.platformFeishu": "Feishu",
+      "chat.platformFeishuMeta": "Lark / Feishu bot",
+      "chat.platformKimi": "KimiClaw",
+      "chat.platformKimiMeta": "Kimi bot bridge",
+      "chat.platformQq": "QQ",
+      "chat.platformQqMeta": "QQ Open Platform Bot",
       "provider.title": "Model Configuration",
       "provider.desc": "Change your LLM provider, API key, or model.",
       "provider.custom": "Custom",
@@ -192,6 +201,15 @@
       "feishu.approvedRemoved": "Authorization removed.",
       "feishu.kindUser": "User",
       "feishu.kindGroup": "Group",
+      "qq.desc": "Connect QQ Bot so users can talk to OneClaw directly in QQ.",
+      "qq.enabled": "Enable",
+      "qq.appId": "QQ Bot App ID",
+      "qq.clientSecret": "Client Secret",
+      "qq.getKey": "Open QQ Open Platform →",
+      "qq.markdownSupport": "Markdown Message",
+      "qq.markdownSupportHint": "Turn this off if the current bot account does not have markdown message permission.",
+      "qq.save": "Save",
+      "qq.saving": "Saving…",
       "error.noPairingCode": "Invalid pairing code.",
       "error.loadPairingFailed": "Failed to load pairing requests.",
       "error.loadApprovedFailed": "Failed to load approved accounts.",
@@ -199,6 +217,9 @@
       "error.invalidGroupId": "Only group IDs starting with oc_ are allowed.",
       "error.noAppId": "Please enter the Feishu App ID.",
       "error.noAppSecret": "Please enter the App Secret.",
+      "error.noQqAppId": "Please enter the QQ Bot App ID.",
+      "error.noQqClientSecret": "Please enter the QQ Bot Client Secret.",
+      "error.qqNotBundled": "QQ Bot component is missing. Please reinstall OneClaw.",
       "error.noKey": "Please enter your API key.",
       "error.noBaseUrl": "Please enter the Base URL.",
       "error.noModelId": "Please enter the Model ID.",
@@ -300,7 +321,16 @@
     zh: {
       "title": "设置",
       "nav.provider": "模型配置",
+      "nav.chat": "聊天集成",
       "nav.feishu": "飞书集成",
+      "chat.title": "聊天集成",
+      "chat.desc": "连接飞书、Kimi 或 QQ，让用户直接在聊天软件里和 OneClaw 对话。",
+      "chat.platformFeishu": "飞书",
+      "chat.platformFeishuMeta": "Lark / 飞书机器人",
+      "chat.platformKimi": "KimiClaw",
+      "chat.platformKimiMeta": "Kimi 远程机器人",
+      "chat.platformQq": "QQ",
+      "chat.platformQqMeta": "QQ 开放平台机器人",
       "provider.title": "模型配置",
       "provider.desc": "修改 LLM 云厂商、API 密钥或模型。",
       "provider.custom": "自定义",
@@ -377,6 +407,15 @@
       "feishu.approvedRemoved": "已移除授权。",
       "feishu.kindUser": "用户",
       "feishu.kindGroup": "群聊",
+      "qq.desc": "连接 QQ Bot，让用户直接在 QQ 中和 OneClaw 对话。",
+      "qq.enabled": "启用状态",
+      "qq.appId": "QQ Bot App ID",
+      "qq.clientSecret": "Client Secret",
+      "qq.getKey": "打开 QQ 开放平台 →",
+      "qq.markdownSupport": "Markdown 消息",
+      "qq.markdownSupportHint": "如果当前机器人还没有开通 Markdown 消息权限，请先关闭这个开关。",
+      "qq.save": "保存",
+      "qq.saving": "保存中…",
       "error.noPairingCode": "配对码无效。",
       "error.loadPairingFailed": "读取待审批请求失败。",
       "error.loadApprovedFailed": "读取已授权列表失败。",
@@ -384,6 +423,9 @@
       "error.invalidGroupId": "仅允许填写以 oc_ 开头的群 ID。",
       "error.noAppId": "请输入飞书应用 ID。",
       "error.noAppSecret": "请输入应用密钥。",
+      "error.noQqAppId": "请输入 QQ Bot App ID。",
+      "error.noQqClientSecret": "请输入 QQ Bot Client Secret。",
+      "error.qqNotBundled": "QQ Bot 组件缺失，请重新安装 OneClaw。",
       "error.noKey": "请输入 API 密钥。",
       "error.noBaseUrl": "请输入接口地址。",
       "error.noModelId": "请输入模型 ID。",
@@ -493,6 +535,9 @@
     // 导航
     navItems: $$(".nav-item"),
     tabPanels: $$(".tab-panel"),
+    chatPlatformItems: $$(".chat-platform-item"),
+    chatPlatformButtons: $$(".chat-platform-btn"),
+    chatPlatformPanels: $$(".chat-platform-panel"),
     // Provider tab
     providerTabs: $("#providerTabs"),
     platformLink: $("#platformLink"),
@@ -540,6 +585,17 @@
     chGroupDialogInput: $("#chGroupDialogInput"),
     btnChGroupDialogCancel: $("#btnChGroupDialogCancel"),
     btnChGroupDialogConfirm: $("#btnChGroupDialogConfirm"),
+    qqEnabled: $("#qqEnabled"),
+    qqFields: $("#qqFields"),
+    qqAppId: $("#qqAppId"),
+    qqClientSecret: $("#qqClientSecret"),
+    btnToggleQqSecret: $("#btnToggleQqSecret"),
+    qqMarkdownSupport: $("#qqMarkdownSupport"),
+    qqConsoleLink: $("#qqConsoleLink"),
+    qqMsgBox: $("#qqMsgBox"),
+    btnQqSave: $("#btnQqSave"),
+    btnQqSaveText: $("#btnQqSave .btn-text"),
+    btnQqSaveSpinner: $("#btnQqSave .btn-spinner"),
     // Kimi tab
     kimiEnabled: $("#kimiEnabled"),
     kimiFields: $("#kimiFields"),
@@ -603,6 +659,7 @@
 
   let currentProvider = "anthropic";
   let saving = false;
+  let currentChatPlatform = "feishu";
   let chSaving = false;
   let chPairingLoading = false;
   let chApprovedLoading = false;
@@ -612,6 +669,7 @@
   let chApprovedRemovingKey = "";
   let chPairingRequests = [];
   let chApprovedEntries = [];
+  let qqSaving = false;
   let kimiSaving = false;
   let searchSaving = false;
   let advSaving = false;
@@ -626,10 +684,20 @@
   let gatewayStateTimer = null;
   let currentLang = "en";
   let initialTab = "provider";
+  let initialChatPlatform = "feishu";
   let startupNotice = "";
+  const CHAT_PLATFORM_PANEL_IDS = {
+    feishu: "chatPlatformFeishu",
+    kimi: "chatPlatformKimi",
+    qqbot: "chatPlatformQqbot",
+  };
   const TAB_ALIAS_MAP = {
     channel: "channels",
+    chat: "channels",
     feishu: "channels",
+    kimi: "channels",
+    qq: "channels",
+    qqbot: "channels",
   };
 
   // ── 语言 ──
@@ -637,15 +705,16 @@
   function detectLang() {
     const params = new URLSearchParams(window.location.search);
     const lang = params.get("lang");
+    const rawTab = String(params.get("tab") || "").trim();
     if (lang && I18N[lang]) {
       currentLang = lang;
     } else {
       const browserLang = String(navigator.language || "").toLowerCase();
       currentLang = browserLang.startsWith("zh") ? "zh" : "en";
     }
-    const tab = params.get("tab");
     const notice = params.get("notice");
-    initialTab = normalizeTabName(tab || "provider");
+    initialTab = normalizeTabName(rawTab || "provider");
+    initialChatPlatform = inferChatPlatformFromTab(rawTab) || "feishu";
     startupNotice = notice || "";
   }
 
@@ -677,7 +746,46 @@
     return TAB_ALIAS_MAP[raw] || raw;
   }
 
+  // 兼容 feishu / qq / qqbot 这类历史入口，把它们映射到聊天集成子平台。
+  function normalizeChatPlatformName(platformName) {
+    var raw = String(platformName || "").trim().toLowerCase();
+    if (raw === "qq" || raw === "qqbot") return "qqbot";
+    if (raw === "kimi") return "kimi";
+    return "feishu";
+  }
+
+  // 当外部直接传 feishu / qqbot 这类 tab 时，自动选中对应子平台。
+  function inferChatPlatformFromTab(tabName) {
+    var raw = String(tabName || "").trim().toLowerCase();
+    if (raw === "feishu" || raw === "kimi" || raw === "qq" || raw === "qqbot") {
+      return normalizeChatPlatformName(raw);
+    }
+    return "";
+  }
+
+  // 聊天集成页内部的二级平台切换。
+  function switchChatPlatform(platformName) {
+    var target = normalizeChatPlatformName(platformName);
+    currentChatPlatform = target;
+
+    els.chatPlatformItems.forEach(function (item) {
+      var active = item.dataset.chatPlatform === target;
+      item.classList.toggle("active", active);
+    });
+
+    els.chatPlatformButtons.forEach(function (button) {
+      var active = button.dataset.chatPlatform === target;
+      button.classList.toggle("active", active);
+      button.setAttribute("aria-pressed", active ? "true" : "false");
+    });
+
+    els.chatPlatformPanels.forEach(function (panel) {
+      panel.classList.toggle("active", panel.id === CHAT_PLATFORM_PANEL_IDS[target]);
+    });
+  }
+
   function switchTab(tabName) {
+    var rawTarget = String(tabName || "").trim();
     var target = normalizeTabName(tabName);
     var found = false;
     els.navItems.forEach((item) => {
@@ -691,6 +799,10 @@
     els.tabPanels.forEach((panel) => {
       panel.classList.toggle("active", panel.id === "tab" + capitalize(target));
     });
+
+    if (target === "channels") {
+      switchChatPlatform(inferChatPlatformFromTab(rawTarget) || currentChatPlatform);
+    }
 
     if (target === "backup") {
       loadBackupData();
@@ -1624,6 +1736,122 @@
     }
   }
 
+  // ── QQ Bot ──
+
+  // QQ 消息框与飞书分离，避免两个平台互相覆盖状态提示。
+  function showQqMsg(msg, type) {
+    els.qqMsgBox.textContent = msg;
+    els.qqMsgBox.className = "msg-box " + type;
+  }
+
+  // 清空 QQ 平台上的错误 / 成功提示。
+  function hideQqMsg() {
+    els.qqMsgBox.classList.add("hidden");
+    els.qqMsgBox.textContent = "";
+    els.qqMsgBox.className = "msg-box hidden";
+  }
+
+  // 同步 QQ 保存按钮的 loading 状态。
+  function setQqSaving(loading) {
+    qqSaving = loading;
+    els.btnQqSave.disabled = loading;
+    els.btnQqSaveText.textContent = loading ? t("qq.saving") : t("qq.save");
+    els.btnQqSaveSpinner.classList.toggle("hidden", !loading);
+  }
+
+  // 读取当前 QQ 平台是否启用。
+  function isQqEnabled() {
+    return !!(els.qqEnabled && els.qqEnabled.checked);
+  }
+
+  // 保存 QQ Bot 配置，流程与飞书保持一致：先校验，再落配置，再重启网关。
+  async function handleQqSave() {
+    if (qqSaving) return;
+
+    var enabled = isQqEnabled();
+    if (!enabled) {
+      setQqSaving(true);
+      hideQqMsg();
+      try {
+        var disableResult = await window.oneclaw.settingsSaveQqbotConfig({ enabled: false });
+        setQqSaving(false);
+        if (disableResult.success) {
+          showToast(t("common.saved"));
+        } else {
+          showQqMsg(disableResult.message || "Save failed", "error");
+        }
+      } catch (err) {
+        setQqSaving(false);
+        showQqMsg(t("error.connection") + (err.message || "Unknown error"), "error");
+      }
+      return;
+    }
+
+    var appId = String(els.qqAppId.value || "").trim();
+    var clientSecret = String(els.qqClientSecret.value || "").trim();
+    if (!appId) { showQqMsg(t("error.noQqAppId"), "error"); return; }
+    if (!clientSecret) { showQqMsg(t("error.noQqClientSecret"), "error"); return; }
+
+    setQqSaving(true);
+    hideQqMsg();
+
+    try {
+      var verifyResult = await window.oneclaw.settingsVerifyKey({
+        provider: "qqbot",
+        appId: appId,
+        clientSecret: clientSecret,
+      });
+      if (!verifyResult.success) {
+        showQqMsg(verifyResult.message || t("error.verifyFailed"), "error");
+        setQqSaving(false);
+        return;
+      }
+
+      var saveResult = await window.oneclaw.settingsSaveQqbotConfig({
+        enabled: true,
+        appId: appId,
+        clientSecret: clientSecret,
+        markdownSupport: !!els.qqMarkdownSupport.checked,
+      });
+      if (!saveResult.success) {
+        showQqMsg(saveResult.message || "Save failed", "error");
+        setQqSaving(false);
+        return;
+      }
+
+      setQqSaving(false);
+      showToast(t("common.saved"));
+    } catch (err) {
+      showQqMsg(t("error.connection") + (err.message || "Unknown error"), "error");
+      setQqSaving(false);
+    }
+  }
+
+  // 回填 QQ Bot 配置，并在未打包插件时给出前置提示。
+  async function loadQqbotConfig() {
+    try {
+      var result = await window.oneclaw.settingsGetQqbotConfig();
+      if (!result.success || !result.data) return;
+
+      var data = result.data;
+      if (data.appId) els.qqAppId.value = data.appId;
+      if (data.clientSecret) els.qqClientSecret.value = data.clientSecret;
+      els.qqMarkdownSupport.checked = data.markdownSupport !== false;
+
+      var enabled = !!data.enabled && !!data.appId;
+      els.qqEnabled.checked = enabled;
+      toggleEl(els.qqFields, enabled);
+
+      if (data.bundled === false) {
+        showQqMsg(data.bundleMessage || t("error.qqNotBundled"), "error");
+      } else {
+        hideQqMsg();
+      }
+    } catch (err) {
+      console.error("[Settings] loadQqbotConfig failed:", err);
+    }
+  }
+
   // ── Advanced ──
 
   // 加载高级配置
@@ -2323,6 +2551,7 @@
     await Promise.allSettled([
       loadCurrentConfig(),
       loadChannelConfig(),
+      loadQqbotConfig(),
       loadKimiConfig(),
       loadSearchConfig(),
       loadAdvancedConfig(),
@@ -2659,6 +2888,13 @@
       if (e.key === "Enter") handleSave();
     });
 
+    // 聊天集成页二级平台切换
+    els.chatPlatformButtons.forEach(function (button) {
+      button.addEventListener("click", function () {
+        switchChatPlatform(button.dataset.chatPlatform || "feishu");
+      });
+    });
+
     // Channels tab — 启用/禁用切换
     els.chEnabled.addEventListener("change", function () {
       toggleEl(els.chFields, isChEnabled());
@@ -2764,6 +3000,33 @@
     els.chAppSecret.addEventListener("keydown", function (e) {
       if (e.key === "Enter") handleChSave();
     });
+
+    // QQ Bot tab — 启用/禁用切换 + Secret 可见性
+    if (els.qqEnabled) {
+      els.qqEnabled.addEventListener("change", function () {
+        toggleEl(els.qqFields, isQqEnabled());
+      });
+    }
+    if (els.btnToggleQqSecret) {
+      els.btnToggleQqSecret.addEventListener("click", togglePasswordVisibility);
+    }
+    if (els.qqConsoleLink) {
+      els.qqConsoleLink.addEventListener("click", function (e) {
+        e.preventDefault();
+        if (window.oneclaw && window.oneclaw.openExternal) {
+          window.oneclaw.openExternal("https://q.qq.com/qqbot/openclaw/");
+        }
+      });
+    }
+    if (els.btnQqSave) {
+      els.btnQqSave.addEventListener("click", handleQqSave);
+    }
+    if (els.qqClientSecret) {
+      els.qqClientSecret.addEventListener("keydown", function (e) {
+        if (e.key === "Enter") handleQqSave();
+      });
+    }
+
     // Kimi tab — 启用/禁用切换 + Token 可见性
     els.kimiEnabled.addEventListener("change", function () { toggleEl(els.kimiFields, isKimiEnabled()); });
     els.btnToggleKimiToken.addEventListener("click", togglePasswordVisibility);
@@ -2862,9 +3125,11 @@
     bindEvents();
     switchProvider("anthropic");
     switchTab(initialTab || "provider");
+    switchChatPlatform(initialChatPlatform || "feishu");
     applyRecoveryNotice(startupNotice);
     loadCurrentConfig();
     loadChannelConfig();
+    loadQqbotConfig();
     loadKimiConfig();
     loadSearchConfig();
     loadAdvancedConfig();

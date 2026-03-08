@@ -35,6 +35,9 @@ contextBridge.exposeInMainWorld("oneclaw", {
   settingsGetChannelConfig: () => ipcRenderer.invoke("settings:get-channel-config"),
   settingsSaveChannel: (params: Record<string, unknown>) =>
     ipcRenderer.invoke("settings:save-channel", params),
+  settingsGetQqbotConfig: () => ipcRenderer.invoke("settings:get-qqbot-config"),
+  settingsSaveQqbotConfig: (params: Record<string, unknown>) =>
+    ipcRenderer.invoke("settings:save-qqbot-config", params),
   settingsListFeishuPairing: () =>
     ipcRenderer.invoke("settings:list-feishu-pairing"),
   settingsListFeishuApproved: () =>

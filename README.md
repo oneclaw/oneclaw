@@ -133,7 +133,7 @@ Its goal is simple: **AI that gets things done, not just chats.** 🎯
 | 🔄 **Auto-Update** | Built-in CDN updates, no manual downloads needed |
 | 🧠 **Session Memory** | Automatically saves conversation context across sessions |
 | 🔍 **Kimi Search** | Integrated web search via Kimi Search |
-| 💬 **Feishu Integration** | Feishu bot channel support for team AI sharing |
+| 💬 **Chat Integrations** | Built-in Feishu and QQ bot access for chatting with OneClaw from messaging apps |
 | 🛡️ **Conflict Detection** | Auto-detects existing OpenClaw installations to avoid port conflicts |
 | 🖋️ **Terminal Command** | Auto-installs `openclaw` command to PATH |
 | 🌐 **China-Friendly** | Pre-configured mirror defaults for smoother experience in China |

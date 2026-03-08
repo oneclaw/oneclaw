@@ -282,6 +282,42 @@ export function verifyFeishu(appId: string, appSecret: string): Promise<void> {
   });
 }
 
+// QQ Bot 凭据验证（通过 getAppAccessToken 接口校验 appId + clientSecret）。
+export function verifyQqbot(appId: string, clientSecret: string): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const body = JSON.stringify({ appId, clientSecret });
+    const req = https.request(
+      {
+        hostname: "bots.qq.com",
+        path: "/app/getAppAccessToken",
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        timeout: 15000,
+      },
+      (res) => {
+        let data = "";
+        res.on("data", (d) => (data += d));
+        res.on("end", () => {
+          try {
+            const json = JSON.parse(data);
+            if (typeof json.access_token === "string" && json.access_token.trim()) {
+              resolve();
+            } else {
+              reject(new Error(json.message || json.msg || `QQ Bot 验证失败: ${data.slice(0, 200)}`));
+            }
+          } catch {
+            reject(new Error(`QQ Bot 响应解析失败: ${data.slice(0, 200)}`));
+          }
+        });
+      }
+    );
+    req.on("error", (e) => reject(new Error(`网络错误: ${e.message}`)));
+    req.on("timeout", () => { req.destroy(); reject(new Error("请求超时")); });
+    req.write(body);
+    req.end();
+  });
+}
+
 // Custom provider 验证（根据 API 类型发真实 chat 请求，而非 /models）
 export async function verifyCustom(apiKey: string, baseURL?: string, apiType?: string, modelID?: string): Promise<void> {
   if (!baseURL) throw new Error("Custom provider 需要 Base URL");
@@ -346,9 +382,21 @@ export async function verifyProvider(params: {
   modelID?: string;
   appId?: string;
   appSecret?: string;
+  clientSecret?: string;
   customPreset?: string;
 }): Promise<{ success: boolean; message?: string }> {
-  const { provider, apiKey, baseURL, subPlatform, apiType, modelID, appId, appSecret, customPreset } = params;
+  const {
+    provider,
+    apiKey,
+    baseURL,
+    subPlatform,
+    apiType,
+    modelID,
+    appId,
+    appSecret,
+    clientSecret,
+    customPreset,
+  } = params;
   try {
     switch (provider) {
       case "anthropic":
@@ -373,6 +421,9 @@ export async function verifyProvider(params: {
       }
       case "feishu":
         await verifyFeishu(appId!, appSecret!);
+        break;
+      case "qqbot":
+        await verifyQqbot(appId!, clientSecret!);
         break;
       default:
         return { success: false, message: `未知 Provider: ${provider}` };

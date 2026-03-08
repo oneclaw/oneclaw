@@ -26,6 +26,7 @@ const KIMI_CLAW_DEFAULT_TGZ_URL = `${KIMI_CLAW_BASE_URL}/kimi-claw-latest.tgz`;
 const KIMI_CLAW_CACHE_FILE = "kimi-claw-latest.tgz";
 const KIMI_SEARCH_DEFAULT_TGZ_URL = `${KIMI_CLAW_BASE_URL}/openclaw-kimi-search-0.1.2.tgz`;
 const KIMI_SEARCH_CACHE_FILE = "openclaw-kimi-search-0.1.2.tgz";
+const QQBOT_PACKAGE_NAME = "@sliverp/qqbot";
 
 // 计算目标产物的唯一标识
 function getTargetId(platform, arch) {
@@ -538,6 +539,37 @@ function getPackageSource() {
   };
 }
 
+// 确定 QQ Bot 插件安装来源：查询 npm latest stable
+function getQqbotPackageSource() {
+  // 显式覆盖（调试 / 私有 tgz / 本地 file: 逃生舱）
+  const explicitSource = readEnvText("ONECLAW_QQBOT_PACKAGE_SOURCE");
+  if (explicitSource) {
+    log(`使用 ONECLAW_QQBOT_PACKAGE_SOURCE 指定来源: ${explicitSource}`);
+    return {
+      source: explicitSource,
+      stampSource: `explicit:${QQBOT_PACKAGE_NAME}@${explicitSource}`,
+    };
+  }
+
+  const latestVersion = readRemoteLatestVersion(QQBOT_PACKAGE_NAME, {
+    cwd: ROOT,
+    env: process.env,
+    logError(message) {
+      log(message);
+    },
+  });
+
+  if (!latestVersion) {
+    die(`无法从 npm 获取 ${QQBOT_PACKAGE_NAME} 最新版本（检查网络或设置 ONECLAW_QQBOT_PACKAGE_SOURCE 手动指定）`);
+  }
+
+  log(`使用 ${QQBOT_PACKAGE_NAME}@${latestVersion}（来源: npm latest）`);
+  return {
+    source: latestVersion,
+    stampSource: `remote:${QQBOT_PACKAGE_NAME}@${latestVersion}`,
+  };
+}
+
 // 读取 gateway 依赖平台戳
 function readGatewayStamp(stampPath) {
   try {
@@ -702,7 +734,8 @@ function assertNativeDepsMatchTarget(nmDir, platform, arch) {
 function installDependencies(opts, gatewayDir) {
   const stampPath = path.join(gatewayDir, ".gateway-stamp");
   const sourceInfo = getPackageSource();
-  const targetStamp = `${opts.platform}-${opts.arch}|${sourceInfo.stampSource}`;
+  const qqbotSourceInfo = getQqbotPackageSource();
+  const targetStamp = `${opts.platform}-${opts.arch}|${sourceInfo.stampSource}|${qqbotSourceInfo.stampSource}`;
 
   // 增量检测：stamp 匹配 + entry.js 存在 → 跳过安装
   const installedEntry = path.join(gatewayDir, "node_modules", "openclaw", "dist", "entry.js");
@@ -731,11 +764,12 @@ function installDependencies(opts, gatewayDir) {
   const source = sourceInfo.source;
   log(`安装 openclaw 依赖 (来源: ${source}) ...`);
 
-  // 写入 package.json（openclaw + clawhub 一起安装）
+  // 写入 package.json（openclaw + clawhub + QQ Bot 插件一起安装）
   const pkg = {
     dependencies: {
       openclaw: source,
       clawhub: "latest",
+      [QQBOT_PACKAGE_NAME]: qqbotSourceInfo.source,
     },
   };
   fs.writeFileSync(path.join(gatewayDir, "package.json"), JSON.stringify(pkg, null, 2));
@@ -767,7 +801,7 @@ function installDependencies(opts, gatewayDir) {
   log("node_modules 裁剪完成");
 }
 
-// ─── Step 2.5: 注入 bundled 插件（kimi-claw + kimi-search） ───
+// ─── Step 2.5: 注入 bundled 插件（kimi-claw + kimi-search + qqbot） ───
 
 // 插件定义（id → 下载/缓存参数）
 const BUNDLED_PLUGINS = [
@@ -788,6 +822,11 @@ const BUNDLED_PLUGINS = [
     refreshEnv: "ONECLAW_KIMI_SEARCH_REFRESH",
     defaultURL: KIMI_SEARCH_DEFAULT_TGZ_URL,
     cacheFile: KIMI_SEARCH_CACHE_FILE,
+    requiredFiles: ["package.json", "openclaw.plugin.json"],
+  },
+  {
+    id: "qqbot",
+    packageName: QQBOT_PACKAGE_NAME,
     requiredFiles: ["package.json", "openclaw.plugin.json"],
   },
 ];
@@ -834,9 +873,46 @@ async function ensurePluginArchive(plugin) {
   return source;
 }
 
-// 将插件 tgz 解压并注入 openclaw/extensions/<id>
+// 将 npm 安装后的包名解析到 node_modules 实际目录。
+function resolveInstalledPackageDir(gatewayDir, packageName) {
+  return path.join(gatewayDir, "node_modules", ...packageName.split("/"));
+}
+
+// 清理已复制完成的源包，避免 node_modules 与 extensions 重复打包。
+function removeInstalledPackageSource(gatewayDir, packageName) {
+  const packageDir = resolveInstalledPackageDir(gatewayDir, packageName);
+  if (!fs.existsSync(packageDir)) {
+    return;
+  }
+
+  rmDir(packageDir);
+
+  const parts = packageName.split("/");
+  if (parts.length === 2) {
+    const scopeDir = path.join(gatewayDir, "node_modules", parts[0]);
+    try {
+      if (fs.existsSync(scopeDir) && fs.readdirSync(scopeDir).length === 0) {
+        fs.rmdirSync(scopeDir);
+      }
+    } catch {
+      // 忽略清理失败，避免影响主流程
+    }
+  }
+
+  pruneDanglingBinLinks(path.join(gatewayDir, "node_modules"));
+}
+
+// 校验插件目录结构，确保最基本的运行入口存在。
+function assertPluginDir(plugin, dirPath, missingLabel) {
+  for (const f of plugin.requiredFiles) {
+    if (!fs.existsSync(path.join(dirPath, f))) {
+      die(`${plugin.id} 包内容无效（缺少 ${missingLabel}${f}）`);
+    }
+  }
+}
+
+// 将插件注入 openclaw/extensions/<id>（支持 tgz 解压和已安装 npm 包两种来源）。
 async function bundlePlugin(plugin, gatewayDir, targetId) {
-  const source = await ensurePluginArchive(plugin);
   const openclawDir = path.join(gatewayDir, "node_modules", "openclaw");
   if (!fs.existsSync(openclawDir)) {
     die(`openclaw 依赖目录不存在，无法注入 ${plugin.id}: ${openclawDir}`);
@@ -845,6 +921,42 @@ async function bundlePlugin(plugin, gatewayDir, targetId) {
   const extRoot = path.join(openclawDir, "extensions");
   const pluginDir = path.join(extRoot, plugin.id);
   ensureDir(extRoot);
+
+  if (plugin.packageName) {
+    const installedPackageDir = resolveInstalledPackageDir(gatewayDir, plugin.packageName);
+    if (!fs.existsSync(installedPackageDir)) {
+      if (fs.existsSync(pluginDir)) {
+        assertPluginDir(plugin, pluginDir, "");
+        log(`复用已注入的 ${plugin.id} 插件: ${path.relative(ROOT, pluginDir)}`);
+        return;
+      }
+      die(`已安装插件包不存在，无法注入 ${plugin.id}: ${installedPackageDir}`);
+    }
+
+    let sourceLabel = `npm:${plugin.packageName}`;
+    try {
+      const pkg = JSON.parse(fs.readFileSync(path.join(installedPackageDir, "package.json"), "utf-8"));
+      if (pkg && typeof pkg.version === "string" && pkg.version.trim()) {
+        sourceLabel = `npm:${plugin.packageName}@${pkg.version.trim()}`;
+      }
+    } catch {
+      // 忽略版本读取失败，回退到包名标签即可。
+    }
+
+    assertPluginDir(plugin, installedPackageDir, "");
+    rmDir(pluginDir);
+    copyDirSync(installedPackageDir, pluginDir);
+    removeInstalledPackageSource(gatewayDir, plugin.packageName);
+
+    fs.writeFileSync(
+      path.join(pluginDir, `.oneclaw-${plugin.id}-stamp.json`),
+      JSON.stringify({ source: sourceLabel, bundledAt: new Date().toISOString() }, null, 2)
+    );
+    log(`已注入 ${plugin.id} 插件到 ${path.relative(ROOT, pluginDir)}`);
+    return;
+  }
+
+  const source = await ensurePluginArchive(plugin);
 
   const safeId = plugin.id.replace(/-/g, "_");
   const tmpDir = createExtractTmpDir(path.dirname(source.archivePath), `${targetId}_${safeId}`);
@@ -880,11 +992,11 @@ async function bundlePlugin(plugin, gatewayDir, targetId) {
 
   // 校验解压产物
   const extractedPkgDir = path.join(tmpDir, "package");
-  for (const f of plugin.requiredFiles) {
-    if (!fs.existsSync(path.join(extractedPkgDir, f))) {
-      rmDir(tmpDir);
-      die(`${plugin.id} 包内容无效（缺少 package/${f}）`);
-    }
+  try {
+    assertPluginDir(plugin, extractedPkgDir, "package/");
+  } catch (err) {
+    rmDir(tmpDir);
+    throw err;
   }
 
   rmDir(pluginDir);
@@ -1119,6 +1231,7 @@ function verifyOutput(targetPaths, platform) {
   required.push(
     path.join(targetRel, "gateway", "node_modules", "openclaw", "extensions", "kimi-claw", "openclaw.plugin.json"),
     path.join(targetRel, "gateway", "node_modules", "openclaw", "extensions", "kimi-search", "openclaw.plugin.json"),
+    path.join(targetRel, "gateway", "node_modules", "openclaw", "extensions", "qqbot", "openclaw.plugin.json"),
   );
 
   let allOk = true;
@@ -1169,7 +1282,7 @@ async function main() {
 
   console.log();
 
-  // Step 2.5: 注入 bundled 插件（kimi-claw + kimi-search）
+  // Step 2.5: 注入 bundled 插件（kimi-claw + kimi-search + qqbot）
   log("Step 2.5: 注入 bundled 插件");
   await bundleAllPlugins(targetPaths.gatewayDir, targetPaths.targetId);
 

@@ -36,6 +36,11 @@ import {
   isKimiSearchPluginBundled,
   writeKimiSearchDedicatedApiKey,
 } from "./kimi-config";
+import {
+  extractQqbotConfig,
+  isQqbotPluginBundled,
+  saveQqbotConfig,
+} from "./qqbot-config";
 import { ensureGatewayAuthTokenInConfig } from "./gateway-auth";
 import { getLaunchAtLoginState, setLaunchAtLoginEnabled } from "./launch-at-login";
 import { installCli, uninstallCli, isCliInstalled } from "./cli-integration";
@@ -293,6 +298,7 @@ export function registerSettingsIpc(opts: SettingsIpcOptions = {}): void {
     const groupPolicy = normalizeGroupPolicy(params?.groupPolicy, "allowlist");
     const groupAllowFrom = normalizeAllowFromEntries(params?.groupAllowFrom);
     const trackedProps = {
+      platform: FEISHU_CHANNEL,
       enabled,
       dm_policy: dmPolicy,
       group_policy: groupPolicy,
@@ -377,6 +383,76 @@ export function registerSettingsIpc(opts: SettingsIpcOptions = {}): void {
         return { success: false, message: err.message || String(err) };
       }
     });
+  });
+
+  // ── 读取 QQ Bot 配置 ──
+  function resolveQqbotMissingMessage(): string {
+    // dev 模式最常见的问题是还没执行 package:resources，把 qqbot 插件注入目标资源目录。
+    if (!app.isPackaged) {
+      return `开发模式未检测到 QQ Bot 插件，请先运行 npm run package:resources（当前目标：${process.platform}-${process.arch}）。`;
+    }
+    return "QQ Bot 组件缺失，请重新安装 OneClaw。";
+  }
+
+  ipcMain.handle("settings:get-qqbot-config", async () => {
+    try {
+      const config = readUserConfig();
+      const bundled = isQqbotPluginBundled();
+      return {
+        success: true,
+        data: {
+          ...extractQqbotConfig(config),
+          bundled,
+          bundleMessage: bundled ? "" : resolveQqbotMissingMessage(),
+        },
+      };
+    } catch (err: any) {
+      return { success: false, message: err.message || String(err) };
+    }
+  });
+
+  // ── 保存 QQ Bot 配置（支持 enabled=false 仅切换开关） ──
+  ipcMain.handle("settings:save-qqbot-config", async (_event, params) => {
+    const enabled = params?.enabled === true;
+    const appId = typeof params?.appId === "string" ? params.appId.trim() : "";
+    const clientSecret = typeof params?.clientSecret === "string" ? params.clientSecret.trim() : "";
+    const markdownSupport = params?.markdownSupport !== false;
+    return runTrackedSettingsAction(
+      "save_channel",
+      { platform: "qqbot", enabled, markdown_support: markdownSupport },
+      async () => {
+        try {
+          const config = readUserConfig();
+
+          if (!enabled) {
+            saveQqbotConfig(config, { enabled: false });
+            writeUserConfigAndRestart(config);
+            return { success: true };
+          }
+
+          if (!appId) {
+            return { success: false, message: "QQ Bot App ID 不能为空。" };
+          }
+          if (!clientSecret) {
+            return { success: false, message: "QQ Bot Client Secret 不能为空。" };
+          }
+          if (!isQqbotPluginBundled()) {
+            return { success: false, message: resolveQqbotMissingMessage() };
+          }
+
+          saveQqbotConfig(config, {
+            enabled: true,
+            appId,
+            clientSecret,
+            markdownSupport,
+          });
+          writeUserConfigAndRestart(config);
+          return { success: true };
+        } catch (err: any) {
+          return { success: false, message: err.message || String(err) };
+        }
+      }
+    );
   });
 
   // ── 列出飞书待审批配对请求（走 openclaw pairing list，避免重复实现存储协议） ──

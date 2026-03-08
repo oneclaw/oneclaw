@@ -177,9 +177,9 @@ button, input, select, label, a {
 
 .channel-desc-row {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
-  gap: 12px;
+  gap: 14px;
 }
 
 .channel-desc-row .desc {
@@ -194,6 +194,132 @@ button, input, select, label, a {
   display: flex;
   gap: 16px;
   white-space: nowrap;
+}
+
+.chat-integration-shell {
+  display: flex;
+  gap: 18px;
+  flex: 1;
+  min-height: 0;
+}
+
+.chat-platform-nav {
+  width: 172px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--bg-secondary);
+  align-self: flex-start;
+}
+
+.chat-platform-item {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px 6px 12px;
+  border-radius: 8px;
+  transition: background var(--transition), box-shadow var(--transition);
+}
+
+.chat-platform-item::before {
+  content: "";
+  position: absolute;
+  left: 7px;
+  top: 10px;
+  bottom: 10px;
+  width: 2px;
+  border-radius: 999px;
+  background: transparent;
+  transition: background var(--transition);
+}
+
+.chat-platform-item:hover {
+  background: var(--bg-input);
+}
+
+.chat-platform-item.active {
+  background: var(--accent-dim);
+  box-shadow: inset 0 0 0 1px rgba(192, 57, 43, 0.22);
+}
+
+.chat-platform-item.active::before {
+  background: var(--accent);
+}
+
+.chat-platform-btn {
+  display: flex;
+  align-items: center;
+  width: auto;
+  min-width: 0;
+  flex: 1;
+  padding: 6px 0;
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: color var(--transition), transform 120ms ease;
+  font-family: inherit;
+  text-align: left;
+}
+
+.chat-platform-item:hover .chat-platform-btn {
+  color: var(--text-primary);
+}
+
+.chat-platform-item.active .chat-platform-btn {
+  color: var(--text-primary);
+}
+
+.chat-platform-btn:active {
+  transform: scale(0.985);
+}
+
+.chat-platform-label {
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.chat-platform-meta {
+  display: none;
+}
+
+.chat-platform-toggle {
+  margin-left: auto;
+}
+
+.chat-platform-panels {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+}
+
+.chat-platform-panel {
+  display: none;
+}
+
+.chat-platform-panel.active {
+  display: flex;
+}
+
+.chat-panel-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.chat-panel-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-primary);
 }
 
 /* ── 当前 provider 状态指示 ── */
@@ -719,6 +845,24 @@ select option {
   color: var(--text-secondary);
 }
 
+.toggle-row-detail {
+  align-items: flex-start;
+  gap: 16px;
+}
+
+.toggle-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.toggle-note {
+  font-size: 12px;
+  color: var(--text-muted);
+  line-height: 1.45;
+}
+
 .toggle-switch {
   position: relative;
   display: inline-block;
@@ -768,6 +912,7 @@ select option {
 
 /* 启用后展开的字段容器 — 统一间距 */
 #chFields,
+#qqFields,
 #kimiFields {
   display: flex;
   flex-direction: column;
@@ -1133,6 +1278,14 @@ select option {
 @media (max-width: 720px) {
   .content {
     padding: 20px 18px;
+  }
+
+  .chat-integration-shell {
+    flex-direction: column;
+  }
+
+  .chat-platform-nav {
+    width: 100%;
   }
 
   .backup-card-header {
