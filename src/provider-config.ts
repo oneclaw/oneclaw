@@ -207,6 +207,7 @@ export async function verifyCustom(apiKey: string, baseURL?: string, apiType?: s
     await jsonRequest(`${base}/v1/messages`, {
       method: "POST",
       headers: {
+        "User-Agent": UA_ANTHROPIC,
         "x-api-key": apiKey,
         "anthropic-version": "2023-06-01",
         "content-type": "application/json",
@@ -222,6 +223,7 @@ export async function verifyCustom(apiKey: string, baseURL?: string, apiType?: s
     await jsonRequest(`${base}/v1/responses`, {
       method: "POST",
       headers: {
+        "User-Agent": UA_OPENAI,
         Authorization: `Bearer ${apiKey}`,
         "content-type": "application/json",
       },
@@ -235,6 +237,7 @@ export async function verifyCustom(apiKey: string, baseURL?: string, apiType?: s
     await jsonRequest(`${base}/chat/completions`, {
       method: "POST",
       headers: {
+        "User-Agent": UA_OPENAI,
         Authorization: `Bearer ${apiKey}`,
         "content-type": "application/json",
       },
@@ -290,6 +293,10 @@ export async function verifyProvider(params: {
 }
 
 // ── HTTP 请求工具 ──
+
+// 与 runtime SDK 保持一致的 User-Agent（见 node_modules/@anthropic-ai/sdk 和 openai）
+const UA_ANTHROPIC = "Anthropic/JS 0.73.0";
+const UA_OPENAI = "OpenAI/JS 6.10.0";
 
 export function jsonRequest(
   url: string,
