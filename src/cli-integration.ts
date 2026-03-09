@@ -11,8 +11,26 @@ interface CliResult {
   message: string;
 }
 
+// CLI 状态：区分“用户想要开启”与“当前是否真正可用”。
+export interface CliStatus {
+  enabled: boolean;
+  installed: boolean;
+  command: string;
+}
+
+type CliPreferenceState = {
+  version: 1;
+  enabled: boolean;
+};
+
+type WinCliBinDirs = {
+  currentBinDir: string;
+  legacyBinDirs: string[];
+};
+
 // Wrapper 脚本中的标记字符串，用于识别由 OneClaw 生成的文件。
 const CLI_MARKER = "OneClaw CLI";
+const CLI_PREFERENCE_FILE = "cli-preferences.json";
 
 // rc 注入块标记，安装可幂等覆盖，卸载可精确移除。
 const RC_BLOCK_START = "# >>> oneclaw-cli >>>";
@@ -41,14 +59,47 @@ function getWinLocalAppDataDir(): string {
   return path.join(os.homedir(), "AppData", "Local");
 }
 
+// 解析 Windows 当前路径与旧版迁移路径，避免老用户 PATH 残留。
+export function resolveWinCliBinDirsForPaths(localAppDataDir: string, userStateDir: string): WinCliBinDirs {
+  return {
+    currentBinDir: path.win32.join(localAppDataDir, "OneClaw", "bin"),
+    legacyBinDirs: [path.win32.join(userStateDir, "bin")],
+  };
+}
+
+// 读取当前平台上的 Windows CLI 目录配置。
+function resolveWinCliBinDirs(): WinCliBinDirs {
+  return resolveWinCliBinDirsForPaths(getWinLocalAppDataDir(), resolveUserStateDir());
+}
+
 // 解析 Windows 平台的 CLI 安装目录。
 function getWinBinDir(): string {
-  return path.join(getWinLocalAppDataDir(), "OneClaw", "bin");
+  return resolveWinCliBinDirs().currentBinDir;
+}
+
+// 解析 Windows 旧版 CLI 目录列表。
+function getLegacyWinBinDirs(): string[] {
+  return resolveWinCliBinDirs().legacyBinDirs;
 }
 
 // 解析 Windows 平台 wrapper 路径。
+function getWinWrapperPathForBinDir(binDir: string): string {
+  return path.join(binDir, "openclaw.cmd");
+}
+
+// 解析当前 Windows wrapper 路径。
 function getWinWrapperPath(): string {
-  return path.join(getWinBinDir(), "openclaw.cmd");
+  return getWinWrapperPathForBinDir(getWinBinDir());
+}
+
+// 解析旧版 Windows wrapper 路径。
+function getLegacyWinWrapperPaths(): string[] {
+  return getLegacyWinBinDirs().map(getWinWrapperPathForBinDir);
+}
+
+// 返回 CLI 偏好文件路径，与 gateway 配置解耦，避免污染上游 schema。
+function resolveCliPreferencePath(): string {
+  return path.join(resolveUserStateDir(), CLI_PREFERENCE_FILE);
 }
 
 // POSIX shell 双引号转义，保证路径中包含空格、$、`、" 时仍安全。
@@ -64,6 +115,49 @@ function escapeForCmdSetValue(value: string): string {
 // PowerShell 单引号字符串转义。
 function escapeForPowerShellSingleQuoted(value: string): string {
   return value.replace(/'/g, "''");
+}
+
+// 读取 OneClaw 维护的 CLI 偏好，仅接受最小合法结构。
+function readCliPreferenceState(): CliPreferenceState | null {
+  const preferencePath = resolveCliPreferencePath();
+  if (!fs.existsSync(preferencePath)) return null;
+
+  try {
+    const raw = JSON.parse(fs.readFileSync(preferencePath, "utf-8"));
+    if (raw && typeof raw === "object" && raw.version === 1 && typeof raw.enabled === "boolean") {
+      return { version: 1, enabled: raw.enabled };
+    }
+  } catch {
+    // 非法文件不阻塞启动，后续按无偏好处理。
+  }
+  return null;
+}
+
+// 持久化 CLI 偏好，供设置页和开机迁移复用。
+export function setCliEnabledPreference(enabled: boolean): void {
+  const preferencePath = resolveCliPreferencePath();
+  fs.mkdirSync(path.dirname(preferencePath), { recursive: true });
+  fs.writeFileSync(
+    preferencePath,
+    JSON.stringify({ version: 1, enabled }, null, 2),
+    "utf-8",
+  );
+}
+
+// 读取用户显式选择的 CLI 偏好；旧用户没有 sidecar 时返回 undefined。
+export function getCliEnabledPreference(): boolean | undefined {
+  return readCliPreferenceState()?.enabled;
+}
+
+// 兼容老用户：没有偏好文件时，根据现有 wrapper 足迹推断是否曾开启 CLI。
+export function inferCliEnabledPreference(
+  savedEnabled: boolean | undefined,
+  hasCurrentWrapper: boolean,
+  hasLegacyWrapper: boolean,
+): boolean | undefined {
+  if (typeof savedEnabled === "boolean") return savedEnabled;
+  if (hasCurrentWrapper || hasLegacyWrapper) return true;
+  return undefined;
 }
 
 // 构建 Windows PATH 修改脚本，避免分号拼接打断 try/catch 语法。
@@ -161,6 +255,36 @@ export function buildWinWrapperForPaths(nodeBin: string, entry: string): string 
 // 读取当前运行时路径并生成 Windows wrapper，避免调用方重复拼路径。
 function buildWinWrapper(): string {
   return buildWinWrapperForPaths(resolveNodeBin(), resolveGatewayEntry());
+}
+
+// 判断指定 wrapper 是否由 OneClaw 管理，避免误删用户自定义脚本。
+function hasManagedWrapper(wrapperPath: string): boolean {
+  if (!fs.existsSync(wrapperPath)) return false;
+  try {
+    return fs.readFileSync(wrapperPath, "utf-8").includes(CLI_MARKER);
+  } catch {
+    return false;
+  }
+}
+
+// 最小化删除策略：只移除带标记的 wrapper。
+function removeManagedWrapper(wrapperPath: string): void {
+  if (!hasManagedWrapper(wrapperPath)) return;
+  fs.unlinkSync(wrapperPath);
+}
+
+// 采集 CLI 足迹，用于状态展示和老用户迁移推断。
+function readCliInstallFootprint(): { currentInstalled: boolean; legacyInstalled: boolean } {
+  if (IS_WIN) {
+    return {
+      currentInstalled: hasManagedWrapper(getWinWrapperPath()),
+      legacyInstalled: getLegacyWinWrapperPaths().some(hasManagedWrapper),
+    };
+  }
+  return {
+    currentInstalled: hasManagedWrapper(getPosixWrapperPath()),
+    legacyInstalled: false,
+  };
 }
 
 // 返回用户 home 目录，优先 HOME，回退 os.homedir()，失败时返回 null。
@@ -273,7 +397,7 @@ function winModifyPath(action: "add" | "remove", binDir: string): Promise<void> 
     execFile(
       "powershell.exe",
       ["-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", script],
-      { timeout: 15_000 },
+      { timeout: 15_000, windowsHide: true },
       (err) => {
         if (err) {
           reject(err);
@@ -285,67 +409,158 @@ function winModifyPath(action: "add" | "remove", binDir: string): Promise<void> 
   });
 }
 
-// 安装 CLI：生成 wrapper 并注入 PATH，失败仅返回结果，不抛出到 Setup 主流程。
+// 校验 CLI 运行时依赖，避免生成必然损坏的 wrapper。
+function validateCliRuntime(): CliResult | null {
+  const nodeBin = resolveNodeBin();
+  const entry = resolveGatewayEntry();
+  if (nodeBin === "node" || !fs.existsSync(nodeBin)) {
+    return { success: false, message: `Node runtime not found: ${nodeBin}` };
+  }
+  if (!fs.existsSync(entry)) {
+    return { success: false, message: `CLI entry not found: ${entry}` };
+  }
+  return null;
+}
+
+// Windows CLI 安装：写入新 wrapper，并迁移掉旧版 PATH 与旧目录中的 wrapper。
+async function installCliWindows(): Promise<CliResult> {
+  const invalidRuntime = validateCliRuntime();
+  if (invalidRuntime) return invalidRuntime;
+
+  const binDir = getWinBinDir();
+  const errors: string[] = [];
+  fs.mkdirSync(binDir, { recursive: true });
+  fs.writeFileSync(getWinWrapperPath(), buildWinWrapper(), "utf-8");
+
+  await winModifyPath("add", binDir);
+
+  for (const legacyWrapperPath of getLegacyWinWrapperPaths()) {
+    try {
+      removeManagedWrapper(legacyWrapperPath);
+    } catch (err) {
+      errors.push(`${path.basename(path.dirname(legacyWrapperPath))}: ${errorMessage(err)}`);
+    }
+  }
+
+  for (const legacyBinDir of getLegacyWinBinDirs()) {
+    try {
+      await winModifyPath("remove", legacyBinDir);
+    } catch (err) {
+      errors.push(`${path.basename(legacyBinDir)} PATH: ${errorMessage(err)}`);
+    }
+  }
+
+  log.info("[cli] Windows CLI installed");
+  if (errors.length > 0) {
+    return {
+      success: true,
+      message: `CLI installed. Legacy PATH migration partially failed (${errors.join("; ")}).`,
+    };
+  }
+  return { success: true, message: "CLI installed. Please reopen your terminal." };
+}
+
+// POSIX CLI 安装：生成 wrapper 并注入 shell profile。
+async function installCliPosix(): Promise<CliResult> {
+  const invalidRuntime = validateCliRuntime();
+  if (invalidRuntime) return invalidRuntime;
+
+  const binDir = getPosixBinDir();
+  fs.mkdirSync(binDir, { recursive: true });
+  const wrapperPath = getPosixWrapperPath();
+  fs.writeFileSync(wrapperPath, buildPosixWrapper(), "utf-8");
+  fs.chmodSync(wrapperPath, 0o755);
+
+  const rcPaths = resolvePosixRcPaths();
+  if (rcPaths.length === 0) {
+    return { success: false, message: "Failed to resolve home directory for PATH injection." };
+  }
+
+  const errors: string[] = [];
+  let injected = 0;
+  for (const rcPath of rcPaths) {
+    try {
+      upsertRcBlock(rcPath, binDir);
+      injected += 1;
+    } catch (err) {
+      const msg = errorMessage(err);
+      errors.push(`${path.basename(rcPath)}: ${msg}`);
+      log.error(`[cli] Failed to update ${rcPath}: ${msg}`);
+    }
+  }
+
+  if (injected === 0) {
+    return {
+      success: false,
+      message: `CLI wrapper created, but PATH injection failed (${errors.join("; ")})`,
+    };
+  }
+
+  log.info("[cli] POSIX CLI installed");
+  if (errors.length > 0) {
+    return {
+      success: true,
+      message: `CLI installed with partial PATH update (${errors.join("; ")}).`,
+    };
+  }
+  return { success: true, message: "CLI installed." };
+}
+
+// Windows CLI 卸载：清理当前与旧版目录，避免 PATH 残留。
+async function uninstallCliWindows(): Promise<CliResult> {
+  const errors: string[] = [];
+  const wrapperPaths = [getWinWrapperPath(), ...getLegacyWinWrapperPaths()];
+  const binDirs = [getWinBinDir(), ...getLegacyWinBinDirs()];
+
+  for (const wrapperPath of wrapperPaths) {
+    try {
+      removeManagedWrapper(wrapperPath);
+    } catch (err) {
+      errors.push(`${path.basename(wrapperPath)}: ${errorMessage(err)}`);
+    }
+  }
+
+  for (const binDir of binDirs) {
+    try {
+      await winModifyPath("remove", binDir);
+    } catch (err) {
+      errors.push(`${path.basename(binDir)} PATH: ${errorMessage(err)}`);
+    }
+  }
+
+  log.info("[cli] Windows CLI uninstalled");
+  if (errors.length > 0) {
+    return {
+      success: false,
+      message: `CLI uninstall cleanup failed (${errors.join("; ")})`,
+    };
+  }
+  return { success: true, message: "CLI uninstalled." };
+}
+
+// POSIX CLI 卸载：删除 wrapper 和 profile 注入块，过程尽量容错。
+async function uninstallCliPosix(): Promise<CliResult> {
+  const wrapperPath = getPosixWrapperPath();
+  if (fs.existsSync(wrapperPath)) fs.unlinkSync(wrapperPath);
+
+  const rcPaths = resolvePosixRcPaths();
+  for (const rcPath of rcPaths) {
+    try {
+      removeRcBlock(rcPath);
+    } catch (err) {
+      log.error(`[cli] Failed to clean ${rcPath}: ${errorMessage(err)}`);
+    }
+  }
+
+  log.info("[cli] POSIX CLI uninstalled");
+  return { success: true, message: "CLI uninstalled." };
+}
+
+// 安装 CLI：持久化用户意图，并把旧版 Windows PATH 迁移到新目录。
 export async function installCli(): Promise<CliResult> {
   try {
-    // 前置校验：node 和 entry 必须存在，否则生成的 wrapper 必然报错。
-    const nodeBin = resolveNodeBin();
-    const entry = resolveGatewayEntry();
-    if (nodeBin === "node" || !fs.existsSync(nodeBin)) {
-      return { success: false, message: `Node runtime not found: ${nodeBin}` };
-    }
-    if (!fs.existsSync(entry)) {
-      return { success: false, message: `CLI entry not found: ${entry}` };
-    }
-
-    if (IS_WIN) {
-      const binDir = getWinBinDir();
-      fs.mkdirSync(binDir, { recursive: true });
-      fs.writeFileSync(getWinWrapperPath(), buildWinWrapper(), "utf-8");
-      await winModifyPath("add", binDir);
-      log.info("[cli] Windows CLI installed");
-      return { success: true, message: "CLI installed. Please reopen your terminal." };
-    }
-
-    const binDir = getPosixBinDir();
-    fs.mkdirSync(binDir, { recursive: true });
-    const wrapperPath = getPosixWrapperPath();
-    fs.writeFileSync(wrapperPath, buildPosixWrapper(), "utf-8");
-    fs.chmodSync(wrapperPath, 0o755);
-
-    const rcPaths = resolvePosixRcPaths();
-    if (rcPaths.length === 0) {
-      return { success: false, message: "Failed to resolve home directory for PATH injection." };
-    }
-
-    const errors: string[] = [];
-    let injected = 0;
-    for (const rcPath of rcPaths) {
-      try {
-        upsertRcBlock(rcPath, binDir);
-        injected += 1;
-      } catch (err) {
-        const msg = errorMessage(err);
-        errors.push(`${path.basename(rcPath)}: ${msg}`);
-        log.error(`[cli] Failed to update ${rcPath}: ${msg}`);
-      }
-    }
-
-    if (injected === 0) {
-      return {
-        success: false,
-        message: `CLI wrapper created, but PATH injection failed (${errors.join("; ")})`,
-      };
-    }
-
-    log.info("[cli] POSIX CLI installed");
-    if (errors.length > 0) {
-      return {
-        success: true,
-        message: `CLI installed with partial PATH update (${errors.join("; ")}).`,
-      };
-    }
-    return { success: true, message: "CLI installed." };
+    setCliEnabledPreference(true);
+    return IS_WIN ? await installCliWindows() : await installCliPosix();
   } catch (err) {
     const msg = errorMessage(err);
     log.error(`[cli] install failed: ${msg}`);
@@ -353,31 +568,11 @@ export async function installCli(): Promise<CliResult> {
   }
 }
 
-// 卸载 CLI：删除 wrapper 和 PATH 注入块，过程尽量容错。
+// 卸载 CLI：记录显式关闭偏好，并清理当前与旧版安装痕迹。
 export async function uninstallCli(): Promise<CliResult> {
   try {
-    if (IS_WIN) {
-      const wrapperPath = getWinWrapperPath();
-      if (fs.existsSync(wrapperPath)) fs.unlinkSync(wrapperPath);
-      await winModifyPath("remove", getWinBinDir());
-      log.info("[cli] Windows CLI uninstalled");
-      return { success: true, message: "CLI uninstalled." };
-    }
-
-    const wrapperPath = getPosixWrapperPath();
-    if (fs.existsSync(wrapperPath)) fs.unlinkSync(wrapperPath);
-
-    const rcPaths = resolvePosixRcPaths();
-    for (const rcPath of rcPaths) {
-      try {
-        removeRcBlock(rcPath);
-      } catch (err) {
-        log.error(`[cli] Failed to clean ${rcPath}: ${errorMessage(err)}`);
-      }
-    }
-
-    log.info("[cli] POSIX CLI uninstalled");
-    return { success: true, message: "CLI uninstalled." };
+    setCliEnabledPreference(false);
+    return IS_WIN ? await uninstallCliWindows() : await uninstallCliPosix();
   } catch (err) {
     const msg = errorMessage(err);
     log.error(`[cli] uninstall failed: ${msg}`);
@@ -385,15 +580,48 @@ export async function uninstallCli(): Promise<CliResult> {
   }
 }
 
-// 判断 CLI 是否安装：只识别由 OneClaw 生成且带标记的 wrapper。
-export function isCliInstalled(): boolean {
-  const wrapperPath = IS_WIN ? getWinWrapperPath() : getPosixWrapperPath();
-  if (!fs.existsSync(wrapperPath)) return false;
+// 对外暴露 CLI 状态：enabled 代表用户偏好，installed 代表当前或旧版 wrapper 足迹。
+export function getCliStatus(): CliStatus {
+  const footprint = readCliInstallFootprint();
+  const enabled =
+    inferCliEnabledPreference(
+      getCliEnabledPreference(),
+      footprint.currentInstalled,
+      footprint.legacyInstalled,
+    ) === true;
 
-  try {
-    const content = fs.readFileSync(wrapperPath, "utf-8");
-    return content.includes(CLI_MARKER);
-  } catch {
-    return false;
+  return {
+    enabled,
+    installed: footprint.currentInstalled || footprint.legacyInstalled,
+    command: "openclaw",
+  };
+}
+
+// 判断 CLI 是否安装：兼容旧版 Windows wrapper 路径。
+export function isCliInstalled(): boolean {
+  return getCliStatus().installed;
+}
+
+// Windows 启动自愈：为已开启 CLI 的用户补回当前 PATH，并迁移旧版目录。
+export async function reconcileCliOnAppLaunch(): Promise<void> {
+  if (!IS_WIN) return;
+
+  const footprint = readCliInstallFootprint();
+  const savedEnabled = getCliEnabledPreference();
+  const inferredEnabled = inferCliEnabledPreference(
+    savedEnabled,
+    footprint.currentInstalled,
+    footprint.legacyInstalled,
+  );
+  if (inferredEnabled === undefined) return;
+
+  if (savedEnabled !== inferredEnabled) {
+    setCliEnabledPreference(inferredEnabled);
+    log.info(`[cli] Migrated CLI enabled preference on launch: ${inferredEnabled}`);
+  }
+
+  const result = inferredEnabled ? await installCliWindows() : await uninstallCliWindows();
+  if (!result.success) {
+    throw new Error(result.message);
   }
 }

@@ -14,7 +14,7 @@ import {
   writeUserConfig,
 } from "./provider-config";
 import * as log from "./logger";
-import { installCli } from "./cli-integration";
+import { installCli, uninstallCli } from "./cli-integration";
 import { saveKimiSearchConfig } from "./kimi-config";
 import {
   detectExistingInstallation,
@@ -268,7 +268,7 @@ export function registerSetupIpc(deps: SetupIpcDeps): void {
 
       analytics.track("setup_completed", latestSetupCompletedProps ?? {});
 
-      // CLI 安装（默认开启，失败不阻塞 Setup）
+      // CLI 开关显式持久化：开启则安装，关闭则清理，失败都不阻塞 Setup。
       if (params?.installCli !== false) {
         const cliResult = await installCli();
         if (cliResult.success) {
@@ -276,6 +276,12 @@ export function registerSetupIpc(deps: SetupIpcDeps): void {
         } else {
           log.error(`[setup] CLI install failed: ${cliResult.message}`);
           analytics.track("cli_install_failed", { error: cliResult.message });
+        }
+      } else {
+        const cliResult = await uninstallCli();
+        if (!cliResult.success) {
+          log.error(`[setup] CLI uninstall failed: ${cliResult.message}`);
+          analytics.track("cli_uninstall_failed", { error: cliResult.message });
         }
       }
 

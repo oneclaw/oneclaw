@@ -787,7 +787,7 @@
   let searchSaving = false;
   let advSaving = false;
   let cliOperating = false;
-  let cliInstalled = false;
+  let cliEnabled = false;
   let appearanceSaving = false;
   let backupRestoring = false;
   let backupResetting = false;
@@ -2407,14 +2407,14 @@
     }
   }
 
-  // 同步开关状态到 CLI 安装状态，操作中禁用开关。
+  // 同步开关状态到 CLI 偏好，操作中禁用开关。
   function renderCliControls() {
     if (!els.cliEnabled) return;
-    els.cliEnabled.checked = cliInstalled;
+    els.cliEnabled.checked = cliEnabled;
     els.cliEnabled.disabled = cliOperating;
   }
 
-  // 读取主进程 CLI 安装状态；若当前版本未提供接口，则安全降级为禁用开关。
+  // 读取主进程 CLI 状态；新版本优先使用 enabled，旧版本回退 installed。
   async function loadCliStatus() {
     if (
       !window.oneclaw ||
@@ -2429,7 +2429,10 @@
     try {
       var result = await window.oneclaw.settingsGetCliStatus();
       if (!result || !result.success || !result.data) return;
-      cliInstalled = result.data.installed === true;
+      cliEnabled = result.data.enabled === true;
+      if (result.data.enabled !== true && result.data.enabled !== false) {
+        cliEnabled = result.data.installed === true;
+      }
       renderCliControls();
     } catch (err) {
       console.error("[Settings] loadCliStatus failed:", err);

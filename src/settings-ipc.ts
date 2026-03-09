@@ -59,7 +59,7 @@ import {
 } from "./wecom-config";
 import { ensureGatewayAuthTokenInConfig } from "./gateway-auth";
 import { getLaunchAtLoginState, setLaunchAtLoginEnabled } from "./launch-at-login";
-import { installCli, uninstallCli, isCliInstalled } from "./cli-integration";
+import { installCli, uninstallCli, getCliStatus } from "./cli-integration";
 import * as analytics from "./analytics";
 import * as path from "path";
 import * as fs from "fs";
@@ -971,15 +971,12 @@ export function registerSettingsIpc(opts: SettingsIpcOptions = {}): void {
     );
   });
 
-  // ── 读取 CLI 安装状态（设置页用于切换“安装/卸载”按钮文案） ──
+  // ── 读取 CLI 状态（enabled=用户偏好，installed=当前/旧版 wrapper 足迹） ──
   ipcMain.handle("settings:get-cli-status", async () => {
     try {
       return {
         success: true,
-        data: {
-          installed: isCliInstalled(),
-          command: "openclaw",
-        },
+        data: getCliStatus(),
       };
     } catch (err: any) {
       return { success: false, message: err.message || String(err) };

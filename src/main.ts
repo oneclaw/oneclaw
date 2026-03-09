@@ -40,6 +40,7 @@ import {
 } from "./config-backup";
 import { readUserConfig, writeUserConfig } from "./provider-config";
 import { resolveKimiSearchApiKey } from "./kimi-config";
+import { reconcileCliOnAppLaunch } from "./cli-integration";
 import * as log from "./logger";
 import * as analytics from "./analytics";
 
@@ -618,6 +619,9 @@ app.whenReady().then(async () => {
     // 存量用户迁移
     migrateSessionMemoryHook();
     migrateDisableGatewayUpdateCheck();
+    void reconcileCliOnAppLaunch().catch((err) => {
+      log.error(`[migrate] CLI launch reconciliation failed: ${err instanceof Error ? err.message : String(err)}`);
+    });
     await startGatewayAndShowMain("app:startup");
   }
 });
