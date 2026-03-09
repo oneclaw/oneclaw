@@ -1,8 +1,8 @@
 import { app } from "electron";
-import * as crypto from "crypto";
 import * as fs from "fs";
 import * as path from "path";
-import { resolveResourcesPath, resolveUserStateDir } from "./constants";
+import { resolveResourcesPath } from "./constants";
+import { ensureDeviceId } from "./oneclaw-config";
 import * as log from "./logger";
 import {
   AnalyticsErrorType,
@@ -55,22 +55,9 @@ let deviceId = "";
 let heartbeatTimer: ReturnType<typeof setInterval> | null = null;
 let resolvedConfigPath = "";
 
-// 读取或生成持久化 device ID（固定写入 ~/.openclaw/.device-id）
+// 读取或生成持久化 device ID（委托给 oneclaw-config 统一管理）
 function getDeviceId(): string {
-  const dir = resolveUserStateDir();
-  const idFile = path.join(dir, ".device-id");
-
-  try {
-    const id = fs.readFileSync(idFile, "utf-8").trim();
-    if (id) return id;
-  } catch { }
-
-  const id = crypto.randomUUID();
-  try {
-    fs.mkdirSync(dir, { recursive: true });
-    fs.writeFileSync(idFile, id, "utf-8");
-  } catch { }
-  return id;
+  return ensureDeviceId();
 }
 
 // 每个事件附带的公共属性
