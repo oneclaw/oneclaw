@@ -70,7 +70,7 @@
 
     <!-- Step 1: 欢迎页 -->
     <section class="step active" id="step1">
-      <div class="step-content">
+      <div class="step-content step1-content">
         <div class="logo-area">
           <svg width="56" height="56" viewBox="0 0 56 56" fill="none">
             <rect width="56" height="56" rx="14" fill="#c0392b"/>
@@ -80,20 +80,37 @@
           </svg>
         </div>
         <h1 data-i18n="welcome.title">Welcome to OneClaw</h1>
-        <p class="subtitle" data-i18n="welcome.subtitle">Your intelligent desktop assistant powered by large language models. Let's get you set up in just a few steps.</p>
+        <p class="subtitle" data-i18n="welcome.subtitle">OneClaw is a one-click installer for OpenClaw. Ready to use out of the box.</p>
 
-        <div class="info-card">
-          <div class="info-card-icon">
-            <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
-              <path d="M10 2L3 6V14L10 18L17 14V6L10 2Z" stroke="#c0392b" stroke-width="1.5"/>
-              <path d="M10 9V13M10 7V7.01" stroke="#c0392b" stroke-width="1.5" stroke-linecap="round"/>
-            </svg>
-          </div>
-          <div class="info-card-text">
-            <strong data-i18n="welcome.security.title">Your keys stay local</strong>
-            <span data-i18n="welcome.security.desc">API keys are stored securely on your machine and never sent to any third-party server.</span>
-          </div>
-        </div>
+        <ul class="welcome-features">
+          <li>
+            <span class="welcome-feature-icon">
+              <svg width="18" height="18" viewBox="0 0 18 18" fill="none"><path d="M3 4.5H15M3 9H15M3 13.5H9" stroke="#c0392b" stroke-width="1.3" stroke-linecap="round"/></svg>
+            </span>
+            <span data-i18n="welcome.feat1">Chat with top language models like Claude, GPT, Kimi, Gemini</span>
+          </li>
+          <li>
+            <span class="welcome-feature-icon">
+              <svg width="18" height="18" viewBox="0 0 18 18" fill="none"><path d="M3 4H15M3 8H10M3 12H13" stroke="#c0392b" stroke-width="1.3" stroke-linecap="round"/></svg>
+            </span>
+            <span data-i18n="welcome.feat2">Follow instructions to access files on your computer and automate tasks</span>
+          </li>
+          <li>
+            <span class="welcome-feature-icon">
+              <svg width="18" height="18" viewBox="0 0 18 18" fill="none"><path d="M2.5 4.5C2.5 3.67 3.17 3 4 3H14C14.83 3 15.5 3.67 15.5 4.5V11.5C15.5 12.33 14.83 13 14 13H10L6.5 15.5V13H4C3.17 13 2.5 12.33 2.5 11.5V4.5Z" stroke="#c0392b" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </span>
+            <span data-i18n="welcome.feat3">Connect to Feishu, WeCom, DingTalk, QQ Bot</span>
+          </li>
+          <li>
+            <span class="welcome-feature-icon">
+              <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
+                <path d="M9 1.5L2.5 5V13L9 16.5L15.5 13V5L9 1.5Z" stroke="#c0392b" stroke-width="1.3"/>
+                <path d="M9 8V12M9 6V6.01" stroke="#c0392b" stroke-width="1.3" stroke-linecap="round"/>
+              </svg>
+            </span>
+            <span data-i18n="welcome.security">API keys stored locally, never sent to third-party servers</span>
+          </li>
+        </ul>
 
         <button class="btn-primary" id="btnToStep2" data-i18n="welcome.next">Next</button>
       </div>
@@ -104,6 +121,19 @@
       <div class="step-content">
         <h2 data-i18n="config.title">Configure Provider</h2>
         <p class="subtitle" data-i18n="config.subtitle">Choose your LLM provider and enter your API key.</p>
+
+        <div class="info-card info-card-compact">
+          <div class="info-card-icon">
+            <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
+              <circle cx="9" cy="9" r="7" stroke="#c0392b" stroke-width="1.3"/>
+              <path d="M8.25 5.63h1.5v1.5h-1.5zM8.25 8.63h1.5v3.75h-1.5z" fill="#c0392b"/>
+            </svg>
+          </div>
+          <div class="info-card-text">
+            <span data-i18n="config.keyNotice">OneClaw does not provide API keys. Please click the link to purchase one from the provider's website.</span>
+          </div>
+        </div>
+
         <p class="docs-link-row"><a href="#" class="platform-link" id="docsLink" data-i18n="config.docsLink">Tutorial Docs →</a></p>
 
         <!-- Provider 分段选择器 -->

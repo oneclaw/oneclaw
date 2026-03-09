@@ -108,9 +108,16 @@ button, input, select, label, a {
   gap: 20px;
 }
 
-/* Step 2 内容左对齐 */
+/* Step 2 内容左对齐 + 可滚动 */
 #step2 .step-content {
   align-items: stretch;
+}
+
+#step2 {
+  overflow-y: auto;
+  align-items: flex-start;
+  padding-top: 48px;
+  padding-bottom: 48px;
 }
 
 /* ---- Logo 区域 ---- */
@@ -171,6 +178,57 @@ h2 {
 
 #step3 #btnStart {
   margin-top: 2px;
+}
+
+/* ---- 欢迎页功能列表 ---- */
+.step1-content {
+  align-items: stretch;
+}
+
+#step1 h1 {
+  text-align: left;
+}
+
+#step1 .subtitle {
+  text-align: left;
+  max-width: none;
+}
+
+.welcome-features {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.welcome-features li {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  font-size: 13px;
+  color: var(--text-secondary);
+  line-height: 1.45;
+}
+
+.welcome-feature-icon {
+  flex-shrink: 0;
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--accent-dim);
+  border-radius: var(--radius-sm);
+  margin-top: 1px;
+}
+
+/* ---- 紧凑信息卡片（Step 2 提示） ---- */
+.info-card-compact {
+  padding: 10px 14px;
+}
+
+.info-card-compact .info-card-text {
+  gap: 0;
 }
 
 /* ---- 安全提示卡片 ---- */
