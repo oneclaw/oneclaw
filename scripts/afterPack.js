@@ -95,8 +95,11 @@ exports.default = async function afterPack(context) {
   const gatewayDir = path.join(targetBase, "gateway");
   pruneGatewayModules(gatewayDir, platform, arch);
 
-  // ── 将 node_modules 打成 tar 包（NSIS 只需安装 1 个文件而非数万散文件） ──
-  tarGatewayModules(gatewayDir);
+  // ── Windows: 将 node_modules 打成 tar 包（NSIS 只需安装 1 个文件而非数万散文件） ──
+  // macOS 不打 tar：Apple 公证会穿透 tar 扫描内部未签名的 .node，导致公证失败。
+  if (platform === "win32") {
+    tarGatewayModules(gatewayDir);
+  }
 
   // ── 用 Electron binary 替换独立 Node.js（节省 80-100MB） ──
   const productName = context.packager.appInfo.productFilename;
