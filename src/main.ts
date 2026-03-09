@@ -41,6 +41,12 @@ import {
 import { readUserConfig, writeUserConfig } from "./provider-config";
 import { resolveKimiSearchApiKey } from "./kimi-config";
 import { reconcileCliOnAppLaunch } from "./cli-integration";
+import { detectOwnership, migrateFromLegacy, markSetupComplete } from "./oneclaw-config";
+import {
+  detectExistingInstallation,
+  uninstallGlobalOpenclaw,
+  killPortProcess,
+} from "./install-detector";
 import * as log from "./logger";
 import * as analytics from "./analytics";
 
@@ -340,6 +346,44 @@ async function ensureGatewayRunning(source: string): Promise<boolean> {
   return false;
 }
 
+// 外部 OpenClaw 接管流程：提示卸载 → 尝试复用配置 → 成功则接管，失败则 Setup
+async function handleExternalOpenclawTakeover(): Promise<void> {
+  const port = resolveGatewayPort();
+
+  // 弹对话框通知用户
+  await dialog.showMessageBox({
+    type: "info",
+    title: "检测到已安装的 OpenClaw",
+    message: "您的电脑上已安装独立版 OpenClaw，为避免冲突，OneClaw 需要先卸载它。",
+    detail: "您的配置数据将被保留。",
+    buttons: ["继续"],
+    defaultId: 0,
+  });
+
+  // 卸载全局 npm 包 + 杀占端口进程
+  const detection = await detectExistingInstallation(port);
+  if (detection.globalInstalled) {
+    await uninstallGlobalOpenclaw();
+  }
+  if (detection.portInUse && detection.portPid > 0) {
+    await killPortProcess(detection.portPid);
+    await new Promise((r) => setTimeout(r, 1_000));
+  }
+
+  // 尝试用现有配置启动 gateway
+  const running = await ensureGatewayRunning("takeover:try-existing-config");
+  if (running) {
+    markSetupComplete();
+    migrateDisableGatewayUpdateCheck();
+    await showMainWindow();
+    recordLastKnownGoodConfigSnapshot();
+    log.info("[startup] takeover succeeded, existing config reused");
+  } else {
+    log.info("[startup] takeover gateway start failed, falling back to setup");
+    setupManager.showSetup();
+  }
+}
+
 async function startGatewayAndShowMain(source: string, opts: StartMainOptions = {}): Promise<boolean> {
   const openOnFailure = opts.openOnFailure ?? true;
   const reportFailure = opts.reportFailure ?? true;
@@ -456,12 +500,15 @@ setupManager.setOnComplete(async () => {
   }
 
   try {
-    // 只有最后一步成功（Gateway 可用）后，才标记 Setup 完成。
+    // gateway schema 兼容：保留 wizard.lastRunAt
     const config = readUserConfig();
     config.wizard ??= {};
     config.wizard.lastRunAt = new Date().toISOString();
     delete config.wizard.pendingAt;
     writeUserConfig(config);
+
+    // 写入 oneclaw.config.json 归属标记
+    markSetupComplete();
   } catch (err: any) {
     log.error(`写入 setup 完成标记失败: ${err?.message ?? err}`);
     return false;
@@ -612,17 +659,43 @@ app.whenReady().then(async () => {
     return;
   }
 
-  if (!isSetupComplete()) {
-    // 无配置 → 先走 Setup，Gateway 在 Setup 完成回调里启动
-    setupManager.showSetup();
-  } else {
-    // 存量用户迁移
-    migrateSessionMemoryHook();
-    migrateDisableGatewayUpdateCheck();
-    void reconcileCliOnAppLaunch().catch((err) => {
-      log.error(`[migrate] CLI launch reconciliation failed: ${err instanceof Error ? err.message : String(err)}`);
-    });
-    await startGatewayAndShowMain("app:startup");
+  // 四态归属判定
+  const ownership = detectOwnership();
+  log.info(`[startup] config ownership: ${ownership}`);
+
+  switch (ownership) {
+    case "oneclaw":
+      // 状态 1：正常启动
+      migrateSessionMemoryHook();
+      migrateDisableGatewayUpdateCheck();
+      void reconcileCliOnAppLaunch().catch((err) => {
+        log.error(`[migrate] CLI launch reconciliation failed: ${err instanceof Error ? err.message : String(err)}`);
+      });
+      await startGatewayAndShowMain("app:startup");
+      break;
+
+    case "legacy-oneclaw":
+      // 状态 2：老 OneClaw 用户升级 → 自动迁移
+      log.info("[startup] legacy OneClaw detected, migrating...");
+      migrateFromLegacy();
+      migrateSessionMemoryHook();
+      migrateDisableGatewayUpdateCheck();
+      void reconcileCliOnAppLaunch().catch((err) => {
+        log.error(`[migrate] CLI launch reconciliation failed: ${err instanceof Error ? err.message : String(err)}`);
+      });
+      await startGatewayAndShowMain("app:startup:legacy-migrate");
+      break;
+
+    case "external-openclaw":
+      // 状态 3：外部 OpenClaw → 接管流程
+      log.info("[startup] external OpenClaw config detected, starting takeover...");
+      await handleExternalOpenclawTakeover();
+      break;
+
+    case "fresh":
+      // 状态 4：全新安装
+      setupManager.showSetup();
+      break;
   }
 });
 
