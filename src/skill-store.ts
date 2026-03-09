@@ -13,6 +13,7 @@ import * as path from "path";
 import * as https from "https";
 import * as http from "http";
 import * as log from "./logger";
+import { readOneclawConfig, writeOneclawConfig } from "./oneclaw-config";
 
 const DEFAULT_REGISTRY = "https://clawhub.ai";
 const FETCH_TIMEOUT_MS = 15_000;
@@ -54,8 +55,8 @@ function skillStoreConfigPath(): string {
   return path.join(resolveUserStateDir(), SKILL_STORE_CONFIG);
 }
 
-// 读取技能商店独立配置
-function readSkillStoreConfig(): Record<string, any> {
+// 读取 legacy 技能商店独立配置（兼容旧版 skill-store.json）
+function readLegacySkillStoreConfig(): Record<string, any> {
   try {
     return JSON.parse(fs.readFileSync(skillStoreConfigPath(), "utf-8"));
   } catch {
@@ -63,43 +64,53 @@ function readSkillStoreConfig(): Record<string, any> {
   }
 }
 
-// 写入技能商店独立配置
-function writeSkillStoreConfig(data: Record<string, any>): void {
+// 写入 legacy 技能商店独立配置（兼容旧版 skill-store.json）
+function writeLegacySkillStoreConfig(data: Record<string, any>): void {
   fs.mkdirSync(path.dirname(skillStoreConfigPath()), { recursive: true });
   fs.writeFileSync(skillStoreConfigPath(), JSON.stringify(data, null, 2) + "\n", "utf-8");
 }
 
 // ── Registry URL 公开接口（供 settings-ipc 使用） ──
 
-// 读取 registry URL（空字符串表示使用默认值）
+// 读取 registry URL（优先 oneclaw.config.json，兼容 legacy skill-store.json）
 export function readSkillStoreRegistry(): string {
-  const config = readSkillStoreConfig();
-  return typeof config?.registryUrl === "string" ? config.registryUrl : "";
+  const oneclawConfig = readOneclawConfig();
+  if (oneclawConfig?.skillStore?.registryUrl) {
+    return oneclawConfig.skillStore.registryUrl;
+  }
+  const legacy = readLegacySkillStoreConfig();
+  return typeof legacy?.registryUrl === "string" ? legacy.registryUrl : "";
 }
 
-// 写入 registry URL（空值时清除）
+// 写入 registry URL（写到 oneclaw.config.json + legacy 文件双写）
 export function writeSkillStoreRegistry(url: string): void {
-  const config = readSkillStoreConfig();
-  if (url) {
-    config.registryUrl = url;
-  } else {
-    delete config.registryUrl;
+  const config = readOneclawConfig();
+  if (config) {
+    if (url) {
+      config.skillStore ??= {};
+      config.skillStore.registryUrl = url;
+    } else {
+      delete config.skillStore?.registryUrl;
+    }
+    writeOneclawConfig(config);
   }
-  writeSkillStoreConfig(config);
+  // legacy 文件双写保持兼容
+  const legacyConfig = readLegacySkillStoreConfig();
+  if (url) {
+    legacyConfig.registryUrl = url;
+  } else {
+    delete legacyConfig.registryUrl;
+  }
+  writeLegacySkillStoreConfig(legacyConfig);
 }
 
 // ── Registry URL 解析 ──
 
 // 读取用户自定义 registry 地址，未配置时回退官方默认值
 function registryUrl(): string {
-  try {
-    const config = readSkillStoreConfig();
-    const custom = config?.registryUrl;
-    if (typeof custom === "string" && custom.trim()) {
-      return custom.trim().replace(/\/+$/, "");
-    }
-  } catch {
-    // 配置读取失败回退默认
+  const custom = readSkillStoreRegistry();
+  if (custom.trim()) {
+    return custom.trim().replace(/\/+$/, "");
   }
   return DEFAULT_REGISTRY;
 }
