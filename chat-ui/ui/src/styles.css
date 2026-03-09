@@ -489,8 +489,8 @@
   }
 }
 
-/* 飞书待审批提示卡：把隐式设置步骤前置到聊天主流程。 */
-.oneclaw-feishu-notice {
+/* 聊天渠道待审批提示卡：把隐式设置步骤前置到聊天主流程。 */
+.oneclaw-pairing-notice {
   position: fixed;
   top: 16px;
   right: 16px;
@@ -507,20 +507,20 @@
   box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05), 0 0 0 1px rgba(0, 0, 0, 0.05);
 }
 
-.oneclaw-feishu-notice__main {
+.oneclaw-pairing-notice__main {
   min-width: 0;
   display: grid;
   gap: 4px;
 }
 
-.oneclaw-feishu-notice__title {
+.oneclaw-pairing-notice__title {
   font-size: 15px;
   line-height: 1.4;
   color: #111827;
   font-weight: 600;
 }
 
-.oneclaw-feishu-notice__desc {
+.oneclaw-pairing-notice__desc {
   font-size: 13px;
   line-height: 1.5;
   color: #4b5563;
@@ -530,7 +530,7 @@
   overflow: hidden;
 }
 
-.oneclaw-feishu-notice__actions {
+.oneclaw-pairing-notice__actions {
   display: flex;
   align-items: center;
   justify-content: flex-end;
@@ -538,7 +538,7 @@
   margin-top: 4px;
 }
 
-.oneclaw-feishu-notice__icon-btn {
+.oneclaw-pairing-notice__icon-btn {
   width: 32px;
   height: 32px;
   border: 1px solid #e5e7eb;
@@ -553,7 +553,7 @@
   transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-.oneclaw-feishu-notice__icon-btn svg {
+.oneclaw-pairing-notice__icon-btn svg {
   width: 16px;
   height: 16px;
   stroke: currentColor;
@@ -563,37 +563,37 @@
   stroke-linejoin: round;
 }
 
-.oneclaw-feishu-notice__icon-btn:hover:not(:disabled) {
+.oneclaw-pairing-notice__icon-btn:hover:not(:disabled) {
   background: #f9fafb;
   border-color: #d1d5db;
   color: #374151;
 }
 
-.oneclaw-feishu-notice__icon-btn:active:not(:disabled) {
+.oneclaw-pairing-notice__icon-btn:active:not(:disabled) {
   background: #f3f4f6;
   transform: translateY(1px);
 }
 
-.oneclaw-feishu-notice__icon-btn:disabled {
+.oneclaw-pairing-notice__icon-btn:disabled {
   opacity: 0.5;
   cursor: not-allowed;
   background: #f9fafb;
 }
 
-.oneclaw-feishu-notice__icon-btn.is-approve:hover:not(:disabled) {
+.oneclaw-pairing-notice__icon-btn.is-approve:hover:not(:disabled) {
   color: #16a34a;
   border-color: #86efac;
   background: #f0fdf4;
 }
 
-.oneclaw-feishu-notice__icon-btn.is-reject:hover:not(:disabled) {
+.oneclaw-pairing-notice__icon-btn.is-reject:hover:not(:disabled) {
   color: #dc2626;
   border-color: #fca5a5;
   background: #fef2f2;
 }
 
 @media (max-width: 720px) {
-  .oneclaw-feishu-notice {
+  .oneclaw-pairing-notice {
     top: 12px;
     right: 12px;
     width: calc(100vw - 24px);

@@ -4,9 +4,20 @@ import { WindowManager } from "./window";
 import { TrayManager } from "./tray";
 import { SetupManager } from "./setup-manager";
 import { registerSetupIpc } from "./setup-ipc";
-import { registerSettingsIpc } from "./settings-ipc";
+import {
+  approveFeishuPairingRequest,
+  approveWecomPairingRequest,
+  closeFeishuFirstPairingWindow,
+  consumeFeishuFirstPairingWindow,
+  getFeishuPairingModeState,
+  getWecomPairingModeState,
+  isFeishuFirstPairingWindowActive,
+  listFeishuPairingRequests,
+  listWecomPairingRequests,
+  registerSettingsIpc,
+} from "./settings-ipc";
 import { registerSkillStoreIpc } from "./skill-store";
-import { FeishuPairingMonitor } from "./feishu-pairing-monitor";
+import { ChannelPairingMonitor } from "./channel-pairing-monitor";
 import {
   setupAutoUpdater,
   checkForUpdates,
@@ -101,13 +112,13 @@ process.on("unhandledRejection", (reason) => {
 
 // ── 核心组件 ──
 
-let feishuPairingMonitor: FeishuPairingMonitor | null = null;
+let pairingMonitor: ChannelPairingMonitor | null = null;
 const gateway = new GatewayProcess({
   port: resolveGatewayPort(),
   token: resolveGatewayAuthToken({ persist: false }),
   onStateChange: () => {
     tray.updateMenu();
-    feishuPairingMonitor?.triggerNow();
+    pairingMonitor?.triggerNow();
   },
 });
 const windowManager = new WindowManager();
@@ -121,11 +132,31 @@ function isAppInForeground(): boolean {
   );
 }
 
-feishuPairingMonitor = new FeishuPairingMonitor({
+pairingMonitor = new ChannelPairingMonitor({
   gateway,
   isAppInForeground,
+  adapters: [
+    {
+      channel: "feishu",
+      getModeState: () => getFeishuPairingModeState(),
+      listRequests: () => listFeishuPairingRequests(),
+      approveRequest: (params) => approveFeishuPairingRequest(params),
+      autoApproveFirst: {
+        isActive: () => isFeishuFirstPairingWindowActive(),
+        consume: (userId) => consumeFeishuFirstPairingWindow(userId),
+        reset: () => closeFeishuFirstPairingWindow(),
+      },
+      onInactive: () => closeFeishuFirstPairingWindow(),
+    },
+    {
+      channel: "wecom",
+      getModeState: () => getWecomPairingModeState(),
+      listRequests: () => listWecomPairingRequests(),
+      approveRequest: (params) => approveWecomPairingRequest(params),
+    },
+  ],
   onStateChange: (state) => {
-    windowManager.pushFeishuPairingState(state);
+    windowManager.pushPairingState(state);
   },
 });
 
@@ -376,8 +407,10 @@ ipcMain.handle("gateway:state", () => gateway.getState());
 ipcMain.on("app:check-updates", () => checkForUpdates(true));
 ipcMain.handle("app:get-update-state", () => getUpdateBannerState());
 ipcMain.handle("app:download-and-install-update", () => downloadAndInstallUpdate());
-ipcMain.handle("app:get-feishu-pairing-state", () => feishuPairingMonitor?.getState());
-ipcMain.on("app:refresh-feishu-pairing-state", () => feishuPairingMonitor?.triggerNow());
+ipcMain.handle("app:get-pairing-state", () => pairingMonitor?.getState());
+ipcMain.on("app:refresh-pairing-state", () => pairingMonitor?.triggerNow());
+ipcMain.handle("app:get-feishu-pairing-state", () => pairingMonitor?.getState().channels.feishu);
+ipcMain.on("app:refresh-feishu-pairing-state", () => pairingMonitor?.triggerNow());
 ipcMain.handle("app:open-external", (_e, url: string) => shell.openExternal(url));
 
 // Chat UI 侧边栏 IPC
@@ -404,7 +437,7 @@ registerSkillStoreIpc();
 
 async function quit(): Promise<void> {
   stopAutoCheckSchedule();
-  feishuPairingMonitor?.stop();
+  pairingMonitor?.stop();
   analytics.track("app_closed");
   await analytics.shutdown();
   windowManager.destroy();
@@ -555,7 +588,7 @@ app.whenReady().then(async () => {
     onQuit: quit,
     onCheckUpdates: () => checkForUpdates(true),
   });
-  feishuPairingMonitor?.start();
+  pairingMonitor?.start();
 
   const configHealth = inspectUserConfigHealth();
   if (configHealth.exists && !configHealth.validJson) {
@@ -629,7 +662,7 @@ app.on("window-all-closed", () => {
 // ── 退出前清理 ──
 
 app.on("before-quit", () => {
-  feishuPairingMonitor?.stop();
+  pairingMonitor?.stop();
   windowManager.destroy();
   gateway.stop();
 });

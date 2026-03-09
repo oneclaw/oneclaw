@@ -716,39 +716,40 @@ function renderOneClawSettingsPage(state: AppViewState) {
   `;
 }
 
-// 在聊天页顶部展示飞书待审批卡片，把“去设置里找批准”改成主流程内的一步动作。
-function renderFeishuPairingNotice(state: AppViewState) {
-  if (!state.shouldShowFeishuPairingNotice()) {
+// 在聊天页顶部展示待审批卡片，把“去设置里找批准”改成主流程内的一步动作。
+function renderPairingNotice(state: AppViewState) {
+  if (!state.shouldShowPairingNotice()) {
     return nothing;
   }
-  const first = state.feishuPairingState.requests[0];
-  const peerLabel = first?.name?.trim() || first?.id?.trim() || t("feishu.pendingUnknown");
+  const first = state.pairingState.requests[0];
+  const peerLabel = first?.name?.trim() || first?.id?.trim() || t("pairing.pendingUnknown");
+  const channelLabel = state.getPendingPairingChannelLabel();
   return html`
-    <section class="oneclaw-feishu-notice">
-      <div class="oneclaw-feishu-notice__main">
-        <div class="oneclaw-feishu-notice__title">${t("feishu.pendingTitle")}</div>
-        <div class="oneclaw-feishu-notice__desc">
-          ${t("feishu.pendingDesc").replace("{name}", peerLabel)}
+    <section class="oneclaw-pairing-notice">
+      <div class="oneclaw-pairing-notice__main">
+        <div class="oneclaw-pairing-notice__title">${t("pairing.pendingTitle").replace("{channel}", channelLabel)}</div>
+        <div class="oneclaw-pairing-notice__desc">
+          ${t("pairing.pendingDesc").replace("{name}", peerLabel)}
         </div>
       </div>
-      <div class="oneclaw-feishu-notice__actions">
+      <div class="oneclaw-pairing-notice__actions">
         <button
-          class="oneclaw-feishu-notice__icon-btn is-approve"
+          class="oneclaw-pairing-notice__icon-btn is-approve"
           type="button"
-          ?disabled=${state.feishuPairingApproving || state.feishuPairingRejecting}
-          title=${t("feishu.approveNow")}
-          aria-label=${t("feishu.approveNow")}
-          @click=${() => void state.approveFirstFeishuPairing()}
+          ?disabled=${state.pairingApproving || state.pairingRejecting}
+          title=${t("pairing.approveNow")}
+          aria-label=${t("pairing.approveNow")}
+          @click=${() => void state.approveFirstPairing()}
         >
           ${icons.check}
         </button>
         <button
-          class="oneclaw-feishu-notice__icon-btn is-reject"
+          class="oneclaw-pairing-notice__icon-btn is-reject"
           type="button"
-          ?disabled=${state.feishuPairingApproving || state.feishuPairingRejecting}
-          title=${t("feishu.rejectNow")}
-          aria-label=${t("feishu.rejectNow")}
-          @click=${() => void state.rejectFirstFeishuPairing()}
+          ?disabled=${state.pairingApproving || state.pairingRejecting}
+          title=${t("pairing.rejectNow")}
+          aria-label=${t("pairing.rejectNow")}
+          @click=${() => void state.rejectFirstPairing()}
         >
           ${icons.x}
         </button>
@@ -805,7 +806,7 @@ export function renderApp(state: AppViewState) {
             },
             onOpenSettings: () => openSettingsView(
               state,
-              state.feishuPairingState.pendingCount > 0 ? "channels" : null,
+              state.pairingState.pendingCount > 0 ? "channels" : null,
             ),
             onOpenSkillStore: () => openSkillsView(state),
             onOpenWebUI: () => void handleOpenWebUI(state),
@@ -842,7 +843,7 @@ export function renderApp(state: AppViewState) {
         }
 
         <main class="oneclaw-content">
-          ${renderFeishuPairingNotice(state)}
+          ${renderPairingNotice(state)}
           ${settingsActive
             ? renderOneClawSettingsPage(state)
             : skillsActive

@@ -483,6 +483,26 @@
                 </div>
 
                 <p class="field-hint" data-i18n="wecom.dmHint">私聊默认建议使用“先配对再访问”；切到“所有人可直接访问”时，OneClaw 会自动写入 allowFrom=["*"]。</p>
+
+                <div id="wecomPairingSection" class="hidden">
+                  <div class="pairing-panel">
+                    <div class="pairing-header">
+                      <span class="pairing-title" data-i18n="feishu.accessTitle">待审批与已授权</span>
+                      <div class="pairing-actions">
+                        <button type="button" class="btn-icon" id="btnWecomAccessRefresh" title="Refresh" aria-label="Refresh">
+                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"></path>
+                            <path d="M21 3v5h-5"></path>
+                          </svg>
+                        </button>
+                      </div>
+                    </div>
+                    <div class="pairing-empty hidden" id="wecomAccessEmpty" data-i18n="feishu.noAccessEntries">
+                      No pending or authorized entries.
+                    </div>
+                    <div class="pairing-list hidden" id="wecomAccessList"></div>
+                  </div>
+                </div>
               </div>
 
               <div class="msg-box hidden" id="wecomMsgBox"></div>

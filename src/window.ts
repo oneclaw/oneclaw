@@ -2,7 +2,7 @@ import { BrowserWindow, app, globalShortcut } from "electron";
 import * as path from "path";
 import * as log from "./logger";
 import { shouldHideWindowOnClose } from "./window-close-policy";
-import type { FeishuPairingState } from "./feishu-pairing-monitor";
+import type { PairingState } from "./channel-pairing-monitor";
 import type { UpdateBannerState } from "./update-banner-state";
 import {
   WINDOW_WIDTH,
@@ -183,12 +183,16 @@ export class WindowManager {
     this.win.webContents.send("app:update-state", state);
   }
 
-  // 向渲染层广播飞书待审批状态（若窗口存在）。
-  pushFeishuPairingState(state: FeishuPairingState): void {
+  // 向渲染层广播聊天渠道待审批状态（若窗口存在）。
+  pushPairingState(state: PairingState): void {
     if (!this.win || this.win.isDestroyed()) {
       return;
     }
-    this.win.webContents.send("app:feishu-pairing-state", state);
+    this.win.webContents.send("app:pairing-state", state);
+    const feishuState = state.channels.feishu;
+    if (feishuState) {
+      this.win.webContents.send("app:feishu-pairing-state", feishuState);
+    }
   }
 
   // 销毁窗口（应用退出前调用）

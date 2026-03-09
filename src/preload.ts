@@ -12,6 +12,8 @@ contextBridge.exposeInMainWorld("oneclaw", {
   checkForUpdates: () => ipcRenderer.send("app:check-updates"),
   getUpdateState: () => ipcRenderer.invoke("app:get-update-state"),
   downloadAndInstallUpdate: () => ipcRenderer.invoke("app:download-and-install-update"),
+  getPairingState: () => ipcRenderer.invoke("app:get-pairing-state"),
+  refreshPairingState: () => ipcRenderer.send("app:refresh-pairing-state"),
   getFeishuPairingState: () => ipcRenderer.invoke("app:get-feishu-pairing-state"),
   refreshFeishuPairingState: () => ipcRenderer.send("app:refresh-feishu-pairing-state"),
 
@@ -44,6 +46,16 @@ contextBridge.exposeInMainWorld("oneclaw", {
   settingsGetWecomConfig: () => ipcRenderer.invoke("settings:get-wecom-config"),
   settingsSaveWecomConfig: (params: Record<string, unknown>) =>
     ipcRenderer.invoke("settings:save-wecom-config", params),
+  settingsListWecomPairing: () =>
+    ipcRenderer.invoke("settings:list-wecom-pairing"),
+  settingsListWecomApproved: () =>
+    ipcRenderer.invoke("settings:list-wecom-approved"),
+  settingsApproveWecomPairing: (params: Record<string, unknown>) =>
+    ipcRenderer.invoke("settings:approve-wecom-pairing", params),
+  settingsRejectWecomPairing: (params: Record<string, unknown>) =>
+    ipcRenderer.invoke("settings:reject-wecom-pairing", params),
+  settingsRemoveWecomApproved: (params: Record<string, unknown>) =>
+    ipcRenderer.invoke("settings:remove-wecom-approved", params),
   settingsListFeishuPairing: () =>
     ipcRenderer.invoke("settings:list-feishu-pairing"),
   settingsListFeishuApproved: () =>
@@ -128,6 +140,68 @@ contextBridge.exposeInMainWorld("oneclaw", {
     };
     ipcRenderer.on("app:update-state", listener);
     return () => ipcRenderer.removeListener("app:update-state", listener);
+  },
+  onPairingState: (
+    cb: (payload: {
+      pendingCount: number;
+      requests: Array<{
+        channel: string;
+        code: string;
+        id: string;
+        name: string;
+        createdAt: string;
+        lastSeenAt: string;
+      }>;
+      updatedAt: number;
+      channels: Record<string, {
+        channel: string;
+        pendingCount: number;
+        requests: Array<{
+          code: string;
+          id: string;
+          name: string;
+          createdAt: string;
+          lastSeenAt: string;
+        }>;
+        updatedAt: number;
+        lastAutoApprovedAt: number | null;
+        lastAutoApprovedName: string | null;
+      }>;
+    }) => void,
+  ) => {
+    const listener = (
+      _event: Electron.IpcRendererEvent,
+      payload: {
+        pendingCount: number;
+        requests: Array<{
+          channel: string;
+          code: string;
+          id: string;
+          name: string;
+          createdAt: string;
+          lastSeenAt: string;
+        }>;
+        updatedAt: number;
+        channels: Record<string, {
+          channel: string;
+          pendingCount: number;
+          requests: Array<{
+            code: string;
+            id: string;
+            name: string;
+            createdAt: string;
+            lastSeenAt: string;
+          }>;
+          updatedAt: number;
+          lastAutoApprovedAt: number | null;
+          lastAutoApprovedName: string | null;
+        }>;
+      },
+    ) => {
+      cb(payload);
+    };
+    ipcRenderer.on("app:pairing-state", listener);
+    return () => ipcRenderer.removeListener("app:pairing-state", listener);
   },
   onFeishuPairingState: (
     cb: (payload: {

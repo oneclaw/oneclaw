@@ -27,6 +27,10 @@ import {
 import { getLatestShareCopyPayload } from "./share-copy";
 import { readSkillStoreRegistry, writeSkillStoreRegistry } from "./skill-store";
 import {
+  readChannelAllowFromStoreEntries as readChannelAllowFromStoreEntriesFromFs,
+  writeChannelAllowFromStoreEntries as writeChannelAllowFromStoreEntriesFromFs,
+} from "./channel-pairing-store";
+import {
   extractKimiConfig,
   saveKimiPluginConfig,
   isKimiPluginBundled,
@@ -51,6 +55,7 @@ import {
   extractWecomConfig,
   isWecomPluginBundled,
   saveWecomConfig,
+  WECOM_CHANNEL_ID,
 } from "./wecom-config";
 import { ensureGatewayAuthTokenInConfig } from "./gateway-auth";
 import { getLaunchAtLoginState, setLaunchAtLoginEnabled } from "./launch-at-login";
@@ -65,13 +70,15 @@ type CliRunResult = {
   stderr: string;
 };
 
-export type FeishuPairingRequestView = {
+export type PairingRequestView = {
   code: string;
   id: string;
   name: string;
   createdAt: string;
   lastSeenAt: string;
 };
+
+export type FeishuPairingRequestView = PairingRequestView;
 
 type FeishuAuthorizedEntryView = {
   kind: "user" | "group";
@@ -90,6 +97,7 @@ const WILDCARD_ALLOW_ENTRY = "*";
 const FEISHU_ALIAS_STORE_FILE = "feishu-allowFrom-aliases.json";
 const FEISHU_REJECTED_PAIRING_STORE_FILE = "feishu-rejected-pairing-codes.json";
 const FEISHU_FIRST_PAIRING_WINDOW_FILE = "feishu-first-pairing-window.json";
+const WECOM_REJECTED_PAIRING_STORE_FILE = "wecom-rejected-pairing-codes.json";
 const FEISHU_FIRST_PAIRING_WINDOW_TTL_MS = 10 * 60 * 1000;
 const FEISHU_OPEN_API_BASE = "https://open.feishu.cn/open-apis";
 const FEISHU_TOKEN_SAFETY_MS = 60_000;
@@ -621,6 +629,81 @@ export function registerSettingsIpc(opts: SettingsIpcOptions = {}): void {
     );
   });
 
+  // ── 列出企业微信待审批配对请求（走 openclaw pairing list） ──
+  ipcMain.handle("settings:list-wecom-pairing", async () => {
+    const listed = await listWecomPairingRequests();
+    return {
+      success: listed.success,
+      data: listed.success ? { requests: listed.requests } : undefined,
+      message: listed.message,
+    };
+  });
+
+  // ── 列出企业微信已授权用户与群聊 ──
+  ipcMain.handle("settings:list-wecom-approved", async () => {
+    try {
+      const config = readUserConfig();
+      const wecomConfig = config?.channels?.[WECOM_CHANNEL_ID] ?? {};
+      const userEntries = collectApprovedUserIds(
+        WECOM_CHANNEL_ID,
+        wecomConfig?.allowFrom,
+      ).map((id) => ({ kind: "user" as const, id, name: id }));
+      const groupEntries = normalizeAllowFromEntries(wecomConfig?.groupAllowFrom)
+        .map((id) => ({ kind: "group" as const, id, name: id }));
+      const entries: FeishuAuthorizedEntryView[] = [...userEntries, ...groupEntries];
+      entries.sort(compareAuthorizedEntry);
+      return { success: true, data: { entries } };
+    } catch (err: any) {
+      return { success: false, message: err.message || String(err) };
+    }
+  });
+
+  // ── 批准企业微信配对请求（走 openclaw pairing approve） ──
+  ipcMain.handle("settings:approve-wecom-pairing", async (_event, params) => {
+    return approveWecomPairingRequest(params);
+  });
+
+  // ── 拒绝企业微信配对请求（本地忽略 pairing code） ──
+  ipcMain.handle("settings:reject-wecom-pairing", async (_event, params) => {
+    return rejectWecomPairingRequest(params);
+  });
+
+  // ── 删除企业微信已授权用户/群聊 ──
+  ipcMain.handle("settings:remove-wecom-approved", async (_event, params) => {
+    const kind = params?.kind === "group" ? "group" : "user";
+    const id = typeof params?.id === "string" ? params.id.trim() : "";
+    if (!id) {
+      return { success: false, message: "授权 ID 不能为空。" };
+    }
+    try {
+      const config = readUserConfig();
+      config.channels ??= {};
+      config.channels[WECOM_CHANNEL_ID] ??= {};
+
+      if (kind === "group") {
+        const nextGroupAllowFrom = normalizeAllowFromEntries(config.channels[WECOM_CHANNEL_ID].groupAllowFrom)
+          .filter((entry) => entry !== id);
+        config.channels[WECOM_CHANNEL_ID].groupAllowFrom = nextGroupAllowFrom;
+      } else {
+        const nextAllowFrom = normalizeAllowFromEntries(config.channels[WECOM_CHANNEL_ID].allowFrom)
+          .filter((entry) => entry !== id && entry !== WILDCARD_ALLOW_ENTRY);
+        if (nextAllowFrom.length > 0) {
+          config.channels[WECOM_CHANNEL_ID].allowFrom = nextAllowFrom;
+        } else {
+          delete config.channels[WECOM_CHANNEL_ID].allowFrom;
+        }
+
+        const nextStoreAllowFrom = readChannelAllowFromStore(WECOM_CHANNEL_ID).filter((entry) => entry !== id);
+        writeChannelAllowFromStore(WECOM_CHANNEL_ID, nextStoreAllowFrom);
+      }
+
+      writeUserConfigAndRestart(config);
+      return { success: true };
+    } catch (err: any) {
+      return { success: false, message: err.message || String(err) };
+    }
+  });
+
   // ── 列出飞书待审批配对请求（走 openclaw pairing list，避免重复实现存储协议） ──
   ipcMain.handle("settings:list-feishu-pairing", async () => {
     const listed = await listFeishuPairingRequests();
@@ -995,11 +1078,28 @@ export function getFeishuPairingModeState(): {
   const feishu = config?.channels?.feishu ?? {};
   const enabled = config?.plugins?.entries?.feishu?.enabled === true;
   const dmPolicy = normalizeDmPolicy(feishu?.dmPolicy, "pairing");
-  const approvedUserIds = collectFeishuApprovedUserIds(config);
+  const approvedUserIds = collectApprovedUserIds(FEISHU_CHANNEL, feishu?.allowFrom);
   return {
     enabled,
     dmPolicy,
     approvedUserCount: approvedUserIds.length,
+  };
+}
+
+// 读取当前企业微信配对模式状态，供主进程轮询器判断是否需要继续监听。
+export function getWecomPairingModeState(): {
+  enabled: boolean;
+  dmPolicy: "open" | "pairing" | "allowlist";
+  approvedUserCount: number;
+} {
+  const config = readUserConfig();
+  const wecom = config?.channels?.[WECOM_CHANNEL_ID] ?? {};
+  const enabled = config?.plugins?.entries?.["wecom-openclaw-plugin"]?.enabled === true;
+  const dmPolicy = normalizeDmPolicy(wecom?.dmPolicy, "pairing");
+  return {
+    enabled,
+    dmPolicy,
+    approvedUserCount: collectApprovedUserIds(WECOM_CHANNEL_ID, wecom?.allowFrom).length,
   };
 }
 
@@ -1009,13 +1109,73 @@ export async function listFeishuPairingRequests(): Promise<{
   requests: FeishuPairingRequestView[];
   message?: string;
 }> {
+  return listChannelPairingRequests(FEISHU_CHANNEL, "读取飞书待审批列表失败", "解析飞书待审批列表失败");
+}
+
+// 列出企业微信待审批请求：解析 CLI 输出并统一成前端可消费结构。
+export async function listWecomPairingRequests(): Promise<{
+  success: boolean;
+  requests: PairingRequestView[];
+  message?: string;
+}> {
+  return listChannelPairingRequests(WECOM_CHANNEL_ID, "读取企业微信待审批列表失败", "解析企业微信待审批列表失败");
+}
+
+// 批准飞书配对请求：调用 CLI 并在成功后缓存用户别名用于展示。
+export async function approveFeishuPairingRequest(params: Record<string, unknown>): Promise<{
+  success: boolean;
+  message?: string;
+}> {
+  const id = typeof params?.id === "string" ? params.id.trim() : "";
+  const name = typeof params?.name === "string" ? params.name.trim() : "";
+  const result = await approveChannelPairingRequest(FEISHU_CHANNEL, params);
+  if (result.success && id && name) {
+    saveFeishuAlias("user", id, name);
+  }
+  return result;
+}
+
+// 批准企业微信配对请求：调用 CLI，并在成功后清理本地拒绝码。
+export async function approveWecomPairingRequest(params: Record<string, unknown>): Promise<{
+  success: boolean;
+  message?: string;
+}> {
+  return approveChannelPairingRequest(WECOM_CHANNEL_ID, params);
+}
+
+// 拒绝飞书配对请求：当前 openclaw pairing 无 reject 子命令，改为本地忽略当前配对码。
+export async function rejectFeishuPairingRequest(params: Record<string, unknown>): Promise<{
+  success: boolean;
+  message?: string;
+}> {
+  return rejectChannelPairingRequest(FEISHU_CHANNEL, params);
+}
+
+// 拒绝企业微信配对请求：当前 openclaw pairing 无 reject 子命令，改为本地忽略当前配对码。
+export async function rejectWecomPairingRequest(params: Record<string, unknown>): Promise<{
+  success: boolean;
+  message?: string;
+}> {
+  return rejectChannelPairingRequest(WECOM_CHANNEL_ID, params);
+}
+
+// 统一解析某个渠道的待审批列表，并过滤本地 sidecar 里的拒绝码。
+async function listChannelPairingRequests(
+  channel: string,
+  listErrorMessage: string,
+  parseErrorMessage: string,
+): Promise<{
+  success: boolean;
+  requests: PairingRequestView[];
+  message?: string;
+}> {
   try {
-    const run = await runGatewayCli(["pairing", "list", "feishu", "--json"]);
+    const run = await runGatewayCli(["pairing", "list", channel, "--json"]);
     if (run.code !== 0) {
       return {
         success: false,
         requests: [],
-        message: compactCliError(run, "读取飞书待审批列表失败"),
+        message: compactCliError(run, listErrorMessage),
       };
     }
 
@@ -1024,23 +1184,23 @@ export async function listFeishuPairingRequests(): Promise<{
       return {
         success: false,
         requests: [],
-        message: compactCliError(run, "解析飞书待审批列表失败"),
+        message: compactCliError(run, parseErrorMessage),
       };
     }
+
     const rawRequests = Array.isArray(parsed?.requests) ? parsed.requests : [];
-    const parsedRequests: FeishuPairingRequestView[] = rawRequests.map((item: any) => ({
+    const parsedRequests: PairingRequestView[] = rawRequests.map((item: any) => ({
       code: String(item?.code ?? ""),
       id: String(item?.id ?? ""),
-      name: String(item?.meta?.name ?? ""),
+      name: String(item?.meta?.name ?? item?.name ?? ""),
       createdAt: String(item?.createdAt ?? ""),
       lastSeenAt: String(item?.lastSeenAt ?? ""),
     }));
-    const rejectedCodes = new Set(readFeishuRejectedPairingCodes());
+    const rejectedCodes = new Set(readRejectedPairingCodes(resolveRejectedPairingStoreFile(channel)));
     const requests = parsedRequests.filter((item) => !rejectedCodes.has(item.code));
-    // 仅保留“当前仍在 pending 列表里”的拒绝码，防止 sidecar 无限制增长。
     if (rejectedCodes.size > 0) {
       const activeCodes = new Set(parsedRequests.map((item) => item.code));
-      pruneFeishuRejectedPairingCodes(activeCodes);
+      pruneRejectedPairingCodes(resolveRejectedPairingStoreFile(channel), activeCodes);
     }
     return { success: true, requests };
   } catch (err: any) {
@@ -1052,38 +1212,39 @@ export async function listFeishuPairingRequests(): Promise<{
   }
 }
 
-// 批准飞书配对请求：调用 CLI 并在成功后缓存用户别名用于展示。
-export async function approveFeishuPairingRequest(params: Record<string, unknown>): Promise<{
+// 统一执行渠道 pairing approve，避免每个渠道重复拼 CLI 参数。
+async function approveChannelPairingRequest(
+  channel: string,
+  params: Record<string, unknown>,
+): Promise<{
   success: boolean;
   message?: string;
 }> {
   const code = typeof params?.code === "string" ? params.code.trim() : "";
-  const id = typeof params?.id === "string" ? params.id.trim() : "";
-  const name = typeof params?.name === "string" ? params.name.trim() : "";
   if (!code) {
     return { success: false, message: "配对码不能为空。" };
   }
 
   try {
-    const run = await runGatewayCli(["pairing", "approve", "feishu", code, "--notify"]);
+    const run = await runGatewayCli(["pairing", "approve", channel, code, "--notify"]);
     if (run.code !== 0) {
       return {
         success: false,
         message: compactCliError(run, `批准配对码失败: ${code}`),
       };
     }
-    if (id && name) {
-      saveFeishuAlias("user", id, name);
-    }
-    removeFeishuRejectedPairingCode(code);
+    removeRejectedPairingCode(resolveRejectedPairingStoreFile(channel), code);
     return { success: true };
   } catch (err: any) {
     return { success: false, message: err?.message || String(err) };
   }
 }
 
-// 拒绝飞书配对请求：当前 openclaw pairing 无 reject 子命令，改为本地忽略当前配对码。
-export async function rejectFeishuPairingRequest(params: Record<string, unknown>): Promise<{
+// 当前 openclaw pairing 暂无 reject 子命令，这里统一用本地 sidecar 忽略当前 pairing code。
+async function rejectChannelPairingRequest(
+  channel: string,
+  params: Record<string, unknown>,
+): Promise<{
   success: boolean;
   message?: string;
 }> {
@@ -1091,17 +1252,16 @@ export async function rejectFeishuPairingRequest(params: Record<string, unknown>
   if (!code) {
     return { success: false, message: "配对码不能为空。" };
   }
-  appendFeishuRejectedPairingCode(code);
+  appendRejectedPairingCode(resolveRejectedPairingStoreFile(channel), code);
   return { success: true };
 }
 
-// 根据配置与授权存储统计当前已授权飞书用户，排除通配符与空值。
-function collectFeishuApprovedUserIds(config: any): string[] {
-  const feishu = config?.channels?.feishu ?? {};
-  const configEntries = normalizeAllowFromEntries(feishu?.allowFrom).filter(
+// 根据配置与授权存储统计当前已授权用户，排除通配符与空值。
+function collectApprovedUserIds(channel: string, configAllowFrom: unknown): string[] {
+  const configEntries = normalizeAllowFromEntries(configAllowFrom).filter(
     (entry) => entry !== WILDCARD_ALLOW_ENTRY
   );
-  const storeEntries = readFeishuAllowFromStore();
+  const storeEntries = readChannelAllowFromStore(channel);
   return dedupeEntries([...configEntries, ...storeEntries]);
 }
 
@@ -1225,7 +1385,7 @@ function reconcileFeishuFirstPairingWindow(config: any): void {
     return;
   }
 
-  const approvedUserIds = collectFeishuApprovedUserIds(config);
+  const approvedUserIds = collectApprovedUserIds(FEISHU_CHANNEL, feishu?.allowFrom);
   if (approvedUserIds.length > 0) {
     closeFeishuFirstPairingWindow();
     return;
@@ -1317,54 +1477,26 @@ function dedupeEntries(items: string[]): string[] {
   return [...new Set(items)];
 }
 
-// 读取飞书 allowFrom store 文件（由 openclaw pairing approve 写入）。
-function readFeishuAllowFromStore(): string[] {
-  const filePath = path.join(resolveUserStateDir(), "credentials", `${FEISHU_CHANNEL}-allowFrom.json`);
-  if (!fs.existsSync(filePath)) return [];
-  try {
-    const raw = fs.readFileSync(filePath, "utf-8");
-    const parsed = parseJsonSafe(raw);
-    return normalizeAllowFromEntries(parsed?.allowFrom);
-  } catch {
-    return [];
-  }
+// 统一解析 pairing allowFrom store 文件（由 openclaw pairing approve 写入）。
+function readChannelAllowFromStore(channel: string): string[] {
+  return readChannelAllowFromStoreEntriesFromFs(
+    path.join(resolveUserStateDir(), "credentials"),
+    channel,
+  );
 }
 
-// 写入飞书 allowFrom store 文件（兼容保留原有字段）。
-function writeFeishuAllowFromStore(entries: string[]): void {
-  const normalized = normalizeAllowFromEntries(entries);
-  const dir = path.join(resolveUserStateDir(), "credentials");
-  const filePath = path.join(dir, `${FEISHU_CHANNEL}-allowFrom.json`);
-  if (normalized.length === 0) {
-    if (fs.existsSync(filePath)) {
-      fs.unlinkSync(filePath);
-    }
-    return;
-  }
-
-  fs.mkdirSync(dir, { recursive: true });
-  let payload: Record<string, unknown> = {};
-  if (fs.existsSync(filePath)) {
-    try {
-      const raw = fs.readFileSync(filePath, "utf-8");
-      const parsed = parseJsonSafe(raw);
-      if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
-        payload = { ...(parsed as Record<string, unknown>) };
-      }
-    } catch {
-      payload = {};
-    }
-  }
-  payload.allowFrom = normalized;
-  if (typeof payload.channel !== "string" || !payload.channel) {
-    payload.channel = FEISHU_CHANNEL;
-  }
-  fs.writeFileSync(filePath, JSON.stringify(payload, null, 2), "utf-8");
+// 写入 pairing allowFrom store 文件（兼容保留原有字段）。
+function writeChannelAllowFromStore(channel: string, entries: string[]): void {
+  writeChannelAllowFromStoreEntriesFromFs(
+    path.join(resolveUserStateDir(), "credentials"),
+    channel,
+    entries,
+  );
 }
 
 // 读取本地“已拒绝配对码”sidecar，用于过滤待审批列表。
-function readFeishuRejectedPairingStore(): FeishuRejectedPairingStore {
-  const filePath = path.join(resolveUserStateDir(), "credentials", FEISHU_REJECTED_PAIRING_STORE_FILE);
+function readRejectedPairingStore(fileName: string): FeishuRejectedPairingStore {
+  const filePath = path.join(resolveUserStateDir(), "credentials", fileName);
   if (!fs.existsSync(filePath)) {
     return { version: 1, codes: [] };
   }
@@ -1379,10 +1511,10 @@ function readFeishuRejectedPairingStore(): FeishuRejectedPairingStore {
 }
 
 // 写入本地“已拒绝配对码”sidecar，空数组时删除文件。
-function writeFeishuRejectedPairingStore(codes: string[]): void {
+function writeRejectedPairingStore(fileName: string, codes: string[]): void {
   const normalized = normalizeAllowFromEntries(codes);
   const dir = path.join(resolveUserStateDir(), "credentials");
-  const filePath = path.join(dir, FEISHU_REJECTED_PAIRING_STORE_FILE);
+  const filePath = path.join(dir, fileName);
   if (normalized.length === 0) {
     if (fs.existsSync(filePath)) {
       fs.unlinkSync(filePath);
@@ -1397,38 +1529,76 @@ function writeFeishuRejectedPairingStore(codes: string[]): void {
   fs.writeFileSync(filePath, JSON.stringify(payload, null, 2), "utf-8");
 }
 
+// 读取某个渠道的拒绝码列表。
+function readRejectedPairingCodes(fileName: string): string[] {
+  return readRejectedPairingStore(fileName).codes;
+}
+
+// 追加单个拒绝码（幂等）。
+function appendRejectedPairingCode(fileName: string, code: string): void {
+  const trimmed = String(code ?? "").trim();
+  if (!trimmed) return;
+  const store = readRejectedPairingStore(fileName);
+  if (store.codes.includes(trimmed)) return;
+  store.codes.push(trimmed);
+  writeRejectedPairingStore(fileName, store.codes);
+}
+
+// 移除单个拒绝码（批准后自动清理）。
+function removeRejectedPairingCode(fileName: string, code: string): void {
+  const trimmed = String(code ?? "").trim();
+  if (!trimmed) return;
+  const store = readRejectedPairingStore(fileName);
+  const nextCodes = store.codes.filter((item) => item !== trimmed);
+  if (nextCodes.length === store.codes.length) return;
+  writeRejectedPairingStore(fileName, nextCodes);
+}
+
+// 清理过期拒绝码：只保留当前 pending 列表里仍存在的 code。
+function pruneRejectedPairingCodes(fileName: string, activeCodes: Set<string>): void {
+  const store = readRejectedPairingStore(fileName);
+  if (store.codes.length === 0) return;
+  const nextCodes = store.codes.filter((code) => activeCodes.has(code));
+  if (nextCodes.length === store.codes.length) return;
+  writeRejectedPairingStore(fileName, nextCodes);
+}
+
+// 渠道专用 sidecar 文件映射；目前只有飞书和企业微信会走这套拒绝码逻辑。
+function resolveRejectedPairingStoreFile(channel: string): string {
+  if (channel === WECOM_CHANNEL_ID) {
+    return WECOM_REJECTED_PAIRING_STORE_FILE;
+  }
+  return FEISHU_REJECTED_PAIRING_STORE_FILE;
+}
+
+// 读取飞书 allowFrom store 文件（由 openclaw pairing approve 写入）。
+function readFeishuAllowFromStore(): string[] {
+  return readChannelAllowFromStore(FEISHU_CHANNEL);
+}
+
+// 写入飞书 allowFrom store 文件（兼容保留原有字段）。
+function writeFeishuAllowFromStore(entries: string[]): void {
+  writeChannelAllowFromStore(FEISHU_CHANNEL, entries);
+}
+
 // 读取拒绝码列表。
 function readFeishuRejectedPairingCodes(): string[] {
-  return readFeishuRejectedPairingStore().codes;
+  return readRejectedPairingCodes(FEISHU_REJECTED_PAIRING_STORE_FILE);
 }
 
 // 追加单个拒绝码（幂等）。
 function appendFeishuRejectedPairingCode(code: string): void {
-  const trimmed = String(code ?? "").trim();
-  if (!trimmed) return;
-  const store = readFeishuRejectedPairingStore();
-  if (store.codes.includes(trimmed)) return;
-  store.codes.push(trimmed);
-  writeFeishuRejectedPairingStore(store.codes);
+  appendRejectedPairingCode(FEISHU_REJECTED_PAIRING_STORE_FILE, code);
 }
 
 // 移除单个拒绝码（批准后自动清理）。
 function removeFeishuRejectedPairingCode(code: string): void {
-  const trimmed = String(code ?? "").trim();
-  if (!trimmed) return;
-  const store = readFeishuRejectedPairingStore();
-  const nextCodes = store.codes.filter((item) => item !== trimmed);
-  if (nextCodes.length === store.codes.length) return;
-  writeFeishuRejectedPairingStore(nextCodes);
+  removeRejectedPairingCode(FEISHU_REJECTED_PAIRING_STORE_FILE, code);
 }
 
 // 清理过期拒绝码：只保留当前 pending 列表里仍存在的 code。
 function pruneFeishuRejectedPairingCodes(activeCodes: Set<string>): void {
-  const store = readFeishuRejectedPairingStore();
-  if (store.codes.length === 0) return;
-  const nextCodes = store.codes.filter((code) => activeCodes.has(code));
-  if (nextCodes.length === store.codes.length) return;
-  writeFeishuRejectedPairingStore(nextCodes);
+  pruneRejectedPairingCodes(FEISHU_REJECTED_PAIRING_STORE_FILE, activeCodes);
 }
 
 // 补全授权条目的可读名称：用户/群聊优先查缓存，未命中则实时查询并回写缓存。

@@ -680,6 +680,10 @@
     btnWecomSave: $("#btnWecomSave"),
     btnWecomSaveText: $("#btnWecomSave .btn-text"),
     btnWecomSaveSpinner: $("#btnWecomSave .btn-spinner"),
+    wecomPairingSection: $("#wecomPairingSection"),
+    btnWecomAccessRefresh: $("#btnWecomAccessRefresh"),
+    wecomAccessEmpty: $("#wecomAccessEmpty"),
+    wecomAccessList: $("#wecomAccessList"),
     dingtalkEnabled: $("#dingtalkEnabled"),
     dingtalkFields: $("#dingtalkFields"),
     dingtalkClientId: $("#dingtalkClientId"),
@@ -845,6 +849,10 @@
       els.btnChAccessRefresh.setAttribute("title", t("feishu.refreshPairing"));
       els.btnChAccessRefresh.setAttribute("aria-label", t("feishu.refreshPairing"));
     }
+    if (els.btnWecomAccessRefresh) {
+      els.btnWecomAccessRefresh.setAttribute("title", t("feishu.refreshPairing"));
+      els.btnWecomAccessRefresh.setAttribute("aria-label", t("feishu.refreshPairing"));
+    }
     if (els.btnChAccessAddGroup) {
       els.btnChAccessAddGroup.setAttribute("title", t("feishu.addGroup"));
       els.btnChAccessAddGroup.setAttribute("aria-label", t("feishu.addGroup"));
@@ -907,6 +915,12 @@
     els.chatPlatformPanels.forEach(function (panel) {
       panel.classList.toggle("active", panel.id === CHAT_PLATFORM_PANEL_IDS[target]);
     });
+
+    if (target === "feishu" || target === "wecom") {
+      updateChPairingSectionVisibility();
+      updateChGroupAllowFromState();
+      refreshChPairingPanels({ silent: true });
+    }
   }
 
   function switchTab(tabName) {
@@ -1292,16 +1306,102 @@
       .replace(/'/g, "&#39;");
   }
 
+  // 当前访问面板只在飞书和企业微信之间切换；其它平台不复用这套配对 UI。
+  function getCurrentAccessPlatform() {
+    return currentChatPlatform === "wecom" ? "wecom" : "feishu";
+  }
+
+  // 根据当前平台返回访问面板所需的 DOM 引用。
+  function getCurrentAccessEls() {
+    if (getCurrentAccessPlatform() === "wecom") {
+      return {
+        enabled: els.wecomEnabled,
+        dmPolicy: els.wecomDmPolicy,
+        groupPolicy: els.wecomGroupPolicy,
+        pairingSection: els.wecomPairingSection,
+        accessEmpty: els.wecomAccessEmpty,
+        accessList: els.wecomAccessList,
+        accessRefresh: els.btnWecomAccessRefresh,
+        accessAddGroup: null,
+      };
+    }
+    return {
+      enabled: els.chEnabled,
+      dmPolicy: els.chDmPolicy,
+      groupPolicy: els.chGroupPolicy,
+      pairingSection: els.chPairingSection,
+      accessEmpty: els.chAccessEmpty,
+      accessList: els.chAccessList,
+      accessRefresh: els.btnChAccessRefresh,
+      accessAddGroup: els.btnChAccessAddGroup,
+    };
+  }
+
+  // 当前访问面板的状态提示要回写到各自平台的消息框，避免串台。
+  function showCurrentAccessMsg(msg, type) {
+    if (getCurrentAccessPlatform() === "wecom") {
+      showWecomMsg(msg, type);
+      return;
+    }
+    showChMsg(msg, type);
+  }
+
+  // 清空当前访问面板消息。
+  function hideCurrentAccessMsg() {
+    if (getCurrentAccessPlatform() === "wecom") {
+      hideWecomMsg();
+      return;
+    }
+    hideChMsg();
+  }
+
+  // 当前平台是否已启用。
+  function isCurrentAccessEnabled() {
+    var accessEls = getCurrentAccessEls();
+    return !!(accessEls.enabled && accessEls.enabled.checked);
+  }
+
+  // 读取当前访问面板对应平台的私聊策略。
+  function getCurrentAccessDmPolicy() {
+    var accessEls = getCurrentAccessEls();
+    var value = accessEls.dmPolicy ? String(accessEls.dmPolicy.value || "").trim() : "";
+    return value === "open" ? "open" : "pairing";
+  }
+
+  // 读取当前访问面板对应平台的群聊策略。
+  function getCurrentAccessGroupPolicy() {
+    var accessEls = getCurrentAccessEls();
+    var value = accessEls.groupPolicy ? String(accessEls.groupPolicy.value || "").trim() : "";
+    if (value === "open" || value === "disabled" || value === "allowlist") return value;
+    return getCurrentAccessPlatform() === "wecom" ? "open" : "allowlist";
+  }
+
+  // 当前访问面板是否处于 pairing 模式。
+  function isCurrentAccessPairingMode() {
+    return getCurrentAccessDmPolicy() === "pairing";
+  }
+
+  // 当前访问面板是否处于群聊白名单模式。
+  function isCurrentAccessGroupAllowlistMode() {
+    return getCurrentAccessGroupPolicy() === "allowlist";
+  }
+
+  // 访问面板展示条件：私聊配对或群聊白名单任一开启。
+  function isCurrentAccessPanelMode() {
+    return isCurrentAccessPairingMode() || isCurrentAccessGroupAllowlistMode();
+  }
+
   // 同步待审批/已授权刷新按钮状态。
   function updateChAccessRefreshState() {
+    var accessEls = getCurrentAccessEls();
     var loading = chPairingLoading || chApprovedLoading;
     var busy = loading || chGroupAdding || !!chPairingApprovingCode || !!chPairingRejectingCode || !!chApprovedRemovingKey;
-    if (els.btnChAccessRefresh) {
-      els.btnChAccessRefresh.disabled = busy;
+    if (accessEls.accessRefresh) {
+      accessEls.accessRefresh.disabled = busy;
     }
-    if (els.btnChAccessAddGroup) {
-      var allowAdd = isChEnabled() && isChGroupAllowlistMode() && !busy;
-      els.btnChAccessAddGroup.disabled = !allowAdd;
+    if (accessEls.accessAddGroup) {
+      var allowAdd = isCurrentAccessEnabled() && isCurrentAccessGroupAllowlistMode() && !busy;
+      accessEls.accessAddGroup.disabled = !allowAdd;
     }
   }
 
@@ -1326,8 +1426,9 @@
 
   // 渲染合并后的待审批+已授权列表（待审批固定在顶部）。
   function renderChAccessEntries() {
-    var listEl = els.chAccessList;
-    var emptyEl = els.chAccessEmpty;
+    var accessEls = getCurrentAccessEls();
+    var listEl = accessEls.accessList;
+    var emptyEl = accessEls.accessEmpty;
     if (!listEl || !emptyEl) return;
 
     // 批准图标（勾号）
@@ -1426,7 +1527,7 @@
   // 读取飞书待审批列表（仅在飞书开关启用后展示）。
   async function loadChPairingRequests(options) {
     var silent = !!(options && options.silent);
-    if (!isChEnabled() || !isChPairingMode()) {
+    if (!isCurrentAccessEnabled() || !isCurrentAccessPairingMode()) {
       chPairingRequests = [];
       chPairingApprovingCode = "";
       chPairingRejectingCode = "";
@@ -1435,11 +1536,13 @@
     }
 
     setChPairingLoading(true);
-    if (!silent) hideChMsg();
+    if (!silent) hideCurrentAccessMsg();
     try {
-      var result = await window.oneclaw.settingsListFeishuPairing();
+      var result = getCurrentAccessPlatform() === "wecom"
+        ? await window.oneclaw.settingsListWecomPairing()
+        : await window.oneclaw.settingsListFeishuPairing();
       if (!result.success) {
-        if (!silent) showChMsg(result.message || t("error.loadPairingFailed"), "error");
+        if (!silent) showCurrentAccessMsg(result.message || t("error.loadPairingFailed"), "error");
         chPairingRequests = [];
       } else {
         chPairingRequests = (result.data && result.data.requests) || [];
@@ -1448,7 +1551,7 @@
     } catch (err) {
       chPairingRequests = [];
       renderChAccessEntries();
-      if (!silent) showChMsg(t("error.connection") + (err.message || "Unknown error"), "error");
+      if (!silent) showCurrentAccessMsg(t("error.connection") + (err.message || "Unknown error"), "error");
     } finally {
       setChPairingLoading(false);
     }
@@ -1457,18 +1560,20 @@
   // 读取飞书已配对账号列表（仅在飞书开关启用后展示）。
   async function loadChApprovedEntries(options) {
     var silent = !!(options && options.silent);
-    if (!isChEnabled() || !isChAccessPanelMode()) {
+    if (!isCurrentAccessEnabled() || !isCurrentAccessPanelMode()) {
       chApprovedEntries = [];
       renderChAccessEntries();
       return;
     }
 
     setChApprovedLoading(true);
-    if (!silent) hideChMsg();
+    if (!silent) hideCurrentAccessMsg();
     try {
-      var result = await window.oneclaw.settingsListFeishuApproved();
+      var result = getCurrentAccessPlatform() === "wecom"
+        ? await window.oneclaw.settingsListWecomApproved()
+        : await window.oneclaw.settingsListFeishuApproved();
       if (!result.success) {
-        if (!silent) showChMsg(result.message || t("error.loadApprovedFailed"), "error");
+        if (!silent) showCurrentAccessMsg(result.message || t("error.loadApprovedFailed"), "error");
         chApprovedEntries = [];
       } else {
         chApprovedEntries = (result.data && result.data.entries) || [];
@@ -1477,7 +1582,7 @@
     } catch (err) {
       chApprovedEntries = [];
       renderChAccessEntries();
-      if (!silent) showChMsg(t("error.connection") + (err.message || "Unknown error"), "error");
+      if (!silent) showCurrentAccessMsg(t("error.connection") + (err.message || "Unknown error"), "error");
     } finally {
       setChApprovedLoading(false);
     }
@@ -1495,10 +1600,12 @@
 
   // 接收主进程推送的飞书待审批快照，减少“手动刷新”依赖。
   function applyChPairingStateFromPush(payload) {
-    if (!payload || !Array.isArray(payload.requests)) {
+    var platform = getCurrentAccessPlatform();
+    var channelPayload = payload && payload.channels ? payload.channels[platform] : null;
+    if (!channelPayload || !Array.isArray(channelPayload.requests)) {
       return;
     }
-    var requests = payload.requests
+    var requests = channelPayload.requests
       .map(function (item) {
         return {
           code: String((item && item.code) || "").trim(),
@@ -1518,7 +1625,7 @@
   async function handleChPairingApprove(code, id, name) {
     var trimmed = String(code || "").trim();
     if (!trimmed) {
-      showChMsg(t("error.noPairingCode"), "error");
+      showCurrentAccessMsg(t("error.noPairingCode"), "error");
       return;
     }
     if (chPairingApprovingCode || chPairingRejectingCode) return;
@@ -1526,22 +1633,28 @@
     chPairingApprovingCode = trimmed;
     renderChAccessEntries();
     updateChAccessRefreshState();
-    hideChMsg();
+    hideCurrentAccessMsg();
 
     try {
-      var result = await window.oneclaw.settingsApproveFeishuPairing({
+      var result = getCurrentAccessPlatform() === "wecom"
+        ? await window.oneclaw.settingsApproveWecomPairing({
+            code: trimmed,
+            id: String(id || "").trim(),
+            name: String(name || "").trim(),
+          })
+        : await window.oneclaw.settingsApproveFeishuPairing({
         code: trimmed,
         id: String(id || "").trim(),
         name: String(name || "").trim(),
       });
       if (!result.success) {
-        showChMsg(result.message || t("error.verifyFailed"), "error");
+        showCurrentAccessMsg(result.message || t("error.verifyFailed"), "error");
       } else {
         showToast(t("feishu.pairingApproved"));
         await refreshChPairingPanels({ silent: true });
       }
     } catch (err) {
-      showChMsg(t("error.connection") + (err.message || "Unknown error"), "error");
+      showCurrentAccessMsg(t("error.connection") + (err.message || "Unknown error"), "error");
     } finally {
       chPairingApprovingCode = "";
       renderChAccessEntries();
@@ -1553,7 +1666,7 @@
   async function handleChPairingReject(code, id, name) {
     var trimmed = String(code || "").trim();
     if (!trimmed) {
-      showChMsg(t("error.noPairingCode"), "error");
+      showCurrentAccessMsg(t("error.noPairingCode"), "error");
       return;
     }
     if (chPairingApprovingCode || chPairingRejectingCode) return;
@@ -1561,22 +1674,28 @@
     chPairingRejectingCode = trimmed;
     renderChAccessEntries();
     updateChAccessRefreshState();
-    hideChMsg();
+    hideCurrentAccessMsg();
 
     try {
-      var result = await window.oneclaw.settingsRejectFeishuPairing({
+      var result = getCurrentAccessPlatform() === "wecom"
+        ? await window.oneclaw.settingsRejectWecomPairing({
+            code: trimmed,
+            id: String(id || "").trim(),
+            name: String(name || "").trim(),
+          })
+        : await window.oneclaw.settingsRejectFeishuPairing({
         code: trimmed,
         id: String(id || "").trim(),
         name: String(name || "").trim(),
       });
       if (!result.success) {
-        showChMsg(result.message || t("error.verifyFailed"), "error");
+        showCurrentAccessMsg(result.message || t("error.verifyFailed"), "error");
       } else {
         showToast(t("feishu.pairingRejected"));
         await refreshChPairingPanels({ silent: true });
       }
     } catch (err) {
-      showChMsg(t("error.connection") + (err.message || "Unknown error"), "error");
+      showCurrentAccessMsg(t("error.connection") + (err.message || "Unknown error"), "error");
     } finally {
       chPairingRejectingCode = "";
       renderChAccessEntries();
@@ -1589,7 +1708,7 @@
     var entryKind = String(kind || "").trim() === "group" ? "group" : "user";
     var entryId = String(id || "").trim();
     if (!entryId) {
-      showChMsg(t("error.removeApprovedFailed"), "error");
+      showCurrentAccessMsg(t("error.removeApprovedFailed"), "error");
       return;
     }
     if (chApprovedRemovingKey) return;
@@ -1597,21 +1716,26 @@
     chApprovedRemovingKey = entryKind + ":" + entryId;
     renderChAccessEntries();
     updateChAccessRefreshState();
-    hideChMsg();
+    hideCurrentAccessMsg();
 
     try {
-      var result = await window.oneclaw.settingsRemoveFeishuApproved({
+      var result = getCurrentAccessPlatform() === "wecom"
+        ? await window.oneclaw.settingsRemoveWecomApproved({
+            kind: entryKind,
+            id: entryId,
+          })
+        : await window.oneclaw.settingsRemoveFeishuApproved({
         kind: entryKind,
         id: entryId,
       });
       if (!result.success) {
-        showChMsg(result.message || t("error.removeApprovedFailed"), "error");
+        showCurrentAccessMsg(result.message || t("error.removeApprovedFailed"), "error");
       } else {
         showToast(t("feishu.approvedRemoved"));
         await refreshChPairingPanels({ silent: true });
       }
     } catch (err) {
-      showChMsg(t("error.connection") + (err.message || "Unknown error"), "error");
+      showCurrentAccessMsg(t("error.connection") + (err.message || "Unknown error"), "error");
     } finally {
       chApprovedRemovingKey = "";
       renderChAccessEntries();
@@ -1684,15 +1808,17 @@
 
   // 根据模式切换配对面板可见性。
   function updateChPairingSectionVisibility() {
-    if (!els.chPairingSection) return;
-    toggleEl(els.chPairingSection, isChEnabled() && isChAccessPanelMode());
+    var accessEls = getCurrentAccessEls();
+    if (!accessEls.pairingSection) return;
+    toggleEl(accessEls.pairingSection, isCurrentAccessEnabled() && isCurrentAccessPanelMode());
     updateChAccessRefreshState();
   }
 
   // 仅在群聊白名单模式下显示“添加群 ID”按钮。
   function updateChGroupAllowFromState() {
-    if (!els.btnChAccessAddGroup) return;
-    toggleEl(els.btnChAccessAddGroup, isChGroupAllowlistMode());
+    var accessEls = getCurrentAccessEls();
+    if (!accessEls.accessAddGroup) return;
+    toggleEl(accessEls.accessAddGroup, getCurrentAccessPlatform() === "feishu" && isCurrentAccessGroupAllowlistMode());
     updateChAccessRefreshState();
   }
 
@@ -1924,6 +2050,7 @@
         setWecomSaving(false);
         if (disableResult.success) {
           showToast(t("common.saved"));
+          refreshChPairingPanels({ silent: true });
         } else {
           showWecomMsg(disableResult.message || "Save failed", "error");
         }
@@ -1959,6 +2086,7 @@
 
       setWecomSaving(false);
       showToast(t("common.saved"));
+      refreshChPairingPanels({ silent: true });
     } catch (err) {
       showWecomMsg(t("error.connection") + (err.message || "Unknown error"), "error");
       setWecomSaving(false);
@@ -1982,6 +2110,10 @@
       els.wecomEnabled.checked = enabled;
       toggleEl(els.wecomFields, enabled);
       updateWecomGroupAllowFromState();
+      if (currentChatPlatform === "wecom") {
+        updateChPairingSectionVisibility();
+        refreshChPairingPanels({ silent: true });
+      }
 
       if (data.bundled === false) {
         showWecomMsg(data.bundleMessage || t("error.wecomNotBundled"), "error");
@@ -3397,11 +3529,21 @@
       els.wecomEnabled.addEventListener("change", function () {
         toggleEl(els.wecomFields, isWecomEnabled());
         updateWecomGroupAllowFromState();
+        updateChPairingSectionVisibility();
+        refreshChPairingPanels({ silent: true });
+      });
+    }
+    if (els.wecomDmPolicy) {
+      els.wecomDmPolicy.addEventListener("change", function () {
+        updateChPairingSectionVisibility();
+        refreshChPairingPanels({ silent: true });
       });
     }
     if (els.wecomGroupPolicy) {
       els.wecomGroupPolicy.addEventListener("change", function () {
         updateWecomGroupAllowFromState();
+        updateChPairingSectionVisibility();
+        refreshChPairingPanels({ silent: true });
       });
     }
     if (els.btnToggleWecomSecret) {
@@ -3425,6 +3567,39 @@
     }
     if (els.btnWecomSave) {
       els.btnWecomSave.addEventListener("click", handleWecomSave);
+    }
+    if (els.btnWecomAccessRefresh) {
+      els.btnWecomAccessRefresh.addEventListener("click", function () {
+        refreshChPairingPanels();
+      });
+    }
+    if (els.wecomAccessList) {
+      els.wecomAccessList.addEventListener("click", function (e) {
+        var btn = e.target.closest("[data-pairing-approve]");
+        if (btn) {
+          handleChPairingApprove(
+            btn.getAttribute("data-pairing-approve"),
+            btn.getAttribute("data-pairing-id"),
+            btn.getAttribute("data-pairing-name")
+          );
+          return;
+        }
+        var rejectBtn = e.target.closest("[data-pairing-reject]");
+        if (rejectBtn) {
+          handleChPairingReject(
+            rejectBtn.getAttribute("data-pairing-reject"),
+            rejectBtn.getAttribute("data-pairing-id"),
+            rejectBtn.getAttribute("data-pairing-name")
+          );
+          return;
+        }
+        var removeBtn = e.target.closest("[data-approved-remove-kind][data-approved-remove-id]");
+        if (!removeBtn) return;
+        handleChApprovedRemove(
+          removeBtn.getAttribute("data-approved-remove-kind"),
+          removeBtn.getAttribute("data-approved-remove-id")
+        );
+      });
     }
     if (els.wecomSecret) {
       els.wecomSecret.addEventListener("keydown", function (e) {
@@ -3576,9 +3751,9 @@
         applyRecoveryNotice(payload.notice || "");
       });
     }
-    if (window.oneclaw && window.oneclaw.onFeishuPairingState) {
-      window.oneclaw.onFeishuPairingState(function (payload) {
-        if (!isChEnabled() || !isChPairingMode()) {
+    if (window.oneclaw && window.oneclaw.onPairingState) {
+      window.oneclaw.onPairingState(function (payload) {
+        if (!isCurrentAccessEnabled() || !isCurrentAccessPairingMode()) {
           return;
         }
         applyChPairingStateFromPush(payload);
