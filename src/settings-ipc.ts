@@ -1071,6 +1071,19 @@ export function registerSettingsIpc(opts: SettingsIpcOptions = {}): void {
   });
 
   // ── 恢复配置：删除 openclaw.json 并重启应用，保留历史目录 ──
+  // 返回 OneClaw 和 OpenClaw 版本信息
+  ipcMain.handle("settings:get-about-info", async () => {
+    const oneClawVersion = app.getVersion();
+    let openClawVersion = "unknown";
+    try {
+      const pkgPath = path.join(resolveGatewayCwd(), "package.json");
+      const raw = fs.readFileSync(pkgPath, "utf-8");
+      const pkg = JSON.parse(raw);
+      if (pkg.version) openClawVersion = pkg.version;
+    } catch {}
+    return { oneClawVersion, openClawVersion };
+  });
+
   ipcMain.handle("settings:reset-config-and-relaunch", async () => {
     try {
       const configPath = resolveUserConfigPath();

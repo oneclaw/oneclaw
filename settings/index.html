@@ -54,6 +54,12 @@
           </svg>
           <span data-i18n="nav.backup">Backup & Restore</span>
         </li>
+        <li class="nav-item" data-tab="about">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+            <use href="#icon-info"></use>
+          </svg>
+          <span data-i18n="nav.about">Software Update</span>
+        </li>
       </ul>
     </nav>
 
@@ -852,6 +858,31 @@
         </div>
 
         <div class="msg-box hidden" id="backupMsgBox"></div>
+      </section>
+
+      <!-- About Tab -->
+      <section class="tab-panel" id="tabAbout">
+        <h2 data-i18n="about.title">Software Update</h2>
+
+        <div class="backup-card">
+          <div class="backup-card-title" data-i18n="about.versionInfo">Version Information</div>
+          <div class="toggle-row">
+            <span class="toggle-label" data-i18n="about.oneClawVersion">OneClaw Version</span>
+            <span id="aboutOneClawVersion">—</span>
+          </div>
+          <div class="toggle-row">
+            <span class="toggle-label" data-i18n="about.openClawVersion">OpenClaw Version</span>
+            <span id="aboutOpenClawVersion">—</span>
+          </div>
+        </div>
+
+        <div class="backup-card">
+          <div class="backup-card-title" data-i18n="about.updateTitle">Software Update</div>
+          <div class="btn-row gateway-actions">
+            <button class="btn-primary btn-compact" id="aboutCheckUpdate" data-i18n="about.checkUpdate">Check for Updates</button>
+          </div>
+          <div class="backup-meta hidden" id="aboutUpdateStatus"></div>
+        </div>
       </section>
 
     </main>

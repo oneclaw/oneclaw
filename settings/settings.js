@@ -357,6 +357,19 @@
       "backup.noticeInvalidJson": "Detected invalid openclaw.json. Restore a previous backup.",
       "backup.noticeGatewayFailed": "Gateway startup failed. Restore a previous backup and retry.",
       "backup.noticeGatewayRecoverFailed": "Auto recovery failed. Please select a backup manually.",
+      "nav.about": "Software Update",
+      "about.title": "Software Update",
+      "about.versionInfo": "Version Information",
+      "about.oneClawVersion": "OneClaw Version",
+      "about.openClawVersion": "OpenClaw Version",
+      "about.updateTitle": "Software Update",
+      "about.checkUpdate": "Check for Updates",
+      "about.checking": "Checking...",
+      "about.upToDate": "Up to date",
+      "about.updateAvailable": "New version available",
+      "about.downloading": "Downloading",
+      "about.installRestart": "Install & Restart",
+      "about.updateFailed": "Check failed, try again later",
     },
     zh: {
       "title": "设置",
@@ -603,6 +616,19 @@
       "backup.noticeInvalidJson": "检测到 openclaw.json 无法解析，请恢复历史备份。",
       "backup.noticeGatewayFailed": "Gateway 启动失败，建议恢复历史备份后重试。",
       "backup.noticeGatewayRecoverFailed": "自动回退失败，请手动选择备份恢复。",
+      "nav.about": "软件更新",
+      "about.title": "软件更新",
+      "about.versionInfo": "版本信息",
+      "about.oneClawVersion": "OneClaw 版本",
+      "about.openClawVersion": "OpenClaw 版本",
+      "about.updateTitle": "软件更新",
+      "about.checkUpdate": "检查更新",
+      "about.checking": "检查中...",
+      "about.upToDate": "已是最新版本",
+      "about.updateAvailable": "发现新版本",
+      "about.downloading": "下载中",
+      "about.installRestart": "安装并重启",
+      "about.updateFailed": "检查失败，请稍后重试",
     },
   };
 
@@ -946,6 +972,10 @@
     if (target === "backup") {
       loadBackupData();
       refreshGatewayState();
+    }
+
+    if (target === "about") {
+      loadAboutInfo();
     }
   }
 
@@ -3761,6 +3791,86 @@
         }
         applyChPairingStateFromPush(payload);
       });
+    }
+
+    // About — 检查更新按钮
+    var aboutCheckBtn = document.getElementById("aboutCheckUpdate");
+    if (aboutCheckBtn) {
+      aboutCheckBtn.addEventListener("click", function () {
+        window.oneclaw.checkForUpdates();
+        aboutCheckBtn.textContent = t("about.checking");
+        aboutCheckBtn.disabled = true;
+      });
+    }
+
+    // 订阅更新状态推送
+    if (window.oneclaw && window.oneclaw.onUpdateState) {
+      window.oneclaw.onUpdateState(function (state) {
+        renderUpdateStatus(state);
+      });
+    }
+  }
+
+  // ── About Tab ──
+
+  // 加载版本信息和更新状态
+  async function loadAboutInfo() {
+    try {
+      var info = await window.oneclaw.settingsGetAboutInfo();
+      document.getElementById("aboutOneClawVersion").textContent = info.oneClawVersion;
+      document.getElementById("aboutOpenClawVersion").textContent = info.openClawVersion;
+    } catch (e) {
+      console.error("Failed to load about info:", e);
+    }
+    try {
+      var state = await window.oneclaw.getUpdateState();
+      renderUpdateStatus(state);
+    } catch (e) {}
+  }
+
+  // 根据更新状态渲染按钮和提示
+  function renderUpdateStatus(state) {
+    var statusEl = document.getElementById("aboutUpdateStatus");
+    var btnEl = document.getElementById("aboutCheckUpdate");
+    if (!statusEl || !btnEl) return;
+
+    switch (state.status) {
+      case "hidden":
+        statusEl.classList.add("hidden");
+        btnEl.textContent = t("about.checkUpdate");
+        btnEl.disabled = false;
+        break;
+      case "available":
+        statusEl.classList.remove("hidden");
+        statusEl.textContent = t("about.updateAvailable") + " " + (state.version || "");
+        btnEl.textContent = t("about.installRestart");
+        btnEl.disabled = false;
+        btnEl.onclick = function () { window.oneclaw.downloadAndInstallUpdate(); };
+        break;
+      case "downloading":
+        statusEl.classList.remove("hidden");
+        statusEl.textContent = t("about.downloading") + " " + Math.round(state.percent || 0) + "%";
+        btnEl.disabled = true;
+        break;
+      case "done":
+        statusEl.classList.remove("hidden");
+        statusEl.textContent = "";
+        btnEl.textContent = t("about.installRestart");
+        btnEl.disabled = false;
+        btnEl.onclick = function () { window.oneclaw.downloadAndInstallUpdate(); };
+        break;
+      case "failed":
+        statusEl.classList.remove("hidden");
+        statusEl.textContent = t("about.updateFailed");
+        btnEl.textContent = t("about.checkUpdate");
+        btnEl.disabled = false;
+        btnEl.onclick = null;
+        break;
+      default:
+        statusEl.classList.add("hidden");
+        btnEl.textContent = t("about.checkUpdate");
+        btnEl.disabled = false;
+        break;
     }
   }
 

@@ -9,6 +9,7 @@ const {
   Eye,
   SlidersVertical,
   History,
+  Info,
 } = require("lucide");
 
 const ROOT = path.resolve(__dirname, "..");
@@ -20,6 +21,7 @@ const ICONS = {
   "icon-eye": Eye,
   "icon-sliders-vertical": SlidersVertical,
   "icon-history": History,
+  "icon-info": Info,
 };
 
 function escapeHtmlAttribute(value) {
