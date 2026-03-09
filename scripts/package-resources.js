@@ -1054,6 +1054,34 @@ const BUNDLED_PLUGINS = [
   },
 ];
 
+// openclaw/extensions 只保留 OneClaw 当前产品面和运行时基础插件。
+const OPENCLAW_EXTENSION_ALLOWLIST = new Set([
+  "shared",
+  "memory-core",
+  "device-pair",
+  "feishu",
+  "imessage",
+  "kimi-claw",
+  "kimi-search",
+  "qqbot",
+  "dingtalk-connector",
+  "wecom-openclaw-plugin",
+]);
+
+// 构建产物校验需要覆盖白名单中的关键扩展，避免悄悄打出残缺包。
+const REQUIRED_OPENCLAW_EXTENSION_OUTPUTS = [
+  "shared",
+  path.join("memory-core", "openclaw.plugin.json"),
+  path.join("device-pair", "openclaw.plugin.json"),
+  path.join("feishu", "openclaw.plugin.json"),
+  path.join("imessage", "openclaw.plugin.json"),
+  path.join("kimi-claw", "openclaw.plugin.json"),
+  path.join("kimi-search", "openclaw.plugin.json"),
+  path.join("qqbot", "openclaw.plugin.json"),
+  path.join("dingtalk-connector", "openclaw.plugin.json"),
+  path.join("wecom-openclaw-plugin", "openclaw.plugin.json"),
+];
+
 // 解析插件包来源（优先本地 tgz，其次远程 URL）
 function resolvePluginSource(plugin) {
   const localTgz = readEnvText(plugin.localEnv);
@@ -1339,13 +1367,6 @@ function pruneNodeModules(nmDir) {
   const openclawExtensionsDir = path.join(openclawDir, "extensions");
   const openclawDocsKeepDir = path.join(openclawDocsDir, "reference", "templates");
 
-  // 需要删除的文档文件名（精确匹配，不区分大小写，避免误杀 changelog.js 等源文件）
-  const junkNames = new Set([
-    "readme", "readme.md", "readme.txt", "readme.markdown",
-    "changelog", "changelog.md", "changelog.txt",
-    "history.md", "authors", "authors.md", "contributors.md",
-  ]);
-
   // 需要删除的目录名（只保留运行所需内容）
   const junkDirs = new Set([
     "test",
@@ -1359,6 +1380,19 @@ function pruneNodeModules(nmDir) {
     "benchmark",
     "benchmarks",
   ]);
+
+  // 需要删除的文档基名与允许删除的文档扩展，避免误杀 changelog.js 等源文件。
+  const junkDocBases = new Set([
+    "readme",
+    "changelog",
+    "history",
+    "authors",
+    "contributors",
+    "license",
+    "licence",
+    "contributing",
+  ]);
+  const junkDocExtensions = new Set(["", ".md", ".txt", ".markdown", ".rst"]);
 
   let removedFiles = 0;
   let removedDirs = 0;
@@ -1394,6 +1428,22 @@ function pruneNodeModules(nmDir) {
       fileNameLower.endsWith(".d.mts") ||
       fileNameLower.endsWith(".d.cts")
     );
+  }
+
+  // 测试产物命名很稳定，直接按后缀剔除即可。
+  function isTestArtifactFile(fileNameLower) {
+    return fileNameLower.includes(".test.") || fileNameLower.includes(".spec.");
+  }
+
+  // 文档文件按安全白名单匹配，只删常见文档扩展，避免误杀源码。
+  function isJunkDocFile(fileNameLower) {
+    const parsed = path.parse(fileNameLower);
+    return junkDocBases.has(parsed.name) && junkDocExtensions.has(parsed.ext);
+  }
+
+  // 插件包常见会把无用依赖藏到 .ignored*，这些目录不该进入正式产物。
+  function isIgnoredJunkDir(dirName) {
+    return dirName === ".ignored" || dirName.startsWith(".ignored_");
   }
 
   // 精简 openclaw/docs，仅保留运行时必需模板 docs/reference/templates
@@ -1436,6 +1486,30 @@ function pruneNodeModules(nmDir) {
     walkDocs(openclawDocsDir);
   }
 
+  // openclaw/extensions 不再整目录豁免，只保留 OneClaw 需要的插件。
+  function pruneOpenclawExtensions() {
+    if (!fs.existsSync(openclawExtensionsDir)) return;
+
+    let entries;
+    try {
+      entries = fs.readdirSync(openclawExtensionsDir, { withFileTypes: true });
+    } catch {
+      return;
+    }
+
+    for (const entry of entries) {
+      const fullPath = path.join(openclawExtensionsDir, entry.name);
+      if (!entry.isDirectory()) {
+        continue;
+      }
+      if (!OPENCLAW_EXTENSION_ALLOWLIST.has(entry.name)) {
+        removeDir(fullPath);
+        continue;
+      }
+      walk(fullPath);
+    }
+  }
+
   // 递归遍历并清理
   function walk(dir) {
     let entries;
@@ -1449,8 +1523,9 @@ function pruneNodeModules(nmDir) {
       const fullPath = path.join(dir, entry.name);
 
       if (entry.isDirectory()) {
-        // extensions 目录整体保护 — 插件 skills、docs 等子目录不受裁剪
-        if (isPathInside(fullPath, openclawExtensionsDir)) {
+        // extensions 改成白名单保留，并继续深入清理保留插件内部垃圾。
+        if (fullPath === openclawExtensionsDir) {
+          pruneOpenclawExtensions();
           continue;
         }
 
@@ -1460,7 +1535,7 @@ function pruneNodeModules(nmDir) {
           continue;
         }
 
-        if (junkDirs.has(entry.name)) {
+        if (junkDirs.has(entry.name) || isIgnoredJunkDir(entry.name)) {
           removeDir(fullPath);
         } else {
           walk(fullPath);
@@ -1468,7 +1543,11 @@ function pruneNodeModules(nmDir) {
       } else {
         const nameLower = entry.name.toLowerCase();
         const ext = path.extname(nameLower);
-        const shouldDelete = isTypeDeclarationFile(nameLower) || ext === ".map" || junkNames.has(nameLower);
+        const shouldDelete =
+          isTypeDeclarationFile(nameLower) ||
+          ext === ".map" ||
+          isTestArtifactFile(nameLower) ||
+          isJunkDocFile(nameLower);
         if (shouldDelete) {
           removeFile(fullPath);
         }
@@ -1542,11 +1621,9 @@ function verifyOutput(targetPaths, platform) {
   ];
 
   required.push(
-    path.join(targetRel, "gateway", "node_modules", "openclaw", "extensions", "kimi-claw", "openclaw.plugin.json"),
-    path.join(targetRel, "gateway", "node_modules", "openclaw", "extensions", "kimi-search", "openclaw.plugin.json"),
-    path.join(targetRel, "gateway", "node_modules", "openclaw", "extensions", "qqbot", "openclaw.plugin.json"),
-    path.join(targetRel, "gateway", "node_modules", "openclaw", "extensions", "dingtalk-connector", "openclaw.plugin.json"),
-    path.join(targetRel, "gateway", "node_modules", "openclaw", "extensions", "wecom-openclaw-plugin", "openclaw.plugin.json"),
+    ...REQUIRED_OPENCLAW_EXTENSION_OUTPUTS.map((relPath) =>
+      path.join(targetRel, "gateway", "node_modules", "openclaw", "extensions", relPath)
+    )
   );
 
   let allOk = true;
