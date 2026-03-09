@@ -36,3 +36,6 @@ tools/
 private_keys/
 
 .gemini-clipboard/
+
+# Git worktrees
+.worktrees/
