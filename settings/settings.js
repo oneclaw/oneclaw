@@ -382,7 +382,7 @@
       "provider.baseUrl": "接口地址",
       "provider.apiKey": "API 密钥",
       "provider.getKey": "获取密钥 →",
-      "provider.getKey.kimi-code": "获取密钥 (Kimi for Code) →",
+      "provider.getKey.kimi-code": "购买会员获取密钥 (Kimi for Code) →",
       "provider.getKey.moonshot-cn": "获取密钥 (Moonshot.cn) →",
       "provider.getKey.moonshot-ai": "获取密钥 (Moonshot.ai) →",
       "provider.model": "模型",
@@ -768,7 +768,7 @@
 
   // ── 状态 ──
 
-  let currentProvider = "anthropic";
+  let currentProvider = "moonshot";
   let saving = false;
   let currentChatPlatform = "feishu";
   let chSaving = false;
@@ -3768,7 +3768,7 @@
     applyI18n();
 
     bindEvents();
-    switchProvider("anthropic");
+    switchProvider("moonshot");
     switchTab(initialTab || "provider");
     switchChatPlatform(initialChatPlatform || "feishu");
     applyRecoveryNotice(startupNotice);

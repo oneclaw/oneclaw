@@ -168,7 +168,7 @@
       "config.baseUrl": "接口地址",
       "config.apiKey": "API 密钥",
       "config.getKey": "获取密钥 →",
-      "config.getKey.kimi-code": "获取密钥 (Kimi for Code) →",
+      "config.getKey.kimi-code": "购买会员获取密钥 (Kimi for Code) →",
       "config.getKey.moonshot-cn": "获取密钥 (Moonshot.cn) →",
       "config.getKey.moonshot-ai": "获取密钥 (Moonshot.ai) →",
       "config.model": "模型",
@@ -272,7 +272,7 @@
 
   // ---- 状态 ----
   let currentStep = 1;
-  let currentProvider = "anthropic";
+  let currentProvider = "moonshot";
   let verifying = false;
   let starting = false;
   let currentLang = "en";
@@ -832,7 +832,7 @@
     detectLang();
     applyI18n();
     bindEvents();
-    switchProvider("anthropic");
+    switchProvider("moonshot");
     checkExistingInstallation();
     loadLaunchAtLoginState();
   }
