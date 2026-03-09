@@ -875,6 +875,7 @@ function installDependencies(opts, gatewayDir) {
     pruneLlamaPackages(nmDir);
     pruneDanglingBinLinks(nmDir);
     assertNativeDepsMatchTarget(nmDir, opts.platform, opts.arch);
+    patchWindowsOpenclawArtifacts(gatewayDir, opts.platform);
     return;
   }
 
@@ -923,8 +924,91 @@ function installDependencies(opts, gatewayDir) {
   pruneLlamaPackages(nmDir);
   pruneDanglingBinLinks(nmDir);
   assertNativeDepsMatchTarget(nmDir, opts.platform, opts.arch);
+  patchWindowsOpenclawArtifacts(gatewayDir, opts.platform);
   fs.writeFileSync(stampPath, targetStamp);
   log("node_modules 裁剪完成");
+}
+
+// Windows 上给 openclaw 已知的 spawn 热点统一补 windowsHide，避免黑框闪烁。
+function patchWindowsOpenclawArtifacts(gatewayDir, platform = "win32") {
+  if (platform !== "win32") return;
+
+  const distDir = path.join(gatewayDir, "node_modules", "openclaw", "dist");
+  if (!fs.existsSync(distDir)) {
+    die(`openclaw dist 目录不存在，无法应用 Windows 补丁: ${distDir}`);
+  }
+
+  const distEntries = fs.readdirSync(distDir);
+  const execFiles = distEntries.filter((name) => /^exec-.*\.js$/.test(name));
+  const gatewayCliFiles = distEntries.filter((name) => /^gateway-cli-.*\.js$/.test(name));
+
+  const execResult = patchWindowsOpenclawFiles(distDir, execFiles, injectExecWindowsHide, hasExecWindowsHide);
+  const gatewayCliResult = patchWindowsOpenclawFiles(
+    distDir,
+    gatewayCliFiles,
+    injectGatewayRespawnWindowsHide,
+    hasGatewayRespawnWindowsHide
+  );
+
+  if (execFiles.length === 0 || execResult.ready === 0) {
+    die("未能为 openclaw exec Windows spawn 注入 windowsHide，构建已终止");
+  }
+  if (gatewayCliFiles.length === 0 || gatewayCliResult.ready === 0) {
+    die("未能为 openclaw gateway-cli respawn 注入 windowsHide，构建已终止");
+  }
+
+  log(
+    `已应用 openclaw Windows 补丁：exec=${execResult.patched}/${execResult.ready} gateway-cli=${gatewayCliResult.patched}/${gatewayCliResult.ready}`
+  );
+}
+
+// 扫描并重写目标文件；若上游产物结构变化，让构建直接失败而不是静默漂移。
+function patchWindowsOpenclawFiles(distDir, fileNames, transform, isReady) {
+  let patched = 0;
+  let ready = 0;
+  for (const fileName of fileNames) {
+    const filePath = path.join(distDir, fileName);
+    const before = fs.readFileSync(filePath, "utf-8");
+    const after = transform(before);
+    if (after !== before) {
+      fs.writeFileSync(filePath, after, "utf-8");
+      patched += 1;
+      ready += 1;
+      continue;
+    }
+    if (isReady(before)) {
+      ready += 1;
+    }
+  }
+  return { patched, ready };
+}
+
+// exec helper 会走 cmd.exe / batch；这里漏掉 windowsHide 就会直接闪黑框。
+function injectExecWindowsHide(source) {
+  const eol = source.includes("\r\n") ? "\r\n" : "\n";
+  return source.replace(
+    /(\] : finalArgv\.slice\(1\), \{)(\r?\n)(\s*)stdio,/,
+    `$1$2$3windowsHide: true,${eol}$3stdio,`
+  );
+}
+
+// 幂等校验：缓存依赖若已带 windowsHide，不应因为补丁再次运行而失败。
+function hasExecWindowsHide(source) {
+  return /\] : finalArgv\.slice\(1\), \{[\s\S]*?windowsHide:\s*true[\s\S]*?stdio,/.test(source);
+}
+
+// respawn 已被 OPENCLAW_NO_RESPAWN 大多压住，但这里补上更稳，避免旁路重新污染主进程树。
+function injectGatewayRespawnWindowsHide(source) {
+  const eol = source.includes("\r\n") ? "\r\n" : "\n";
+  return source.replace(
+    /(spawn\(process\.execPath, args, \{)(\r?\n)(\s*)env: process\.env,/,
+    `$1$2$3windowsHide: true,${eol}$3env: process.env,`
+  );
+}
+
+// 幂等校验：已打过补丁的 gateway-cli 允许重复复用，不重复报错。
+function hasGatewayRespawnWindowsHide(source) {
+  return /spawn\(process\.execPath, args, \{[\s\S]*?windowsHide:\s*true[\s\S]*?env: process\.env,/.test(source);
 }
 
 // ─── Step 2.5: 注入 bundled 插件（kimi-claw + kimi-search + qqbot + dingtalk） ───

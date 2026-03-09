@@ -142,11 +142,7 @@ function replaceNodeBinary(platform, targetBase, productName) {
     // 重写 npm.cmd — 注入 ELECTRON_RUN_AS_NODE=1，指向 Electron binary
     const npmCmdPath = path.join(runtimeDir, "npm.cmd");
     if (fs.existsSync(npmCmdPath)) {
-      const npmScript = [
-        "@echo off",
-        'set "ELECTRON_RUN_AS_NODE=1"',
-        `"%~dp0..\\..\\..\\${productName}.exe" "%~dp0node_modules\\npm\\bin\\npm-cli.js" %*`,
-      ].join("\r\n") + "\r\n";
+      const npmScript = buildWindowsElectronProxyScript(productName, "%~dp0node_modules\\npm\\bin\\npm-cli.js");
       fs.writeFileSync(npmCmdPath, npmScript, "utf-8");
       console.log(`[afterPack] 已重写 npm.cmd`);
     }
@@ -154,15 +150,28 @@ function replaceNodeBinary(platform, targetBase, productName) {
     // 重写 npx.cmd — 同上
     const npxCmdPath = path.join(runtimeDir, "npx.cmd");
     if (fs.existsSync(npxCmdPath)) {
-      const npxScript = [
-        "@echo off",
-        'set "ELECTRON_RUN_AS_NODE=1"',
-        `"%~dp0..\\..\\..\\${productName}.exe" "%~dp0node_modules\\npm\\bin\\npx-cli.js" %*`,
-      ].join("\r\n") + "\r\n";
+      const npxScript = buildWindowsElectronProxyScript(productName, "%~dp0node_modules\\npm\\bin\\npx-cli.js");
       fs.writeFileSync(npxCmdPath, npxScript, "utf-8");
       console.log(`[afterPack] 已重写 npx.cmd`);
     }
   }
+}
+
+// Windows runtime wrapper 优先走 Helper.exe，缺失时再回退主 exe，避免首次启动前 wrapper 失效。
+function buildWindowsElectronProxyScript(productName, cliEntryPath) {
+  const mainExe = `%~dp0..\\..\\..\\${productName}.exe`;
+  const helperExe = `%~dp0..\\..\\..\\${productName} Helper.exe`;
+  return [
+    "@echo off",
+    'set "ELECTRON_RUN_AS_NODE=1"',
+    `set "APP_EXE=${mainExe}"`,
+    `set "APP_HELPER=${helperExe}"`,
+    'if exist "%APP_HELPER%" (',
+    `  "%APP_HELPER%" "${cliEntryPath}" %*`,
+    ") else (",
+    `  "%APP_EXE%" "${cliEntryPath}" %*`,
+    ")",
+  ].join("\r\n") + "\r\n";
 }
 
 // ── 递归复制目录（保留文件权限） ──

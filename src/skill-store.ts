@@ -1,5 +1,12 @@
 import { app, ipcMain } from "electron";
-import { resolveUserStateDir, resolveUserBinDir, resolveNodeBin, resolveClawhubEntry, IS_WIN } from "./constants";
+import {
+  resolveUserStateDir,
+  resolveUserBinDir,
+  resolveNodeBin,
+  resolveNodeExtraEnv,
+  resolveClawhubEntry,
+  IS_WIN,
+} from "./constants";
 import { execFile } from "child_process";
 import * as fs from "fs";
 import * as path from "path";
@@ -235,7 +242,7 @@ function execClawhub(args: string[]): Promise<{ stdout: string; stderr: string }
       timeout: 60_000,
       env: {
         ...process.env,
-        ELECTRON_RUN_AS_NODE: "1",
+        ...resolveNodeExtraEnv(),
         PATH: envPath,
       },
       windowsHide: true,

@@ -52,6 +52,8 @@ export const WINDOW_MIN_HEIGHT = 600;
 
 export const IS_WIN = process.platform === "win32";
 
+let cachedPackagedWindowsNodeBin: string | null = null;
+
 // ── 路径解析（自动适配 dev / packaged 两种环境） ──
 
 /** 资源根目录（dev 模式指向 targets/<platform-arch>，打包后 afterPack 已拍平） */
@@ -66,6 +68,34 @@ export function resolveResourcesPath(): string {
 /** dev 模式下的目标产物目录（package:resources 的输出路径） */
 function resolveDevTargetPath(): string {
   return path.join(app.getAppPath(), "resources", "targets", `${process.platform}-${process.arch}`);
+}
+
+// Windows packaged 模式下优先使用 Helper.exe，避免把主 GUI exe 直接暴露给所有子进程。
+function resolvePackagedWindowsHelperPath(): string {
+  const exeDir = path.dirname(process.execPath);
+  const ext = path.extname(process.execPath) || ".exe";
+  const base = path.basename(process.execPath, ext);
+  return path.join(exeDir, `${base} Helper${ext}`);
+}
+
+// 惰性创建 Windows Helper hard link；失败时安全回退主 exe，不阻断启动。
+function resolvePackagedWindowsNodeBin(): string {
+  if (cachedPackagedWindowsNodeBin) return cachedPackagedWindowsNodeBin;
+
+  const helperPath = resolvePackagedWindowsHelperPath();
+  if (fs.existsSync(helperPath)) {
+    cachedPackagedWindowsNodeBin = helperPath;
+    return helperPath;
+  }
+
+  try {
+    fs.linkSync(process.execPath, helperPath);
+    cachedPackagedWindowsNodeBin = helperPath;
+    return helperPath;
+  } catch {
+    cachedPackagedWindowsNodeBin = process.execPath;
+    return process.execPath;
+  }
 }
 
 /** Node.js 二进制（packaged 复用 Electron binary + ELECTRON_RUN_AS_NODE；dev 优先用下载的） */
@@ -85,7 +115,7 @@ export function resolveNodeBin(): string {
     );
     if (fs.existsSync(helperPath)) return helperPath;
   }
-  return process.execPath;
+  return resolvePackagedWindowsNodeBin();
 }
 
 /** packaged 模式需要的额外环境变量（让 Electron binary 作为纯 Node.js 运行） */
