@@ -1,4 +1,6 @@
-// 统一 Setup 完成态判定：只认最终完成标记，避免半完成状态误判。
+import { readOneclawConfig } from "./oneclaw-config";
+
+// 旧逻辑保留：检查 openclaw.json 的 wizard.lastRunAt（gateway schema 兼容）
 export function isSetupCompleteFromConfig(config: any): boolean {
   if (!config || typeof config !== "object") {
     return false;
@@ -12,4 +14,10 @@ export function isSetupCompleteFromConfig(config: any): boolean {
     typeof wizard.lastRunAt === "string" &&
     wizard.lastRunAt.trim() !== ""
   );
+}
+
+// 基于 oneclaw.config.json 判定 Setup 是否完成
+export function isOneclawSetupComplete(): boolean {
+  const config = readOneclawConfig();
+  return !!(config?.setupCompletedAt);
 }

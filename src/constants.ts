@@ -2,6 +2,7 @@ import { app } from "electron";
 import * as path from "path";
 import * as fs from "fs";
 import { isSetupCompleteFromConfig } from "./setup-completion";
+import { readOneclawConfig } from "./oneclaw-config";
 
 // ── 网络端口 ──
 
@@ -196,11 +197,15 @@ export function resolveChatUiPath(): string {
 
 // ── Setup 完成判断 ──
 
-/** 检查 Setup 是否已完成（配置文件存在且有效） */
+/** 检查 Setup 是否已完成（优先读 oneclaw.config.json，兼容旧版） */
 export function isSetupComplete(): boolean {
+  // 新逻辑：oneclaw.config.json 的 setupCompletedAt
+  const oneclawConfig = readOneclawConfig();
+  if (oneclawConfig?.setupCompletedAt) return true;
+
+  // 兼容：老 OneClaw 用户可能还没迁移
   const configPath = resolveUserConfigPath();
   if (!fs.existsSync(configPath)) return false;
-
   try {
     const raw = fs.readFileSync(configPath, "utf-8");
     const config = JSON.parse(raw);
