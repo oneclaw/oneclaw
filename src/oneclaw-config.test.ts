@@ -48,10 +48,17 @@ test("detectOwnership 有 oneclaw.config.json + setupCompletedAt 时返回 onecl
   expect(detectOwnership()).toBe("oneclaw");
 });
 
-test("detectOwnership 有 .device-id 无 oneclaw.config.json 时返回 legacy-oneclaw", async () => {
+test("detectOwnership 有 setup-baseline 文件时返回 legacy-oneclaw", async () => {
+  const { detectOwnership } = await import("./oneclaw-config");
+  fs.writeFileSync(path.join(tmpDir, "openclaw-setup-baseline.json"), "{}", "utf-8");
+  expect(detectOwnership()).toBe("legacy-oneclaw");
+});
+
+test("detectOwnership 有 .device-id 但无 OneClaw 独有文件时返回 external-openclaw", async () => {
   const { detectOwnership } = await import("./oneclaw-config");
   fs.writeFileSync(path.join(tmpDir, ".device-id"), "some-uuid", "utf-8");
-  expect(detectOwnership()).toBe("legacy-oneclaw");
+  fs.writeFileSync(path.join(tmpDir, "openclaw.json"), "{}", "utf-8");
+  expect(detectOwnership()).toBe("external-openclaw");
 });
 
 test("detectOwnership 有 openclaw.json 无 .device-id 无 oneclaw.config.json 时返回 external-openclaw", async () => {

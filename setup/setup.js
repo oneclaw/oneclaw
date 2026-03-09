@@ -145,12 +145,12 @@
       "done.startFailed": "Gateway failed to start. Please click Start OneClaw to retry.",
       "conflict.title": "Existing OpenClaw Detected",
       "conflict.subtitle": "An existing OpenClaw installation was found on your system. This may cause port conflicts with OneClaw.",
+      "conflict.reassure": "Your personas and chat history will be preserved.",
       "conflict.portInUse": "Port {port} is in use by process: {process} (PID: {pid})",
       "conflict.globalInstalled": "Global installation found: {path}",
       "conflict.uninstall": "Uninstall old version & continue",
-      "conflict.changePort": "Use a different port",
+      "conflict.quit": "Quit",
       "conflict.uninstalling": "Uninstalling…",
-      "conflict.changingPort": "Resolving…",
       "conflict.failed": "Operation failed: ",
       "error.noKey": "Please enter your API key.",
       "error.noBaseUrl": "Please enter the Base URL.",
@@ -203,12 +203,12 @@
       "done.startFailed": 'Gateway 启动失败，请点击"启动 OneClaw"重试。',
       "conflict.title": "检测到已安装的 OpenClaw",
       "conflict.subtitle": "系统中已存在 OpenClaw 安装，可能与 OneClaw 产生端口冲突。",
+      "conflict.reassure": "你的人设和聊天记录将会被保留。",
       "conflict.portInUse": "端口 {port} 被占用，进程: {process} (PID: {pid})",
       "conflict.globalInstalled": "全局安装路径: {path}",
       "conflict.uninstall": "卸载旧版并继续",
-      "conflict.changePort": "使用其他端口继续",
+      "conflict.quit": "退出",
       "conflict.uninstalling": "正在卸载…",
-      "conflict.changingPort": "正在处理…",
       "conflict.failed": "操作失败：",
       "error.noKey": "请输入 API 密钥。",
       "error.noBaseUrl": "请输入接口地址。",
@@ -261,9 +261,7 @@
     btnUninstall: $("#btnUninstall"),
     btnUninstallText: document.querySelector("#btnUninstall .btn-text"),
     btnUninstallSpinner: document.querySelector("#btnUninstall .btn-spinner"),
-    btnChangePort: $("#btnChangePort"),
-    btnChangePortText: document.querySelector("#btnChangePort .btn-text"),
-    btnChangePortSpinner: document.querySelector("#btnChangePort .btn-spinner"),
+    btnQuitConflict: $("#btnQuitConflict"),
     conflictStatus: $("#conflictStatus"),
     // Step 3 — 完成
     sessionMemoryEnabled: $("#sessionMemoryEnabled"),
@@ -373,7 +371,7 @@
     if (resolving) return;
     resolving = true;
     setConflictBtnState(els.btnUninstall, els.btnUninstallText, els.btnUninstallSpinner, true, t("conflict.uninstalling"));
-    els.btnChangePort.disabled = true;
+    els.btnQuitConflict.disabled = true;
     hideConflictError();
 
     try {
@@ -391,32 +389,13 @@
     } finally {
       resolving = false;
       setConflictBtnState(els.btnUninstall, els.btnUninstallText, els.btnUninstallSpinner, false, t("conflict.uninstall"));
-      els.btnChangePort.disabled = false;
+      els.btnQuitConflict.disabled = false;
     }
   }
 
-  // 使用其他端口
-  async function handleChangePort() {
-    if (resolving) return;
-    resolving = true;
-    setConflictBtnState(els.btnChangePort, els.btnChangePortText, els.btnChangePortSpinner, true, t("conflict.changingPort"));
-    els.btnUninstall.disabled = true;
-    hideConflictError();
-
-    try {
-      const res = await window.oneclaw.resolveConflict({ action: "change-port" });
-      if (res?.success) {
-        goToStep(1);
-      } else {
-        showConflictError(t("conflict.failed") + (res?.message || ""));
-      }
-    } catch (err) {
-      showConflictError(t("conflict.failed") + (err.message || ""));
-    } finally {
-      resolving = false;
-      setConflictBtnState(els.btnChangePort, els.btnChangePortText, els.btnChangePortSpinner, false, t("conflict.changePort"));
-      els.btnUninstall.disabled = false;
-    }
+  // 退出应用
+  function handleQuitConflict() {
+    window.close();
   }
 
   // 冲突页按钮状态控制
@@ -777,7 +756,7 @@
   // ---- 事件绑定 ----
   function bindEvents() {
     els.btnUninstall.addEventListener("click", handleUninstall);
-    els.btnChangePort.addEventListener("click", handleChangePort);
+    els.btnQuitConflict.addEventListener("click", handleQuitConflict);
     els.btnToStep2.addEventListener("click", () => goToStep(2));
     els.btnBackToStep1.addEventListener("click", () => goToStep(1));
 

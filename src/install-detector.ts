@@ -243,19 +243,6 @@ export async function uninstallGlobalOpenclaw(): Promise<boolean> {
   return allOk;
 }
 
-// 递归删除用户状态目录（~/.openclaw/）
-export function removeUserStateDir(): boolean {
-  const dir = resolveUserStateDir();
-  log.info(`[install-detector] removing user state dir: ${dir}`);
-  try {
-    if (!fs.existsSync(dir)) return true;
-    fs.rmSync(dir, { recursive: true, force: true });
-    return true;
-  } catch (err) {
-    log.error(`[install-detector] remove ${dir} failed: ${err instanceof Error ? err.message : String(err)}`);
-    return false;
-  }
-}
 
 // 从指定端口开始，逐个探测直到找到可用端口
 export async function findAvailablePort(startPort: number = DEFAULT_PORT): Promise<number> {

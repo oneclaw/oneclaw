@@ -29,6 +29,7 @@
         </div>
         <h1 data-i18n="conflict.title">Existing OpenClaw Detected</h1>
         <p class="subtitle" data-i18n="conflict.subtitle">An existing OpenClaw installation was found on your system. This may cause port conflicts.</p>
+        <p class="conflict-reassure" data-i18n="conflict.reassure">Your personas and chat history will be preserved.</p>
 
         <div class="conflict-details" id="conflictDetails">
           <div class="conflict-item hidden" id="conflictPort">
@@ -58,10 +59,7 @@
             <span class="btn-text" data-i18n="conflict.uninstall">Uninstall old version & continue</span>
             <span class="btn-spinner hidden"></span>
           </button>
-          <button class="btn-secondary" id="btnChangePort">
-            <span class="btn-text" data-i18n="conflict.changePort">Use a different port</span>
-            <span class="btn-spinner hidden"></span>
-          </button>
+          <button class="btn-secondary" id="btnQuitConflict" data-i18n="conflict.quit">Quit</button>
         </div>
 
         <div class="status-msg hidden" id="conflictStatus"></div>

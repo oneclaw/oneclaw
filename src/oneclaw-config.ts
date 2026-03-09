@@ -65,13 +65,21 @@ export function writeOneclawConfig(config: OneclawConfig): void {
 
 // ── 归属检测 ──
 
+// 老版 OneClaw 独有文件：官方 CLI 不会创建 setup-baseline
+function hasLegacyOneclawMarker(): boolean {
+  return fs.existsSync(
+    path.join(resolveUserStateDir(), "openclaw-setup-baseline.json"),
+  );
+}
+
 // 判定当前 ~/.openclaw/ 目录的归属状态
 export function detectOwnership(): OwnershipState {
   const oneclawConfig = readOneclawConfig();
   if (oneclawConfig?.setupCompletedAt) return "oneclaw";
 
-  const deviceIdExists = fs.existsSync(resolveDeviceIdPath());
-  if (deviceIdExists) return "legacy-oneclaw";
+  // 老版 OneClaw 没有 oneclaw.config.json，但会创建这些独有文件
+  // （.device-id 和 wizard.lastRunAt 不可靠：官方 CLI 也会创建）
+  if (hasLegacyOneclawMarker()) return "legacy-oneclaw";
 
   const openclawJsonExists = fs.existsSync(resolveUserConfigPath());
   if (openclawJsonExists) return "external-openclaw";

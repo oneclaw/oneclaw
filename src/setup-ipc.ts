@@ -20,7 +20,6 @@ import {
   detectExistingInstallation,
   killPortProcess,
   uninstallGlobalOpenclaw,
-  removeUserStateDir,
   findAvailablePort,
 } from "./install-detector";
 import { DEFAULT_PORT } from "./constants";
@@ -108,7 +107,7 @@ export function registerSetupIpc(deps: SetupIpcDeps): void {
           await killPortProcess(pid);
         }
         await uninstallGlobalOpenclaw();
-        removeUserStateDir();
+        // 保留 ~/.openclaw/：聊天记录、项目数据都在里面
         log.info("[setup] 旧版 OpenClaw 卸载完成");
         return { success: true };
       }

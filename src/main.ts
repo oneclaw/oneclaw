@@ -42,11 +42,6 @@ import { readUserConfig, writeUserConfig } from "./provider-config";
 import { resolveKimiSearchApiKey } from "./kimi-config";
 import { reconcileCliOnAppLaunch } from "./cli-integration";
 import { detectOwnership, migrateFromLegacy, markSetupComplete } from "./oneclaw-config";
-import {
-  detectExistingInstallation,
-  uninstallGlobalOpenclaw,
-  killPortProcess,
-} from "./install-detector";
 import * as log from "./logger";
 import * as analytics from "./analytics";
 
@@ -346,42 +341,10 @@ async function ensureGatewayRunning(source: string): Promise<boolean> {
   return false;
 }
 
-// 外部 OpenClaw 接管流程：提示卸载 → 尝试复用配置 → 成功则接管，失败则 Setup
+// 外部 OpenClaw 接管：进 Setup 向导，Step 0 展示冲突并让用户决定
 async function handleExternalOpenclawTakeover(): Promise<void> {
-  const port = resolveGatewayPort();
-
-  // 弹对话框通知用户
-  await dialog.showMessageBox({
-    type: "info",
-    title: "检测到已安装的 OpenClaw",
-    message: "您的电脑上已安装独立版 OpenClaw，为避免冲突，OneClaw 需要先卸载它。",
-    detail: "您的配置数据将被保留。",
-    buttons: ["继续"],
-    defaultId: 0,
-  });
-
-  // 卸载全局 npm 包 + 杀占端口进程
-  const detection = await detectExistingInstallation(port);
-  if (detection.globalInstalled) {
-    await uninstallGlobalOpenclaw();
-  }
-  if (detection.portInUse && detection.portPid > 0) {
-    await killPortProcess(detection.portPid);
-    await new Promise((r) => setTimeout(r, 1_000));
-  }
-
-  // 尝试用现有配置启动 gateway
-  const running = await ensureGatewayRunning("takeover:try-existing-config");
-  if (running) {
-    markSetupComplete();
-    migrateDisableGatewayUpdateCheck();
-    await showMainWindow();
-    recordLastKnownGoodConfigSnapshot();
-    log.info("[startup] takeover succeeded, existing config reused");
-  } else {
-    log.info("[startup] takeover gateway start failed, falling back to setup");
-    setupManager.showSetup();
-  }
+  log.info("[startup] external OpenClaw detected, launching setup with conflict check");
+  setupManager.showSetup();
 }
 
 async function startGatewayAndShowMain(source: string, opts: StartMainOptions = {}): Promise<boolean> {
