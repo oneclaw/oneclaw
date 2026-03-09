@@ -19,6 +19,9 @@ import {
   MOONSHOT_SUB_PLATFORMS,
   CUSTOM_PROVIDER_PRESETS,
   verifyProvider,
+  verifyFeishu,
+  verifyQqbot,
+  verifyDingtalk,
   buildProviderConfig,
   saveMoonshotConfig,
   readUserConfig,
@@ -55,6 +58,7 @@ import {
   extractWecomConfig,
   isWecomPluginBundled,
   saveWecomConfig,
+  verifyWecom,
   WECOM_CHANNEL_ID,
 } from "./wecom-config";
 import { ensureGatewayAuthTokenInConfig } from "./gateway-auth";
@@ -347,6 +351,13 @@ export function registerSettingsIpc(opts: SettingsIpcOptions = {}): void {
           return { success: true };
         }
 
+        // 保存前验证凭据
+        try {
+          await verifyFeishu(appId, appSecret);
+        } catch (err: any) {
+          return { success: false, message: err.message || "飞书凭据验证失败" };
+        }
+
         config.plugins.entries.feishu = { enabled: true };
         config.channels ??= {};
         // 保留已有飞书策略字段，避免每次保存凭据都把 dmPolicy/allowFrom 覆盖丢失
@@ -475,6 +486,13 @@ export function registerSettingsIpc(opts: SettingsIpcOptions = {}): void {
             return { success: false, message: resolveQqbotMissingMessage() };
           }
 
+          // 保存前验证凭据
+          try {
+            await verifyQqbot(appId, clientSecret);
+          } catch (err: any) {
+            return { success: false, message: err.message || "QQ Bot 凭据验证失败" };
+          }
+
           saveQqbotConfig(config, {
             enabled: true,
             appId,
@@ -547,6 +565,13 @@ export function registerSettingsIpc(opts: SettingsIpcOptions = {}): void {
             return { success: false, message: resolveDingtalkMissingMessage() };
           }
 
+          // 保存前验证凭据
+          try {
+            await verifyDingtalk(clientId, clientSecret);
+          } catch (err: any) {
+            return { success: false, message: err.message || "钉钉凭据验证失败" };
+          }
+
           saveDingtalkConfig(config, {
             enabled: true,
             clientId,
@@ -610,6 +635,13 @@ export function registerSettingsIpc(opts: SettingsIpcOptions = {}): void {
           }
           if (!isWecomPluginBundled()) {
             return { success: false, message: resolveWecomMissingMessage() };
+          }
+
+          // 保存前验证凭据，避免坏配置写入后导致 gateway 启动失败
+          try {
+            await verifyWecom(botId, secret);
+          } catch (err: any) {
+            return { success: false, message: err.message || "企业微信凭据验证失败" };
           }
 
           saveWecomConfig(config, {
