@@ -44,6 +44,7 @@ oneclaw/
 │   ├── setup-manager.ts    # Setup wizard window lifecycle
 │   ├── setup-ipc.ts        # Setup validation + config write + CLI install
 │   ├── setup-completion.ts # Setup wizard completion detection
+│   ├── oneclaw-config.ts   # OneClaw ownership config (deviceId, setupCompletedAt, migration)
 │   ├── settings-ipc.ts     # Settings CRUD, backup/restore, Kimi, CLI, advanced
 │   ├── config-backup.ts    # Rolling backups + last-known-good snapshot + restore
 │   ├── share-copy.ts       # Remote share copy content (CDN fetch + local fallback)
@@ -297,6 +298,7 @@ Electron 40 defaults to sandbox mode. 42 IPC methods + 4 event listeners are exp
 ```
 ~/.openclaw/
   ├── openclaw.json                    # User config (provider, model, auth token, channels)
+  ├── oneclaw.config.json              # OneClaw ownership marker (deviceId, setupCompletedAt)
   ├── openclaw.last-known-good.json    # Last successful gateway startup config snapshot
   ├── .device-id                       # Analytics device ID (UUID)
   ├── app.log                          # Application log (5MB truncate)
@@ -354,6 +356,8 @@ Electron 40 defaults to sandbox mode. 42 IPC methods + 4 event listeners are exp
 16. **Gateway port is configurable.** Resolution order: env `OPENCLAW_GATEWAY_PORT` > config `gateway.port` in `openclaw.json` > default `18789`. Don't hardcode port numbers — use `resolveGatewayPort()` from `constants.ts`.
 
 17. **Gateway npm update check is disabled.** OneClaw writes `update.checkOnStart = false` to the gateway config at startup. The gateway cannot self-update inside a packaged Electron app.
+
+18. **`oneclaw.config.json` is the ownership marker.** OneClaw uses this file to detect config ownership at startup. Detection flow: `oneclaw.config.json` exists → normal startup; `.device-id` exists → legacy migration; `openclaw.json` exists without marker → external OpenClaw takeover; nothing → fresh Setup. Do not delete this file manually.
 
 ## Architecture Diagram
 
