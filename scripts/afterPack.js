@@ -10,7 +10,6 @@
 
 const path = require("path");
 const fs = require("fs");
-const { execFileSync } = require("child_process");
 const { Arch } = require("builder-util");
 
 // ── 注入目录列表 ──
@@ -94,12 +93,6 @@ exports.default = async function afterPack(context) {
   const arch = resolveArchName(context.arch);
   const gatewayDir = path.join(targetBase, "gateway");
   pruneGatewayModules(gatewayDir, platform, arch);
-
-  // ── Windows: 将 node_modules 打成 tar 包（NSIS 只需安装 1 个文件而非数万散文件） ──
-  // macOS 不打 tar：Apple 公证会穿透 tar 扫描内部未签名的 .node，导致公证失败。
-  if (platform === "win32") {
-    tarGatewayModules(gatewayDir);
-  }
 
   // ── 用 Electron binary 替换独立 Node.js（节省 80-100MB） ──
   const productName = context.packager.appInfo.productFilename;
@@ -282,37 +275,6 @@ function walkDir(dir, callback) {
       callback(p);
     }
   }
-}
-
-// ── 将 node_modules 打成 tar 包 ──
-//
-// 安装包内用单个 tar 文件代替数万散文件，
-// 避免 NSIS 逐文件解压 + Windows Defender 逐文件扫描导致安装 10 分钟以上。
-// 首次启动时由 gateway-extract.ts 在主进程中解压。
-
-function tarGatewayModules(gatewayDir) {
-  const modulesDir = path.join(gatewayDir, "node_modules");
-  if (!fs.existsSync(modulesDir)) return;
-
-  const tarPath = path.join(gatewayDir, "node_modules.tar");
-
-  // 统计裁剪后的文件数
-  const { count } = countFiles(modulesDir);
-  console.log(`[afterPack] 将 ${count} 个文件打包为 node_modules.tar ...`);
-
-  const startTime = Date.now();
-  execFileSync("tar", ["cf", "node_modules.tar", "node_modules"], {
-    cwd: gatewayDir,
-    timeout: 300_000,
-  });
-
-  const tarSizeMB = (fs.statSync(tarPath).size / 1048576).toFixed(1);
-  const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
-  console.log(`[afterPack] tar 完成: ${tarSizeMB} MB，耗时 ${elapsed}s`);
-
-  // 删除原始 node_modules 目录
-  fs.rmSync(modulesDir, { recursive: true, force: true });
-  console.log(`[afterPack] 已删除原始 node_modules/`);
 }
 
 // ── 递归复制目录（保留文件权限） ──
