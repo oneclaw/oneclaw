@@ -1,5 +1,7 @@
 import * as net from "net";
 import * as fs from "fs";
+import * as os from "os";
+import * as path from "path";
 import { execFile } from "child_process";
 import { DEFAULT_PORT, resolveUserStateDir, IS_WIN } from "./constants";
 import * as log from "./logger";
@@ -222,6 +224,75 @@ export async function killPortProcess(pid: number): Promise<boolean> {
     return false;
   }
 }
+
+// ── 系统守护进程卸载 ──
+
+// 官方 openclaw LaunchAgent 的 label（与 openclaw 源码 daemon/constants.ts 保持一致）
+const LAUNCHD_LABEL = "ai.openclaw.gateway";
+
+// 官方 openclaw Windows 计划任务名（与 openclaw 源码 daemon/constants.ts 保持一致）
+const WIN_TASK_NAME = "OpenClaw Gateway";
+
+// 卸载 macOS LaunchAgent：bootout 停止服务 + 删除 plist 文件
+async function uninstallLaunchdAgent(): Promise<void> {
+  const uid = process.getuid?.() ?? 501;
+  const domain = `gui/${uid}`;
+
+  // bootout 会同时停止进程并注销服务
+  try {
+    await execFileAsync("launchctl", ["bootout", `${domain}/${LAUNCHD_LABEL}`]);
+    log.info(`[install-detector] launchd bootout ${LAUNCHD_LABEL} succeeded`);
+  } catch (err) {
+    // 服务不存在时 bootout 会报错，属正常情况
+    log.info(`[install-detector] launchd bootout ${LAUNCHD_LABEL}: ${err instanceof Error ? err.message : String(err)}`);
+  }
+
+  // 删除 plist 文件，防止 launchd 在下次登录时重新加载
+  const plistPath = path.join(os.homedir(), "Library", "LaunchAgents", `${LAUNCHD_LABEL}.plist`);
+  try {
+    if (fs.existsSync(plistPath)) {
+      fs.unlinkSync(plistPath);
+      log.info(`[install-detector] deleted plist: ${plistPath}`);
+    }
+  } catch (err) {
+    log.error(`[install-detector] delete plist failed: ${err instanceof Error ? err.message : String(err)}`);
+  }
+}
+
+// 卸载 Windows 计划任务 + 删除 gateway.cmd 脚本
+async function uninstallWindowsTask(): Promise<void> {
+  // 删除计划任务
+  try {
+    await execFileAsync("schtasks", ["/Delete", "/F", "/TN", WIN_TASK_NAME]);
+    log.info(`[install-detector] schtasks delete "${WIN_TASK_NAME}" succeeded`);
+  } catch (err) {
+    // 任务不存在时报错是正常的
+    log.info(`[install-detector] schtasks delete "${WIN_TASK_NAME}": ${err instanceof Error ? err.message : String(err)}`);
+  }
+
+  // 删除 gateway.cmd 启动脚本
+  const scriptPath = path.join(resolveUserStateDir(), "gateway.cmd");
+  try {
+    if (fs.existsSync(scriptPath)) {
+      fs.unlinkSync(scriptPath);
+      log.info(`[install-detector] deleted script: ${scriptPath}`);
+    }
+  } catch (err) {
+    log.error(`[install-detector] delete script failed: ${err instanceof Error ? err.message : String(err)}`);
+  }
+}
+
+// 卸载系统守护进程（macOS LaunchAgent / Windows Scheduled Task）
+export async function uninstallGatewayDaemon(): Promise<void> {
+  log.info("[install-detector] uninstalling gateway daemon");
+  if (IS_WIN) {
+    await uninstallWindowsTask();
+  } else {
+    await uninstallLaunchdAgent();
+  }
+}
+
+// ── npm 全局卸载 ──
 
 // 需要卸载的 npm 包列表（openclaw 官方包 + openclaw-cn 中国区分支）
 const OPENCLAW_PACKAGES = ["openclaw", "openclaw-cn"];

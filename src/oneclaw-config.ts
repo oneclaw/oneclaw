@@ -6,7 +6,6 @@ import { resolveUserStateDir, resolveUserConfigPath } from "./constants";
 // ── 类型定义 ──
 
 export interface OneclawConfig {
-  deviceId: string;
   setupCompletedAt?: string;
   cliPreference?: "installed" | "uninstalled";
   skillStore?: {
@@ -28,7 +27,7 @@ export function resolveOneclawConfigPath(): string {
   return path.join(resolveUserStateDir(), "oneclaw.config.json");
 }
 
-// legacy .device-id 文件路径
+// .device-id 文件路径（与官方 CLI 共用）
 function resolveDeviceIdPath(): string {
   return path.join(resolveUserStateDir(), ".device-id");
 }
@@ -45,7 +44,7 @@ export function readOneclawConfig(): OneclawConfig | null {
   try {
     const raw = fs.readFileSync(resolveOneclawConfigPath(), "utf-8");
     const parsed = JSON.parse(raw);
-    if (!parsed || typeof parsed !== "object" || !parsed.deviceId) return null;
+    if (!parsed || typeof parsed !== "object") return null;
     return parsed as OneclawConfig;
   } catch {
     return null;
@@ -91,14 +90,6 @@ export function detectOwnership(): OwnershipState {
 
 // 从 legacy 文件迁移到 oneclaw.config.json（老 OneClaw 用户升级）
 export function migrateFromLegacy(): OneclawConfig {
-  // 读取 .device-id
-  let deviceId = "";
-  const deviceIdPath = resolveDeviceIdPath();
-  try {
-    deviceId = fs.readFileSync(deviceIdPath, "utf-8").trim();
-  } catch {}
-  if (!deviceId) deviceId = crypto.randomUUID();
-
   // 读取 wizard.lastRunAt
   let setupCompletedAt: string | undefined;
   try {
@@ -119,7 +110,7 @@ export function migrateFromLegacy(): OneclawConfig {
     }
   } catch {}
 
-  const config: OneclawConfig = { deviceId, setupCompletedAt, skillStore };
+  const config: OneclawConfig = { setupCompletedAt, skillStore };
   writeOneclawConfig(config);
   return config;
 }
@@ -130,30 +121,24 @@ export function migrateFromLegacy(): OneclawConfig {
 export function markSetupComplete(): void {
   let config = readOneclawConfig();
   if (!config) {
-    config = { deviceId: crypto.randomUUID() };
+    config = {};
   }
   config.setupCompletedAt = new Date().toISOString();
   writeOneclawConfig(config);
 }
 
-// 确保 deviceId 存在（analytics 初始化时调用）
+// 确保 deviceId 存在，直接读写 .device-id 文件（与官方 CLI 共用）
 export function ensureDeviceId(): string {
-  let config = readOneclawConfig();
-  if (config?.deviceId) return config.deviceId;
-
-  // 兼容 legacy .device-id
-  const legacyPath = resolveDeviceIdPath();
-  let deviceId = "";
+  const deviceIdPath = resolveDeviceIdPath();
   try {
-    deviceId = fs.readFileSync(legacyPath, "utf-8").trim();
+    const existing = fs.readFileSync(deviceIdPath, "utf-8").trim();
+    if (existing) return existing;
   } catch {}
-  if (!deviceId) deviceId = crypto.randomUUID();
 
-  if (!config) {
-    config = { deviceId };
-  } else {
-    config.deviceId = deviceId;
-  }
-  writeOneclawConfig(config);
+  // 文件不存在或为空，生成新 ID 并写入
+  const deviceId = crypto.randomUUID();
+  const dir = resolveUserStateDir();
+  fs.mkdirSync(dir, { recursive: true });
+  fs.writeFileSync(deviceIdPath, deviceId + "\n", "utf-8");
   return deviceId;
 }

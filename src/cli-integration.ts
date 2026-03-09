@@ -3,6 +3,7 @@ import * as os from "os";
 import * as path from "path";
 import { execFile } from "child_process";
 import { resolveNodeBin, resolveGatewayEntry, resolveUserStateDir, IS_WIN } from "./constants";
+import { readOneclawConfig, writeOneclawConfig } from "./oneclaw-config";
 import * as log from "./logger";
 
 // CLI 安装结果，供 Setup 流程统一显示与埋点。
@@ -18,11 +19,6 @@ export interface CliStatus {
   command: string;
 }
 
-type CliPreferenceState = {
-  version: 1;
-  enabled: boolean;
-};
-
 type WinCliBinDirs = {
   currentBinDir: string;
   legacyBinDirs: string[];
@@ -30,7 +26,6 @@ type WinCliBinDirs = {
 
 // Wrapper 脚本中的标记字符串，用于识别由 OneClaw 生成的文件。
 const CLI_MARKER = "OneClaw CLI";
-const CLI_PREFERENCE_FILE = "cli-preferences.json";
 
 // rc 注入块标记，安装可幂等覆盖，卸载可精确移除。
 const RC_BLOCK_START = "# >>> oneclaw-cli >>>";
@@ -97,11 +92,6 @@ function getLegacyWinWrapperPaths(): string[] {
   return getLegacyWinBinDirs().map(getWinWrapperPathForBinDir);
 }
 
-// 返回 CLI 偏好文件路径，与 gateway 配置解耦，避免污染上游 schema。
-function resolveCliPreferencePath(): string {
-  return path.join(resolveUserStateDir(), CLI_PREFERENCE_FILE);
-}
-
 // POSIX shell 双引号转义，保证路径中包含空格、$、`、" 时仍安全。
 function escapeForPosixDoubleQuoted(value: string): string {
   return value.replace(/(["\\$`])/g, "\\$1");
@@ -117,36 +107,44 @@ function escapeForPowerShellSingleQuoted(value: string): string {
   return value.replace(/'/g, "''");
 }
 
-// 读取 OneClaw 维护的 CLI 偏好，仅接受最小合法结构。
-function readCliPreferenceState(): CliPreferenceState | null {
-  const preferencePath = resolveCliPreferencePath();
-  if (!fs.existsSync(preferencePath)) return null;
+// 旧版 cli-preferences.json 路径，仅用于一次性迁移
+const LEGACY_CLI_PREFERENCE_FILE = "cli-preferences.json";
+
+// 从旧版 sidecar 文件迁移 CLI 偏好到 oneclaw.config.json
+function migrateLegacyCliPreference(): boolean | undefined {
+  const legacyPath = path.join(resolveUserStateDir(), LEGACY_CLI_PREFERENCE_FILE);
+  if (!fs.existsSync(legacyPath)) return undefined;
 
   try {
-    const raw = JSON.parse(fs.readFileSync(preferencePath, "utf-8"));
+    const raw = JSON.parse(fs.readFileSync(legacyPath, "utf-8"));
     if (raw && typeof raw === "object" && raw.version === 1 && typeof raw.enabled === "boolean") {
-      return { version: 1, enabled: raw.enabled };
+      const enabled: boolean = raw.enabled;
+      // 写入 oneclaw.config.json 并删除旧文件
+      setCliEnabledPreference(enabled);
+      fs.unlinkSync(legacyPath);
+      log.info(`[cli] migrated CLI preference from legacy sidecar: enabled=${enabled}`);
+      return enabled;
     }
   } catch {
-    // 非法文件不阻塞启动，后续按无偏好处理。
+    // 非法文件不阻塞启动
   }
-  return null;
+  return undefined;
 }
 
-// 持久化 CLI 偏好，供设置页和开机迁移复用。
+// 持久化 CLI 偏好到 oneclaw.config.json
 export function setCliEnabledPreference(enabled: boolean): void {
-  const preferencePath = resolveCliPreferencePath();
-  fs.mkdirSync(path.dirname(preferencePath), { recursive: true });
-  fs.writeFileSync(
-    preferencePath,
-    JSON.stringify({ version: 1, enabled }, null, 2),
-    "utf-8",
-  );
+  const config = readOneclawConfig() ?? {};
+  config.cliPreference = enabled ? "installed" : "uninstalled";
+  writeOneclawConfig(config);
 }
 
-// 读取用户显式选择的 CLI 偏好；旧用户没有 sidecar 时返回 undefined。
+// 读取用户显式选择的 CLI 偏好；无记录时返回 undefined
 export function getCliEnabledPreference(): boolean | undefined {
-  return readCliPreferenceState()?.enabled;
+  const config = readOneclawConfig();
+  if (config?.cliPreference === "installed") return true;
+  if (config?.cliPreference === "uninstalled") return false;
+  // 兼容旧版：尝试从 cli-preferences.json 迁移
+  return migrateLegacyCliPreference();
 }
 
 // 兼容老用户：没有偏好文件时，根据现有 wrapper 足迹推断是否曾开启 CLI。

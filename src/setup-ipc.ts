@@ -19,6 +19,7 @@ import { saveKimiSearchConfig } from "./kimi-config";
 import {
   detectExistingInstallation,
   killPortProcess,
+  uninstallGatewayDaemon,
   uninstallGlobalOpenclaw,
   findAvailablePort,
 } from "./install-detector";
@@ -103,6 +104,10 @@ export function registerSetupIpc(deps: SetupIpcDeps): void {
     const { action, pid } = params;
     try {
       if (action === "uninstall") {
+        // 顺序：① 卸载系统守护进程（停止 launchd/schtasks 的自动重启）
+        //       ② 杀掉残留进程（守护进程卸载后不会再被拉起）
+        //       ③ 卸载 npm 全局包
+        await uninstallGatewayDaemon();
         if (pid && pid > 0) {
           await killPortProcess(pid);
         }
