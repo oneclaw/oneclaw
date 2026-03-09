@@ -41,6 +41,7 @@ import {
 import { readUserConfig, writeUserConfig } from "./provider-config";
 import { resolveKimiSearchApiKey } from "./kimi-config";
 import { reconcileCliOnAppLaunch } from "./cli-integration";
+import { extractGatewayModulesIfNeeded } from "./gateway-extract";
 import * as log from "./logger";
 import * as analytics from "./analytics";
 
@@ -506,6 +507,19 @@ function syncAppFocusState(trigger: string): void {
 
 app.whenReady().then(async () => {
   log.info("app ready");
+
+  // 首次启动时解压 gateway node_modules（tar 打包安装，减少 NSIS 安装文件数）
+  try {
+    await extractGatewayModulesIfNeeded();
+  } catch (err: any) {
+    log.error(`gateway 资源解压失败: ${err?.message ?? err}`);
+    dialog.showErrorBox(
+      "OneClaw 启动失败",
+      `无法解压运行环境资源。\n${err?.message ?? err}`,
+    );
+    app.quit();
+    return;
+  }
 
   // 所有窗口的 show/hide/closed 事件统一驱动 Dock 可见性
   app.on("browser-window-created", (_e, win) => {

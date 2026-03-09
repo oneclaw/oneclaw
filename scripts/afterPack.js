@@ -10,6 +10,7 @@
 
 const path = require("path");
 const fs = require("fs");
+const { execFileSync } = require("child_process");
 const { Arch } = require("builder-util");
 
 // ── 注入目录列表 ──
@@ -88,6 +89,14 @@ exports.default = async function afterPack(context) {
     fs.copyFileSync(src, dest);
     console.log(`[afterPack] 已注入 ${name}`);
   }
+
+  // ── 裁剪 gateway node_modules 中的冗余文件 ──
+  const arch = resolveArchName(context.arch);
+  const gatewayDir = path.join(targetBase, "gateway");
+  pruneGatewayModules(gatewayDir, platform, arch);
+
+  // ── 将 node_modules 打成 tar 包（NSIS 只需安装 1 个文件而非数万散文件） ──
+  tarGatewayModules(gatewayDir);
 
   // ── 用 Electron binary 替换独立 Node.js（节省 80-100MB） ──
   const productName = context.packager.appInfo.productFilename;
@@ -172,6 +181,135 @@ function buildWindowsElectronProxyScript(productName, cliEntryPath) {
     `  "%APP_EXE%" "${cliEntryPath}" %*`,
     ")",
   ].join("\r\n") + "\r\n";
+}
+
+// ── 裁剪 gateway node_modules 冗余文件 ──
+//
+// 构建产物中包含大量无用文件（跨平台 native binaries、source maps、文档），
+// 清理后可减少数千文件和近百 MB 体积。
+
+// 平台名映射：Electron 架构名 → koffi 目录名前缀
+const KOFFI_PLATFORM_MAP = {
+  "darwin-x64": "darwin_x64",
+  "darwin-arm64": "darwin_arm64",
+  "win32-x64": "win32_x64",
+  "win32-arm64": "win32_arm64",
+};
+
+function pruneGatewayModules(gatewayDir, platform, arch) {
+  const modulesDir = path.join(gatewayDir, "node_modules");
+  if (!fs.existsSync(modulesDir)) return;
+
+  let removedFiles = 0;
+  let removedBytes = 0;
+
+  // 1) koffi: 仅保留目标平台的 native binary，删除其余 17 个平台
+  const koffiBuildsDir = path.join(modulesDir, "koffi", "build", "koffi");
+  if (fs.existsSync(koffiBuildsDir)) {
+    const keepDir = KOFFI_PLATFORM_MAP[`${platform}-${arch}`];
+    for (const entry of fs.readdirSync(koffiBuildsDir, { withFileTypes: true })) {
+      if (entry.isDirectory() && entry.name !== keepDir) {
+        const dirPath = path.join(koffiBuildsDir, entry.name);
+        const { count, bytes } = countFiles(dirPath);
+        fs.rmSync(dirPath, { recursive: true, force: true });
+        removedFiles += count;
+        removedBytes += bytes;
+      }
+    }
+    console.log(`[afterPack] koffi: 保留 ${keepDir}，删除其余平台`);
+  }
+
+  // 2) .map 文件（source maps，运行时不需要）
+  const mapStats = removeByGlob(modulesDir, /\.map$/);
+  removedFiles += mapStats.count;
+  removedBytes += mapStats.bytes;
+
+  // 3) 文档文件（README、LICENSE、CHANGELOG 等，仅匹配无扩展名或 .md/.txt/.rst）
+  const docStats = removeByGlob(modulesDir, /^(readme|license|licence|changelog|history|authors|contributors)(\.md|\.txt|\.rst)?$/i);
+  removedFiles += docStats.count;
+  removedBytes += docStats.bytes;
+
+  const savedMB = (removedBytes / 1048576).toFixed(1);
+  console.log(`[afterPack] 裁剪完成: 删除 ${removedFiles} 个文件，节省 ${savedMB} MB`);
+}
+
+// 递归统计目录内文件数和总字节
+function countFiles(dir) {
+  let count = 0;
+  let bytes = 0;
+  for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+    const p = path.join(dir, entry.name);
+    if (entry.isDirectory()) {
+      const sub = countFiles(p);
+      count += sub.count;
+      bytes += sub.bytes;
+    } else {
+      count++;
+      try { bytes += fs.statSync(p).size; } catch {}
+    }
+  }
+  return { count, bytes };
+}
+
+// 递归删除匹配正则的文件
+function removeByGlob(dir, pattern) {
+  let count = 0;
+  let bytes = 0;
+  walkDir(dir, (filePath) => {
+    if (pattern.test(path.basename(filePath))) {
+      try {
+        bytes += fs.statSync(filePath).size;
+        fs.unlinkSync(filePath);
+        count++;
+      } catch {}
+    }
+  });
+  return { count, bytes };
+}
+
+// 递归遍历目录
+function walkDir(dir, callback) {
+  let entries;
+  try { entries = fs.readdirSync(dir, { withFileTypes: true }); } catch { return; }
+  for (const entry of entries) {
+    const p = path.join(dir, entry.name);
+    if (entry.isDirectory()) {
+      walkDir(p, callback);
+    } else {
+      callback(p);
+    }
+  }
+}
+
+// ── 将 node_modules 打成 tar 包 ──
+//
+// 安装包内用单个 tar 文件代替数万散文件，
+// 避免 NSIS 逐文件解压 + Windows Defender 逐文件扫描导致安装 10 分钟以上。
+// 首次启动时由 gateway-extract.ts 在主进程中解压。
+
+function tarGatewayModules(gatewayDir) {
+  const modulesDir = path.join(gatewayDir, "node_modules");
+  if (!fs.existsSync(modulesDir)) return;
+
+  const tarPath = path.join(gatewayDir, "node_modules.tar");
+
+  // 统计裁剪后的文件数
+  const { count } = countFiles(modulesDir);
+  console.log(`[afterPack] 将 ${count} 个文件打包为 node_modules.tar ...`);
+
+  const startTime = Date.now();
+  execFileSync("tar", ["cf", "node_modules.tar", "node_modules"], {
+    cwd: gatewayDir,
+    timeout: 300_000,
+  });
+
+  const tarSizeMB = (fs.statSync(tarPath).size / 1048576).toFixed(1);
+  const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+  console.log(`[afterPack] tar 完成: ${tarSizeMB} MB，耗时 ${elapsed}s`);
+
+  // 删除原始 node_modules 目录
+  fs.rmSync(modulesDir, { recursive: true, force: true });
+  console.log(`[afterPack] 已删除原始 node_modules/`);
 }
 
 // ── 递归复制目录（保留文件权限） ──
