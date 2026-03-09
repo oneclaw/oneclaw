@@ -118,9 +118,11 @@
       "nav.chat": "Chat Integration",
       "nav.feishu": "Feishu Integration",
       "chat.title": "Chat Integration",
-      "chat.desc": "Connect Feishu, DingTalk, Kimi, or QQ and chat with AI directly inside your messaging app.",
+      "chat.desc": "Connect Feishu, WeCom, DingTalk, Kimi, or QQ and chat with AI directly inside your messaging app.",
       "chat.platformFeishu": "Feishu",
       "chat.platformFeishuMeta": "Lark / Feishu bot",
+      "chat.platformWecom": "WeCom",
+      "chat.platformWecomMeta": "WeCom AI bot",
       "chat.platformDingtalk": "DingTalk",
       "chat.platformDingtalkMeta": "DingTalk stream connector",
       "chat.platformKimi": "KimiClaw",
@@ -203,6 +205,24 @@
       "feishu.approvedRemoved": "Authorization removed.",
       "feishu.kindUser": "User",
       "feishu.kindGroup": "Group",
+      "wecom.desc": "Connect WeCom so users can talk to OneClaw directly in WeCom.",
+      "wecom.enabled": "Enable",
+      "wecom.botId": "Bot ID",
+      "wecom.secret": "Secret",
+      "wecom.dmPolicy": "DM Access Mode",
+      "wecom.dmPolicyPairing": "Access after pairing.",
+      "wecom.dmPolicyOpen": "Everyone can access directly.",
+      "wecom.groupPolicy": "Group Access Mode",
+      "wecom.groupPolicyOpen": "All groups can access.",
+      "wecom.groupPolicyAllowlist": "Only allowlisted groups can access.",
+      "wecom.groupPolicyDisabled": "Ignore all group messages.",
+      "wecom.groupAllowFrom": "Group Allowlist",
+      "wecom.groupAllowFromHint": "One group ID per line. This only applies when group access mode is allowlist.",
+      "wecom.dmHint": "Pairing is recommended for direct messages. When set to open, OneClaw will automatically write allowFrom=[\"*\"].",
+      "wecom.docs": "Plugin README →",
+      "wecom.getKey": "Open WeCom Admin →",
+      "wecom.save": "Save",
+      "wecom.saving": "Saving…",
       "dingtalk.desc": "Connect DingTalk so users can talk to OneClaw directly in DingTalk.",
       "dingtalk.enabled": "Enable",
       "dingtalk.clientId": "Client ID / AppKey",
@@ -230,6 +250,9 @@
       "error.invalidGroupId": "Only group IDs starting with oc_ are allowed.",
       "error.noAppId": "Please enter the Feishu App ID.",
       "error.noAppSecret": "Please enter the App Secret.",
+      "error.noWecomBotId": "Please enter the WeCom Bot ID.",
+      "error.noWecomSecret": "Please enter the WeCom Secret.",
+      "error.wecomNotBundled": "WeCom plugin is missing. Please reinstall OneClaw.",
       "error.noDingtalkClientId": "Please enter the DingTalk Client ID / AppKey.",
       "error.noDingtalkClientSecret": "Please enter the DingTalk Client Secret / AppSecret.",
       "error.invalidDingtalkSessionTimeout": "Please enter a valid session timeout in milliseconds.",
@@ -341,9 +364,11 @@
       "nav.chat": "聊天集成",
       "nav.feishu": "飞书集成",
       "chat.title": "聊天集成",
-      "chat.desc": "连接飞书、钉钉、Kimi 或 QQ，让用户直接在聊天软件里和 OneClaw 对话。",
+      "chat.desc": "连接飞书、企业微信、钉钉、Kimi 或 QQ，让用户直接在聊天软件里和 OneClaw 对话。",
       "chat.platformFeishu": "飞书",
       "chat.platformFeishuMeta": "Lark / 飞书机器人",
+      "chat.platformWecom": "企业微信",
+      "chat.platformWecomMeta": "企业微信智能机器人",
       "chat.platformDingtalk": "钉钉",
       "chat.platformDingtalkMeta": "钉钉 Stream 连接器",
       "chat.platformKimi": "KimiClaw",
@@ -426,6 +451,24 @@
       "feishu.approvedRemoved": "已移除授权。",
       "feishu.kindUser": "用户",
       "feishu.kindGroup": "群聊",
+      "wecom.desc": "连接企业微信机器人，让用户直接在企业微信里和 OneClaw 对话。",
+      "wecom.enabled": "启用状态",
+      "wecom.botId": "Bot ID",
+      "wecom.secret": "Secret",
+      "wecom.dmPolicy": "私聊访问模式",
+      "wecom.dmPolicyPairing": "先配对再访问",
+      "wecom.dmPolicyOpen": "所有人可直接访问",
+      "wecom.groupPolicy": "群聊访问模式",
+      "wecom.groupPolicyOpen": "所有群可访问",
+      "wecom.groupPolicyAllowlist": "仅白名单群可访问",
+      "wecom.groupPolicyDisabled": "不接收群消息",
+      "wecom.groupAllowFrom": "群聊白名单",
+      "wecom.groupAllowFromHint": "每行一个群 ID。仅在“仅白名单群可访问”模式下生效。",
+      "wecom.dmHint": "私聊建议优先使用“先配对再访问”；切到“所有人可直接访问”时，OneClaw 会自动写入 allowFrom=[\"*\"]。",
+      "wecom.docs": "插件说明 →",
+      "wecom.getKey": "打开企业微信后台 →",
+      "wecom.save": "保存",
+      "wecom.saving": "保存中…",
       "dingtalk.desc": "连接钉钉，让用户直接在钉钉里和 OneClaw 对话。",
       "dingtalk.enabled": "启用状态",
       "dingtalk.clientId": "Client ID / AppKey",
@@ -453,6 +496,9 @@
       "error.invalidGroupId": "仅允许填写以 oc_ 开头的群 ID。",
       "error.noAppId": "请输入飞书应用 ID。",
       "error.noAppSecret": "请输入应用密钥。",
+      "error.noWecomBotId": "请输入企业微信 Bot ID。",
+      "error.noWecomSecret": "请输入企业微信 Secret。",
+      "error.wecomNotBundled": "企业微信插件组件缺失，请重新安装 OneClaw。",
       "error.noDingtalkClientId": "请输入钉钉 Client ID / AppKey。",
       "error.noDingtalkClientSecret": "请输入钉钉 Client Secret / AppSecret。",
       "error.invalidDingtalkSessionTimeout": "请输入有效的会话超时毫秒值。",
@@ -619,6 +665,21 @@
     chGroupDialogInput: $("#chGroupDialogInput"),
     btnChGroupDialogCancel: $("#btnChGroupDialogCancel"),
     btnChGroupDialogConfirm: $("#btnChGroupDialogConfirm"),
+    wecomEnabled: $("#wecomEnabled"),
+    wecomFields: $("#wecomFields"),
+    wecomBotId: $("#wecomBotId"),
+    wecomSecret: $("#wecomSecret"),
+    wecomDmPolicy: $("#wecomDmPolicy"),
+    wecomGroupPolicy: $("#wecomGroupPolicy"),
+    wecomGroupAllowFromGroup: $("#wecomGroupAllowFromGroup"),
+    wecomGroupAllowFrom: $("#wecomGroupAllowFrom"),
+    btnToggleWecomSecret: $("#btnToggleWecomSecret"),
+    wecomDocsLink: $("#wecomDocsLink"),
+    wecomConsoleLink: $("#wecomConsoleLink"),
+    wecomMsgBox: $("#wecomMsgBox"),
+    btnWecomSave: $("#btnWecomSave"),
+    btnWecomSaveText: $("#btnWecomSave .btn-text"),
+    btnWecomSaveSpinner: $("#btnWecomSave .btn-spinner"),
     dingtalkEnabled: $("#dingtalkEnabled"),
     dingtalkFields: $("#dingtalkFields"),
     dingtalkClientId: $("#dingtalkClientId"),
@@ -715,6 +776,7 @@
   let chApprovedRemovingKey = "";
   let chPairingRequests = [];
   let chApprovedEntries = [];
+  let wecomSaving = false;
   let dingtalkSaving = false;
   let qqSaving = false;
   let kimiSaving = false;
@@ -735,6 +797,7 @@
   let startupNotice = "";
   const CHAT_PLATFORM_PANEL_IDS = {
     feishu: "chatPlatformFeishu",
+    wecom: "chatPlatformWecom",
     dingtalk: "chatPlatformDingtalk",
     kimi: "chatPlatformKimi",
     qqbot: "chatPlatformQqbot",
@@ -743,6 +806,7 @@
     channel: "channels",
     chat: "channels",
     feishu: "channels",
+    wecom: "channels",
     dingtalk: "channels",
     "dingtalk-connector": "channels",
     kimi: "channels",
@@ -799,6 +863,7 @@
   // 兼容 feishu / dingtalk / qq / qqbot 这类历史入口，把它们映射到聊天集成子平台。
   function normalizeChatPlatformName(platformName) {
     var raw = String(platformName || "").trim().toLowerCase();
+    if (raw === "wecom" || raw === "wechat-work" || raw === "wecom-openclaw-plugin") return "wecom";
     if (raw === "dingtalk" || raw === "dingtalk-connector") return "dingtalk";
     if (raw === "qq" || raw === "qqbot") return "qqbot";
     if (raw === "kimi") return "kimi";
@@ -810,6 +875,8 @@
     var raw = String(tabName || "").trim().toLowerCase();
     if (
       raw === "feishu" ||
+      raw === "wecom" ||
+      raw === "wecom-openclaw-plugin" ||
       raw === "dingtalk" ||
       raw === "dingtalk-connector" ||
       raw === "kimi" ||
@@ -1794,6 +1861,138 @@
     }
   }
 
+  // ── WeCom ──
+
+  // 企业微信消息框与其它平台分离，避免状态提示互相覆盖。
+  function showWecomMsg(msg, type) {
+    els.wecomMsgBox.textContent = msg;
+    els.wecomMsgBox.className = "msg-box " + type;
+  }
+
+  // 清空企业微信平台上的错误 / 成功提示。
+  function hideWecomMsg() {
+    els.wecomMsgBox.classList.add("hidden");
+    els.wecomMsgBox.textContent = "";
+    els.wecomMsgBox.className = "msg-box hidden";
+  }
+
+  // 同步企业微信保存按钮的 loading 状态。
+  function setWecomSaving(loading) {
+    wecomSaving = loading;
+    els.btnWecomSave.disabled = loading;
+    els.btnWecomSaveText.textContent = loading ? t("wecom.saving") : t("wecom.save");
+    els.btnWecomSaveSpinner.classList.toggle("hidden", !loading);
+  }
+
+  // 读取当前企业微信平台是否启用。
+  function isWecomEnabled() {
+    return !!(els.wecomEnabled && els.wecomEnabled.checked);
+  }
+
+  // 读取企业微信群策略。
+  function getWecomGroupPolicy() {
+    var value = String(els.wecomGroupPolicy.value || "").trim();
+    if (value === "allowlist" || value === "disabled") return value;
+    return "open";
+  }
+
+  // 按当前群策略切换白名单输入区显隐。
+  function updateWecomGroupAllowFromState() {
+    toggleEl(els.wecomGroupAllowFromGroup, getWecomGroupPolicy() === "allowlist");
+  }
+
+  // 统一解析企业微信群白名单，支持换行 / 逗号 / 分号分隔。
+  function parseWecomGroupAllowFrom() {
+    return Array.from(new Set(
+      String(els.wecomGroupAllowFrom.value || "")
+        .split(/[\n,;]+/g)
+        .map(function (entry) { return String(entry || "").trim(); })
+        .filter(Boolean)
+    ));
+  }
+
+  // 保存企业微信配置，直接落盘并触发 Gateway 重启。
+  async function handleWecomSave() {
+    if (wecomSaving) return;
+
+    var enabled = isWecomEnabled();
+    if (!enabled) {
+      setWecomSaving(true);
+      hideWecomMsg();
+      try {
+        var disableResult = await window.oneclaw.settingsSaveWecomConfig({ enabled: false });
+        setWecomSaving(false);
+        if (disableResult.success) {
+          showToast(t("common.saved"));
+        } else {
+          showWecomMsg(disableResult.message || "Save failed", "error");
+        }
+      } catch (err) {
+        setWecomSaving(false);
+        showWecomMsg(t("error.connection") + (err.message || "Unknown error"), "error");
+      }
+      return;
+    }
+
+    var botId = String(els.wecomBotId.value || "").trim();
+    var secret = String(els.wecomSecret.value || "").trim();
+    if (!botId) { showWecomMsg(t("error.noWecomBotId"), "error"); return; }
+    if (!secret) { showWecomMsg(t("error.noWecomSecret"), "error"); return; }
+
+    setWecomSaving(true);
+    hideWecomMsg();
+
+    try {
+      var saveResult = await window.oneclaw.settingsSaveWecomConfig({
+        enabled: true,
+        botId: botId,
+        secret: secret,
+        dmPolicy: String(els.wecomDmPolicy.value || "pairing"),
+        groupPolicy: getWecomGroupPolicy(),
+        groupAllowFrom: parseWecomGroupAllowFrom(),
+      });
+      if (!saveResult.success) {
+        showWecomMsg(saveResult.message || "Save failed", "error");
+        setWecomSaving(false);
+        return;
+      }
+
+      setWecomSaving(false);
+      showToast(t("common.saved"));
+    } catch (err) {
+      showWecomMsg(t("error.connection") + (err.message || "Unknown error"), "error");
+      setWecomSaving(false);
+    }
+  }
+
+  // 回填企业微信配置，并在未打包插件时给出前置提示。
+  async function loadWecomConfig() {
+    try {
+      var result = await window.oneclaw.settingsGetWecomConfig();
+      if (!result.success || !result.data) return;
+
+      var data = result.data;
+      if (data.botId) els.wecomBotId.value = data.botId;
+      if (data.secret) els.wecomSecret.value = data.secret;
+      if (els.wecomDmPolicy) els.wecomDmPolicy.value = data.dmPolicy || "pairing";
+      if (els.wecomGroupPolicy) els.wecomGroupPolicy.value = data.groupPolicy || "open";
+      els.wecomGroupAllowFrom.value = Array.isArray(data.groupAllowFrom) ? data.groupAllowFrom.join("\n") : "";
+
+      var enabled = !!data.enabled && !!data.botId;
+      els.wecomEnabled.checked = enabled;
+      toggleEl(els.wecomFields, enabled);
+      updateWecomGroupAllowFromState();
+
+      if (data.bundled === false) {
+        showWecomMsg(data.bundleMessage || t("error.wecomNotBundled"), "error");
+      } else {
+        hideWecomMsg();
+      }
+    } catch (err) {
+      console.error("[Settings] loadWecomConfig failed:", err);
+    }
+  }
+
   // ── DingTalk ──
 
   // 钉钉消息框与其它平台分离，避免不同平台的状态提示互相覆盖。
@@ -2741,6 +2940,7 @@
     await Promise.allSettled([
       loadCurrentConfig(),
       loadChannelConfig(),
+      loadWecomConfig(),
       loadDingtalkConfig(),
       loadQqbotConfig(),
       loadKimiConfig(),
@@ -3192,6 +3392,46 @@
       if (e.key === "Enter") handleChSave();
     });
 
+    // WeCom tab — 启用/禁用切换 + Secret 可见性
+    if (els.wecomEnabled) {
+      els.wecomEnabled.addEventListener("change", function () {
+        toggleEl(els.wecomFields, isWecomEnabled());
+        updateWecomGroupAllowFromState();
+      });
+    }
+    if (els.wecomGroupPolicy) {
+      els.wecomGroupPolicy.addEventListener("change", function () {
+        updateWecomGroupAllowFromState();
+      });
+    }
+    if (els.btnToggleWecomSecret) {
+      els.btnToggleWecomSecret.addEventListener("click", togglePasswordVisibility);
+    }
+    if (els.wecomDocsLink) {
+      els.wecomDocsLink.addEventListener("click", function (e) {
+        e.preventDefault();
+        if (window.oneclaw && window.oneclaw.openExternal) {
+          window.oneclaw.openExternal("https://github.com/WecomTeam/wecom-openclaw-plugin");
+        }
+      });
+    }
+    if (els.wecomConsoleLink) {
+      els.wecomConsoleLink.addEventListener("click", function (e) {
+        e.preventDefault();
+        if (window.oneclaw && window.oneclaw.openExternal) {
+          window.oneclaw.openExternal("https://work.weixin.qq.com/");
+        }
+      });
+    }
+    if (els.btnWecomSave) {
+      els.btnWecomSave.addEventListener("click", handleWecomSave);
+    }
+    if (els.wecomSecret) {
+      els.wecomSecret.addEventListener("keydown", function (e) {
+        if (e.key === "Enter") handleWecomSave();
+      });
+    }
+
     // DingTalk tab — 启用/禁用切换 + Secret 可见性
     if (els.dingtalkEnabled) {
       els.dingtalkEnabled.addEventListener("change", function () {
@@ -3359,6 +3599,7 @@
     applyRecoveryNotice(startupNotice);
     loadCurrentConfig();
     loadChannelConfig();
+    loadWecomConfig();
     loadDingtalkConfig();
     loadQqbotConfig();
     loadKimiConfig();

@@ -213,6 +213,16 @@
                 <span class="toggle-slider"></span>
               </label>
             </div>
+            <div class="chat-platform-item" data-chat-platform="wecom">
+              <button type="button" class="chat-platform-btn" data-chat-platform="wecom">
+                <span class="chat-platform-label" data-i18n="chat.platformWecom">企业微信</span>
+                <span class="chat-platform-meta" data-i18n="chat.platformWecomMeta">WeCom AI bot</span>
+              </button>
+              <label class="toggle-switch chat-platform-toggle" aria-label="Toggle WeCom">
+                <input type="checkbox" id="wecomEnabled">
+                <span class="toggle-slider"></span>
+              </label>
+            </div>
             <div class="chat-platform-item" data-chat-platform="dingtalk">
               <button type="button" class="chat-platform-btn" data-chat-platform="dingtalk">
                 <span class="chat-platform-label" data-i18n="chat.platformDingtalk">DingTalk</span>
@@ -410,6 +420,76 @@
               <div class="btn-row bottom-actions">
                 <button class="btn-primary" id="btnDingtalkSave">
                   <span class="btn-text" data-i18n="dingtalk.save">Save</span>
+                  <span class="btn-spinner hidden"></span>
+                </button>
+              </div>
+            </div>
+
+            <div id="chatPlatformWecom" class="channel-panel chat-platform-panel">
+              <div class="channel-desc-row">
+                <div class="chat-panel-copy">
+                  <div class="chat-panel-title" data-i18n="chat.platformWecom">企业微信</div>
+                  <p class="desc" data-i18n="wecom.desc">连接企业微信机器人，让用户直接在企业微信里和 OneClaw 对话。</p>
+                </div>
+                <div class="channel-links">
+                  <a href="#" class="platform-link" id="wecomDocsLink" data-i18n="wecom.docs">插件说明 →</a>
+                  <a href="#" class="platform-link" id="wecomConsoleLink" data-i18n="wecom.getKey">打开企业微信后台 →</a>
+                </div>
+              </div>
+
+              <div id="wecomFields" class="hidden">
+                <div class="field-group">
+                  <label for="wecomBotId" data-i18n="wecom.botId">Bot ID</label>
+                  <input type="text" id="wecomBotId" placeholder="bot_xxxxxxxx" autocomplete="off" spellcheck="false">
+                </div>
+
+                <div class="field-group">
+                  <label for="wecomSecret" data-i18n="wecom.secret">Secret</label>
+                  <div class="input-password-wrap">
+                    <input type="password" id="wecomSecret" placeholder="••••••••" autocomplete="off" spellcheck="false">
+                    <button class="btn-toggle-vis" id="btnToggleWecomSecret" type="button" title="Toggle visibility">
+                      <svg class="icon-eye" width="18" height="18" viewBox="0 0 18 18" fill="none">
+                        <path d="M1.5 9C1.5 9 4 3.75 9 3.75C14 3.75 16.5 9 16.5 9C16.5 9 14 14.25 9 14.25C4 14.25 1.5 9 1.5 9Z" stroke="currentColor" stroke-width="1.3"/>
+                        <circle cx="9" cy="9" r="2.25" stroke="currentColor" stroke-width="1.3"/>
+                      </svg>
+                      <svg class="icon-eye-off hidden" width="18" height="18" viewBox="0 0 18 18" fill="none">
+                        <path d="M2.5 2.5L15.5 15.5M7.05 7.05A2.25 2.25 0 0010.95 10.95M1.5 9C1.5 9 4 3.75 9 3.75C10.2 3.75 11.3 4.1 12.25 4.6M16.5 9C16.5 9 14 14.25 9 14.25C7.8 14.25 6.7 13.9 5.75 13.4" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
+                      </svg>
+                    </button>
+                  </div>
+                </div>
+
+                <div class="field-group">
+                  <label for="wecomDmPolicy" data-i18n="wecom.dmPolicy">私聊访问模式</label>
+                  <select id="wecomDmPolicy">
+                    <option value="pairing" data-i18n="wecom.dmPolicyPairing">先配对再访问</option>
+                    <option value="open" data-i18n="wecom.dmPolicyOpen">所有人可直接访问</option>
+                  </select>
+                </div>
+
+                <div class="field-group">
+                  <label for="wecomGroupPolicy" data-i18n="wecom.groupPolicy">群聊访问模式</label>
+                  <select id="wecomGroupPolicy">
+                    <option value="open" data-i18n="wecom.groupPolicyOpen">所有群可访问</option>
+                    <option value="allowlist" data-i18n="wecom.groupPolicyAllowlist">仅白名单群可访问</option>
+                    <option value="disabled" data-i18n="wecom.groupPolicyDisabled">不接收群消息</option>
+                  </select>
+                </div>
+
+                <div class="field-group hidden" id="wecomGroupAllowFromGroup">
+                  <label for="wecomGroupAllowFrom" data-i18n="wecom.groupAllowFrom">群聊白名单</label>
+                  <textarea id="wecomGroupAllowFrom" placeholder="group-id-1&#10;group-id-2" spellcheck="false"></textarea>
+                  <p class="field-hint" data-i18n="wecom.groupAllowFromHint">每行一个群 ID。只有在群聊访问模式为“仅白名单群可访问”时才会生效。</p>
+                </div>
+
+                <p class="field-hint" data-i18n="wecom.dmHint">私聊默认建议使用“先配对再访问”；切到“所有人可直接访问”时，OneClaw 会自动写入 allowFrom=["*"]。</p>
+              </div>
+
+              <div class="msg-box hidden" id="wecomMsgBox"></div>
+
+              <div class="btn-row bottom-actions">
+                <button class="btn-primary" id="btnWecomSave">
+                  <span class="btn-text" data-i18n="wecom.save">保存</span>
                   <span class="btn-spinner hidden"></span>
                 </button>
               </div>

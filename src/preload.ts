@@ -41,6 +41,9 @@ contextBridge.exposeInMainWorld("oneclaw", {
   settingsGetDingtalkConfig: () => ipcRenderer.invoke("settings:get-dingtalk-config"),
   settingsSaveDingtalkConfig: (params: Record<string, unknown>) =>
     ipcRenderer.invoke("settings:save-dingtalk-config", params),
+  settingsGetWecomConfig: () => ipcRenderer.invoke("settings:get-wecom-config"),
+  settingsSaveWecomConfig: (params: Record<string, unknown>) =>
+    ipcRenderer.invoke("settings:save-wecom-config", params),
   settingsListFeishuPairing: () =>
     ipcRenderer.invoke("settings:list-feishu-pairing"),
   settingsListFeishuApproved: () =>

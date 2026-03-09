@@ -913,6 +913,7 @@ select option {
 
 /* 启用后展开的字段容器 — 统一间距 */
 #chFields,
+#wecomFields,
 #dingtalkFields,
 #qqFields,
 #kimiFields {

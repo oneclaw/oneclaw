@@ -28,6 +28,7 @@ const KIMI_SEARCH_DEFAULT_TGZ_URL = `${KIMI_CLAW_BASE_URL}/openclaw-kimi-search-
 const KIMI_SEARCH_CACHE_FILE = "openclaw-kimi-search-0.1.2.tgz";
 const QQBOT_PACKAGE_NAME = "@sliverp/qqbot";
 const DINGTALK_CONNECTOR_PACKAGE_NAME = "@dingtalk-real-ai/dingtalk-connector";
+const WECOM_PLUGIN_PACKAGE_NAME = "@wecom/wecom-openclaw-plugin";
 
 // 计算目标产物的唯一标识
 function getTargetId(platform, arch) {
@@ -602,6 +603,37 @@ function getDingtalkConnectorPackageSource() {
   };
 }
 
+// 确定企业微信插件安装来源：查询 npm latest stable
+function getWecomPluginPackageSource() {
+  // 显式覆盖（调试 / 私有 tgz / 本地 file: 逃生舱）
+  const explicitSource = readEnvText("ONECLAW_WECOM_PLUGIN_PACKAGE_SOURCE");
+  if (explicitSource) {
+    log(`使用 ONECLAW_WECOM_PLUGIN_PACKAGE_SOURCE 指定来源: ${explicitSource}`);
+    return {
+      source: explicitSource,
+      stampSource: `explicit:${WECOM_PLUGIN_PACKAGE_NAME}@${explicitSource}`,
+    };
+  }
+
+  const latestVersion = readRemoteLatestVersion(WECOM_PLUGIN_PACKAGE_NAME, {
+    cwd: ROOT,
+    env: process.env,
+    logError(message) {
+      log(message);
+    },
+  });
+
+  if (!latestVersion) {
+    die(`无法从 npm 获取 ${WECOM_PLUGIN_PACKAGE_NAME} 最新版本（检查网络或设置 ONECLAW_WECOM_PLUGIN_PACKAGE_SOURCE 手动指定）`);
+  }
+
+  log(`使用 ${WECOM_PLUGIN_PACKAGE_NAME}@${latestVersion}（来源: npm latest）`);
+  return {
+    source: latestVersion,
+    stampSource: `remote:${WECOM_PLUGIN_PACKAGE_NAME}@${latestVersion}`,
+  };
+}
+
 // 读取 gateway 依赖平台戳
 function readGatewayStamp(stampPath) {
   try {
@@ -896,6 +928,12 @@ const BUNDLED_PLUGINS = [
     packageName: DINGTALK_CONNECTOR_PACKAGE_NAME,
     requiredFiles: ["package.json", "openclaw.plugin.json"],
     getSource: getDingtalkConnectorPackageSource,
+  },
+  {
+    id: "wecom-openclaw-plugin",
+    packageName: WECOM_PLUGIN_PACKAGE_NAME,
+    requiredFiles: ["package.json", "openclaw.plugin.json"],
+    getSource: getWecomPluginPackageSource,
   },
 ];
 
@@ -1389,6 +1427,7 @@ function verifyOutput(targetPaths, platform) {
     path.join(targetRel, "gateway", "node_modules", "openclaw", "extensions", "kimi-search", "openclaw.plugin.json"),
     path.join(targetRel, "gateway", "node_modules", "openclaw", "extensions", "qqbot", "openclaw.plugin.json"),
     path.join(targetRel, "gateway", "node_modules", "openclaw", "extensions", "dingtalk-connector", "openclaw.plugin.json"),
+    path.join(targetRel, "gateway", "node_modules", "openclaw", "extensions", "wecom-openclaw-plugin", "openclaw.plugin.json"),
   );
 
   let allOk = true;

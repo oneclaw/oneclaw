@@ -47,6 +47,11 @@ import {
   saveDingtalkConfig,
   DEFAULT_DINGTALK_SESSION_TIMEOUT_MS,
 } from "./dingtalk-config";
+import {
+  extractWecomConfig,
+  isWecomPluginBundled,
+  saveWecomConfig,
+} from "./wecom-config";
 import { ensureGatewayAuthTokenInConfig } from "./gateway-auth";
 import { getLaunchAtLoginState, setLaunchAtLoginEnabled } from "./launch-at-login";
 import { installCli, uninstallCli, isCliInstalled } from "./cli-integration";
@@ -408,6 +413,14 @@ export function registerSettingsIpc(opts: SettingsIpcOptions = {}): void {
     return "钉钉连接器组件缺失，请重新安装 OneClaw。";
   }
 
+  function resolveWecomMissingMessage(): string {
+    // dev 模式最常见的问题是还没执行 package:resources，把企业微信插件注入目标资源目录。
+    if (!app.isPackaged) {
+      return `开发模式未检测到企业微信插件，请先运行 npm run package:resources（当前目标：${process.platform}-${process.arch}）。`;
+    }
+    return "企业微信插件组件缺失，请重新安装 OneClaw。";
+  }
+
   ipcMain.handle("settings:get-qqbot-config", async () => {
     try {
       const config = readUserConfig();
@@ -531,6 +544,73 @@ export function registerSettingsIpc(opts: SettingsIpcOptions = {}): void {
             clientId,
             clientSecret,
             sessionTimeout,
+          });
+          writeUserConfigAndRestart(config);
+          return { success: true };
+        } catch (err: any) {
+          return { success: false, message: err.message || String(err) };
+        }
+      }
+    );
+  });
+
+  // ── 读取企业微信配置 ──
+  ipcMain.handle("settings:get-wecom-config", async () => {
+    try {
+      const config = readUserConfig();
+      const bundled = isWecomPluginBundled();
+      return {
+        success: true,
+        data: {
+          ...extractWecomConfig(config),
+          bundled,
+          bundleMessage: bundled ? "" : resolveWecomMissingMessage(),
+        },
+      };
+    } catch (err: any) {
+      return { success: false, message: err.message || String(err) };
+    }
+  });
+
+  // ── 保存企业微信配置（支持 enabled=false 仅切换开关） ──
+  ipcMain.handle("settings:save-wecom-config", async (_event, params) => {
+    const enabled = params?.enabled === true;
+    const botId = typeof params?.botId === "string" ? params.botId.trim() : "";
+    const secret = typeof params?.secret === "string" ? params.secret.trim() : "";
+    const dmPolicy = typeof params?.dmPolicy === "string" ? params.dmPolicy.trim() : "";
+    const groupPolicy = typeof params?.groupPolicy === "string" ? params.groupPolicy.trim() : "";
+    const groupAllowFrom = Array.isArray(params?.groupAllowFrom) ? params.groupAllowFrom : [];
+
+    return runTrackedSettingsAction(
+      "save_channel",
+      { platform: "wecom", enabled, dm_policy: dmPolicy || undefined, group_policy: groupPolicy || undefined },
+      async () => {
+        try {
+          const config = readUserConfig();
+
+          if (!enabled) {
+            saveWecomConfig(config, { enabled: false });
+            writeUserConfigAndRestart(config);
+            return { success: true };
+          }
+
+          if (!botId) {
+            return { success: false, message: "企业微信 Bot ID 不能为空。" };
+          }
+          if (!secret) {
+            return { success: false, message: "企业微信 Secret 不能为空。" };
+          }
+          if (!isWecomPluginBundled()) {
+            return { success: false, message: resolveWecomMissingMessage() };
+          }
+
+          saveWecomConfig(config, {
+            enabled: true,
+            botId,
+            secret,
+            dmPolicy,
+            groupPolicy,
+            groupAllowFrom,
           });
           writeUserConfigAndRestart(config);
           return { success: true };
