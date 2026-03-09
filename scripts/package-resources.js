@@ -768,6 +768,39 @@ function getDirSize(dir) {
   return total;
 }
 
+// 清理 pdf-parse 冗余的 pdf.js 版本（只保留最新版，节省约 13 MB）
+function prunePdfParseRedundantVersions(nmDir) {
+  const pdfJsDir = path.join(nmDir, "pdf-parse", "lib", "pdf.js");
+  if (!fs.existsSync(pdfJsDir)) return;
+
+  let entries;
+  try {
+    entries = fs.readdirSync(pdfJsDir, { withFileTypes: true })
+      .filter((e) => e.isDirectory() && e.name.startsWith("v"));
+  } catch { return; }
+
+  if (entries.length <= 1) return;
+
+  // 按语义版本降序排列，保留最新版
+  entries.sort((a, b) => {
+    const va = a.name.slice(1).split(".").map(Number);
+    const vb = b.name.slice(1).split(".").map(Number);
+    for (let i = 0; i < Math.max(va.length, vb.length); i++) {
+      if ((vb[i] || 0) !== (va[i] || 0)) return (vb[i] || 0) - (va[i] || 0);
+    }
+    return 0;
+  });
+
+  let savedBytes = 0;
+  for (let i = 1; i < entries.length; i++) {
+    const dir = path.join(pdfJsDir, entries[i].name);
+    savedBytes += getDirSize(dir);
+    rmDir(dir);
+  }
+  const savedMB = (savedBytes / 1048576).toFixed(1);
+  log(`已移除 pdf-parse 冗余 pdf.js 版本 (保留 ${entries[0].name}，节省 ${savedMB} MB)`);
+}
+
 // 清理 node_modules/.bin 中的悬挂符号链接（避免 afterPack 拷贝时报 ENOENT）
 function pruneDanglingBinLinks(nmDir) {
   const binDir = path.join(nmDir, ".bin");
@@ -1120,6 +1153,7 @@ async function bundleNpmPackagePlugin(plugin, gatewayDir, targetId, opts) {
   pruneNodeModules(pluginNm);
   pruneLlamaPackages(pluginNm);
   pruneFFmpegBinaries(pluginNm);
+  prunePdfParseRedundantVersions(pluginNm);
   pruneDarwinUniversalNativePackages(pluginNm, opts.platform);
   pruneDanglingBinLinks(pluginNm);
 
@@ -1233,6 +1267,7 @@ function pruneNodeModules(nmDir) {
     "test",
     "tests",
     "__tests__",
+    "coverage",
     "docs",
     "examples",
     ".github",
