@@ -241,7 +241,6 @@ h2 {
   border: 1px solid rgba(192, 57, 43, 0.2);
   border-radius: var(--radius-md);
   width: 100%;
-  max-width: 380px;
 }
 
 .info-card-icon {
