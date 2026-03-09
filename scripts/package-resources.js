@@ -870,7 +870,7 @@ function installDependencies(opts, gatewayDir) {
     log(`gateway 依赖未变化且平台/来源匹配 (${targetStamp})，跳过 npm install`);
     const nmDir = path.join(gatewayDir, "node_modules");
     // 即使复用缓存依赖，也要执行最新裁剪规则，避免历史产物遗留冗余文件
-    pruneNodeModules(nmDir);
+    pruneNodeModules(nmDir, opts.platform);
     pruneDarwinUniversalNativePackages(nmDir, opts.platform);
     pruneLlamaPackages(nmDir);
     pruneDanglingBinLinks(nmDir);
@@ -919,7 +919,7 @@ function installDependencies(opts, gatewayDir) {
 
   log("依赖安装完成，开始裁剪 node_modules...");
   const nmDir = path.join(gatewayDir, "node_modules");
-  pruneNodeModules(nmDir);
+  pruneNodeModules(nmDir, opts.platform);
   pruneDarwinUniversalNativePackages(nmDir, opts.platform);
   pruneLlamaPackages(nmDir);
   pruneDanglingBinLinks(nmDir);
@@ -1053,6 +1053,32 @@ const BUNDLED_PLUGINS = [
     getSource: getWecomPluginPackageSource,
   },
 ];
+
+// openclaw/skills 只保留 OneClaw 产品需要的内置技能，上游新增 skill 不会自动打入。
+const OPENCLAW_SKILLS_ALLOWLIST = new Set([
+  "canvas",
+  "clawhub",
+  "coding-agent",
+  "discord",
+  "github",
+  "healthcheck",
+  "model-usage",
+  "notion",
+  "session-logs",
+  "skill-creator",
+  "tmux",
+  "video-frames",
+  "weather",
+]);
+
+// 仅 macOS 构建时额外保留的 skills（依赖 macOS 专有 API 或 app）
+const OPENCLAW_SKILLS_DARWIN_ONLY = new Set([
+  "apple-notes",
+  "apple-reminders",
+  "camsnap",
+  "imsg",
+  "peekaboo",
+]);
 
 // openclaw/extensions 只保留 OneClaw 当前产品面和运行时基础插件。
 const OPENCLAW_EXTENSION_ALLOWLIST = new Set([
@@ -1261,8 +1287,8 @@ async function bundleNpmPackagePlugin(plugin, gatewayDir, targetId, opts) {
     }
   }
 
-  // 裁剪插件的 node_modules
-  pruneNodeModules(pluginNm);
+  // 裁剪插件的 node_modules（插件内无 skills 目录，platform 无影响）
+  pruneNodeModules(pluginNm, null);
   pruneLlamaPackages(pluginNm);
   pruneFFmpegBinaries(pluginNm);
   prunePdfParseRedundantVersions(pluginNm);
@@ -1359,7 +1385,8 @@ async function bundleAllPlugins(gatewayDir, targetId, opts) {
 }
 
 // 裁剪 node_modules，删除无用文件以减小体积
-function pruneNodeModules(nmDir) {
+// platform: "darwin" | "win32"，用于条件保留平台专属 skills
+function pruneNodeModules(nmDir, platform) {
   if (!fs.existsSync(nmDir)) return;
 
   const openclawDir = path.join(nmDir, "openclaw");
@@ -1510,6 +1537,28 @@ function pruneNodeModules(nmDir) {
     }
   }
 
+  // 按白名单保留内置 skills，删除不在列表中的技能目录
+  const openclawSkillsDir = path.join(openclawDir, "skills");
+  function pruneOpenclawSkills() {
+    if (!fs.existsSync(openclawSkillsDir)) return;
+
+    let entries;
+    try {
+      entries = fs.readdirSync(openclawSkillsDir, { withFileTypes: true });
+    } catch {
+      return;
+    }
+
+    for (const entry of entries) {
+      if (!entry.isDirectory()) continue;
+      const allowed = OPENCLAW_SKILLS_ALLOWLIST.has(entry.name)
+        || (platform === "darwin" && OPENCLAW_SKILLS_DARWIN_ONLY.has(entry.name));
+      if (!allowed) {
+        removeDir(path.join(openclawSkillsDir, entry.name));
+      }
+    }
+  }
+
   // 递归遍历并清理
   function walk(dir) {
     let entries;
@@ -1526,6 +1575,13 @@ function pruneNodeModules(nmDir) {
         // extensions 改成白名单保留，并继续深入清理保留插件内部垃圾。
         if (fullPath === openclawExtensionsDir) {
           pruneOpenclawExtensions();
+          continue;
+        }
+
+        // skills 按黑名单删除中国用户不需要的内置技能
+        if (fullPath === openclawSkillsDir) {
+          pruneOpenclawSkills();
+          walk(fullPath);
           continue;
         }
 
