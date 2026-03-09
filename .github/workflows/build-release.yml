@@ -10,8 +10,9 @@ on:
   pull_request:       # PR 触发构建验证（不发布）
   workflow_dispatch:  # 允许在任意分支上手动触发构建（不发布）
 
-# package-resources.js 每次构建自动从 npm 拉取 openclaw latest stable
+# package-resources.js 使用 OPENCLAW_PACKAGE_SOURCE 固定 openclaw 版本
 env:
+  OPENCLAW_PACKAGE_SOURCE: "2026.3.2"
   ARTIFACT_RETENTION_DAYS: 3
   # 埋点配置
   ONECLAW_ANALYTICS_API_KEY: ${{ secrets.ONECLAW_ANALYTICS_API_KEY }}
