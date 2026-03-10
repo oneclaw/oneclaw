@@ -149,6 +149,40 @@
   background: var(--bg-hover);
   color: var(--text);
 }
+
+.oneclaw-sidebar__new-chat-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  padding: 10px 16px;
+  border-radius: 9999px;
+  background: transparent;
+  border: 1px solid var(--border-strong);
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: border-color var(--duration-fast) ease, color var(--duration-fast) ease, background var(--duration-fast) ease;
+  -webkit-app-region: no-drag;
+}
+
+.oneclaw-sidebar__new-chat-btn:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.oneclaw-sidebar__new-chat-btn svg {
+  width: 16px;
+  height: 16px;
+  stroke: currentColor;
+  fill: none;
+  stroke-width: 1.5px;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  flex-shrink: 0;
+}
 .oneclaw-sidebar__collapse svg {
   width: 18px;
   height: 18px;
