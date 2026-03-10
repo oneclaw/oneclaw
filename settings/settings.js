@@ -113,7 +113,7 @@
 
   const I18N = {
     en: {
-      "settings.backToChat": "Back to chat",
+      "settings.backToChat": "Back",
       "title": "Settings",
       "nav.provider": "Model",
       "nav.chat": "Chat Integration",
@@ -373,7 +373,7 @@
       "about.updateFailed": "Check failed, try again later",
     },
     zh: {
-      "settings.backToChat": "返回应用",
+      "settings.backToChat": "返回",
       "title": "设置",
       "nav.provider": "模型配置",
       "nav.chat": "聊天集成",
@@ -1331,9 +1331,6 @@
 
   function setChSaving(loading) {
     chSaving = loading;
-    els.btnChSave.disabled = loading;
-    els.btnChSaveText.textContent = loading ? t("feishu.saving") : t("feishu.save");
-    els.btnChSaveSpinner.classList.toggle("hidden", !loading);
   }
 
   // 转义文本，避免将外部内容直接插入 HTML。
@@ -1952,8 +1949,8 @@
     var appId = els.chAppId.value.trim();
     var appSecret = els.chAppSecret.value.trim();
 
-    if (!appId) { showChMsg(t("error.noAppId"), "error"); return; }
-    if (!appSecret) { showChMsg(t("error.noAppSecret"), "error"); return; }
+    if (!appId) { showChMsg(t("error.noAppId"), "error"); els.chEnabled.checked = false; return; }
+    if (!appSecret) { showChMsg(t("error.noAppSecret"), "error"); els.chEnabled.checked = false; return; }
     var groupAllowFromEntries = getChGroupAllowFromEntries();
 
     setChSaving(true);
@@ -1967,6 +1964,7 @@
       });
       if (!verifyResult.success) {
         showChMsg(verifyResult.message || t("error.verifyFailed"), "error");
+        els.chEnabled.checked = false;
         setChSaving(false);
         return;
       }
@@ -1982,6 +1980,7 @@
       });
       if (!saveResult.success) {
         showChMsg(saveResult.message || "Save failed", "error");
+        els.chEnabled.checked = false;
         setChSaving(false);
         return;
       }
@@ -1991,6 +1990,7 @@
       refreshChPairingPanels({ silent: true });
     } catch (err) {
       showChMsg(t("error.connection") + (err.message || "Unknown error"), "error");
+      els.chEnabled.checked = false;
       setChSaving(false);
     }
   }
@@ -2018,7 +2018,6 @@
       if (els.chGroupPolicy && data.groupPolicy) {
         els.chGroupPolicy.value = data.groupPolicy;
       }
-      toggleEl(els.chFields, !!enabled);
       updateChPairingSectionVisibility();
       updateChGroupAllowFromState();
       refreshChPairingPanels({ silent: true });
@@ -2045,9 +2044,6 @@
   // 同步企业微信保存按钮的 loading 状态。
   function setWecomSaving(loading) {
     wecomSaving = loading;
-    els.btnWecomSave.disabled = loading;
-    els.btnWecomSaveText.textContent = loading ? t("wecom.saving") : t("wecom.save");
-    els.btnWecomSaveSpinner.classList.toggle("hidden", !loading);
   }
 
   // 读取当前企业微信平台是否启用。
@@ -2103,8 +2099,8 @@
 
     var botId = String(els.wecomBotId.value || "").trim();
     var secret = String(els.wecomSecret.value || "").trim();
-    if (!botId) { showWecomMsg(t("error.noWecomBotId"), "error"); return; }
-    if (!secret) { showWecomMsg(t("error.noWecomSecret"), "error"); return; }
+    if (!botId) { showWecomMsg(t("error.noWecomBotId"), "error"); els.wecomEnabled.checked = false; return; }
+    if (!secret) { showWecomMsg(t("error.noWecomSecret"), "error"); els.wecomEnabled.checked = false; return; }
 
     setWecomSaving(true);
     hideWecomMsg();
@@ -2120,6 +2116,7 @@
       });
       if (!saveResult.success) {
         showWecomMsg(saveResult.message || "Save failed", "error");
+        els.wecomEnabled.checked = false;
         setWecomSaving(false);
         return;
       }
@@ -2129,6 +2126,7 @@
       refreshChPairingPanels({ silent: true });
     } catch (err) {
       showWecomMsg(t("error.connection") + (err.message || "Unknown error"), "error");
+      els.wecomEnabled.checked = false;
       setWecomSaving(false);
     }
   }
@@ -2148,7 +2146,6 @@
 
       var enabled = !!data.enabled && !!data.botId;
       els.wecomEnabled.checked = enabled;
-      toggleEl(els.wecomFields, enabled);
       updateWecomGroupAllowFromState();
       if (currentChatPlatform === "wecom") {
         updateChPairingSectionVisibility();
@@ -2183,9 +2180,6 @@
   // 同步钉钉保存按钮的 loading 状态。
   function setDingtalkSaving(loading) {
     dingtalkSaving = loading;
-    els.btnDingtalkSave.disabled = loading;
-    els.btnDingtalkSaveText.textContent = loading ? t("dingtalk.saving") : t("dingtalk.save");
-    els.btnDingtalkSaveSpinner.classList.toggle("hidden", !loading);
   }
 
   // 读取当前钉钉平台是否启用。
@@ -2230,10 +2224,11 @@
     var clientId = String(els.dingtalkClientId.value || "").trim();
     var clientSecret = String(els.dingtalkClientSecret.value || "").trim();
     var sessionTimeout = parseDingtalkSessionTimeout();
-    if (!clientId) { showDingtalkMsg(t("error.noDingtalkClientId"), "error"); return; }
-    if (!clientSecret) { showDingtalkMsg(t("error.noDingtalkClientSecret"), "error"); return; }
+    if (!clientId) { showDingtalkMsg(t("error.noDingtalkClientId"), "error"); els.dingtalkEnabled.checked = false; return; }
+    if (!clientSecret) { showDingtalkMsg(t("error.noDingtalkClientSecret"), "error"); els.dingtalkEnabled.checked = false; return; }
     if (!Number.isFinite(sessionTimeout) || sessionTimeout <= 0) {
       showDingtalkMsg(t("error.invalidDingtalkSessionTimeout"), "error");
+      els.dingtalkEnabled.checked = false;
       return;
     }
 
@@ -2248,6 +2243,7 @@
       });
       if (!verifyResult.success) {
         showDingtalkMsg(verifyResult.message || t("error.verifyFailed"), "error");
+        els.dingtalkEnabled.checked = false;
         setDingtalkSaving(false);
         return;
       }
@@ -2260,6 +2256,7 @@
       });
       if (!saveResult.success) {
         showDingtalkMsg(saveResult.message || "Save failed", "error");
+        els.dingtalkEnabled.checked = false;
         setDingtalkSaving(false);
         return;
       }
@@ -2268,6 +2265,7 @@
       showToast(t("common.saved"));
     } catch (err) {
       showDingtalkMsg(t("error.connection") + (err.message || "Unknown error"), "error");
+      els.dingtalkEnabled.checked = false;
       setDingtalkSaving(false);
     }
   }
@@ -2285,7 +2283,6 @@
 
       var enabled = !!data.enabled && !!data.clientId;
       els.dingtalkEnabled.checked = enabled;
-      toggleEl(els.dingtalkFields, enabled);
 
       if (data.bundled === false) {
         showDingtalkMsg(data.bundleMessage || t("error.dingtalkNotBundled"), "error");
@@ -2315,9 +2312,6 @@
   // 同步 QQ 保存按钮的 loading 状态。
   function setQqSaving(loading) {
     qqSaving = loading;
-    els.btnQqSave.disabled = loading;
-    els.btnQqSaveText.textContent = loading ? t("qq.saving") : t("qq.save");
-    els.btnQqSaveSpinner.classList.toggle("hidden", !loading);
   }
 
   // 读取当前 QQ 平台是否启用。
@@ -2350,8 +2344,8 @@
 
     var appId = String(els.qqAppId.value || "").trim();
     var clientSecret = String(els.qqClientSecret.value || "").trim();
-    if (!appId) { showQqMsg(t("error.noQqAppId"), "error"); return; }
-    if (!clientSecret) { showQqMsg(t("error.noQqClientSecret"), "error"); return; }
+    if (!appId) { showQqMsg(t("error.noQqAppId"), "error"); els.qqEnabled.checked = false; return; }
+    if (!clientSecret) { showQqMsg(t("error.noQqClientSecret"), "error"); els.qqEnabled.checked = false; return; }
 
     setQqSaving(true);
     hideQqMsg();
@@ -2364,6 +2358,7 @@
       });
       if (!verifyResult.success) {
         showQqMsg(verifyResult.message || t("error.verifyFailed"), "error");
+        els.qqEnabled.checked = false;
         setQqSaving(false);
         return;
       }
@@ -2376,6 +2371,7 @@
       });
       if (!saveResult.success) {
         showQqMsg(saveResult.message || "Save failed", "error");
+        els.qqEnabled.checked = false;
         setQqSaving(false);
         return;
       }
@@ -2384,6 +2380,7 @@
       showToast(t("common.saved"));
     } catch (err) {
       showQqMsg(t("error.connection") + (err.message || "Unknown error"), "error");
+      els.qqEnabled.checked = false;
       setQqSaving(false);
     }
   }
@@ -2397,11 +2394,10 @@
       var data = result.data;
       if (data.appId) els.qqAppId.value = data.appId;
       if (data.clientSecret) els.qqClientSecret.value = data.clientSecret;
-      els.qqMarkdownSupport.checked = data.markdownSupport !== false;
+      els.qqMarkdownSupport.checked = !!data.markdownSupport;
 
       var enabled = !!data.enabled && !!data.appId;
       els.qqEnabled.checked = enabled;
-      toggleEl(els.qqFields, enabled);
 
       if (data.bundled === false) {
         showQqMsg(data.bundleMessage || t("error.qqNotBundled"), "error");
@@ -2748,9 +2744,6 @@
 
   function setKimiSaving(loading) {
     kimiSaving = loading;
-    els.btnKimiSave.disabled = loading;
-    els.btnKimiSaveText.textContent = loading ? t("kimi.saving") : t("kimi.save");
-    els.btnKimiSaveSpinner.classList.toggle("hidden", !loading);
   }
 
   // 获取 Kimi 启用/禁用状态
@@ -2774,7 +2767,6 @@
       // 回填启用状态
       var enabled = data.enabled && data.botToken;
       els.kimiEnabled.checked = !!enabled;
-      toggleEl(els.kimiFields, !!enabled);
     } catch (err) {
       console.error("[Settings] loadKimiConfig failed:", err);
     }
@@ -2809,6 +2801,7 @@
     var botToken = parseBotToken(els.kimiSettingsInput.value);
     if (!botToken) {
       showKimiMsg(t("error.noKimiBotToken"), "error");
+      els.kimiEnabled.checked = false;
       return;
     }
 
@@ -2819,6 +2812,7 @@
       var result = await window.oneclaw.settingsSaveKimiConfig({ botToken: botToken, enabled: true });
       if (!result.success) {
         showKimiMsg(result.message || "Save failed", "error");
+        els.kimiEnabled.checked = false;
         setKimiSaving(false);
         return;
       }
@@ -2827,6 +2821,7 @@
       showToast(t("common.saved"));
     } catch (err) {
       setKimiSaving(false);
+      els.kimiEnabled.checked = false;
       showKimiMsg(t("error.connection") + (err.message || "Unknown error"), "error");
     }
   }
@@ -3485,12 +3480,12 @@
       });
     });
 
-    // Channels tab — 启用/禁用切换
+    // Channels tab — 启用/禁用切换：开关变化即刻保存
     els.chEnabled.addEventListener("change", function () {
-      toggleEl(els.chFields, isChEnabled());
       updateChPairingSectionVisibility();
       updateChGroupAllowFromState();
       refreshChPairingPanels({ silent: true });
+      handleChSave();
     });
     if (els.chDmPolicy) {
       els.chDmPolicy.addEventListener("change", function () {
@@ -3518,7 +3513,6 @@
         window.oneclaw.openExternal("https://open.feishu.cn/app");
       }
     });
-    els.btnChSave.addEventListener("click", handleChSave);
     if (els.btnChAccessAddGroup) {
       els.btnChAccessAddGroup.addEventListener("click", function () {
         handleChAccessAddGroup();
@@ -3588,16 +3582,16 @@
       });
     }
     els.chAppSecret.addEventListener("keydown", function (e) {
-      if (e.key === "Enter") handleChSave();
+      if (e.key === "Enter") e.target.blur();
     });
 
     // WeCom tab — 启用/禁用切换 + Secret 可见性
     if (els.wecomEnabled) {
       els.wecomEnabled.addEventListener("change", function () {
-        toggleEl(els.wecomFields, isWecomEnabled());
         updateWecomGroupAllowFromState();
         updateChPairingSectionVisibility();
         refreshChPairingPanels({ silent: true });
+        handleWecomSave();
       });
     }
     if (els.wecomDmPolicy) {
@@ -3631,9 +3625,6 @@
           window.oneclaw.openExternal("https://work.weixin.qq.com/");
         }
       });
-    }
-    if (els.btnWecomSave) {
-      els.btnWecomSave.addEventListener("click", handleWecomSave);
     }
     if (els.btnWecomAccessRefresh) {
       els.btnWecomAccessRefresh.addEventListener("click", function () {
@@ -3670,14 +3661,14 @@
     }
     if (els.wecomSecret) {
       els.wecomSecret.addEventListener("keydown", function (e) {
-        if (e.key === "Enter") handleWecomSave();
+        if (e.key === "Enter") e.target.blur();
       });
     }
 
     // DingTalk tab — 启用/禁用切换 + Secret 可见性
     if (els.dingtalkEnabled) {
       els.dingtalkEnabled.addEventListener("change", function () {
-        toggleEl(els.dingtalkFields, isDingtalkEnabled());
+        handleDingtalkSave();
       });
     }
     if (els.btnToggleDingtalkSecret) {
@@ -3699,24 +3690,21 @@
         }
       });
     }
-    if (els.btnDingtalkSave) {
-      els.btnDingtalkSave.addEventListener("click", handleDingtalkSave);
-    }
     if (els.dingtalkClientSecret) {
       els.dingtalkClientSecret.addEventListener("keydown", function (e) {
-        if (e.key === "Enter") handleDingtalkSave();
+        if (e.key === "Enter") e.target.blur();
       });
     }
     if (els.dingtalkSessionTimeout) {
       els.dingtalkSessionTimeout.addEventListener("keydown", function (e) {
-        if (e.key === "Enter") handleDingtalkSave();
+        if (e.key === "Enter") e.target.blur();
       });
     }
 
     // QQ Bot tab — 启用/禁用切换 + Secret 可见性
     if (els.qqEnabled) {
       els.qqEnabled.addEventListener("change", function () {
-        toggleEl(els.qqFields, isQqEnabled());
+        handleQqSave();
       });
     }
     if (els.btnToggleQqSecret) {
@@ -3730,17 +3718,14 @@
         }
       });
     }
-    if (els.btnQqSave) {
-      els.btnQqSave.addEventListener("click", handleQqSave);
-    }
     if (els.qqClientSecret) {
       els.qqClientSecret.addEventListener("keydown", function (e) {
-        if (e.key === "Enter") handleQqSave();
+        if (e.key === "Enter") e.target.blur();
       });
     }
 
     // Kimi tab — 启用/禁用切换 + Token 可见性
-    els.kimiEnabled.addEventListener("change", function () { toggleEl(els.kimiFields, isKimiEnabled()); });
+    els.kimiEnabled.addEventListener("change", function () { handleKimiSave(); });
     els.btnToggleKimiToken.addEventListener("click", togglePasswordVisibility);
     els.kimiSettingsInput.addEventListener("input", function () {
       var raw = els.kimiSettingsInput.value;
@@ -3751,7 +3736,6 @@
         showToast(t("kimi.tokenParsed") + maskToken(token));
       }
     });
-    els.btnKimiSave.addEventListener("click", handleKimiSave);
     els.kimiBotPageLink.addEventListener("click", function (e) {
       e.preventDefault();
       if (window.oneclaw && window.oneclaw.openExternal) {

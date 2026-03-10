@@ -241,10 +241,7 @@ button, input, select, label, a {
   display: flex;
   flex-direction: column;
   gap: 2px;
-  padding: 8px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-lg);
-  background: var(--bg-secondary);
+  padding: 0;
   align-self: flex-start;
 }
 
@@ -258,18 +255,6 @@ button, input, select, label, a {
   transition: background var(--transition), box-shadow var(--transition);
 }
 
-.chat-platform-item::before {
-  content: "";
-  position: absolute;
-  left: 7px;
-  top: 10px;
-  bottom: 10px;
-  width: 2px;
-  border-radius: 999px;
-  background: transparent;
-  transition: background var(--transition);
-}
-
 .chat-platform-item:hover {
   background: var(--bg-hover);
 }
@@ -278,10 +263,6 @@ button, input, select, label, a {
 .chat-platform-item.active {
   background: var(--bg-hover);
   box-shadow: none;
-}
-
-.chat-platform-item.active::before {
-  background: var(--text-muted);
 }
 
 .chat-platform-btn {
@@ -1392,7 +1373,8 @@ select option {
   align-items: center;
   gap: 8px;
   padding: 8px 12px;
-  margin-bottom: 16px;
+  margin-top: 4px;
+  margin-bottom: 8px;
   border: 1px solid transparent;
   border-radius: var(--radius-md);
   background: transparent;
