@@ -116,7 +116,7 @@ export function renderSidebar(props: SidebarProps) {
         <div style="padding: 12px 14px 16px;">
           <button
             class="btn primary"
-            style="width: 100%; border-radius: 8px; justify-content: center; padding-top: 10px; padding-bottom: 10px; font-weight: 600; -webkit-app-region: no-drag;"
+            style="width: 100%; justify-content: center; padding-top: 10px; padding-bottom: 10px; font-weight: 600; -webkit-app-region: no-drag;"
             @click=${props.onNewChat}
           >
             ${icons.messagePlus} ${t("sidebar.newChat")}

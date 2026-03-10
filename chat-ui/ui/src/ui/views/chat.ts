@@ -428,9 +428,7 @@ export function renderChat(props: ChatProps) {
               ?disabled=${!props.connected}
               @click=${props.onSend}
               title=${t("chat.send")}
-            >
-              ${isBusy ? t("chat.queue") : icons.arrowUp}
-            </button>
+            >${isBusy ? t("chat.queue") : icons.arrowUp}</button>
           </div>
         </div>
       </div>

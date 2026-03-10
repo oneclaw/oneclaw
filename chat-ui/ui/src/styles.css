@@ -11,6 +11,30 @@
   --accent-hover: #a93226;
   --accent-muted: rgba(192, 57, 43, 0.15);
   --sidebar-width: 220px;
+  
+  /* Match settings page colors (Dark) */
+  --bg: #1a1a1a;
+  --panel: #151515;
+  --card: #222222;
+  --bg-elevated: #222222;
+  --bg-hover: #2a2a2a;
+  --border: #303030;
+  --border-strong: #404040;
+}
+
+:root[data-theme=light] {
+  /* Match settings page colors (Light) */
+  --bg: #ffffff;
+  --panel: #fbfbfb;
+  --card: #ffffff;
+  --bg-elevated: #ffffff;
+  --bg-hover: #f4f4f5;
+  --border: #e4e4e7;
+  --border-strong: #d4d4d8;
+}
+
+.btn {
+  border-radius: 9999px !important;
 }
 
 .btn.primary {
@@ -41,6 +65,7 @@
   height: 100vh;
   overflow: hidden;
   position: relative;
+  background: var(--bg);
 }
 
 .oneclaw-content {
@@ -1017,9 +1042,6 @@
 }
 
 /* 4. Input Area Optimization */
-.chat-compose {
-  padding-bottom: 24px !important;
-}
 .chat-compose__row {
   position: relative;
 }
@@ -1030,8 +1052,8 @@
 }
 .chat-compose__actions {
   position: absolute;
-  right: 6px;
-  bottom: 6px;
+  right: 10px;
+  bottom: 20px; /* Centered vertically when textarea is 72px min-height */
   z-index: 10;
 }
 .chat-compose__actions .btn {
@@ -1044,6 +1066,10 @@
   display: flex !important;
   align-items: center !important;
   justify-content: center !important;
+}
+.chat-compose__actions .btn svg {
+  margin: 0 !important;
+  display: block !important;
 }
 
 /* 5. Timestamps / Avatars weakened */
@@ -1064,6 +1090,33 @@
 
 /* 6. General Spacing */
 .chat-thread {
-  padding-left: 24px !important;
-  padding-right: 24px !important;
+  padding-left: 8px !important;
+  padding-right: 8px !important;
+}
+
+/* 7. Chat Compose Input Overrides */
+.chat-compose {
+  padding: 0 8px 8px 8px !important; /* Matches thread padding exactly */
+  background: var(--bg) !important; /* Remove gradient to prevent shadow cutoff */
+}
+
+.chat-compose__field textarea {
+  border: 1px solid var(--border) !important;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.25) !important;
+  transition: border-color 150ms ease, box-shadow 150ms ease !important;
+}
+:root[data-theme=light] .chat-compose__field textarea {
+  border: 1px solid var(--border) !important;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.06) !important;
+}
+
+.chat-compose__field textarea:focus {
+  border-color: var(--accent) !important;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.25) !important;
+  outline: none !important;
+}
+:root[data-theme=light] .chat-compose__field textarea:focus {
+  border-color: var(--accent) !important;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.06) !important;
+  outline: none !important;
 }
