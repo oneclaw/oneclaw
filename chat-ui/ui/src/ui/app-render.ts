@@ -828,7 +828,7 @@ export function renderApp(state: AppViewState) {
       <div class="oneclaw-main">
         ${
           settingsActive
-            ? html`<div style="position: absolute; top: 0; left: 220px; right: 0; height: 44px; -webkit-app-region: drag; z-index: 100;"></div>`
+            ? html`<div style="position: absolute; top: 0; left: 0; right: 0; height: 44px; -webkit-app-region: drag;"></div>`
             : html`
                 <div class="oneclaw-titlebar">
                   ${

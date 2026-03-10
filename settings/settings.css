@@ -9,6 +9,7 @@
   --bg-secondary: #151515;
   --bg-card: #222222;
   --bg-input: #111111;
+  --bg-hover: #2a2a2a;
   --border: #303030;
   --border-focus: #c0392b;
   --text-primary: #e4e4e7;
@@ -16,7 +17,7 @@
   --text-muted: #71717a;
   --text-strong: #fafafa;
   --accent: #c0392b;
-  --accent-hover: #d94a3c;
+  --accent-hover: #a93226;
   --accent-dim: rgba(192, 57, 43, 0.12);
   --success: #d4776a;
   --success-bg: rgba(212, 119, 106, 0.1);
@@ -29,7 +30,7 @@
   --radius-lg: 16px;
   --radius-pill: 9999px;
   --transition: 180ms ease;
-  --sidebar-width: 220px;
+  --sidebar-width: 280px;
 }
 
 /* 全局重置 */
@@ -37,6 +38,14 @@
   box-sizing: border-box;
   margin: 0;
   padding: 0;
+}
+
+/* 隐藏 lucide sprite SVG（CSP 阻止了其 inline position:absolute） */
+body > svg:first-child {
+  position: absolute;
+  width: 0;
+  height: 0;
+  overflow: hidden;
 }
 
 html, body {
@@ -70,7 +79,8 @@ button, input, select, label, a {
   flex-shrink: 0;
   background: var(--bg-secondary);
   border-right: 1px solid var(--border);
-  padding: 16px 8px 12px;
+  /* 顶部 44px 避让 macOS 红绿灯 */
+  padding: 44px 8px 12px;
   display: flex;
   flex-direction: column;
   -webkit-app-region: drag;
@@ -95,35 +105,34 @@ button, input, select, label, a {
   gap: 2px;
 }
 
-/* 导航项：8px 圆角，柔和过渡 */
+/* 导航项：统一 10px 圆角 + 宽松内边距 */
 .nav-item {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 8px 10px;
+  padding: 8px 12px;
   font-size: 13px;
   font-weight: 500;
   color: var(--text-secondary);
   cursor: pointer;
-  border-radius: var(--radius-sm);
+  border-radius: 10px;
   transition: color var(--transition), background var(--transition);
   -webkit-app-region: no-drag;
 }
 
 .nav-item:hover {
   color: var(--text-primary);
-  background: var(--bg-input);
+  background: var(--bg-hover);
 }
 
+/* 选中态：灰色背景，与 Chat UI 侧栏选中色一致 */
 .nav-item.active {
   color: var(--text-strong);
-  background: var(--accent-dim);
-  border-left: none;
-  padding-left: 10px;
+  background: var(--bg-hover);
 }
 
 .nav-item.active svg {
-  color: var(--accent);
+  color: var(--text-strong);
 }
 
 .nav-item svg {
@@ -137,15 +146,32 @@ button, input, select, label, a {
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  padding: 28px 32px;
+  /* 顶部 44px 避让 macOS 标题栏拖拽区域 */
+  padding: 44px 32px 28px;
   position: relative;
 }
 
+/* 内容区顶部拖拽区域（替代外层绝对定位 div） */
+.content::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 44px;
+  -webkit-app-region: drag;
+}
+
+/* 内容面板：限制最大宽度，居中放置 */
 .tab-panel {
   display: none;
   flex-direction: column;
   gap: 16px;
   min-height: 0;
+  max-width: 720px;
+  width: 100%;
+  margin-left: auto;
+  margin-right: auto;
 }
 
 .tab-panel.active {
@@ -228,7 +254,7 @@ button, input, select, label, a {
   align-items: center;
   gap: 8px;
   padding: 6px 8px 6px 12px;
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   transition: background var(--transition), box-shadow var(--transition);
 }
 
@@ -245,16 +271,17 @@ button, input, select, label, a {
 }
 
 .chat-platform-item:hover {
-  background: var(--bg-input);
+  background: var(--bg-hover);
 }
 
+/* 平台选中态：灰色背景，与 Chat UI 侧栏选中色一致 */
 .chat-platform-item.active {
-  background: var(--accent-dim);
-  box-shadow: inset 0 0 0 1px rgba(192, 57, 43, 0.22);
+  background: var(--bg-hover);
+  box-shadow: none;
 }
 
 .chat-platform-item.active::before {
-  background: var(--accent);
+  background: var(--text-muted);
 }
 
 .chat-platform-btn {
@@ -783,10 +810,11 @@ select option {
   margin-top: 4px;
 }
 
+/* 底部操作按钮：跟随 tab-panel 居中，不用绝对定位 */
 .btn-row.bottom-actions {
-  position: absolute;
-  right: 32px;
-  bottom: 48px;
+  margin-top: auto;
+  padding-top: 24px;
+  padding-bottom: 32px;
 }
 
 .btn-spinner {
@@ -1293,6 +1321,10 @@ select option {
 
 /* ── 小屏布局 ── */
 @media (max-width: 720px) {
+  :root {
+    --sidebar-width: 220px;
+  }
+
   .content {
     padding: 20px 18px;
   }
@@ -1332,20 +1364,20 @@ select option {
     --bg-secondary: #fafafa;
     --bg-card: #ffffff;
     --bg-input: #fafafa;
+    --bg-hover: #ebebeb;
     --border: #e4e4e7;
     --text-primary: #3f3f46;
     --text-secondary: #71717a;
     --text-muted: #a1a1aa;
     --text-strong: #18181b;
-    --accent-dim: rgba(192, 57, 43, 0.08);
+    --accent: #dc2626;
+    --accent-hover: #ef4444;
+    --accent-dim: rgba(220, 38, 38, 0.08);
     --success-bg: rgba(212, 119, 106, 0.06);
-    --error-bg: rgba(192, 57, 43, 0.06);
-    --warning-bg: rgba(192, 57, 43, 0.05);
-  }
-
-  /* 导航 hover：浅色下用黑色半透明 */
-  .nav-item:hover {
-    background: #f4f4f5;
+    --error-bg: rgba(220, 38, 38, 0.06);
+    --warning: #dc2626;
+    --warning-bg: rgba(220, 38, 38, 0.05);
+    --error: #dc2626;
   }
 
   /* 分段选择器激活态：红底强制白字 */

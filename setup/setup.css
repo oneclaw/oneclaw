@@ -15,7 +15,7 @@
   --text-muted: #71717a;
   --text-strong: #fafafa;
   --accent: #c0392b;
-  --accent-hover: #d94a3c;
+  --accent-hover: #a93226;
   --accent-dim: rgba(192, 57, 43, 0.12);
   --success: #d4776a;
   --error: #c0392b;
@@ -784,8 +784,10 @@ select option {
     --text-secondary: #71717a;
     --text-muted: #a1a1aa;
     --text-strong: #18181b;
-    --accent-dim: rgba(192, 57, 43, 0.08);
-    --error-bg: rgba(192, 57, 43, 0.06);
+    --accent: #dc2626;
+    --accent-hover: #ef4444;
+    --accent-dim: rgba(220, 38, 38, 0.08);
+    --error-bg: rgba(220, 38, 38, 0.06);
   }
 
   /* 分段选择器激活态：红底强制白字 */
