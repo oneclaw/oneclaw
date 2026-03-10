@@ -10,18 +10,20 @@
   --bg-input: #111111;
   --border: #303030;
   --border-focus: #c0392b;
-  --text-primary: #e8e8e8;
-  --text-secondary: #999999;
-  --text-muted: #666666;
+  --text-primary: #e4e4e7;
+  --text-secondary: #a1a1aa;
+  --text-muted: #71717a;
+  --text-strong: #fafafa;
   --accent: #c0392b;
   --accent-hover: #d94a3c;
   --accent-dim: rgba(192, 57, 43, 0.12);
   --success: #d4776a;
   --error: #c0392b;
   --error-bg: rgba(192, 57, 43, 0.1);
-  --radius-sm: 6px;
-  --radius-md: 10px;
-  --radius-lg: 14px;
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-pill: 9999px;
   --transition: 180ms ease;
 }
 
@@ -36,7 +38,7 @@
 html, body {
   height: 100%;
   overflow: hidden;
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", "PingFang SC", "Microsoft YaHei", "Hiragino Sans GB", sans-serif;
   font-size: 14px;
   line-height: 1.5;
   color: var(--text-primary);
@@ -131,12 +133,14 @@ h1 {
   font-weight: 700;
   letter-spacing: -0.02em;
   text-align: center;
+  color: var(--text-strong);
 }
 
 h2 {
   font-size: 20px;
   font-weight: 600;
   letter-spacing: -0.01em;
+  color: var(--text-strong);
 }
 
 .subtitle {
@@ -268,12 +272,13 @@ h2 {
 }
 
 /* ---- Provider 分段选择器 ---- */
+/* 药丸形分段选择器 */
 .provider-tabs {
   display: flex;
   gap: 0;
   background: var(--bg-input);
   border: 1px solid var(--border);
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-pill);
   padding: 3px;
   overflow: hidden;
 }
@@ -286,7 +291,7 @@ h2 {
   color: var(--text-muted);
   background: transparent;
   border: none;
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-pill);
   cursor: pointer;
   transition: color var(--transition), background var(--transition);
   white-space: nowrap;
@@ -514,6 +519,7 @@ select option {
 }
 
 /* ---- 按钮 ---- */
+/* 药丸形主按钮 */
 .btn-primary {
   display: inline-flex;
   align-items: center;
@@ -525,7 +531,7 @@ select option {
   color: #fff;
   background: var(--accent);
   border: none;
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-pill);
   cursor: pointer;
   transition: background var(--transition), transform 80ms ease;
   min-height: 40px;
@@ -545,6 +551,7 @@ select option {
   cursor: not-allowed;
 }
 
+/* 药丸形描边次要按钮（Ghost 风格） */
 .btn-secondary {
   display: inline-flex;
   align-items: center;
@@ -555,7 +562,7 @@ select option {
   color: var(--text-secondary);
   background: transparent;
   border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-pill);
   cursor: pointer;
   transition: color var(--transition), border-color var(--transition);
   min-height: 40px;
@@ -769,13 +776,14 @@ select option {
 @media (prefers-color-scheme: light) {
   :root {
     --bg-primary: #ffffff;
-    --bg-secondary: #f5f5f5;
+    --bg-secondary: #fafafa;
     --bg-card: #ffffff;
-    --bg-input: #f5f5f5;
-    --border: #e0e0e0;
-    --text-primary: #1a1a1a;
-    --text-secondary: #555555;
-    --text-muted: #888888;
+    --bg-input: #fafafa;
+    --border: #e4e4e7;
+    --text-primary: #3f3f46;
+    --text-secondary: #71717a;
+    --text-muted: #a1a1aa;
+    --text-strong: #18181b;
     --accent-dim: rgba(192, 57, 43, 0.08);
     --error-bg: rgba(192, 57, 43, 0.06);
   }
