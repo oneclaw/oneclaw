@@ -80,7 +80,7 @@ export function renderSidebar(props: SidebarProps) {
       viewBox="0 0 24 24"
       fill="none"
       stroke="currentColor"
-      stroke-width="2"
+      stroke-width="1.5"
       stroke-linecap="round"
       stroke-linejoin="round"
       aria-hidden="true"
@@ -246,7 +246,7 @@ export function renderSidebar(props: SidebarProps) {
             <span class="oneclaw-sidebar__status-text">${statusText}</span>
           </div>
           <button
-            class="btn btn--sm btn--icon oneclaw-sidebar__refresh"
+            class="oneclaw-sidebar__refresh"
             type="button"
             ?disabled=${props.refreshDisabled}
             @click=${props.onRefresh}
