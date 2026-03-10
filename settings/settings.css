@@ -135,6 +135,7 @@ button, input, select, label, a {
   flex-direction: column;
   overflow: hidden;
   padding: 28px 32px;
+  position: relative;
 }
 
 .tab-panel {
@@ -773,8 +774,9 @@ select option {
 }
 
 .btn-row.bottom-actions {
-  margin-top: auto;
-  padding-top: 16px;
+  position: absolute;
+  right: 32px;
+  bottom: 48px;
 }
 
 .btn-spinner {
