@@ -779,7 +779,7 @@ export function renderApp(state: AppViewState) {
 
   return html`
     <div
-      class="oneclaw-shell ${chatFocus ? "oneclaw-shell--focus" : ""} ${sidebarCollapsed ? "oneclaw-shell--sidebar-collapsed" : ""} ${settingsActive ? "oneclaw-shell--fullpage" : ""}"
+      class="oneclaw-shell ${navigator.platform?.includes("Mac") ? "is-mac" : ""} ${chatFocus ? "oneclaw-shell--focus" : ""} ${sidebarCollapsed ? "oneclaw-shell--sidebar-collapsed" : ""} ${settingsActive ? "oneclaw-shell--fullpage" : ""}"
     >
       ${chatFocus || sidebarCollapsed
         ? nothing

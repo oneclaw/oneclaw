@@ -6273,10 +6273,15 @@ img.chat-avatar {
   display: flex;
   align-items: center;
   gap: 4px;
-  /* 与 sidebar 折叠按钮同一水平位置（红绿灯右侧） */
-  margin-left: 90px;
+  /* Windows/Linux 默认：靠左 */
+  margin-left: 12px;
   padding-top: 3px;
   -webkit-app-region: no-drag;
+}
+
+/* macOS 红绿灯右侧对齐 */
+.is-mac .oneclaw-floating-actions {
+  margin-left: 90px;
 }
 
 .oneclaw-floating-btn {
@@ -6884,12 +6889,17 @@ img.chat-avatar {
 /* 1. Immersive Titlebar padding */
 .oneclaw-sidebar__brand {
   height: 44px !important;
-  /* macOS 红绿灯约 70px，按钮紧跟其后；顶部 3px 微调垂直对齐 */
-  padding: 3px 12px 0 90px !important;
+  /* Windows/Linux 默认：按钮靠左 */
+  padding: 3px 12px 0 12px !important;
   display: flex !important;
   align-items: center !important;
   justify-content: flex-start !important;
   -webkit-app-region: drag;
+}
+
+/* macOS 红绿灯约 70px，按钮紧跟其后 */
+.is-mac .oneclaw-sidebar__brand {
+  padding-left: 90px !important;
 }
 
 .oneclaw-sidebar__collapse {
