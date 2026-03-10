@@ -112,6 +112,7 @@ npm run clean                # Remove all generated files
 ```
 
 **Full build pipeline** (what `dist:mac:arm64` does):
+
 1. `package:resources` — download Node.js 22, `npm install openclaw --production --install-links` (version auto-fetched from npm)
 2. `build:chat` — Vite builds Lit Chat UI into `chat-ui/dist/`
 3. `tsc` — compile TypeScript
@@ -126,6 +127,7 @@ State machine: `stopped → starting → running → stopping → stopped`
 **Generation tracking:** Each `spawn()` call increments a generation counter. The exit handler only processes exits matching the current generation, preventing stale process exits from corrupting the state machine during rapid restart cycles.
 
 Startup sequence:
+
 1. Inject env vars: `OPENCLAW_LENIENT_CONFIG=1`, `OPENCLAW_GATEWAY_TOKEN`, `OPENCLAW_NPM_BIN`, `OPENCLAW_NO_RESPAWN=1`
 2. Prepend bundled runtime to `PATH`
 3. Resolve entry: try `openclaw.mjs` first, fall back to `gateway-entry.mjs` (legacy)
@@ -154,6 +156,7 @@ localStorage.setItem("openclaw.control.settings.v1", JSON.stringify({token}))
 Centralized module for all provider presets, API key verification, and config file I/O. Shared by both Setup wizard and Settings page.
 
 Supported providers:
+
 - **Anthropic** — standard Anthropic Messages API
 - **Moonshot** — 3 sub-platforms: `moonshot-cn`, `moonshot-ai`, `kimi-code`
 - **OpenAI** — OpenAI completions API
@@ -169,6 +172,7 @@ First-launch 3-step wizard: Welcome → Provider Config → Done.
 Also supports optional Feishu channel configuration (appId + appSecret).
 
 Step 3 (Done) includes optional toggles for:
+
 - **Install CLI**: Auto-install `openclaw` command to PATH (enabled by default)
 - **Launch at Login**: Register app for system startup (macOS/Windows only)
 
@@ -179,6 +183,7 @@ Config is written to `~/.openclaw/openclaw.json`. Setup completion is marked by 
 Post-setup configuration management embedded inside the Chat UI (via `app:navigate` IPC). Opened from tray menu "Settings", Chat UI sidebar button, or macOS `Cmd+,`.
 
 Tabs:
+
 - **Provider** — View/edit provider config, verify API key, switch models
 - **Search** — Kimi Search web search toggle + dedicated API key (auto-reuses Kimi Code key if available)
 - **Channels** — Feishu integration (appId + appSecret, DM scope, group access control, pairing approval/rejection)
@@ -190,6 +195,7 @@ Tabs:
 ### Config Backup & Recovery (`config-backup.ts`)
 
 Non-destructive config safety net:
+
 - **Rolling backups**: Max 10 timestamped copies in `~/.openclaw/config-backups/`, created automatically before every config write
 - **Last Known Good**: Snapshot of config at most recent successful gateway startup (`openclaw.last-known-good.json`)
 - **Setup baseline**: Read-only copy of initial post-wizard config
@@ -199,6 +205,7 @@ Non-destructive config safety net:
 ### Share Copy (`share-copy.ts`)
 
 Remote marketing content distribution for the "Share OneClaw" feature in Settings:
+
 - Fetches from CDN (`oneclaw.cn/config/share-copy-content.json`) with 5-minute cache
 - Falls back to bundled `settings/share-copy-content.json`, then hardcoded defaults
 - Bilingual (zh/en) with automatic field normalization
@@ -206,12 +213,14 @@ Remote marketing content distribution for the "Share OneClaw" feature in Setting
 ### Kimi Plugin & Search (`kimi-config.ts`)
 
 Kimi robot plugin and search configuration management:
+
 - **kimi-claw**: Writes `plugins.entries["kimi-claw"]` with bridge/gateway WebSocket params; validates plugin bundling (`openclaw.plugin.json` + entry file) before enabling
 - **kimi-search**: Dedicated API key stored in sidecar file (`~/.openclaw/credentials/kimi-search-api-key`); auto-reuses kimi-code provider API key if no dedicated key configured; auto-enabled when kimi-claw is enabled
 
 ### CLI Integration (`cli-integration.ts`)
 
 Cross-platform `openclaw` command-line wrapper management:
+
 - **POSIX**: Wrapper script at `~/.openclaw/bin/openclaw` + PATH injection into `.zprofile`/`.bash_profile` via `# >>> oneclaw-cli >>>` markers
 - **Windows**: Wrapper `.cmd` at `%LOCALAPPDATA%\OneClaw\bin\` + PowerShell user PATH modification
 - Idempotent install/uninstall with marker-based detection
@@ -220,6 +229,7 @@ Cross-platform `openclaw` command-line wrapper management:
 ### Launch at Login (`launch-at-login.ts`)
 
 System startup integration via `app.getLoginItemSettings()` / `setLoginItemSettings()`:
+
 - Supported on macOS and Windows only (Linux unsupported)
 - Pure functions for testability
 - Configurable in Setup wizard step 3 and Settings > Advanced
@@ -227,6 +237,7 @@ System startup integration via `app.getLoginItemSettings()` / `setLoginItemSetti
 ### Feishu Pairing Monitor (`feishu-pairing-monitor.ts`)
 
 Feishu robot pairing request polling and state management:
+
 - Polling intervals: 10s foreground, 60s background
 - Tracks pending pairing requests with auto-approval (oldest request first)
 - Real-time state subscriptions via `onFeishuPairingState()` IPC listener
@@ -234,6 +245,7 @@ Feishu robot pairing request polling and state management:
 ### Update Banner State Machine (`update-banner-state.ts`)
 
 Pure state machine for update notification UI:
+
 - Status flow: `hidden → available → downloading → (done | failed)`
 - Download progress tracking (0–100%)
 - Badge indicator for new update availability
@@ -242,6 +254,7 @@ Pure state machine for update notification UI:
 ### Gateway RPC (`gateway-rpc.ts`)
 
 Low-level WebSocket RPC for main→gateway communication:
+
 - One-shot calls: connect → Protocol 3 handshake → method → close
 - Used internally for gateway CLI invocations (e.g., `gateway stop` to probe stale ports)
 
@@ -256,6 +269,7 @@ Tray context menu labels are localized (Chinese/English) based on `app.getLocale
 ### Auto-Updater (`auto-updater.ts`)
 
 CDN-based updates via `electron-updater`:
+
 - macOS requires ZIP artifact (DMG is for manual distribution)
 - Auto-check every 4 hours (30s startup delay)
 - Download progress shown in tray tooltip
@@ -312,6 +326,11 @@ Electron 40 defaults to sandbox mode. 42 IPC methods + 4 event listeners are exp
 ```
 
 ## Design Rules
+
+For comprehensive design guidelines, please refer to:
+
+- [Design Guidelines (English)](docs/design-guidelines-en.md)
+- [Design Guidelines (Chinese)](docs/design-guidelines-zh.md)
 
 1. **Theme color is red, not blue or green.** Use OpenClaw's signature red (`#c0392b`) as the accent/theme color. Never use blue (`#3b82f6`) or green as accent colors. Semantic status colors (error red, warning amber) are separate from the accent.
 

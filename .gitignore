@@ -39,3 +39,5 @@ private_keys/
 
 # Git worktrees
 .worktrees/
+
+docs/plans/
