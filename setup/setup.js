@@ -31,7 +31,7 @@
     google: {
       placeholder: "AI...",
       platformUrl: "https://aistudio.google.com?utm_source=oneclaw",
-      models: ["gemini-3.1-pro", "gemini-3.1-flash", "gemini-3-pro-preview", "gemini-3-flash-preview"],
+      models: ["gemini-3.1-pro-preview", "gemini-3.1-flash-lite-preview", "gemini-3-flash-preview"],
     },
     custom: {
       placeholder: "",
@@ -493,7 +493,8 @@
 
   // 模型下拉切换时，判断是否显示自定义输入框
   function handleModelSelectChange() {
-    if (currentProvider !== "custom" || !els.customPreset.value) return;
+    // custom provider 手动模式（无预设）不走这里
+    if (currentProvider === "custom" && !els.customPreset.value) return;
     const isCustomModel = els.modelSelect.value === CUSTOM_MODEL_SENTINEL;
     toggleEl(els.customModelInputGroup, isCustomModel);
     if (isCustomModel) {
@@ -530,9 +531,9 @@
   function updateModels() {
     const config = PROVIDERS[currentProvider];
     if (currentProvider === "moonshot" && getSubPlatform() === "kimi-code") {
-      populateModels(KIMI_CODE_MODELS);
+      populatePresetModels(KIMI_CODE_MODELS);
     } else {
-      populateModels(config.models);
+      populatePresetModels(config.models);
     }
   }
 
@@ -633,7 +634,17 @@
         params.supportImage = els.imageSupport.checked;
       }
     } else {
-      params.modelID = els.modelSelect.value;
+      // 非 custom provider：支持自定义模型输入
+      if (els.modelSelect.value === CUSTOM_MODEL_SENTINEL) {
+        const customModel = (els.customModelInput.value || "").trim();
+        if (!customModel) {
+          showError(t("error.noModelId"));
+          return null;
+        }
+        params.modelID = customModel;
+      } else {
+        params.modelID = els.modelSelect.value;
+      }
     }
 
     // Moonshot 子平台
