@@ -113,6 +113,7 @@
 
   const I18N = {
     en: {
+      "settings.backToChat": "Back to chat",
       "title": "Settings",
       "nav.provider": "Model",
       "nav.chat": "Chat Integration",
@@ -372,6 +373,7 @@
       "about.updateFailed": "Check failed, try again later",
     },
     zh: {
+      "settings.backToChat": "返回应用",
       "title": "设置",
       "nav.provider": "模型配置",
       "nav.chat": "聊天集成",
@@ -3411,6 +3413,18 @@
   // ── 事件绑定 ──
 
   function bindEvents() {
+    var btnBackToChat = document.getElementById("btnBackToChat");
+    if (btnBackToChat) {
+      btnBackToChat.addEventListener("click", function() {
+        if (window.parent && window.parent !== window) {
+          window.parent.postMessage({ source: 'oneclaw-settings-embed', type: 'navigate-back' }, '*');
+        } else if (window.oneclaw && window.oneclaw.onNavigate) {
+          // Fallback
+          window.oneclaw.openWebUI?.();
+        }
+      });
+    }
+
     // 左侧导航 tab 切换
     els.navItems.forEach(function (item) {
       item.addEventListener("click", function () {

@@ -667,6 +667,11 @@ function ensureSettingsEmbedBridge(state: AppViewState) {
       return;
     }
 
+    if (data.type === "navigate-back") {
+      setOneClawView(bridge.state, "chat");
+      return;
+    }
+
     if (data.type === "appearance-save") {
       const nextTheme = data.payload?.theme;
       const nextShowThinking = data.payload?.showThinking;
@@ -774,7 +779,7 @@ export function renderApp(state: AppViewState) {
 
   return html`
     <div
-      class="oneclaw-shell ${chatFocus ? "oneclaw-shell--focus" : ""} ${sidebarCollapsed ? "oneclaw-shell--sidebar-collapsed" : ""}"
+      class="oneclaw-shell ${chatFocus ? "oneclaw-shell--focus" : ""} ${sidebarCollapsed ? "oneclaw-shell--sidebar-collapsed" : ""} ${settingsActive ? "oneclaw-shell--fullpage" : ""}"
     >
       ${chatFocus || sidebarCollapsed
         ? nothing
@@ -822,24 +827,43 @@ export function renderApp(state: AppViewState) {
 
       <div class="oneclaw-main">
         ${
-          sidebarCollapsed && !chatFocus
-            ? html`
-                <button
-                  class="oneclaw-sidebar-toggle-floating"
-                  type="button"
-                  @click=${() => {
-                    state.applySettings({
-                      ...state.settings,
-                      navCollapsed: false,
-                    });
-                  }}
-                  title=${t("sidebar.expand")}
-                  aria-label=${t("sidebar.expand")}
-                >
-                  ${icons.menu}
-                </button>
+          settingsActive
+            ? html`<div style="position: absolute; top: 0; left: 220px; right: 0; height: 44px; -webkit-app-region: drag; z-index: 100;"></div>`
+            : html`
+                <div class="oneclaw-titlebar">
+                  ${
+                    sidebarCollapsed && !chatFocus
+                      ? html`
+                          <div class="oneclaw-floating-actions">
+                            <button
+                              class="oneclaw-floating-btn"
+                              type="button"
+                              @click=${() => {
+                                state.applySettings({
+                                  ...state.settings,
+                                  navCollapsed: false,
+                                });
+                              }}
+                              title=${t("sidebar.expand")}
+                              aria-label=${t("sidebar.expand")}
+                            >
+                              ${icons.panelLeft}
+                            </button>
+                            <button
+                              class="oneclaw-floating-btn"
+                              type="button"
+                              @click=${() => handleSessionChange(state, generateSessionKey())}
+                              title=${t("sidebar.newChat")}
+                              aria-label=${t("sidebar.newChat")}
+                            >
+                              ${icons.messagePlus}
+                            </button>
+                          </div>
+                        `
+                      : nothing
+                  }
+                </div>
               `
-            : nothing
         }
 
         <main class="oneclaw-content">

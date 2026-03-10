@@ -100,12 +100,6 @@ export function renderSidebar(props: SidebarProps) {
   return html`
     <aside class="oneclaw-sidebar">
       <div class="oneclaw-sidebar__brand">
-        <div class="oneclaw-sidebar__brand-main">
-          <div class="oneclaw-sidebar__logo">
-            <img src=${oneClawLogo} alt=${t("sidebar.brand")} />
-          </div>
-          <span class="oneclaw-sidebar__title">${t("sidebar.brand")}</span>
-        </div>
         <button
           class="oneclaw-sidebar__collapse"
           type="button"
@@ -113,23 +107,25 @@ export function renderSidebar(props: SidebarProps) {
           title=${t("sidebar.collapse")}
           aria-label=${t("sidebar.collapse")}
         >
-          ${icons.menu}
+          ${icons.panelLeft}
         </button>
       </div>
 
       <nav class="oneclaw-sidebar__nav">
+        <!-- Prominent New Chat Button -->
+        <div style="padding: 12px 14px 16px;">
+          <button
+            class="btn primary"
+            style="width: 100%; border-radius: 8px; justify-content: center; padding-top: 10px; padding-bottom: 10px; font-weight: 600; -webkit-app-region: no-drag;"
+            @click=${props.onNewChat}
+          >
+            ${icons.messagePlus} ${t("sidebar.newChat")}
+          </button>
+        </div>
+
         <!-- 会话列表标题行 -->
         <div class="oneclaw-sidebar__session-header">
           <span class="oneclaw-sidebar__section-title">${t("sidebar.agent")}</span>
-          <button
-            class="oneclaw-sidebar__session-add"
-            type="button"
-            @click=${props.onNewChat}
-            title=${t("sidebar.newChat")}
-            aria-label=${t("sidebar.newChat")}
-          >
-            ${icons.plus}
-          </button>
         </div>
 
         <!-- 会话列表 -->

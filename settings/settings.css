@@ -27,7 +27,7 @@
   --radius-md: 10px;
   --radius-lg: 14px;
   --transition: 180ms ease;
-  --sidebar-width: 180px;
+  --sidebar-width: 220px;
 }
 
 /* 全局重置 */
@@ -68,7 +68,7 @@ button, input, select, label, a {
   flex-shrink: 0;
   background: var(--bg-secondary);
   border-right: 1px solid var(--border);
-  padding: 12px 8px;
+  padding: 16px 8px 12px;
   display: flex;
   flex-direction: column;
   -webkit-app-region: drag;
@@ -1339,4 +1339,25 @@ select option {
   .provider-tab.active {
     color: #fff;
   }
+}
+
+/* Back to chat button */
+.btn-back-to-chat {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  margin-bottom: 16px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--text-primary);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background var(--transition), border-color var(--transition);
+  -webkit-app-region: no-drag;
+}
+.btn-back-to-chat:hover {
+  background: var(--bg-hover);
 }

@@ -91,7 +91,7 @@ const dict: Record<Locale, Record<string, string>> = {
     "settings.backToChat": "返回对话",
 
     // Chat
-    "chat.placeholder": "输入消息（↩ 发送，Shift+↩ 换行，粘贴图片）",
+    "chat.placeholder": "输入消息…",
     "chat.placeholder.image": "添加消息或粘贴更多图片…",
     "chat.placeholder.disconnected": "连接 Gateway 后即可聊天…",
     "chat.send": "发送",
@@ -221,7 +221,7 @@ const dict: Record<Locale, Record<string, string>> = {
     "settings.backToChat": "Back to chat",
 
     // Chat
-    "chat.placeholder": "Message (↩ to send, Shift+↩ for line breaks, paste images)",
+    "chat.placeholder": "Type a message...",
     "chat.placeholder.image": "Add a message or paste more images...",
     "chat.placeholder.disconnected": "Connect to the gateway to start chatting…",
     "chat.send": "Send",

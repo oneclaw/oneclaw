@@ -54,6 +54,7 @@ export class WindowManager {
     );
 
     const title = resolveMainWindowTitle();
+    const isMac = process.platform === "darwin";
     this.win = new BrowserWindow({
       width: WINDOW_WIDTH,
       height: WINDOW_HEIGHT,
@@ -62,6 +63,11 @@ export class WindowManager {
       show: false,
       title,
       autoHideMenuBar: true,
+      titleBarStyle: "hidden",
+      trafficLightPosition: isMac ? { x: 18, y: 18 } : undefined,
+      titleBarOverlay: isMac
+        ? undefined
+        : { color: "#00000000", symbolColor: "#666666", height: 32 },
       webPreferences: {
         contextIsolation: true,
         nodeIntegration: false,

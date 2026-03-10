@@ -371,6 +371,22 @@ export function renderChat(props: ChatProps) {
 
       <div class="chat-compose">
         ${renderAttachmentPreview(props)}
+        ${
+          canAbort
+            ? html`
+              <div style="display: flex; justify-content: center; margin-bottom: -4px;">
+                <button
+                  class="btn"
+                  ?disabled=${!props.connected}
+                  @click=${props.onAbort}
+                  style="border-radius: 999px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); background: var(--bg-elevated); z-index: 20;"
+                >
+                  ${t("chat.stop")}
+                </button>
+              </div>
+            `
+            : nothing
+        }
         <div class="chat-compose__row">
           <label class="field chat-compose__field">
             <span>${t("chat.messageLabel")}</span>
@@ -407,25 +423,13 @@ export function renderChat(props: ChatProps) {
             ></textarea>
           </label>
           <div class="chat-compose__actions">
-            ${
-              canAbort
-                ? html`
-                  <button
-                    class="btn"
-                    ?disabled=${!props.connected}
-                    @click=${props.onAbort}
-                  >
-                    ${t("chat.stop")}
-                  </button>
-                `
-                : nothing
-            }
             <button
               class="btn primary"
               ?disabled=${!props.connected}
               @click=${props.onSend}
+              title=${t("chat.send")}
             >
-              ${isBusy ? t("chat.queue") : t("chat.send")}<kbd class="btn-kbd">↵</kbd>
+              ${isBusy ? t("chat.queue") : icons.arrowUp}
             </button>
           </div>
         </div>

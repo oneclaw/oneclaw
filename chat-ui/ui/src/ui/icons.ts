@@ -1,7 +1,17 @@
 import { html, type TemplateResult } from "lit";
+import { unsafeSVG } from "lit/directives/unsafe-svg.js";
+import { createElement, PanelLeft, MessageSquarePlus } from "lucide";
 
 // Lucide-style SVG icons
 // All icons use currentColor for stroke
+
+function renderLucideIcon(iconNode: any[]): TemplateResult {
+  const innerHtml = iconNode.map(([tag, attrs]: [string, any]) => {
+    const attrString = Object.entries(attrs).map(([k, v]) => `${k}="${v}"`).join(" ");
+    return `<${tag} ${attrString}></${tag}>`;
+  }).join("");
+  return html`${unsafeSVG(`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${innerHtml}</svg>`)}`;
+}
 
 export const icons = {
   // Navigation icons
@@ -241,6 +251,20 @@ export const icons = {
       <line x1="10" x2="21" y1="14" y2="3" />
     </svg>
   `,
+  send: html`
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <line x1="22" y1="2" x2="11" y2="13" />
+      <polygon points="22 2 15 22 11 13 2 9 22 2" />
+    </svg>
+  `,
+  arrowUp: html`
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <line x1="12" y1="19" x2="12" y2="5" />
+      <polyline points="5 12 12 5 19 12" />
+    </svg>
+  `,
+  panelLeft: renderLucideIcon(PanelLeft),
+  messagePlus: renderLucideIcon(MessageSquarePlus),
 } as const;
 
 export type IconName = keyof typeof icons;

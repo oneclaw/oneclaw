@@ -107,9 +107,9 @@
 }
 
 .oneclaw-sidebar__collapse {
-  width: 30px;
-  height: 30px;
-  border: 1px solid transparent;
+  width: 32px;
+  height: 32px;
+  border: none;
   border-radius: 8px;
   background: transparent;
   color: var(--muted);
@@ -117,19 +117,19 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  transition: background var(--duration-fast) ease, color var(--duration-fast) ease;
   -webkit-app-region: no-drag;
 }
 .oneclaw-sidebar__collapse:hover {
   background: var(--bg-hover);
-  border-color: var(--border);
   color: var(--text);
 }
 .oneclaw-sidebar__collapse svg {
-  width: 16px;
-  height: 16px;
+  width: 18px;
+  height: 18px;
   stroke: currentColor;
   fill: none;
-  stroke-width: 2;
+  stroke-width: 1.5;
   stroke-linecap: round;
   stroke-linejoin: round;
 }
@@ -415,33 +415,44 @@
   background: #22c55e;
 }
 
-.oneclaw-sidebar-toggle-floating {
-  position: absolute;
-  top: 12px;
-  left: 12px;
-  z-index: 20;
+.oneclaw-titlebar {
+  height: 44px;
+  width: 100%;
+  flex-shrink: 0;
+  -webkit-app-region: drag;
+  display: flex;
+  align-items: center;
+}
+.oneclaw-floating-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: 88px;
+  -webkit-app-region: no-drag;
+}
+.oneclaw-floating-btn {
   width: 32px;
   height: 32px;
-  border: 1px solid var(--border);
+  border: none;
   border-radius: 8px;
-  background: var(--panel);
+  background: transparent;
   color: var(--muted);
   display: inline-flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
+  transition: background var(--duration-fast) ease, color var(--duration-fast) ease;
 }
-.oneclaw-sidebar-toggle-floating:hover {
+.oneclaw-floating-btn:hover {
   color: var(--text);
-  border-color: var(--border-strong);
   background: var(--bg-hover);
 }
-.oneclaw-sidebar-toggle-floating svg {
-  width: 16px;
-  height: 16px;
+.oneclaw-floating-btn svg {
+  width: 18px;
+  height: 18px;
   stroke: currentColor;
   fill: none;
-  stroke-width: 2;
+  stroke-width: 1.5;
   stroke-linecap: round;
   stroke-linejoin: round;
 }
@@ -968,4 +979,88 @@
 }
 .skills-apikey-row .skill-store__btn {
   flex-shrink: 0;
+}
+
+/* --- OneClaw Visual Polish Overrides --- */
+
+/* 1. Immersive Titlebar padding */
+.oneclaw-sidebar__brand {
+  height: 44px !important; /* macOS traffic lights height */
+  padding: 0 12px 0 0 !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: flex-end !important;
+  -webkit-app-region: drag;
+}
+.oneclaw-sidebar__collapse {
+  -webkit-app-region: no-drag;
+}
+.chat-header {
+  padding-top: 0 !important;
+}
+.chat-header__left, .chat-header__right {
+  -webkit-app-region: no-drag;
+}
+.oneclaw-sidebar__item, .oneclaw-sidebar__session-item, .oneclaw-sidebar__session-add {
+  -webkit-app-region: no-drag;
+}
+
+/* 2. Fullpage Settings */
+.oneclaw-shell--fullpage .oneclaw-sidebar {
+  display: none !important;
+}
+.oneclaw-shell--fullpage .oneclaw-main {
+  width: 100vw !important;
+}
+
+/* 4. Input Area Optimization */
+.chat-compose {
+  padding-bottom: 24px !important;
+}
+.chat-compose__row {
+  position: relative;
+}
+.chat-compose__field textarea {
+  border-radius: 20px !important;
+  padding-right: 48px !important;
+  padding-bottom: 12px !important;
+}
+.chat-compose__actions {
+  position: absolute;
+  right: 6px;
+  bottom: 6px;
+  z-index: 10;
+}
+.chat-compose__actions .btn {
+  border-radius: 50% !important;
+  width: 32px !important;
+  height: 32px !important;
+  min-width: 0 !important;
+  min-height: 0 !important;
+  padding: 0 !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+}
+
+/* 5. Timestamps / Avatars weakened */
+.chat-group-footer {
+  opacity: 0;
+  transition: opacity 150ms ease;
+}
+.chat-group:hover .chat-group-footer {
+  opacity: 1;
+}
+.chat-avatar {
+  display: none !important;
+}
+.chat-group {
+  margin-left: 0 !important;
+  margin-right: 0 !important;
+}
+
+/* 6. General Spacing */
+.chat-thread {
+  padding-left: 24px !important;
+  padding-right: 24px !important;
 }
