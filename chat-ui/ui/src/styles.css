@@ -417,8 +417,11 @@
 
 .oneclaw-titlebar {
   height: 44px;
-  width: 100%;
-  flex-shrink: 0;
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 100;
   -webkit-app-region: drag;
   display: flex;
   align-items: center;

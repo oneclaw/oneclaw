@@ -64,7 +64,7 @@ export class WindowManager {
       title,
       autoHideMenuBar: true,
       titleBarStyle: "hidden",
-      trafficLightPosition: isMac ? { x: 18, y: 18 } : undefined,
+      trafficLightPosition: isMac ? { x: 14, y: 16 } : undefined,
       titleBarOverlay: isMac
         ? undefined
         : { color: "#00000000", symbolColor: "#666666", height: 32 },
