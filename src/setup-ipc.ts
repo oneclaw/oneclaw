@@ -182,6 +182,9 @@ export function registerSetupIpc(deps: SetupIpcDeps): void {
         config.agents ??= {};
         config.agents.defaults ??= {};
         config.agents.defaults.model ??= {};
+        // 长对话压缩保护：保留最近轮次原文、审计摘要质量、守住关键标识符
+        config.agents.defaults.compaction ??= {};
+        config.agents.defaults.compaction.mode = "safeguard";
 
         // Moonshot 子平台需要特殊处理
         if (provider === "moonshot") {
