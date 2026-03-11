@@ -96,6 +96,11 @@
       placeholder: "sk-sp-...",
       models: ["qwen3.5-plus", "kimi-k2.5", "glm-5", "MiniMax-M2.5",],
     },
+    "deepseek": {
+      providerKey: "deepseek",
+      placeholder: "sk-...",
+      models: ["deepseek-chat", "deepseek-reasoner"],
+    },
   };
 
   // ---- 国际化文案 ----

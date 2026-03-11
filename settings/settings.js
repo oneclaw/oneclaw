@@ -104,6 +104,11 @@
       placeholder: "sk-sp-...",
       models: ["qwen3.5-plus", "kimi-k2.5", "glm-5", "MiniMax-M2.5",],
     },
+    "deepseek": {
+      providerKey: "deepseek",
+      placeholder: "sk-...",
+      models: ["deepseek-chat", "deepseek-reasoner"],
+    },
   };
 
   // 已保存的各 provider 配置缓存（供切换时自动回填）

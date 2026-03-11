@@ -95,6 +95,13 @@ export const CUSTOM_PROVIDER_PRESETS: Record<string, CustomProviderPreset> = {
     placeholder: "sk-sp-...",
     models: ["qwen3.5-plus", "kimi-k2.5", "glm-5", "MiniMax-M2.5",],
   },
+  "deepseek": {
+    providerKey: "deepseek",
+    baseUrl: "https://api.deepseek.com",
+    api: "openai-completions",
+    placeholder: "sk-...",
+    models: ["deepseek-chat", "deepseek-reasoner"],
+  },
 };
 
 // ── 构建 Provider 配置对象 ──
