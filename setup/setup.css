@@ -227,6 +227,10 @@ h2 {
   align-items: stretch;
 }
 
+#step1 .btn-primary {
+  margin-top: 12px;
+}
+
 #step1 h1 {
   text-align: left;
 }
@@ -263,6 +267,13 @@ h2 {
   background: var(--accent-dim);
   border-radius: var(--radius-sm);
   color: var(--accent);
+}
+
+/* 欢迎页安全警告 */
+.welcome-warning {
+  font-size: 12px;
+  color: var(--warning, #d97706);
+  line-height: 1.5;
 }
 
 /* ---- 安全提示卡片 ---- */

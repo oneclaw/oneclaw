@@ -61,29 +61,15 @@
     <!-- Step 1: 欢迎页 -->
     <section class="step active" id="step1">
       <div class="step-content step1-content">
-        <div class="logo-area">
-          <svg width="56" height="56" viewBox="0 0 56 56" fill="none">
-            <rect width="56" height="56" rx="14" fill="#c0392b"/>
-            <path d="M18 28C18 22.477 22.477 18 28 18C33.523 18 38 22.477 38 28C38 33.523 33.523 38 28 38" stroke="white" stroke-width="2.5" stroke-linecap="round"/>
-            <circle cx="28" cy="28" r="4" fill="white"/>
-            <path d="M20 36L16 40" stroke="white" stroke-width="2.5" stroke-linecap="round"/>
-          </svg>
-        </div>
         <h1 data-i18n="welcome.title">Welcome to OneClaw</h1>
-        <p class="subtitle" data-i18n="welcome.subtitle">OneClaw is a one-click installer for OpenClaw. Ready to use out of the box.</p>
+        <p class="subtitle" data-i18n="welcome.subtitle">OneClaw is a one-click installer for OpenClaw</p>
 
         <ul class="welcome-features">
           <li>
             <span class="welcome-feature-icon">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" class="lucide-icon"><use href="#icon-sparkles"></use></svg>
-            </span>
-            <span data-i18n="welcome.feat1">Chat with top language models like Claude, GPT, Kimi, Gemini</span>
-          </li>
-          <li>
-            <span class="welcome-feature-icon">
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" class="lucide-icon"><use href="#icon-terminal"></use></svg>
             </span>
-            <span data-i18n="welcome.feat2">Follow instructions to access files on your computer and automate tasks</span>
+            <span data-i18n="welcome.feat2">Follow instructions to access files and automate tasks</span>
           </li>
           <li>
             <span class="welcome-feature-icon">
@@ -98,6 +84,8 @@
             <span data-i18n="welcome.security">API keys stored locally, never sent to third-party servers</span>
           </li>
         </ul>
+
+        <p class="welcome-warning" data-i18n="welcome.warning">OpenClaw has high system privileges and can control your computer — please use it responsibly</p>
 
         <button class="btn-primary" id="btnToStep2" data-i18n="welcome.next">Next</button>
       </div>
