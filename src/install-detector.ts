@@ -227,58 +227,67 @@ export async function killPortProcess(pid: number): Promise<boolean> {
 
 // ── 系统守护进程卸载 ──
 
-// 官方 openclaw LaunchAgent 的 label（与 openclaw 源码 daemon/constants.ts 保持一致）
-const LAUNCHD_LABEL = "ai.openclaw.gateway";
+// 官方 openclaw 守护服务的标识符（与 openclaw 源码 daemon/constants.ts 保持一致）
+// Gateway + Node 两个服务都需要卸载
+const LAUNCHD_LABELS = ["ai.openclaw.gateway", "ai.openclaw.node"];
+const WIN_TASK_NAMES = ["OpenClaw Gateway", "OpenClaw Node"];
+const WIN_TASK_SCRIPTS = ["gateway.cmd", "node.cmd"];
 
-// 官方 openclaw Windows 计划任务名（与 openclaw 源码 daemon/constants.ts 保持一致）
-const WIN_TASK_NAME = "OpenClaw Gateway";
-
-// 卸载 macOS LaunchAgent：bootout 停止服务 + 删除 plist 文件
+// 卸载 macOS LaunchAgent：bootout 停止服务 + 删除 plist 文件（Gateway + Node 两个服务）
 async function uninstallLaunchdAgent(): Promise<void> {
   const uid = process.getuid?.() ?? 501;
   const domain = `gui/${uid}`;
+  const agentsDir = path.join(os.homedir(), "Library", "LaunchAgents");
 
-  // bootout 会同时停止进程并注销服务
-  try {
-    await execFileAsync("launchctl", ["bootout", `${domain}/${LAUNCHD_LABEL}`]);
-    log.info(`[install-detector] launchd bootout ${LAUNCHD_LABEL} succeeded`);
-  } catch (err) {
-    // 服务不存在时 bootout 会报错，属正常情况
-    log.info(`[install-detector] launchd bootout ${LAUNCHD_LABEL}: ${err instanceof Error ? err.message : String(err)}`);
-  }
-
-  // 删除 plist 文件，防止 launchd 在下次登录时重新加载
-  const plistPath = path.join(os.homedir(), "Library", "LaunchAgents", `${LAUNCHD_LABEL}.plist`);
-  try {
-    if (fs.existsSync(plistPath)) {
-      fs.unlinkSync(plistPath);
-      log.info(`[install-detector] deleted plist: ${plistPath}`);
+  for (const label of LAUNCHD_LABELS) {
+    // bootout 会同时停止进程并注销服务
+    try {
+      await execFileAsync("launchctl", ["bootout", `${domain}/${label}`]);
+      log.info(`[install-detector] launchd bootout ${label} succeeded`);
+    } catch (err) {
+      // 服务不存在时 bootout 会报错，属正常情况
+      log.info(`[install-detector] launchd bootout ${label}: ${err instanceof Error ? err.message : String(err)}`);
     }
-  } catch (err) {
-    log.error(`[install-detector] delete plist failed: ${err instanceof Error ? err.message : String(err)}`);
+
+    // 删除 plist 文件，防止 launchd 在下次登录时重新加载
+    const plistPath = path.join(agentsDir, `${label}.plist`);
+    try {
+      if (fs.existsSync(plistPath)) {
+        fs.unlinkSync(plistPath);
+        log.info(`[install-detector] deleted plist: ${plistPath}`);
+      }
+    } catch (err) {
+      log.error(`[install-detector] delete plist failed: ${err instanceof Error ? err.message : String(err)}`);
+    }
   }
 }
 
-// 卸载 Windows 计划任务 + 删除 gateway.cmd 脚本
+// 卸载 Windows 计划任务 + 删除启动脚本（Gateway + Node 两个服务）
 async function uninstallWindowsTask(): Promise<void> {
-  // 删除计划任务
-  try {
-    await execFileAsync("schtasks", ["/Delete", "/F", "/TN", WIN_TASK_NAME]);
-    log.info(`[install-detector] schtasks delete "${WIN_TASK_NAME}" succeeded`);
-  } catch (err) {
-    // 任务不存在时报错是正常的
-    log.info(`[install-detector] schtasks delete "${WIN_TASK_NAME}": ${err instanceof Error ? err.message : String(err)}`);
+  const stateDir = resolveUserStateDir();
+
+  // 删除计划任务（Gateway + Node）
+  for (const taskName of WIN_TASK_NAMES) {
+    try {
+      await execFileAsync("schtasks", ["/Delete", "/F", "/TN", taskName]);
+      log.info(`[install-detector] schtasks delete "${taskName}" succeeded`);
+    } catch (err) {
+      // 任务不存在时报错是正常的
+      log.info(`[install-detector] schtasks delete "${taskName}": ${err instanceof Error ? err.message : String(err)}`);
+    }
   }
 
-  // 删除 gateway.cmd 启动脚本
-  const scriptPath = path.join(resolveUserStateDir(), "gateway.cmd");
-  try {
-    if (fs.existsSync(scriptPath)) {
-      fs.unlinkSync(scriptPath);
-      log.info(`[install-detector] deleted script: ${scriptPath}`);
+  // 删除启动脚本（gateway.cmd + node.cmd）
+  for (const script of WIN_TASK_SCRIPTS) {
+    const scriptPath = path.join(stateDir, script);
+    try {
+      if (fs.existsSync(scriptPath)) {
+        fs.unlinkSync(scriptPath);
+        log.info(`[install-detector] deleted script: ${scriptPath}`);
+      }
+    } catch (err) {
+      log.error(`[install-detector] delete script failed: ${err instanceof Error ? err.message : String(err)}`);
     }
-  } catch (err) {
-    log.error(`[install-detector] delete script failed: ${err instanceof Error ? err.message : String(err)}`);
   }
 }
 
