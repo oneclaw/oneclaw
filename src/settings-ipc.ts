@@ -1,4 +1,4 @@
-import { app, ipcMain } from "electron";
+import { app, ipcMain, session } from "electron";
 import { spawn } from "child_process";
 import {
   resolveNodeBin,
@@ -1102,6 +1102,13 @@ export function registerSettingsIpc(opts: SettingsIpcOptions = {}): void {
         if (fs.existsSync(marker)) {
           fs.unlinkSync(marker);
         }
+      }
+
+      // 清除 BrowserWindow 的 localStorage（分享弹窗计数器等），确保恢复出厂后状态彻底重置
+      try {
+        await session.defaultSession.clearStorageData({ storages: ["localstorage"] });
+      } catch {
+        // 清理失败不阻塞重启
       }
 
       app.relaunch();
