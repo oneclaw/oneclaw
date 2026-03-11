@@ -9,6 +9,7 @@ import {
   resolveUserConfigPath,
   resolveUserStateDir,
 } from "./constants";
+import { resolveOneclawConfigPath } from "./oneclaw-config";
 import {
   getConfigRecoveryData,
   restoreLastKnownGoodConfigSnapshot,
@@ -1089,6 +1090,18 @@ export function registerSettingsIpc(opts: SettingsIpcOptions = {}): void {
       const configPath = resolveUserConfigPath();
       if (fs.existsSync(configPath)) {
         fs.unlinkSync(configPath);
+      }
+
+      // 删除所有影响 detectOwnership() 判定的标记文件，确保重启后进入 Setup
+      const stateDir = resolveUserStateDir();
+      for (const marker of [
+        resolveOneclawConfigPath(),                                   // "oneclaw" 归属标记
+        path.join(stateDir, "openclaw-setup-baseline.json"),          // "legacy-oneclaw" 标记
+        path.join(stateDir, "openclaw.last-known-good.json"),         // last-known-good 快照
+      ]) {
+        if (fs.existsSync(marker)) {
+          fs.unlinkSync(marker);
+        }
       }
 
       app.relaunch();
