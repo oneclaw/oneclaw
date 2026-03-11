@@ -25,6 +25,7 @@ export type SkillStoreState = {
   sort: "updated" | "trending" | "downloads";
   nextCursor: string | null;
   installingSlugs: Set<string>;
+  toastMessage: string | null;
 };
 
 export type SkillStoreCallbacks = {
@@ -140,6 +141,10 @@ export function renderSkillStoreView(
 
     ${state.loading
       ? html`<div class="skill-store__loading">${t("chat.loading")}</div>`
+      : nothing}
+
+    ${state.toastMessage
+      ? html`<div class="skill-store__toast">${state.toastMessage}</div>`
       : nothing}
   `;
 }

@@ -248,7 +248,23 @@ const skillStoreState: SkillStoreState = {
   sort: "trending",
   nextCursor: null,
   installingSlugs: new Set(),
+  toastMessage: null,
 };
+
+// toast 定时器句柄
+let skillStoreToastTimer: ReturnType<typeof setTimeout> | null = null;
+
+// 显示 toast 并在 4 秒后自动消失
+function showSkillStoreToast(state: AppViewState, message: string) {
+  if (skillStoreToastTimer) clearTimeout(skillStoreToastTimer);
+  skillStoreState.toastMessage = message;
+  state.requestUpdate();
+  skillStoreToastTimer = setTimeout(() => {
+    skillStoreState.toastMessage = null;
+    skillStoreToastTimer = null;
+    state.requestUpdate();
+  }, 4000);
+}
 let skillStoreDataLoaded = false;
 
 // 加载技能列表（初次或切换排序时调用）
@@ -331,8 +347,12 @@ async function installSkillFromStore(state: AppViewState, slug: string) {
     const result = await window.oneclaw.skillStoreInstall({ slug });
     if (result?.success) {
       skillStoreState.installedSlugs.add(slug);
+    } else {
+      showSkillStoreToast(state, t("skillStore.installFailed"));
     }
-  } catch { /* ignore */ }
+  } catch {
+    showSkillStoreToast(state, t("skillStore.installFailed"));
+  }
   skillStoreState.installingSlugs.delete(slug);
   state.requestUpdate();
 }
@@ -346,8 +366,12 @@ async function uninstallSkillFromStore(state: AppViewState, slug: string) {
     const result = await window.oneclaw.skillStoreUninstall({ slug });
     if (result?.success) {
       skillStoreState.installedSlugs.delete(slug);
+    } else {
+      showSkillStoreToast(state, t("skillStore.uninstallFailed"));
     }
-  } catch { /* ignore */ }
+  } catch {
+    showSkillStoreToast(state, t("skillStore.uninstallFailed"));
+  }
   skillStoreState.installingSlugs.delete(slug);
   state.requestUpdate();
 }
@@ -358,11 +382,17 @@ async function uninstallLocalSkill(state: AppViewState, slug: string) {
   state.skillsBusyKey = slug;
   state.requestUpdate();
   try {
-    await window.oneclaw.skillStoreUninstall({ slug });
-    // 刷新已安装列表和商店已安装标记
-    void loadSkills(state as unknown as SkillsState);
-    await refreshInstalledSlugs();
-  } catch { /* ignore */ }
+    const result = await window.oneclaw.skillStoreUninstall({ slug });
+    if (result?.success) {
+      // 刷新已安装列表和商店已安装标记
+      void loadSkills(state as unknown as SkillsState);
+      await refreshInstalledSlugs();
+    } else {
+      showSkillStoreToast(state, t("skillStore.uninstallFailed"));
+    }
+  } catch {
+    showSkillStoreToast(state, t("skillStore.uninstallFailed"));
+  }
   state.skillsBusyKey = "";
   state.requestUpdate();
 }

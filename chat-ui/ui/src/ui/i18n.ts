@@ -88,6 +88,8 @@ const dict: Record<Locale, Record<string, string>> = {
     "skillStore.error": "加载失败，请稍后再试",
     "skillStore.version": "版本",
     "skillStore.downloads": "下载量",
+    "skillStore.installFailed": "安装失败，请稍后重试",
+    "skillStore.uninstallFailed": "卸载失败，请稍后重试",
 
     // OneClaw settings page
     "settings.title": "设置",
@@ -222,6 +224,8 @@ const dict: Record<Locale, Record<string, string>> = {
     "skillStore.error": "Failed to load. Please try again later.",
     "skillStore.version": "Version",
     "skillStore.downloads": "Downloads",
+    "skillStore.installFailed": "Install failed. Please try again later.",
+    "skillStore.uninstallFailed": "Uninstall failed. Please try again later.",
 
     // OneClaw settings page
     "settings.title": "Settings",

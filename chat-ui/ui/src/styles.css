@@ -6727,6 +6727,29 @@ img.chat-avatar {
   color: #dc2626;
 }
 
+/* 技能商店操作 toast 提示（与 settings 页 toast 风格一致） */
+.skill-store__toast {
+  position: fixed;
+  top: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 10px 20px;
+  font-size: 13px;
+  font-weight: 500;
+  border-radius: var(--radius-sm, 6px);
+  color: #dc2626;
+  background: rgba(220, 38, 38, 0.08);
+  border: 1px solid rgba(192, 57, 43, 0.25);
+  z-index: 9999;
+  pointer-events: none;
+  animation: skill-toast-in 0.2s ease forwards;
+}
+
+@keyframes skill-toast-in {
+  from { opacity: 0; transform: translateX(-50%) translateY(-8px); }
+  to { opacity: 1; transform: translateX(-50%) translateY(0); }
+}
+
 .skill-store__load-more {
   margin-top: 16px;
 }
