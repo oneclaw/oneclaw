@@ -1,5 +1,5 @@
 // 此文件由 scripts/generate-settings-icons.js 自动生成，请勿手动编辑。
-(function injectOneClawSettingsIconSprite() {
+(function inject() {
   if (typeof document === "undefined" || !document.body) return;
   if (document.getElementById("oneclaw-settings-icon-sprite")) return;
 

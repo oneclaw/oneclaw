@@ -677,8 +677,8 @@
 
     try {
       const payload = {
-        installCli: els.installCliCheck.checked,
-        sessionMemory: !!els.sessionMemoryEnabled.checked,
+        installCli: true,
+        sessionMemory: true,
       };
       if (launchAtLoginSupported) {
         payload.launchAtLogin = !!els.launchAtLoginEnabled.checked;

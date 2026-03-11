@@ -20,6 +20,8 @@
   --success: #d4776a;
   --error: #c0392b;
   --error-bg: rgba(192, 57, 43, 0.1);
+  --warning: #e67e22;
+  --warning-dim: rgba(230, 126, 34, 0.12);
   --radius-sm: 8px;
   --radius-md: 12px;
   --radius-lg: 16px;
@@ -32,6 +34,14 @@
   box-sizing: border-box;
   margin: 0;
   padding: 0;
+}
+
+/* 隐藏 Lucide sprite SVG */
+body > svg:first-child {
+  position: absolute;
+  width: 0;
+  height: 0;
+  overflow: hidden;
 }
 
 /* 页面根样式 */
@@ -52,6 +62,14 @@ html, body {
 button, input, select, label, a {
   -webkit-app-region: no-drag;
   user-select: text;
+}
+
+/* ---- Lucide 图标通用样式 ---- */
+.lucide-icon {
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 
 /* ---- 顶部进度条 ---- */
@@ -79,18 +97,18 @@ button, input, select, label, a {
   height: 100%;
 }
 
-/* 单步骤面板 */
+/* 单步骤面板 — 偏上定位 */
 .step {
   position: absolute;
   inset: 0;
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: center;
   opacity: 0;
   visibility: hidden;
   transform: translateY(12px);
   transition: opacity 300ms ease, transform 300ms ease, visibility 0ms 300ms;
-  padding: 32px;
+  padding: 72px 32px 32px;
 }
 
 .step.active {
@@ -117,7 +135,6 @@ button, input, select, label, a {
 
 #step2 {
   overflow-y: auto;
-  align-items: flex-start;
   padding-top: 48px;
   padding-bottom: 48px;
 }
@@ -125,6 +142,36 @@ button, input, select, label, a {
 /* ---- Logo 区域 ---- */
 .logo-area {
   margin-bottom: 4px;
+}
+
+/* Step 0 警告图标容器 */
+.logo-area-warning {
+  width: 48px;
+  height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--warning-dim);
+  border-radius: var(--radius-md);
+}
+
+.warning-icon {
+  color: var(--warning);
+}
+
+/* Step 3 完成图标容器 */
+.logo-area-check {
+  width: 48px;
+  height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--accent-dim);
+  border-radius: var(--radius-md);
+}
+
+.check-icon {
+  color: var(--accent);
 }
 
 /* ---- 排版 ---- */
@@ -157,18 +204,12 @@ h2 {
   max-width: none;
 }
 
-/* 教程文档链接行 */
-.docs-link-row {
-  margin: 2px 0 0;
-  font-size: 12.5px;
-}
-
+/* Step 3 完成页 */
 #step3 .step-content {
   align-items: stretch;
-  gap: 16px;
+  gap: 14px;
 }
 
-/* 完成页统一左对齐，避免标题与正文错位 */
 #step3 .logo-area {
   margin-bottom: 0;
 }
@@ -177,12 +218,8 @@ h2 {
   text-align: left;
 }
 
-#step3 .feature-list {
-  margin-top: 2px;
-}
-
 #step3 #btnStart {
-  margin-top: 2px;
+  margin-top: 4px;
 }
 
 /* ---- 欢迎页功能列表 ---- */
@@ -208,13 +245,14 @@ h2 {
 
 .welcome-features li {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   gap: 10px;
   font-size: 13px;
   color: var(--text-secondary);
   line-height: 1.45;
 }
 
+/* 功能图标统一 28px 容器 */
 .welcome-feature-icon {
   flex-shrink: 0;
   width: 28px;
@@ -224,16 +262,7 @@ h2 {
   justify-content: center;
   background: var(--accent-dim);
   border-radius: var(--radius-sm);
-  margin-top: 1px;
-}
-
-/* ---- 紧凑信息卡片（Step 2 提示） ---- */
-.info-card-compact {
-  padding: 10px 14px;
-}
-
-.info-card-compact .info-card-text {
-  gap: 0;
+  color: var(--accent);
 }
 
 /* ---- 安全提示卡片 ---- */
@@ -248,9 +277,19 @@ h2 {
   width: 100%;
 }
 
+/* 紧凑信息卡片（Step 2 提示） */
+.info-card-compact {
+  padding: 10px 14px;
+}
+
+.info-card-compact .info-card-text {
+  gap: 4px;
+}
+
 .info-card-icon {
   flex-shrink: 0;
   margin-top: 1px;
+  color: var(--accent);
 }
 
 .info-card-text {
@@ -271,8 +310,21 @@ h2 {
   color: var(--text-secondary);
 }
 
+/* 卡片内链接 */
+.info-card-link {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--accent);
+  text-decoration: none;
+  cursor: pointer;
+  transition: color var(--transition);
+}
+
+.info-card-link:hover {
+  color: var(--accent-hover);
+}
+
 /* ---- Provider 分段选择器 ---- */
-/* 药丸形分段选择器 */
 .provider-tabs {
   display: flex;
   gap: 0;
@@ -596,7 +648,7 @@ select option {
   to { transform: rotate(360deg); }
 }
 
-/* Step 4 启动状态提示 */
+/* 启动状态提示 */
 .status-msg {
   margin-top: -6px;
   font-size: 12.5px;
@@ -608,44 +660,12 @@ select option {
   color: var(--error);
 }
 
-/* ---- Step 4 功能列表 ---- */
-.feature-list {
-  list-style: none;
-  width: 100%;
-  max-width: 380px;
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.feature-list li {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  font-size: 13.5px;
-  color: var(--text-secondary);
-}
-
-.feature-icon {
-  flex-shrink: 0;
-  width: 36px;
-  height: 36px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: var(--accent-dim);
-  border-radius: var(--radius-sm);
-}
-
 /* ---- iOS 风格开关 ---- */
 .toggle-row {
   width: 100%;
-  max-width: 380px;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-top: -2px;
-  margin-bottom: 6px;
 }
 
 .toggle-label {
@@ -699,11 +719,6 @@ select option {
   transform: translateX(18px);
 }
 
-/* 完成页开关行与主按钮对齐，避免右侧缩进 */
-#step3 .toggle-row {
-  max-width: none;
-}
-
 /* ---- Step 0 冲突检测页 ---- */
 .step0-content {
   align-items: stretch;
@@ -739,6 +754,10 @@ select option {
 
 .conflict-icon {
   flex-shrink: 0;
+}
+
+.conflict-icon-svg {
+  color: var(--warning);
 }
 
 .conflict-actions {
@@ -788,6 +807,8 @@ select option {
     --accent-hover: #ef4444;
     --accent-dim: rgba(220, 38, 38, 0.08);
     --error-bg: rgba(220, 38, 38, 0.06);
+    --warning: #d97706;
+    --warning-dim: rgba(217, 119, 6, 0.08);
   }
 
   /* 分段选择器激活态：红底强制白字 */

@@ -9,6 +9,8 @@
 </head>
 <body>
 
+  <script src="lucide-sprite.generated.js"></script>
+
   <!-- 进度指示器 -->
   <div class="progress-bar">
     <div class="progress-fill" id="progressFill"></div>
@@ -20,12 +22,8 @@
     <!-- Step 0: 环境检测（冲突时显示） -->
     <section class="step" id="step0">
       <div class="step-content step0-content">
-        <div class="logo-area">
-          <svg width="56" height="56" viewBox="0 0 56 56" fill="none">
-            <rect width="56" height="56" rx="14" fill="#e67e22"/>
-            <path d="M28 16L28 32" stroke="white" stroke-width="3" stroke-linecap="round"/>
-            <circle cx="28" cy="38" r="2" fill="white"/>
-          </svg>
+        <div class="logo-area logo-area-warning">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" class="lucide-icon warning-icon"><use href="#icon-alert-triangle"></use></svg>
         </div>
         <h1 data-i18n="conflict.title">Existing OpenClaw Detected</h1>
         <p class="subtitle" data-i18n="conflict.subtitle">An existing OpenClaw installation was found on your system. This may cause port conflicts.</p>
@@ -34,19 +32,13 @@
         <div class="conflict-details" id="conflictDetails">
           <div class="conflict-item hidden" id="conflictPort">
             <span class="conflict-icon">
-              <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-                <circle cx="8" cy="8" r="6" stroke="#e67e22" stroke-width="1.5"/>
-                <path d="M8 5V9M8 11V11.01" stroke="#e67e22" stroke-width="1.5" stroke-linecap="round"/>
-              </svg>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" class="lucide-icon conflict-icon-svg"><use href="#icon-alert-circle"></use></svg>
             </span>
             <span id="conflictPortText"></span>
           </div>
           <div class="conflict-item hidden" id="conflictGlobal">
             <span class="conflict-icon">
-              <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-                <circle cx="8" cy="8" r="6" stroke="#e67e22" stroke-width="1.5"/>
-                <path d="M8 5V9M8 11V11.01" stroke="#e67e22" stroke-width="1.5" stroke-linecap="round"/>
-              </svg>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" class="lucide-icon conflict-icon-svg"><use href="#icon-alert-circle"></use></svg>
             </span>
             <span id="conflictGlobalText"></span>
           </div>
@@ -83,28 +75,25 @@
         <ul class="welcome-features">
           <li>
             <span class="welcome-feature-icon">
-              <svg width="18" height="18" viewBox="0 0 18 18" fill="none"><path d="M3 4.5H15M3 9H15M3 13.5H9" stroke="#c0392b" stroke-width="1.3" stroke-linecap="round"/></svg>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" class="lucide-icon"><use href="#icon-sparkles"></use></svg>
             </span>
             <span data-i18n="welcome.feat1">Chat with top language models like Claude, GPT, Kimi, Gemini</span>
           </li>
           <li>
             <span class="welcome-feature-icon">
-              <svg width="18" height="18" viewBox="0 0 18 18" fill="none"><path d="M3 4H15M3 8H10M3 12H13" stroke="#c0392b" stroke-width="1.3" stroke-linecap="round"/></svg>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" class="lucide-icon"><use href="#icon-terminal"></use></svg>
             </span>
             <span data-i18n="welcome.feat2">Follow instructions to access files on your computer and automate tasks</span>
           </li>
           <li>
             <span class="welcome-feature-icon">
-              <svg width="18" height="18" viewBox="0 0 18 18" fill="none"><path d="M2.5 4.5C2.5 3.67 3.17 3 4 3H14C14.83 3 15.5 3.67 15.5 4.5V11.5C15.5 12.33 14.83 13 14 13H10L6.5 15.5V13H4C3.17 13 2.5 12.33 2.5 11.5V4.5Z" stroke="#c0392b" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" class="lucide-icon"><use href="#icon-message-circle"></use></svg>
             </span>
             <span data-i18n="welcome.feat3">Connect to Feishu, WeCom, DingTalk, QQ Bot</span>
           </li>
           <li>
             <span class="welcome-feature-icon">
-              <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
-                <path d="M9 1.5L2.5 5V13L9 16.5L15.5 13V5L9 1.5Z" stroke="#c0392b" stroke-width="1.3"/>
-                <path d="M9 8V12M9 6V6.01" stroke="#c0392b" stroke-width="1.3" stroke-linecap="round"/>
-              </svg>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" class="lucide-icon"><use href="#icon-shield-check"></use></svg>
             </span>
             <span data-i18n="welcome.security">API keys stored locally, never sent to third-party servers</span>
           </li>
@@ -122,17 +111,13 @@
 
         <div class="info-card info-card-compact">
           <div class="info-card-icon">
-            <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
-              <circle cx="9" cy="9" r="7" stroke="#c0392b" stroke-width="1.3"/>
-              <path d="M8.25 5.63h1.5v1.5h-1.5zM8.25 8.63h1.5v3.75h-1.5z" fill="#c0392b"/>
-            </svg>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" class="lucide-icon"><use href="#icon-info"></use></svg>
           </div>
           <div class="info-card-text">
             <span data-i18n="config.keyNotice">OneClaw does not provide API keys. Please click the link to purchase one from the provider's website.</span>
+            <a href="#" class="info-card-link" id="docsLink" data-i18n="config.docsLink">Tutorial Docs →</a>
           </div>
         </div>
-
-        <p class="docs-link-row"><a href="#" class="platform-link" id="docsLink" data-i18n="config.docsLink">Tutorial Docs →</a></p>
 
         <!-- Provider 分段选择器 -->
         <div class="provider-tabs" id="providerTabs">
@@ -194,13 +179,8 @@
           <div class="input-password-wrap">
             <input type="password" id="apiKey" placeholder="sk-ant-..." autocomplete="off" spellcheck="false">
             <button class="btn-toggle-vis" id="btnToggleKey" type="button" title="Toggle visibility">
-              <svg class="icon-eye" width="18" height="18" viewBox="0 0 18 18" fill="none">
-                <path d="M1.5 9C1.5 9 4 3.75 9 3.75C14 3.75 16.5 9 16.5 9C16.5 9 14 14.25 9 14.25C4 14.25 1.5 9 1.5 9Z" stroke="currentColor" stroke-width="1.3"/>
-                <circle cx="9" cy="9" r="2.25" stroke="currentColor" stroke-width="1.3"/>
-              </svg>
-              <svg class="icon-eye-off hidden" width="18" height="18" viewBox="0 0 18 18" fill="none">
-                <path d="M2.5 2.5L15.5 15.5M7.05 7.05A2.25 2.25 0 0010.95 10.95M1.5 9C1.5 9 4 3.75 9 3.75C10.2 3.75 11.3 4.1 12.25 4.6M16.5 9C16.5 9 14 14.25 9 14.25C7.8 14.25 6.7 13.9 5.75 13.4" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
-              </svg>
+              <svg class="icon-eye" width="16" height="16" viewBox="0 0 24 24" fill="none"><use href="#icon-eye"></use></svg>
+              <svg class="icon-eye-off hidden" width="16" height="16" viewBox="0 0 24 24" fill="none"><use href="#icon-eye-off"></use></svg>
             </button>
           </div>
         </div>
@@ -267,72 +247,16 @@
     <!-- Step 3: 完成 -->
     <section class="step" id="step3">
       <div class="step-content">
-        <div class="logo-area">
-          <svg width="48" height="48" viewBox="0 0 48 48" fill="none">
-            <circle cx="24" cy="24" r="22" stroke="#c0392b" stroke-width="2.5"/>
-            <path d="M15 24L21 30L33 18" stroke="#c0392b" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
-          </svg>
+        <div class="logo-area logo-area-check">
+          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" class="lucide-icon check-icon"><use href="#icon-circle-check"></use></svg>
         </div>
         <h1 data-i18n="done.title">All Set!</h1>
-        <p class="subtitle" data-i18n="done.subtitle">OneClaw is ready. Here's what you can do:</p>
-
-        <ul class="feature-list">
-          <li>
-            <span class="feature-icon">
-              <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
-                <path d="M3 5H17M3 10H17M3 15H10" stroke="#c0392b" stroke-width="1.5" stroke-linecap="round"/>
-              </svg>
-            </span>
-            <span data-i18n="done.feature1">Chat with state-of-the-art language models</span>
-          </li>
-          <li>
-            <span class="feature-icon">
-              <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
-                <path d="M6 4L14 10L6 16V4Z" stroke="#c0392b" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-              </svg>
-            </span>
-            <span data-i18n="done.feature2">Generate and execute code in real time</span>
-          </li>
-          <li>
-            <span class="feature-icon">
-              <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
-                <rect x="3" y="3" width="14" height="14" rx="2" stroke="#c0392b" stroke-width="1.5"/>
-                <path d="M7 10H13M10 7V13" stroke="#c0392b" stroke-width="1.5" stroke-linecap="round"/>
-              </svg>
-            </span>
-            <span data-i18n="done.feature3">Manage multiple conversations and contexts</span>
-          </li>
-          <li>
-            <span class="feature-icon">
-              <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
-                <circle cx="10" cy="10" r="7" stroke="#c0392b" stroke-width="1.5"/>
-                <path d="M10 6V10L13 13" stroke="#c0392b" stroke-width="1.5" stroke-linecap="round"/>
-              </svg>
-            </span>
-            <span data-i18n="done.feature4">Switch providers or models anytime in Settings</span>
-          </li>
-        </ul>
-
-        <div class="toggle-row">
-          <span class="toggle-label" data-i18n="done.sessionMemory">Auto-save session memory on /new</span>
-          <label class="toggle-switch">
-            <input type="checkbox" id="sessionMemoryEnabled" checked>
-            <span class="toggle-slider"></span>
-          </label>
-        </div>
+        <p class="subtitle" data-i18n="done.subtitle">OneClaw is ready. You can switch providers or models anytime in Settings.</p>
 
         <div class="toggle-row hidden" id="launchAtLoginRow">
           <span class="toggle-label" data-i18n="done.launchAtLogin">Launch at login</span>
           <label class="toggle-switch">
             <input type="checkbox" id="launchAtLoginEnabled">
-            <span class="toggle-slider"></span>
-          </label>
-        </div>
-
-        <div class="toggle-row">
-          <span class="toggle-label" data-i18n="done.installCli">Add openclaw command to terminal PATH</span>
-          <label class="toggle-switch">
-            <input type="checkbox" id="installCliCheck" checked>
             <span class="toggle-slider"></span>
           </label>
         </div>
