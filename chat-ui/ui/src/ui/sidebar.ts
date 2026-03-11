@@ -246,7 +246,7 @@ export function renderSidebar(props: SidebarProps) {
             <span class="oneclaw-sidebar__status-text">${statusText}</span>
           </div>
           <button
-            class="oneclaw-sidebar__refresh"
+            class="oneclaw-sidebar__refresh ${props.connected ? "" : "disconnected"}"
             type="button"
             ?disabled=${props.refreshDisabled}
             @click=${props.onRefresh}

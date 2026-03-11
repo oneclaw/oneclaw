@@ -94,6 +94,16 @@ export class GatewayBrowserClient {
     return this.ws?.readyState === WebSocket.OPEN;
   }
 
+  // 手动立即重连（重置 backoff），用于刷新按钮
+  reconnectNow() {
+    if (this.connected) return;
+    this.closed = false;
+    this.backoffMs = 800;
+    this.ws?.close();
+    this.ws = null;
+    this.connect();
+  }
+
   private connect() {
     if (this.closed) {
       return;

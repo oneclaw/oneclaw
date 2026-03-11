@@ -240,6 +240,7 @@ export class OpenClawApp extends LitElement {
     execApprovalBusy: { state: true },
     execApprovalError: { state: true },
     pendingGatewayUrl: { state: true },
+    showRestartGatewayDialog: { state: true },
     configLoading: { state: true },
     configRaw: { state: true },
     configRawOriginal: { state: true },
@@ -462,6 +463,7 @@ export class OpenClawApp extends LitElement {
   execApprovalBusy = false;
   execApprovalError: string | null = null;
   pendingGatewayUrl: string | null = null;
+  showRestartGatewayDialog = false;
 
   configLoading = false;
   configRaw = "{\n}\n";

@@ -6234,6 +6234,16 @@ img.chat-avatar {
   cursor: not-allowed;
 }
 
+/* 断开连接时刷新按钮变红 */
+.oneclaw-sidebar__refresh.disconnected {
+  color: var(--accent, #c0392b);
+}
+
+.oneclaw-sidebar__refresh.disconnected:hover {
+  color: var(--accent-hover, #a93226);
+  background: var(--bg-hover);
+}
+
 .oneclaw-sidebar__refresh svg {
   width: 14px;
   height: 14px;

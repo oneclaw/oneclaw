@@ -15,6 +15,7 @@ import { renderSidebar } from "./sidebar.ts";
 import { renderChat } from "./views/chat.ts";
 import { renderExecApprovalPrompt } from "./views/exec-approval.ts";
 import { renderGatewayUrlConfirmation } from "./views/gateway-url-confirmation.ts";
+import { renderRestartGatewayDialog } from "./views/restart-gateway-dialog.ts";
 import { renderSharePrompt } from "./views/share-prompt.ts";
 import { patchSession, loadSessions } from "./controllers/sessions.ts";
 import { renderSkillStoreView, type SkillStoreState } from "./skill-store-view.ts";
@@ -570,7 +571,15 @@ function confirmAndCreateNewSession(state: AppViewState) {
 }
 
 async function handleRefreshChat(state: AppViewState) {
-  if (state.chatLoading || !state.connected) {
+  if (state.chatLoading) return;
+  // 断开连接时立即重连，3 秒后仍失败则弹窗询问是否重启 Gateway
+  if (!state.connected) {
+    (state as any).client?.reconnectNow();
+    setTimeout(() => {
+      if (!state.connected) {
+        state.showRestartGatewayDialog = true;
+      }
+    }, 3000);
     return;
   }
   const app = state as any;
@@ -793,7 +802,7 @@ export function renderApp(state: AppViewState) {
             updateVersion: updateBannerState.version,
             updatePercent: updateBannerState.percent,
             updateShowBadge: updateBannerState.showBadge,
-            refreshDisabled: state.chatLoading || !state.connected,
+            refreshDisabled: state.chatLoading,
             onSelectSession: (nextSessionKey: string) => handleSessionChange(state, nextSessionKey),
             onNewChat: () => createNewSession(state),
             onRenameSession: (key: string, newLabel: string) => {
@@ -1054,6 +1063,7 @@ export function renderApp(state: AppViewState) {
 
       ${renderExecApprovalPrompt(state)}
       ${renderGatewayUrlConfirmation(state)}
+      ${renderRestartGatewayDialog(state)}
       ${renderSharePrompt(state)}
     </div>
   `;
