@@ -147,6 +147,9 @@
       "done.installCli": "Add openclaw command to terminal PATH",
       "done.start": "Start OneClaw",
       "done.starting": "Starting Gateway…",
+      "done.retryPort": "Try a different port",
+      "done.retryPortStarting": "Switching port…",
+      "done.retryPortSuccess": "Switched to port {port}, restarting…",
       "done.startFailed": "Gateway failed to start — please click Start OneClaw to retry",
       "conflict.title": "Existing OpenClaw Detected",
       "conflict.subtitle": "An existing OpenClaw installation was found on your system, which may cause port conflicts with OneClaw",
@@ -205,6 +208,9 @@
       "done.installCli": "将 openclaw 命令添加到终端 PATH",
       "done.start": "启动 OneClaw",
       "done.starting": "正在启动 Gateway…",
+      "done.retryPort": "换个端口试试",
+      "done.retryPortStarting": "正在切换端口…",
+      "done.retryPortSuccess": "已切换到端口 {port}，正在重启…",
       "done.startFailed": 'Gateway 启动失败 请点击"启动 OneClaw"重试',
       "conflict.title": "检测到已安装的 OpenClaw",
       "conflict.subtitle": "系统中已存在 OpenClaw 安装 可能与 OneClaw 产生端口冲突",
@@ -277,6 +283,9 @@
     doneStatus: $("#doneStatus"),
     launchAtLoginRow: $("#launchAtLoginRow"),
     launchAtLoginEnabled: $("#launchAtLoginEnabled"),
+    btnRetryPort: $("#btnRetryPort"),
+    btnRetryPortText: document.querySelector("#btnRetryPort .btn-text"),
+    btnRetryPortSpinner: document.querySelector("#btnRetryPort .btn-spinner"),
   };
 
   // ---- 状态 ----
@@ -692,10 +701,55 @@
       if (!result || !result.success) {
         setStarting(false);
         setDoneStatus(result?.message || t("done.startFailed"), true);
+        showRetryPortButton();
       }
     } catch (err) {
       setStarting(false);
       setDoneStatus((err && err.message) || t("done.startFailed"), true);
+      showRetryPortButton();
+    }
+  }
+
+  // 显示换端口重试按钮
+  function showRetryPortButton() {
+    if (window.oneclaw?.retryRandomPort) {
+      els.btnRetryPort.classList.remove("hidden");
+    }
+  }
+
+  // 换随机端口重试
+  async function handleRetryPort() {
+    if (starting) return;
+
+    els.btnRetryPort.disabled = true;
+    els.btnRetryPortText.textContent = t("done.retryPortStarting");
+    els.btnRetryPortSpinner.classList.remove("hidden");
+    setDoneStatus("");
+
+    try {
+      const portResult = await window.oneclaw.retryRandomPort();
+      if (!portResult || !portResult.success) {
+        setDoneStatus(portResult?.message || t("done.startFailed"), true);
+        els.btnRetryPort.disabled = false;
+        els.btnRetryPortText.textContent = t("done.retryPort");
+        els.btnRetryPortSpinner.classList.add("hidden");
+        return;
+      }
+
+      // 端口切换成功，提示并自动重试启动
+      setDoneStatus(t("done.retryPortSuccess").replace("{port}", String(portResult.port)));
+      els.btnRetryPort.classList.add("hidden");
+      els.btnRetryPortText.textContent = t("done.retryPort");
+      els.btnRetryPortSpinner.classList.add("hidden");
+      els.btnRetryPort.disabled = false;
+
+      // 自动触发启动
+      handleComplete();
+    } catch (err) {
+      setDoneStatus((err && err.message) || t("done.startFailed"), true);
+      els.btnRetryPort.disabled = false;
+      els.btnRetryPortText.textContent = t("done.retryPort");
+      els.btnRetryPortSpinner.classList.add("hidden");
     }
   }
 
@@ -826,6 +880,7 @@
 
     // Step 3 — 完成
     els.btnStart.addEventListener("click", handleComplete);
+    els.btnRetryPort.addEventListener("click", handleRetryPort);
   }
 
   // ---- 初始化 ----

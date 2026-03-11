@@ -240,6 +240,26 @@ export function registerSetupIpc(deps: SetupIpcDeps): void {
     });
   });
 
+  // ── 换随机端口重试启动 Gateway ──
+  ipcMain.handle("setup:retry-random-port", async () => {
+    try {
+      const newPort = await findAvailablePort(DEFAULT_PORT + 1);
+      if (newPort <= 0) {
+        return { success: false, message: "No available port found" };
+      }
+      const config = readUserConfig();
+      config.gateway ??= {};
+      config.gateway.port = newPort;
+      writeUserConfig(config);
+      deps.gateway?.setPort(newPort);
+      log.info(`[setup] 端口冲突重试，切换到端口 ${newPort}`);
+      return { success: true, port: newPort };
+    } catch (err: any) {
+      log.error(`[setup] 换端口失败: ${err?.message ?? err}`);
+      return { success: false, message: err?.message ?? String(err) };
+    }
+  });
+
   // ── Setup 完成（Gateway 启动 + 窗口切换由 setOnComplete 回调统一处理） ──
   ipcMain.handle("setup:complete", async (_event, params?: { installCli?: boolean; launchAtLogin?: boolean; sessionMemory?: boolean }) => {
     const launchAtLogin = typeof params?.launchAtLogin === "boolean" ? params.launchAtLogin : undefined;
