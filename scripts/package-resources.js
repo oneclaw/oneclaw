@@ -1307,6 +1307,85 @@ async function bundleNpmPackagePlugin(plugin, gatewayDir, targetId, opts) {
   log(`已注入 ${plugin.id} 插件到 ${path.relative(ROOT, pluginDir)}`);
 }
 
+// tgz 插件依赖补装：读取 package.json dependencies，在临时目录安装后收集到插件 node_modules
+function installTgzPluginDeps(plugin, pluginDir, targetId, opts) {
+  const pkgPath = path.join(pluginDir, "package.json");
+  if (!fs.existsSync(pkgPath)) return;
+
+  let pkg;
+  try { pkg = JSON.parse(fs.readFileSync(pkgPath, "utf-8")); } catch { return; }
+
+  const deps = pkg.dependencies;
+  if (!deps || Object.keys(deps).length === 0) return;
+
+  // 检查是否所有依赖已经存在（增量构建场景）
+  const pluginNm = path.join(pluginDir, "node_modules");
+  const allPresent = Object.keys(deps).every((name) => {
+    const depDir = path.join(pluginNm, ...name.split("/"));
+    return fs.existsSync(depDir);
+  });
+  if (allPresent) {
+    log(`${plugin.id} 依赖已就位，跳过安装`);
+    return;
+  }
+
+  log(`为 ${plugin.id} 安装生产依赖: ${Object.keys(deps).join(", ")} ...`);
+
+  const depTmpDir = createExtractTmpDir(TARGETS_ROOT, `${targetId}_tgzdeps_${plugin.id}`);
+  const tmpPkg = { dependencies: deps };
+  fs.writeFileSync(path.join(depTmpDir, "package.json"), JSON.stringify(tmpPkg, null, 2));
+
+  try {
+    execSync(
+      `npm install --omit=dev --install-links --legacy-peer-deps --os=${opts.platform} --cpu=${opts.arch}`,
+      {
+        cwd: depTmpDir,
+        stdio: "inherit",
+        env: {
+          ...process.env,
+          NODE_ENV: "production",
+          npm_config_os: opts.platform,
+          npm_config_cpu: opts.arch,
+          NODE_LLAMA_CPP_SKIP_DOWNLOAD: "true",
+        },
+      }
+    );
+  } catch (err) {
+    rmDir(depTmpDir);
+    die(`安装 ${plugin.id} 依赖失败: ${err.message || String(err)}`);
+  }
+
+  // 收集 hoisted 依赖到插件 node_modules
+  const tmpNm = path.join(depTmpDir, "node_modules");
+  ensureDir(pluginNm);
+
+  for (const entry of fs.readdirSync(tmpNm, { withFileTypes: true })) {
+    if (entry.name.startsWith(".") || !entry.isDirectory()) continue;
+
+    if (entry.name.startsWith("@")) {
+      const scopeDir = path.join(tmpNm, entry.name);
+      for (const child of fs.readdirSync(scopeDir, { withFileTypes: true })) {
+        if (!child.isDirectory()) continue;
+        const dest = path.join(pluginNm, entry.name, child.name);
+        if (fs.existsSync(dest)) continue;
+        ensureDir(path.join(pluginNm, entry.name));
+        copyDirSync(path.join(scopeDir, child.name), dest);
+      }
+    } else {
+      const dest = path.join(pluginNm, entry.name);
+      if (fs.existsSync(dest)) continue;
+      copyDirSync(path.join(tmpNm, entry.name), dest);
+    }
+  }
+
+  // 裁剪依赖中的无用文件
+  pruneNodeModules(pluginNm, null);
+  pruneDanglingBinLinks(pluginNm);
+
+  rmDir(depTmpDir);
+  log(`${plugin.id} 依赖安装完成`);
+}
+
 // 将插件注入 openclaw/extensions/<id>（支持 tgz 解压和 npm 包两种来源）
 async function bundlePlugin(plugin, gatewayDir, targetId, opts) {
   // npm 包插件：在独立目录安装，防止传递依赖污染 gateway
@@ -1369,6 +1448,9 @@ async function bundlePlugin(plugin, gatewayDir, targetId, opts) {
   rmDir(pluginDir);
   copyDirSync(extractedPkgDir, pluginDir);
   rmDir(tmpDir);
+
+  // tgz 插件可能声明了 dependencies 但不自带 node_modules，需要补装
+  installTgzPluginDeps(plugin, pluginDir, targetId, opts);
 
   const stamp = { source: source.sourceLabel, bundledAt: new Date().toISOString() };
   fs.writeFileSync(
