@@ -801,6 +801,28 @@ function prunePdfParseRedundantVersions(nmDir) {
   log(`已移除 pdf-parse 冗余 pdf.js 版本 (保留 ${entries[0].name}，节省 ${savedMB} MB)`);
 }
 
+// 清理非目标平台的 prebuilds 目录（node-pty 等包自带多平台预编译二进制，只保留目标平台）
+function pruneNonTargetPrebuilds(nmDir, targetPlatform, targetArch) {
+  const targetName = `${targetPlatform}-${targetArch}`;
+  const packages = collectTopLevelPackages(nmDir);
+  let totalRemoved = 0;
+
+  for (const pkg of packages) {
+    const prebuildsDir = path.join(pkg.dir, "prebuilds");
+    if (!fs.existsSync(prebuildsDir)) continue;
+
+    for (const entry of fs.readdirSync(prebuildsDir, { withFileTypes: true })) {
+      if (!entry.isDirectory() || entry.name === targetName) continue;
+      rmDir(path.join(prebuildsDir, entry.name));
+      totalRemoved++;
+    }
+  }
+
+  if (totalRemoved > 0) {
+    log(`已清理 ${totalRemoved} 个非目标平台 prebuilds 目录（保留 ${targetName}）`);
+  }
+}
+
 // 清理 node_modules/.bin 中的悬挂符号链接（避免 afterPack 拷贝时报 ENOENT）
 function pruneDanglingBinLinks(nmDir) {
   const binDir = path.join(nmDir, ".bin");
@@ -1337,7 +1359,7 @@ function installTgzPluginDeps(plugin, pluginDir, targetId, opts) {
 
   try {
     execSync(
-      `npm install --omit=dev --install-links --legacy-peer-deps --os=${opts.platform} --cpu=${opts.arch}`,
+      `npm install --omit=dev --install-links --legacy-peer-deps --ignore-scripts --os=${opts.platform} --cpu=${opts.arch}`,
       {
         cwd: depTmpDir,
         stdio: "inherit",
@@ -1346,12 +1368,7 @@ function installTgzPluginDeps(plugin, pluginDir, targetId, opts) {
           NODE_ENV: "production",
           npm_config_os: opts.platform,
           npm_config_cpu: opts.arch,
-          // 引导 prebuild-install / node-gyp 按目标架构下载预编译二进制
-          npm_config_arch: opts.arch,
-          npm_config_platform: opts.platform,
           NODE_LLAMA_CPP_SKIP_DOWNLOAD: "true",
-          // Windows CI 的 Git Bash 作为 npm script-shell 会导致原生模块 spawn EINVAL
-          ...(process.platform === "win32" ? { npm_config_script_shell: "cmd.exe" } : {}),
         },
       }
     );
@@ -1386,6 +1403,9 @@ function installTgzPluginDeps(plugin, pluginDir, targetId, opts) {
   // 裁剪依赖中的无用文件
   pruneNodeModules(pluginNm, null);
   pruneDanglingBinLinks(pluginNm);
+
+  // 清理非目标平台的 prebuilds（node-pty 自带 4 个平台的预编译二进制，只保留目标平台）
+  pruneNonTargetPrebuilds(pluginNm, opts.platform, opts.arch);
 
   rmDir(depTmpDir);
   log(`${plugin.id} 依赖安装完成`);
