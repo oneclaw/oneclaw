@@ -1346,7 +1346,12 @@ function installTgzPluginDeps(plugin, pluginDir, targetId, opts) {
           NODE_ENV: "production",
           npm_config_os: opts.platform,
           npm_config_cpu: opts.arch,
+          // 引导 prebuild-install / node-gyp 按目标架构下载预编译二进制
+          npm_config_arch: opts.arch,
+          npm_config_platform: opts.platform,
           NODE_LLAMA_CPP_SKIP_DOWNLOAD: "true",
+          // Windows CI 的 Git Bash 作为 npm script-shell 会导致原生模块 spawn EINVAL
+          ...(process.platform === "win32" ? { npm_config_script_shell: "cmd.exe" } : {}),
         },
       }
     );
