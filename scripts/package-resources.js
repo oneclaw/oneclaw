@@ -1087,6 +1087,7 @@ const OPENCLAW_EXTENSION_ALLOWLIST = new Set([
   "device-pair",
   "feishu",
   "imessage",
+  "telegram",
   "kimi-claw",
   "kimi-search",
   "qqbot",
