@@ -1,6 +1,6 @@
 import { html, type TemplateResult } from "lit";
 import { unsafeSVG } from "lit/directives/unsafe-svg.js";
-import { createElement, PanelLeft, MessageSquarePlus } from "lucide";
+import { createElement, PanelLeft, MessageSquarePlus, Square } from "lucide";
 
 // Lucide-style SVG icons
 // All icons use currentColor for stroke
@@ -263,6 +263,7 @@ export const icons = {
       <polyline points="5 12 12 5 19 12" />
     </svg>
   `,
+  stop: renderLucideIcon(Square),
   panelLeft: renderLucideIcon(PanelLeft),
   messagePlus: renderLucideIcon(MessageSquarePlus),
 } as const;

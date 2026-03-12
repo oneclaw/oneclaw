@@ -6972,13 +6972,18 @@ img.chat-avatar {
   border-radius: 20px !important;
   padding-right: 48px !important;
   padding-bottom: 12px !important;
+  min-height: 72px !important;
+  scrollbar-width: none !important;
+}
+
+.chat-compose__field textarea::-webkit-scrollbar {
+  display: none !important;
 }
 
 .chat-compose__actions {
   position: absolute;
   right: 10px;
   bottom: 20px;
-  /* Centered vertically when textarea is 72px min-height */
   z-index: 10;
 }
 

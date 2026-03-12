@@ -200,11 +200,13 @@ export function renderChat(props: ChatProps) {
   };
 
   const hasAttachments = (props.attachments?.length ?? 0) > 0;
-  const composePlaceholder = props.connected
-    ? hasAttachments
-      ? t("chat.placeholder.image")
-      : t("chat.placeholder")
-    : t("chat.placeholder.disconnected");
+  const composePlaceholder = !props.connected
+    ? t("chat.placeholder.disconnected")
+    : isBusy
+      ? t("chat.placeholder.busy")
+      : hasAttachments
+        ? t("chat.placeholder.image")
+        : t("chat.placeholder");
 
   const splitRatio = props.splitRatio ?? 0.6;
   const sidebarOpen = Boolean(props.sidebarOpen && props.onCloseSidebar);
@@ -371,22 +373,6 @@ export function renderChat(props: ChatProps) {
 
       <div class="chat-compose">
         ${renderAttachmentPreview(props)}
-        ${
-          canAbort
-            ? html`
-              <div style="display: flex; justify-content: center; margin-bottom: -4px;">
-                <button
-                  class="btn"
-                  ?disabled=${!props.connected}
-                  @click=${props.onAbort}
-                  style="border-radius: 999px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); background: var(--bg-elevated); z-index: 20;"
-                >
-                  ${t("chat.stop")}
-                </button>
-              </div>
-            `
-            : nothing
-        }
         <div class="chat-compose__row">
           <label class="field chat-compose__field">
             <span>${t("chat.messageLabel")}</span>
@@ -423,12 +409,20 @@ export function renderChat(props: ChatProps) {
             ></textarea>
           </label>
           <div class="chat-compose__actions">
-            <button
-              class="btn primary"
-              ?disabled=${!props.connected}
-              @click=${props.onSend}
-              title=${t("chat.send")}
-            >${isBusy ? t("chat.queue") : icons.arrowUp}</button>
+            ${isBusy && canAbort
+              ? html`<button
+                  class="btn primary"
+                  ?disabled=${!props.connected}
+                  @click=${props.onAbort}
+                  title=${t("chat.stop")}
+                >${icons.stop}</button>`
+              : html`<button
+                  class="btn primary"
+                  ?disabled=${!props.connected}
+                  @click=${props.onSend}
+                  title=${t("chat.send")}
+                >${icons.arrowUp}</button>`
+            }
           </div>
         </div>
       </div>
