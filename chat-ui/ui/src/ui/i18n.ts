@@ -19,7 +19,7 @@ const dict: Record<Locale, Record<string, string>> = {
     "sidebar.updateReady": "重新启动即可更新",
     "sidebar.updateDownloading": "正在下载更新 {percent}%",
     "sidebar.agent": "会话列表",
-    "sidebar.fullUI": "OpenClaw Web UI",
+    "sidebar.fullUI": "打开 OpenClaw 网页端",
     "sidebar.deleteSession": "删除此会话？\n\n会话记录将被归档。",
     "sidebar.preferences": "偏好设置",
     "sidebar.appearance": "外观显示",
