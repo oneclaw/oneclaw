@@ -702,6 +702,8 @@ app.on("window-all-closed", () => {
 // ── 退出前清理 ──
 
 app.on("before-quit", () => {
+  // 先放行窗口关闭，避免 close handler 拦截 WM_CLOSE 导致 NSIS 安装器报"无法关闭"
+  windowManager.prepareForAppQuit();
   pairingMonitor?.stop();
   windowManager.destroy();
   gateway.stop();

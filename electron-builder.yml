@@ -50,6 +50,8 @@ win:
 nsis:
   oneClick: true
   perMachine: false
+  # 安装前强制终止旧进程，避免托盘模式下 WM_CLOSE 被拦截
+  include: "scripts/installer.nsh"
   createDesktopShortcut: true
   createStartMenuShortcut: true
   runAfterFinish: true
