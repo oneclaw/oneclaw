@@ -29,6 +29,7 @@ export interface CustomProviderPreset extends ProviderPreset {
   providerKey: string;
   placeholder: string;
   models: string[];
+  keyOptional?: boolean;
 }
 
 export const CUSTOM_PROVIDER_PRESETS: Record<string, CustomProviderPreset> = {
@@ -72,14 +73,14 @@ export const CUSTOM_PROVIDER_PRESETS: Record<string, CustomProviderPreset> = {
     baseUrl: "https://ark.cn-beijing.volces.com/api/v3",
     api: "openai-completions",
     placeholder: "...",
-    models: ["doubao-seed-1-8-251228", "doubao-seed-code-preview-251028", "deepseek-v3-2-251201"],
+    models: ["doubao-seed-2.0-pro", "doubao-seed-2.0-lite", "doubao-seed-2.0-code", "doubao-seed-code"],
   },
   "volcengine-coding": {
     providerKey: "volcengine",
     baseUrl: "https://ark.cn-beijing.volces.com/api/coding",
     api: "openai-completions",
     placeholder: "...",
-    models: ["doubao-seed-1-8-251228", "doubao-seed-code-preview-251028", "deepseek-v3-2-251201"],
+    models: ["doubao-seed-2.0-code", "doubao-seed-2.0-pro", "doubao-seed-2.0-lite", "doubao-seed-code", "minimax-m2.5", "glm-4.7", "deepseek-v3.2", "kimi-k2.5", "ark-code-latest"],
   },
   "qwen": {
     providerKey: "qwen",
@@ -101,6 +102,14 @@ export const CUSTOM_PROVIDER_PRESETS: Record<string, CustomProviderPreset> = {
     api: "openai-completions",
     placeholder: "sk-...",
     models: ["deepseek-chat", "deepseek-reasoner"],
+  },
+  "ollama": {
+    providerKey: "ollama",
+    baseUrl: "http://localhost:11434",
+    api: "openai-completions",
+    placeholder: "",
+    models: [],
+    keyOptional: true,
   },
 };
 
@@ -127,12 +136,12 @@ export function buildProviderConfig(
     };
   }
 
-  // Custom 内置预设命中时，使用预设的 baseUrl 和 api
+  // Custom 内置预设命中时，使用预设的 baseUrl 和 api（前端传了 baseURL 时优先用前端值）
   const customPre = customPreset ? CUSTOM_PROVIDER_PRESETS[customPreset] : undefined;
   if (customPre) {
     return {
       apiKey,
-      baseUrl: customPre.baseUrl,
+      baseUrl: baseURL || customPre.baseUrl,
       api: customPre.api,
       models: [{ id: modelID, name: modelID, input: ["text", "image"] }],
     };
@@ -368,6 +377,12 @@ export function verifyDingtalk(clientId: string, clientSecret: string): Promise<
   });
 }
 
+// Ollama 本地验证（GET /api/tags 检查服务是否运行）
+export async function verifyOllama(baseURL?: string): Promise<void> {
+  const base = (baseURL || "http://localhost:11434").replace(/\/$/, "");
+  await jsonRequest(`${base}/api/tags`, {});
+}
+
 // Custom provider 验证（根据 API 类型发真实 chat 请求，而非 /models）
 export async function verifyCustom(apiKey: string, baseURL?: string, apiType?: string, modelID?: string): Promise<void> {
   if (!baseURL) throw new Error("Custom provider 需要 Base URL");
@@ -464,9 +479,14 @@ export async function verifyProvider(params: {
         await verifyMoonshot(apiKey!, subPlatform, modelID);
         break;
       case "custom": {
-        // 内置预设命中时，使用预设的 baseUrl 和 api 进行验证
         const customPre = customPreset ? CUSTOM_PROVIDER_PRESETS[customPreset] : undefined;
-        const effectiveBaseURL = customPre ? customPre.baseUrl : baseURL;
+        // Ollama 本地验证：GET /api/tags 检查连通性，无需 API Key
+        if (customPre?.keyOptional) {
+          await verifyOllama(baseURL || customPre.baseUrl);
+          break;
+        }
+        // 内置预设命中时，使用预设的 baseUrl 和 api 进行验证（前端传了 baseURL 时优先）
+        const effectiveBaseURL = baseURL || (customPre ? customPre.baseUrl : undefined);
         const effectiveApiType = customPre ? customPre.api : apiType;
         await verifyCustom(apiKey!, effectiveBaseURL, effectiveApiType, modelID);
         break;

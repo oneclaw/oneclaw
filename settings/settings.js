@@ -87,12 +87,12 @@
     "volcengine": {
       providerKey: "volcengine",
       placeholder: "...",
-      models: ["doubao-seed-1-8-251228", "doubao-seed-code-preview-251028", "deepseek-v3-2-251201"],
+      models: ["doubao-seed-2.0-pro", "doubao-seed-2.0-lite", "doubao-seed-2.0-code", "doubao-seed-code"],
     },
     "volcengine-coding": {
       providerKey: "volcengine",
       placeholder: "...",
-      models: ["doubao-seed-1-8-251228", "doubao-seed-code-preview-251028", "deepseek-v3-2-251201"],
+      models: ["doubao-seed-2.0-code", "doubao-seed-2.0-pro", "doubao-seed-2.0-lite", "doubao-seed-code", "minimax-m2.5", "glm-4.7", "deepseek-v3.2", "kimi-k2.5", "ark-code-latest"],
     },
     "qwen": {
       providerKey: "qwen",
@@ -108,6 +108,12 @@
       providerKey: "deepseek",
       placeholder: "sk-...",
       models: ["deepseek-chat", "deepseek-reasoner"],
+    },
+    "ollama": {
+      providerKey: "ollama",
+      placeholder: "",
+      models: [],
+      keyOptional: true,
     },
   };
 
@@ -658,6 +664,7 @@
     platformLink: $("#platformLink"),
     subPlatformGroup: $("#subPlatformGroup"),
     baseURLGroup: $("#baseURLGroup"),
+    apiKeyGroup: $("#apiKeyGroup"),
     apiKeyInput: $("#apiKey"),
     baseURLInput: $("#baseURL"),
     btnToggleKey: $("#btnToggleKey"),
@@ -1095,20 +1102,29 @@
       toggleEl(els.modelInputGroup, false);
       toggleEl(els.modelSelectGroup, false);
       toggleEl(els.customModelInputGroup, false);
+      toggleEl(els.apiKeyGroup, true);
       els.btnSave.disabled = true;
       updatePlatformLink();
     } else if (preset) {
-      // 预设模式：隐藏手动字段，显示模型下拉
-      toggleEl(els.baseURLGroup, false);
+      // 预设模式：隐藏手动字段
       toggleEl(els.apiTypeGroup, false);
       toggleEl(els.imageSupportGroup, false);
       toggleEl(els.modelInputGroup, false);
-      toggleEl(els.modelSelectGroup, true);
-      toggleEl(els.customModelInputGroup, false);
+      // Ollama 等本地 provider：显示可编辑 Base URL，隐藏 API Key
+      toggleEl(els.baseURLGroup, !!preset.keyOptional);
+      toggleEl(els.apiKeyGroup, !preset.keyOptional);
+      if (preset.keyOptional) {
+        els.baseURLInput.value = els.baseURLInput.value || preset.defaultBaseUrl || "http://localhost:11434";
+      }
+
+      // 无预设模型列表时直接显示自定义输入框，跳过空下拉
+      var hasModels = preset.models && preset.models.length > 0;
+      toggleEl(els.modelSelectGroup, hasModels);
+      toggleEl(els.customModelInputGroup, !hasModels);
 
       els.apiKeyInput.placeholder = preset.placeholder;
       els.customModelInput.value = "";
-      populatePresetModels(preset.models);
+      if (hasModels) populatePresetModels(preset.models);
       els.btnSave.disabled = false;
       updatePlatformLink();
     } else {
@@ -1119,6 +1135,7 @@
       toggleEl(els.modelInputGroup, true);
       toggleEl(els.modelSelectGroup, false);
       toggleEl(els.customModelInputGroup, false);
+      toggleEl(els.apiKeyGroup, true);
 
       els.apiKeyInput.placeholder = "";
       els.btnSave.disabled = false;
@@ -1230,7 +1247,9 @@
     if (saving) return;
 
     var apiKey = els.apiKeyInput.value.trim();
-    if (!apiKey) {
+    // Ollama 等本地 provider 不需要 API Key
+    var activePreset = currentProvider === "custom" ? CUSTOM_PRESETS[els.customPreset.value] : null;
+    if (!apiKey && !(activePreset && activePreset.keyOptional)) {
       showMsg(t("error.noKey"), "error");
       return;
     }
@@ -1281,8 +1300,8 @@
       var presetKey = els.customPreset.value;
       if (presetKey === "__placeholder__") return null;
       if (presetKey) {
-        // 预设模式：选了"自定义模型"时用输入框，否则用下拉值
-        if (els.modelSelect.value === CUSTOM_MODEL_SENTINEL) {
+        // 自定义输入框可见（含空 models 预设）或选了"自定义模型"时用输入框
+        if (!els.customModelInputGroup.classList.contains("hidden") || els.modelSelect.value === CUSTOM_MODEL_SENTINEL) {
           var customModel = (els.customModelInput.value || "").trim();
           if (!customModel) { showMsg(t("error.noModelId"), "error"); return null; }
           params.modelID = customModel;
@@ -1290,6 +1309,11 @@
           params.modelID = els.modelSelect.value;
         }
         params.customPreset = presetKey;
+        // 本地 provider 用户可能改了端口，传递前端编辑的 Base URL
+        var presetObj = CUSTOM_PRESETS[presetKey];
+        if (presetObj && presetObj.keyOptional) {
+          params.baseURL = (els.baseURLInput.value || "").trim();
+        }
       } else {
         // 手动模式
         var baseURL = (els.baseURLInput.value || "").trim();
