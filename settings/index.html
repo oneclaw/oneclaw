@@ -87,7 +87,7 @@
           <button class="provider-tab" data-provider="anthropic">Anthropic</button>
           <button class="provider-tab" data-provider="openai">OpenAI</button>
           <button class="provider-tab" data-provider="google">Google</button>
-          <button class="provider-tab" data-provider="custom" data-i18n="provider.custom">Custom</button>
+          <button class="provider-tab" data-provider="custom" data-i18n="provider.custom">Other</button>
         </div>
 
         <!-- Moonshot 子平台 -->
@@ -113,6 +113,7 @@
         <div class="field-group hidden" id="customPresetGroup">
           <label data-i18n="provider.preset">Preset</label>
           <select id="customPreset">
+            <option value="__placeholder__" data-i18n="provider.presetPlaceholder">Please select</option>
             <option value="" data-i18n="provider.presetManual">Manual</option>
             <option value="minimax">MiniMax (Global)</option>
             <option value="minimax-cn">MiniMax (中国)</option>

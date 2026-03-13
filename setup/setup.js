@@ -131,7 +131,8 @@
       "config.presetManual": "Manual",
       "config.customModelId": "Custom Model ID",
       "config.customModelOption": "Custom Model…",
-      "config.custom": "Custom",
+      "config.custom": "Other",
+      "config.presetPlaceholder": "Please select",
       "config.docsLink": "Tutorial Docs →",
       "config.back": "Back",
       "config.verify": "Verify & Continue",
@@ -192,7 +193,8 @@
       "config.presetManual": "手动配置",
       "config.customModelId": "自定义模型 ID",
       "config.customModelOption": "自定义模型…",
-      "config.custom": "自定义",
+      "config.custom": "其他",
+      "config.presetPlaceholder": "请选择",
       "config.docsLink": "教程文档 →",
       "config.back": "返回",
       "config.verify": "验证并继续",
@@ -449,8 +451,8 @@
     toggleEl(els.customPresetGroup, isCustom);
 
     if (isCustom) {
-      els.customPreset.value = "";
-      applyCustomPreset("");
+      els.customPreset.value = "__placeholder__";
+      applyCustomPreset("__placeholder__");
     } else {
       toggleEl(els.baseURLGroup, false);
       toggleEl(els.modelInputGroup, false);
@@ -458,6 +460,7 @@
       toggleEl(els.imageSupportGroup, false);
       toggleEl(els.customModelInputGroup, false);
       toggleEl(els.modelSelectGroup, true);
+      els.btnVerify.disabled = false;
       updateModels();
     }
   }
@@ -469,7 +472,17 @@
   function applyCustomPreset(presetKey) {
     const preset = CUSTOM_PRESETS[presetKey];
 
-    if (preset) {
+    if (presetKey === "__placeholder__") {
+      // 占位状态：隐藏所有字段，禁用验证按钮
+      toggleEl(els.baseURLGroup, false);
+      toggleEl(els.apiTypeGroup, false);
+      toggleEl(els.imageSupportGroup, false);
+      toggleEl(els.modelInputGroup, false);
+      toggleEl(els.modelSelectGroup, false);
+      toggleEl(els.customModelInputGroup, false);
+      els.btnVerify.disabled = true;
+      updatePlatformLink();
+    } else if (preset) {
       // 预设模式：隐藏手动字段，显示模型下拉
       toggleEl(els.baseURLGroup, false);
       toggleEl(els.apiTypeGroup, false);
@@ -481,6 +494,7 @@
       els.apiKeyInput.placeholder = preset.placeholder;
       els.customModelInput.value = "";
       populatePresetModels(preset.models);
+      els.btnVerify.disabled = false;
       updatePlatformLink();
     } else {
       // 手动模式：恢复原始 Custom 行为
@@ -492,6 +506,7 @@
       toggleEl(els.customModelInputGroup, false);
 
       els.apiKeyInput.placeholder = "";
+      els.btnVerify.disabled = false;
       updatePlatformLink();
     }
   }
@@ -617,6 +632,7 @@
 
     if (currentProvider === "custom") {
       const presetKey = els.customPreset.value;
+      if (presetKey === "__placeholder__") return null;
       if (presetKey) {
         // 预设模式：选了"自定义模型"时用输入框，否则用下拉值
         if (els.modelSelect.value === CUSTOM_MODEL_SENTINEL) {

@@ -137,7 +137,8 @@
       "chat.platformQqMeta": "QQ Open Platform Bot",
       "provider.title": "Model Configuration",
       "provider.desc": "Change your LLM provider, API key, or model",
-      "provider.custom": "Custom",
+      "provider.custom": "Other",
+      "provider.presetPlaceholder": "Please select",
       "provider.platform": "Platform",
       "provider.baseUrl": "Base URL",
       "provider.apiKey": "API Key",
@@ -397,7 +398,8 @@
       "chat.platformQqMeta": "QQ 开放平台机器人",
       "provider.title": "模型配置",
       "provider.desc": "修改 LLM 云厂商、API 密钥或模型",
-      "provider.custom": "自定义",
+      "provider.custom": "其他",
+      "provider.presetPlaceholder": "请选择",
       "provider.platform": "平台",
       "provider.baseUrl": "接口地址",
       "provider.apiKey": "API 密钥",
@@ -1060,9 +1062,9 @@
     toggleEl(els.customPresetGroup, isCustom);
 
     if (isCustom) {
-      els.customPreset.value = "";
+      els.customPreset.value = "__placeholder__";
       els.supportImageCheckbox.checked = true;
-      applyCustomPreset("");
+      applyCustomPreset("__placeholder__");
     } else {
       toggleEl(els.baseURLGroup, false);
       toggleEl(els.modelInputGroup, false);
@@ -1070,6 +1072,7 @@
       toggleEl(els.imageSupportGroup, false);
       toggleEl(els.customModelInputGroup, false);
       toggleEl(els.modelSelectGroup, true);
+      els.btnSave.disabled = false;
       updateModels();
     }
 
@@ -1084,7 +1087,17 @@
   function applyCustomPreset(presetKey) {
     var preset = CUSTOM_PRESETS[presetKey];
 
-    if (preset) {
+    if (presetKey === "__placeholder__") {
+      // 占位状态：隐藏所有字段，禁用保存按钮
+      toggleEl(els.baseURLGroup, false);
+      toggleEl(els.apiTypeGroup, false);
+      toggleEl(els.imageSupportGroup, false);
+      toggleEl(els.modelInputGroup, false);
+      toggleEl(els.modelSelectGroup, false);
+      toggleEl(els.customModelInputGroup, false);
+      els.btnSave.disabled = true;
+      updatePlatformLink();
+    } else if (preset) {
       // 预设模式：隐藏手动字段，显示模型下拉
       toggleEl(els.baseURLGroup, false);
       toggleEl(els.apiTypeGroup, false);
@@ -1096,6 +1109,7 @@
       els.apiKeyInput.placeholder = preset.placeholder;
       els.customModelInput.value = "";
       populatePresetModels(preset.models);
+      els.btnSave.disabled = false;
       updatePlatformLink();
     } else {
       // 手动模式：恢复原始 Custom 行为
@@ -1107,6 +1121,7 @@
       toggleEl(els.customModelInputGroup, false);
 
       els.apiKeyInput.placeholder = "";
+      els.btnSave.disabled = false;
       updatePlatformLink();
     }
   }
@@ -1264,6 +1279,7 @@
 
     if (currentProvider === "custom") {
       var presetKey = els.customPreset.value;
+      if (presetKey === "__placeholder__") return null;
       if (presetKey) {
         // 预设模式：选了"自定义模型"时用输入框，否则用下拉值
         if (els.modelSelect.value === CUSTOM_MODEL_SENTINEL) {
