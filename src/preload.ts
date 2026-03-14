@@ -29,6 +29,10 @@ contextBridge.exposeInMainWorld("oneclaw", {
   resolveConflict: (params: Record<string, unknown>) =>
     ipcRenderer.invoke("setup:resolve-conflict", params),
 
+  // Kimi OAuth
+  kimiOAuthLogin: () => ipcRenderer.invoke("kimi-oauth:login"),
+  kimiOAuthStatus: () => ipcRenderer.invoke("kimi-oauth:status"),
+
   // Settings 相关
   settingsGetConfig: () => ipcRenderer.invoke("settings:get-config"),
   settingsVerifyKey: (params: Record<string, unknown>) =>
