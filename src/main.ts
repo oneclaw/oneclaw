@@ -42,6 +42,7 @@ import { readUserConfig, writeUserConfig } from "./provider-config";
 import { resolveKimiSearchApiKey } from "./kimi-config";
 import { reconcileCliOnAppLaunch } from "./cli-integration";
 import { detectOwnership, migrateFromLegacy, markSetupComplete } from "./oneclaw-config";
+import { startTokenRefresh, stopTokenRefresh, loadOAuthToken } from "./kimi-oauth";
 import * as log from "./logger";
 import * as analytics from "./analytics";
 
@@ -377,6 +378,22 @@ async function startGatewayAndShowMain(source: string, opts: StartMainOptions = 
     }
     if (!openOnFailure) return false;
   }
+  // OAuth token 后台刷新：gateway 启动后检查是否有 kimi-coding OAuth token
+  if (running && loadOAuthToken()) {
+    startTokenRefresh((refreshedToken) => {
+      try {
+        const cfg = readUserConfig();
+        if (cfg?.models?.providers?.["kimi-coding"]) {
+          cfg.models.providers["kimi-coding"].apiKey = refreshedToken.access_token;
+          writeUserConfig(cfg);
+          requestGatewayRestart("oauth-token-refresh");
+        }
+      } catch (err: any) {
+        log.error(`OAuth token 刷新后更新配置失败: ${err.message}`);
+      }
+    });
+  }
+
   await showMainWindow();
   return running;
 }
@@ -444,6 +461,7 @@ registerSkillStoreIpc();
 // ── 退出 ──
 
 async function quit(): Promise<void> {
+  stopTokenRefresh();
   stopAutoCheckSchedule();
   pairingMonitor?.stop();
   analytics.track("app_closed");
