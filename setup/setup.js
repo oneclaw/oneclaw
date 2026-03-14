@@ -144,6 +144,7 @@
       "config.verify": "Verify & Continue",
       "config.imageSupport": "Model supports image input",
       "config.oauthLogin": "Log in with Kimi",
+      "config.oauthCancel": "Cancel",
       "config.oauthWaiting": "Waiting for authorization in browser…",
       "config.oauthSuccess": "Login successful!",
       "config.oauthOr": "or enter API Key manually",
@@ -210,6 +211,7 @@
       "config.verify": "验证并继续",
       "config.imageSupport": "模型支持图片输入",
       "config.oauthLogin": "Kimi 会员登录",
+      "config.oauthCancel": "取消",
       "config.oauthWaiting": "请在浏览器中完成授权…",
       "config.oauthSuccess": "登录成功！",
       "config.oauthOr": "或手动输入 API Key",
@@ -278,6 +280,7 @@
     btnOAuth: $("#btnOAuth"),
     btnOAuthText: document.querySelector("#btnOAuth .btn-oauth-text"),
     btnOAuthSpinner: document.querySelector("#btnOAuth .btn-oauth-spinner"),
+    btnOAuthCancel: $("#btnOAuthCancel"),
     oauthStatus: $("#oauthStatus"),
     oauthDivider: $("#oauthDivider"),
     errorMsg: $("#errorMsg"),
@@ -667,10 +670,20 @@
     }
   }
 
+  // 取消 OAuth 轮询
+  function handleOAuthCancel() {
+    if (window.oneclaw?.kimiOAuthCancel) {
+      window.oneclaw.kimiOAuthCancel();
+    }
+    setOAuthLoading(false);
+    els.oauthStatus.classList.add("hidden");
+  }
+
   function setOAuthLoading(loading) {
     els.btnOAuth.disabled = loading;
     els.btnOAuthText.classList.toggle("hidden", loading);
     els.btnOAuthSpinner.classList.toggle("hidden", !loading);
+    toggleEl(els.btnOAuthCancel, loading);
     if (loading) {
       els.oauthStatus.textContent = t("config.oauthWaiting");
       els.oauthStatus.classList.remove("hidden", "success");
@@ -990,6 +1003,9 @@
     });
 
     els.btnOAuth.addEventListener("click", handleOAuthLogin);
+    if (els.btnOAuthCancel) {
+      els.btnOAuthCancel.addEventListener("click", handleOAuthCancel);
+    }
     els.btnToggleKey.addEventListener("click", toggleKeyVisibility);
     els.btnVerify.addEventListener("click", handleVerify);
 

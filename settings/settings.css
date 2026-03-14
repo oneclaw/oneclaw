@@ -839,6 +839,48 @@ select option {
   animation: spin 0.6s linear infinite;
 }
 
+.btn-oauth-cancel {
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--text-secondary);
+  padding: 8px 20px;
+  border-radius: 8px;
+  font-size: 13px;
+  cursor: pointer;
+  margin-top: 6px;
+  transition: background 0.15s, color 0.15s;
+}
+
+.btn-oauth-cancel:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.btn-oauth-logout {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--text-secondary);
+  padding: 10px 20px;
+  border-radius: 8px;
+  font-size: 14px;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+
+.btn-oauth-logout:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+  border-color: var(--text-secondary);
+}
+
+.btn-oauth-logout .lucide-icon {
+  stroke: currentColor;
+  flex-shrink: 0;
+}
+
 .oauth-status {
   font-size: 13px;
   color: var(--text-secondary);

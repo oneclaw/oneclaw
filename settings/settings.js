@@ -157,6 +157,8 @@
       "provider.apiType": "API Type",
       "provider.supportImage": "Supports image input",
       "provider.oauthLogin": "Log in with Kimi",
+      "provider.oauthCancel": "Cancel",
+      "provider.oauthLogout": "Log out",
       "provider.oauthWaiting": "Waiting for authorization in browser…",
       "provider.oauthSuccess": "Login successful! Restarting gateway…",
       "provider.oauthOr": "or enter API Key manually",
@@ -422,6 +424,8 @@
       "provider.apiType": "接口类型",
       "provider.supportImage": "支持图像输入",
       "provider.oauthLogin": "Kimi 会员登录",
+      "provider.oauthCancel": "取消",
+      "provider.oauthLogout": "退出登录",
       "provider.oauthWaiting": "请在浏览器中完成授权…",
       "provider.oauthSuccess": "登录成功！正在重启 Gateway…",
       "provider.oauthOr": "或手动输入 API Key",
@@ -691,6 +695,8 @@
     btnOAuth: $("#btnOAuth"),
     btnOAuthText: document.querySelector("#btnOAuth .btn-oauth-text"),
     btnOAuthSpinner: document.querySelector("#btnOAuth .btn-oauth-spinner"),
+    btnOAuthCancel: $("#btnOAuthCancel"),
+    btnOAuthLogout: $("#btnOAuthLogout"),
     oauthStatus: $("#oauthStatus"),
     oauthDivider: $("#oauthDivider"),
     msgBox: $("#msgBox"),
@@ -1216,6 +1222,26 @@
     var show = currentProvider === "moonshot" && getSubPlatform() === "kimi-code";
     toggleEl(els.oauthGroup, show);
     toggleEl(els.oauthDivider, show);
+    if (show) {
+      checkOAuthStatus();
+    }
+  }
+
+  // 检查当前 OAuth 登录状态，切换登录/退出按钮
+  async function checkOAuthStatus() {
+    if (!window.oneclaw?.kimiOAuthStatus) return;
+    try {
+      var status = await window.oneclaw.kimiOAuthStatus();
+      if (status && status.loggedIn) {
+        toggleEl(els.btnOAuth, false);
+        toggleEl(els.btnOAuthLogout, true);
+      } else {
+        toggleEl(els.btnOAuth, true);
+        toggleEl(els.btnOAuthLogout, false);
+      }
+    } catch {
+      // 获取状态失败时默认显示登录按钮
+    }
   }
 
   function populateModels(models) {
@@ -1317,10 +1343,33 @@
     }
   }
 
+  // 取消 OAuth 轮询
+  function handleOAuthCancel() {
+    if (window.oneclaw?.kimiOAuthCancel) {
+      window.oneclaw.kimiOAuthCancel();
+    }
+    setOAuthLoading(false);
+    els.oauthStatus.classList.add("hidden");
+  }
+
+  // 退出 OAuth 登录
+  async function handleOAuthLogout() {
+    if (window.oneclaw?.kimiOAuthLogout) {
+      await window.oneclaw.kimiOAuthLogout();
+    }
+    // 隐藏退出按钮，恢复登录按钮
+    toggleEl(els.btnOAuthLogout, false);
+    toggleEl(els.btnOAuth, true);
+    els.oauthStatus.classList.add("hidden");
+    els.oauthStatus.classList.remove("success");
+    showToast(t("provider.oauthLogout"));
+  }
+
   function setOAuthLoading(loading) {
     els.btnOAuth.disabled = loading;
     els.btnOAuthText.classList.toggle("hidden", loading);
     els.btnOAuthSpinner.classList.toggle("hidden", !loading);
+    toggleEl(els.btnOAuthCancel, loading);
     if (loading) {
       els.oauthStatus.textContent = t("provider.oauthWaiting");
       els.oauthStatus.classList.remove("hidden", "success");
@@ -1331,6 +1380,9 @@
     els.oauthStatus.textContent = t("provider.oauthSuccess");
     els.oauthStatus.classList.remove("hidden");
     els.oauthStatus.classList.add("success");
+    // OAuth 成功后显示退出按钮
+    toggleEl(els.btnOAuth, false);
+    toggleEl(els.btnOAuthLogout, true);
   }
 
   // ── 保存 Provider 配置 ──
@@ -3602,6 +3654,12 @@
 
     // 密码可见性
     els.btnOAuth.addEventListener("click", handleOAuthLogin);
+    if (els.btnOAuthCancel) {
+      els.btnOAuthCancel.addEventListener("click", handleOAuthCancel);
+    }
+    if (els.btnOAuthLogout) {
+      els.btnOAuthLogout.addEventListener("click", handleOAuthLogout);
+    }
     els.btnToggleKey.addEventListener("click", togglePasswordVisibility);
 
     // 保存

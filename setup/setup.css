@@ -686,6 +686,23 @@ select option {
   animation: spin 0.6s linear infinite;
 }
 
+.btn-oauth-cancel {
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--text-secondary);
+  padding: 8px 20px;
+  border-radius: 8px;
+  font-size: 13px;
+  cursor: pointer;
+  margin-top: 6px;
+  transition: background 0.15s, color 0.15s;
+}
+
+.btn-oauth-cancel:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
 .oauth-status {
   font-size: 13px;
   color: var(--text-secondary);
