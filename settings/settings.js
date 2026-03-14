@@ -156,6 +156,10 @@
       "provider.modelId": "Model ID",
       "provider.apiType": "API Type",
       "provider.supportImage": "Supports image input",
+      "provider.oauthLogin": "Log in with Kimi",
+      "provider.oauthWaiting": "Waiting for authorization in browser…",
+      "provider.oauthSuccess": "Login successful! Restarting gateway…",
+      "provider.oauthOr": "or enter API Key manually",
       "provider.preset": "Preset",
       "provider.presetManual": "Manual",
       "provider.customModelId": "Custom Model ID",
@@ -417,6 +421,10 @@
       "provider.modelId": "模型 ID",
       "provider.apiType": "接口类型",
       "provider.supportImage": "支持图像输入",
+      "provider.oauthLogin": "Kimi 会员登录",
+      "provider.oauthWaiting": "请在浏览器中完成授权…",
+      "provider.oauthSuccess": "登录成功！正在重启 Gateway…",
+      "provider.oauthOr": "或手动输入 API Key",
       "provider.preset": "预设",
       "provider.presetManual": "手动配置",
       "provider.customModelId": "自定义模型 ID",
@@ -679,6 +687,12 @@
     customPreset: $("#customPreset"),
     customModelInputGroup: $("#customModelInputGroup"),
     customModelInput: $("#customModelInput"),
+    oauthGroup: $("#oauthGroup"),
+    btnOAuth: $("#btnOAuth"),
+    btnOAuthText: document.querySelector("#btnOAuth .btn-oauth-text"),
+    btnOAuthSpinner: document.querySelector("#btnOAuth .btn-oauth-spinner"),
+    oauthStatus: $("#oauthStatus"),
+    oauthDivider: $("#oauthDivider"),
     msgBox: $("#msgBox"),
     btnSave: $("#btnSave"),
     btnSaveText: $("#btnSave .btn-text"),
@@ -1083,6 +1097,8 @@
       updateModels();
     }
 
+    updateOAuthVisibility();
+
     // 从缓存回填已保存的 provider 配置
     fillSavedProviderFields(provider);
   }
@@ -1195,6 +1211,13 @@
     }
   }
 
+  // 控制 OAuth 登录区域显隐（仅 kimi-code 子平台）
+  function updateOAuthVisibility() {
+    var show = currentProvider === "moonshot" && getSubPlatform() === "kimi-code";
+    toggleEl(els.oauthGroup, show);
+    toggleEl(els.oauthDivider, show);
+  }
+
   function populateModels(models) {
     els.modelSelect.innerHTML = "";
     models.forEach((m) => {
@@ -1239,6 +1262,75 @@
     input.type = isPassword ? "text" : "password";
     btn.querySelector(".icon-eye").classList.toggle("hidden", !isPassword);
     btn.querySelector(".icon-eye-off").classList.toggle("hidden", isPassword);
+  }
+
+  // ── Kimi OAuth 一键登录 ──
+
+  async function handleOAuthLogin() {
+    if (saving) return;
+    setOAuthLoading(true);
+    hideMsg();
+
+    try {
+      var result = await window.oneclaw.kimiOAuthLogin();
+      if (!result.success) {
+        showMsg(result.message || t("error.verifyFailed"), "error");
+        setOAuthLoading(false);
+        return;
+      }
+
+      var modelID = els.modelSelect.value === CUSTOM_MODEL_SENTINEL
+        ? (els.customModelInput.value || "").trim() || "k2p5"
+        : els.modelSelect.value || "k2p5";
+
+      var saveResult = await window.oneclaw.settingsSaveProvider({
+        provider: "moonshot",
+        apiKey: result.accessToken,
+        modelID: modelID,
+        baseURL: "",
+        api: "",
+        subPlatform: "kimi-code",
+        supportImage: true,
+        customPreset: "",
+      });
+
+      setOAuthLoading(false);
+
+      if (!saveResult.success) {
+        showMsg(saveResult.message || "Save failed", "error");
+        return;
+      }
+
+      showOAuthSuccess();
+      showToast(t("common.saved"));
+
+      // 刷新缓存
+      try {
+        var refreshResult = await window.oneclaw.settingsGetConfig();
+        if (refreshResult.success && refreshResult.data && refreshResult.data.savedProviders) {
+          savedProviders = refreshResult.data.savedProviders;
+        }
+      } catch {}
+    } catch (err) {
+      showMsg(t("error.connection") + (err.message || ""), "error");
+      setOAuthLoading(false);
+    }
+  }
+
+  function setOAuthLoading(loading) {
+    els.btnOAuth.disabled = loading;
+    els.btnOAuthText.classList.toggle("hidden", loading);
+    els.btnOAuthSpinner.classList.toggle("hidden", !loading);
+    if (loading) {
+      els.oauthStatus.textContent = t("provider.oauthWaiting");
+      els.oauthStatus.classList.remove("hidden", "success");
+    }
+  }
+
+  function showOAuthSuccess() {
+    els.oauthStatus.textContent = t("provider.oauthSuccess");
+    els.oauthStatus.classList.remove("hidden");
+    els.oauthStatus.classList.add("success");
   }
 
   // ── 保存 Provider 配置 ──
@@ -3484,6 +3576,7 @@
         if (currentProvider === "moonshot") {
           updateModels();
           updatePlatformLink();
+          updateOAuthVisibility();
           // 切换子平台时回填对应配置
           fillSavedProviderFields("moonshot", getSubPlatform());
         }
@@ -3508,6 +3601,7 @@
     });
 
     // 密码可见性
+    els.btnOAuth.addEventListener("click", handleOAuthLogin);
     els.btnToggleKey.addEventListener("click", togglePasswordVisibility);
 
     // 保存

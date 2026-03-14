@@ -143,6 +143,10 @@
       "config.back": "Back",
       "config.verify": "Verify & Continue",
       "config.imageSupport": "Model supports image input",
+      "config.oauthLogin": "Log in with Kimi",
+      "config.oauthWaiting": "Waiting for authorization in browser…",
+      "config.oauthSuccess": "Login successful!",
+      "config.oauthOr": "or enter API Key manually",
       "done.title": "All Set!",
       "done.subtitle": "OneClaw is ready — switch providers or models anytime in Settings",
       "done.feature1": "Chat with state-of-the-art language models",
@@ -205,6 +209,10 @@
       "config.back": "返回",
       "config.verify": "验证并继续",
       "config.imageSupport": "模型支持图片输入",
+      "config.oauthLogin": "Kimi 会员登录",
+      "config.oauthWaiting": "请在浏览器中完成授权…",
+      "config.oauthSuccess": "登录成功！",
+      "config.oauthOr": "或手动输入 API Key",
       "done.title": "配置完成！",
       "done.subtitle": "OneClaw 已就绪 随时可在设置中切换服务商或模型",
       "done.feature1": "与最先进的大语言模型对话",
@@ -266,6 +274,12 @@
     customPreset: $("#customPreset"),
     customModelInputGroup: $("#customModelInputGroup"),
     customModelInput: $("#customModelInput"),
+    oauthGroup: $("#oauthGroup"),
+    btnOAuth: $("#btnOAuth"),
+    btnOAuthText: document.querySelector("#btnOAuth .btn-oauth-text"),
+    btnOAuthSpinner: document.querySelector("#btnOAuth .btn-oauth-spinner"),
+    oauthStatus: $("#oauthStatus"),
+    oauthDivider: $("#oauthDivider"),
     errorMsg: $("#errorMsg"),
     btnBackToStep1: $("#btnBackToStep1"),
     btnVerify: $("#btnVerify"),
@@ -470,6 +484,7 @@
       els.btnVerify.disabled = false;
       updateModels();
     }
+    updateOAuthVisibility();
   }
 
   // 自定义 Model ID 哨兵值（下拉最后一项）
@@ -583,6 +598,13 @@
     }
   }
 
+  // 控制 OAuth 登录区域显隐（仅 kimi-code 子平台）
+  function updateOAuthVisibility() {
+    var show = currentProvider === "moonshot" && getSubPlatform() === "kimi-code";
+    toggleEl(els.oauthGroup, show);
+    toggleEl(els.oauthDivider, show);
+  }
+
   // 填充模型下拉选项
   function populateModels(models) {
     els.modelSelect.innerHTML = "";
@@ -604,6 +626,61 @@
     const eyeOff = els.btnToggleKey.querySelector(".icon-eye-off");
     eyeOn.classList.toggle("hidden", !isPassword);
     eyeOff.classList.toggle("hidden", isPassword);
+  }
+
+  // ---- Kimi OAuth 一键登录 ----
+  async function handleOAuthLogin() {
+    if (verifying) return;
+    setOAuthLoading(true);
+    hideError();
+
+    try {
+      var result = await window.oneclaw.kimiOAuthLogin();
+      if (!result.success) {
+        showError(result.message || t("error.verifyFailed"));
+        setOAuthLoading(false);
+        return;
+      }
+
+      // OAuth 成功 → 用 access_token 直接保存配置
+      var modelID = els.modelSelect.value === CUSTOM_MODEL_SENTINEL
+        ? (els.customModelInput.value || "").trim() || "k2p5"
+        : els.modelSelect.value || "k2p5";
+
+      await window.oneclaw.saveConfig({
+        provider: "moonshot",
+        apiKey: result.accessToken,
+        modelID: modelID,
+        baseURL: "",
+        api: "",
+        subPlatform: "kimi-code",
+        supportImage: true,
+        customPreset: "",
+      });
+
+      setOAuthLoading(false);
+      showOAuthSuccess();
+      setTimeout(function () { goToStep(3); }, 600);
+    } catch (err) {
+      showError(t("error.connection") + (err.message || ""));
+      setOAuthLoading(false);
+    }
+  }
+
+  function setOAuthLoading(loading) {
+    els.btnOAuth.disabled = loading;
+    els.btnOAuthText.classList.toggle("hidden", loading);
+    els.btnOAuthSpinner.classList.toggle("hidden", !loading);
+    if (loading) {
+      els.oauthStatus.textContent = t("config.oauthWaiting");
+      els.oauthStatus.classList.remove("hidden", "success");
+    }
+  }
+
+  function showOAuthSuccess() {
+    els.oauthStatus.textContent = t("config.oauthSuccess");
+    els.oauthStatus.classList.remove("hidden");
+    els.oauthStatus.classList.add("success");
   }
 
   // ---- 验证并保存配置（Step 2） ----
@@ -882,6 +959,7 @@
         if (currentProvider === "moonshot") {
           updateModels();
           updatePlatformLink();
+          updateOAuthVisibility();
         }
       });
     }
@@ -911,6 +989,7 @@
       }
     });
 
+    els.btnOAuth.addEventListener("click", handleOAuthLogin);
     els.btnToggleKey.addEventListener("click", toggleKeyVisibility);
     els.btnVerify.addEventListener("click", handleVerify);
 
