@@ -892,21 +892,45 @@ select option {
   color: #27ae60;
 }
 
-.oauth-divider {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  margin: 4px 0;
-  font-size: 12px;
+/* OAuth 高级选项折叠 */
+.oauth-advanced > summary {
+  cursor: pointer;
+  font-size: 13px;
   color: var(--text-secondary);
+  padding: 6px 0;
+  user-select: none;
+  list-style: none;
 }
 
-.oauth-divider::before,
-.oauth-divider::after {
-  content: "";
-  flex: 1;
-  height: 1px;
-  background: var(--border);
+.oauth-advanced > summary::-webkit-details-marker {
+  display: none;
+}
+
+.oauth-advanced > summary::before {
+  content: "▸ ";
+}
+
+.oauth-advanced[open] > summary::before {
+  content: "▾ ";
+}
+
+.oauth-advanced-content {
+  padding-top: 4px;
+}
+
+/* 非 OAuth 模式：去掉折叠外观，summary 完全隐藏 */
+.oauth-advanced--plain > summary {
+  display: none;
+}
+
+.oauth-membership-link {
+  color: var(--accent);
+  text-decoration: none;
+  font-weight: 500;
+}
+
+.oauth-membership-link:hover {
+  text-decoration: underline;
 }
 
 .btn-spinner {

@@ -147,6 +147,8 @@
       "config.oauthCancel": "Cancel",
       "config.oauthWaiting": "Waiting for authorization in browser…",
       "config.oauthSuccess": "Login successful!",
+      "config.oauthNoMembership": "Login succeeded, but your account has no active Kimi membership. Please subscribe and try again.",
+      "config.oauthSubscribeLink": "Subscribe now →",
       "config.oauthOr": "or enter API Key manually",
       "done.title": "All Set!",
       "done.subtitle": "OneClaw is ready — switch providers or models anytime in Settings",
@@ -214,6 +216,8 @@
       "config.oauthCancel": "取消",
       "config.oauthWaiting": "请在浏览器中完成授权…",
       "config.oauthSuccess": "登录成功！",
+      "config.oauthNoMembership": "登录成功，但当前账号未开通 Kimi 会员，请订阅后重试。",
+      "config.oauthSubscribeLink": "前往订阅 →",
       "config.oauthOr": "或手动输入 API Key",
       "done.title": "配置完成！",
       "done.subtitle": "OneClaw 已就绪 随时可在设置中切换服务商或模型",
@@ -645,10 +649,27 @@
         return;
       }
 
-      // OAuth 成功 → 用 access_token 直接保存配置
+      // OAuth 成功 → 先验证 token 是否有会员权限
       var modelID = els.modelSelect.value === CUSTOM_MODEL_SENTINEL
         ? (els.customModelInput.value || "").trim() || "k2p5"
         : els.modelSelect.value || "k2p5";
+
+      var verifyResult = await window.oneclaw.verifyKey({
+        provider: "moonshot",
+        apiKey: result.accessToken,
+        modelID: modelID,
+        subPlatform: "kimi-code",
+      });
+
+      if (!verifyResult.success) {
+        // 验证失败 → 退出 OAuth 登录，提示用户需要会员
+        if (window.oneclaw.kimiOAuthLogout) {
+          window.oneclaw.kimiOAuthLogout();
+        }
+        showOAuthNoMembership();
+        setOAuthLoading(false);
+        return;
+      }
 
       await window.oneclaw.saveConfig({
         provider: "moonshot",
@@ -912,6 +933,23 @@
 
   function showError(msg) {
     els.errorMsg.textContent = msg;
+    els.errorMsg.classList.remove("hidden");
+  }
+
+  // 非会员提示（带订阅超链接）
+  function showOAuthNoMembership() {
+    var url = "https://kimi.com/membership/pricing?utm_source=oneclaw";
+    els.errorMsg.textContent = "";
+    els.errorMsg.appendChild(document.createTextNode(t("config.oauthNoMembership") + " "));
+    var link = document.createElement("a");
+    link.href = "#";
+    link.textContent = t("config.oauthSubscribeLink");
+    link.className = "oauth-membership-link";
+    link.addEventListener("click", function (e) {
+      e.preventDefault();
+      if (window.oneclaw?.openExternal) window.oneclaw.openExternal(url);
+    });
+    els.errorMsg.appendChild(link);
     els.errorMsg.classList.remove("hidden");
   }
 

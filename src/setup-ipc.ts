@@ -147,13 +147,22 @@ export function registerSetupIpc(deps: SetupIpcDeps): void {
     }
   });
 
-  // ── Kimi OAuth 一键登录 ──
+  // ── Kimi OAuth ──
   ipcMain.handle("kimi-oauth:login", async () => {
     const { kimiOAuthLogin } = await import("./kimi-oauth");
     return kimiOAuthLogin();
   });
 
-  // ── Kimi OAuth 状态查询 ──
+  ipcMain.handle("kimi-oauth:cancel", async () => {
+    const { kimiOAuthCancel } = await import("./kimi-oauth");
+    kimiOAuthCancel();
+  });
+
+  ipcMain.handle("kimi-oauth:logout", async () => {
+    const { kimiOAuthLogout } = await import("./kimi-oauth");
+    kimiOAuthLogout();
+  });
+
   ipcMain.handle("kimi-oauth:status", async () => {
     const { getOAuthStatus } = await import("./kimi-oauth");
     return getOAuthStatus();

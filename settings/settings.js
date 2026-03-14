@@ -160,7 +160,10 @@
       "provider.oauthCancel": "Cancel",
       "provider.oauthLogout": "Log out",
       "provider.oauthWaiting": "Waiting for authorization in browser…",
-      "provider.oauthSuccess": "Login successful! Restarting gateway…",
+      "provider.oauthSuccess": "Login successful!",
+      "provider.oauthNoMembership": "Login succeeded, but your account has no active Kimi membership. Please subscribe and try again.",
+      "provider.oauthSubscribeLink": "Subscribe now →",
+      "provider.oauthAdvanced": "Advanced options",
       "provider.oauthOr": "or enter API Key manually",
       "provider.preset": "Preset",
       "provider.presetManual": "Manual",
@@ -427,7 +430,10 @@
       "provider.oauthCancel": "取消",
       "provider.oauthLogout": "退出登录",
       "provider.oauthWaiting": "请在浏览器中完成授权…",
-      "provider.oauthSuccess": "登录成功！正在重启 Gateway…",
+      "provider.oauthSuccess": "登录成功！",
+      "provider.oauthNoMembership": "登录成功，但当前账号未开通 Kimi 会员，请订阅后重试。",
+      "provider.oauthSubscribeLink": "前往订阅 →",
+      "provider.oauthAdvanced": "高级选项",
       "provider.oauthOr": "或手动输入 API Key",
       "provider.preset": "预设",
       "provider.presetManual": "手动配置",
@@ -698,7 +704,7 @@
     btnOAuthCancel: $("#btnOAuthCancel"),
     btnOAuthLogout: $("#btnOAuthLogout"),
     oauthStatus: $("#oauthStatus"),
-    oauthDivider: $("#oauthDivider"),
+    oauthAdvanced: $("#oauthAdvanced"),
     msgBox: $("#msgBox"),
     btnSave: $("#btnSave"),
     btnSaveText: $("#btnSave .btn-text"),
@@ -1219,11 +1225,19 @@
 
   // 控制 OAuth 登录区域显隐（仅 kimi-code 子平台）
   function updateOAuthVisibility() {
-    var show = currentProvider === "moonshot" && getSubPlatform() === "kimi-code";
-    toggleEl(els.oauthGroup, show);
-    toggleEl(els.oauthDivider, show);
-    if (show) {
+    var isOAuth = currentProvider === "moonshot" && getSubPlatform() === "kimi-code";
+    toggleEl(els.oauthGroup, isOAuth);
+    if (isOAuth) {
+      // OAuth 模式：API Key / Model 收入折叠高级选项
+      els.oauthAdvanced.classList.remove("hidden", "oauth-advanced--plain");
+      els.oauthAdvanced.removeAttribute("open");
+      els.platformLink.classList.add("hidden");
       checkOAuthStatus();
+    } else {
+      // 非 OAuth 模式：展开且隐藏折叠外观，字段正常显示
+      els.oauthAdvanced.classList.remove("hidden");
+      els.oauthAdvanced.classList.add("oauth-advanced--plain");
+      els.oauthAdvanced.setAttribute("open", "");
     }
   }
 
@@ -1308,6 +1322,23 @@
       var modelID = els.modelSelect.value === CUSTOM_MODEL_SENTINEL
         ? (els.customModelInput.value || "").trim() || "k2p5"
         : els.modelSelect.value || "k2p5";
+
+      // 先验证 token 是否有会员权限
+      var verifyResult = await window.oneclaw.settingsVerifyKey({
+        provider: "moonshot",
+        apiKey: result.accessToken,
+        modelID: modelID,
+        subPlatform: "kimi-code",
+      });
+
+      if (!verifyResult.success) {
+        if (window.oneclaw.kimiOAuthLogout) {
+          window.oneclaw.kimiOAuthLogout();
+        }
+        showOAuthNoMembership();
+        setOAuthLoading(false);
+        return;
+      }
 
       var saveResult = await window.oneclaw.settingsSaveProvider({
         provider: "moonshot",
@@ -3579,6 +3610,23 @@
   function showMsg(msg, type) {
     els.msgBox.textContent = msg;
     els.msgBox.className = "msg-box " + type;
+  }
+
+  // 非会员提示（带订阅超链接）
+  function showOAuthNoMembership() {
+    var url = "https://kimi.com/membership/pricing?utm_source=oneclaw";
+    els.msgBox.textContent = "";
+    els.msgBox.className = "msg-box error";
+    els.msgBox.appendChild(document.createTextNode(t("provider.oauthNoMembership") + " "));
+    var link = document.createElement("a");
+    link.href = "#";
+    link.textContent = t("provider.oauthSubscribeLink");
+    link.className = "oauth-membership-link";
+    link.addEventListener("click", function (e) {
+      e.preventDefault();
+      if (window.oneclaw?.openExternal) window.oneclaw.openExternal(url);
+    });
+    els.msgBox.appendChild(link);
   }
 
   function hideMsg() {

@@ -144,6 +144,14 @@ function sleep(ms: number): Promise<void> {
   return new Promise((r) => setTimeout(r, ms));
 }
 
+// 轮询中止标志
+let abortFlag = false;
+
+// 取消正在进行的 OAuth 登录
+export function kimiOAuthCancel(): void {
+  abortFlag = true;
+}
+
 // 轮询等待用户完成授权
 async function pollForToken(
   deviceCode: string,
@@ -152,6 +160,7 @@ async function pollForToken(
 ): Promise<OAuthToken> {
   for (let i = 0; i < POLL_MAX_RETRIES; i++) {
     await sleep(interval * 1000);
+    if (abortFlag) throw new Error("已取消");
 
     const { data } = await postForm("/api/oauth/token", {
       client_id: KIMI_CODE_CLIENT_ID,
@@ -218,12 +227,13 @@ export async function refreshOAuthToken(token: OAuthToken): Promise<OAuthToken> 
   return refreshed;
 }
 
-// 完整登录流程：设备授权 → 打开浏览器 → 轮询等待 → 保存 token
+// 完整登录流程：设备授权 → 打开浏览器 → 轮询等待 → 保存 token（开始前重置中止标志）
 export async function kimiOAuthLogin(): Promise<{
   success: boolean;
   accessToken?: string;
   message?: string;
 }> {
+  abortFlag = false;
   try {
     const auth = await requestDeviceAuthorization();
     log.info(`Kimi OAuth: 用户码 ${auth.user_code}，等待浏览器授权`);
@@ -278,4 +288,11 @@ export function getOAuthStatus(): { loggedIn: boolean; expiresAt?: number } {
   const token = loadOAuthToken();
   if (!token) return { loggedIn: false };
   return { loggedIn: true, expiresAt: token.expires_at };
+}
+
+// 登出：删除 token 文件 + 停止自动刷新
+export function kimiOAuthLogout(): void {
+  deleteOAuthToken();
+  stopTokenRefresh();
+  log.info("Kimi OAuth: 已登出");
 }

@@ -148,10 +148,12 @@
             <span data-i18n="provider.oauthLogout">退出登录</span>
           </button>
           <div class="oauth-status hidden" id="oauthStatus"></div>
-          <div class="oauth-divider hidden" id="oauthDivider">
-            <span data-i18n="provider.oauthOr">或手动输入 API Key</span>
-          </div>
         </div>
+
+        <!-- OAuth 高级选项折叠区（仅 kimi-code OAuth 模式显示） -->
+        <details class="oauth-advanced hidden" id="oauthAdvanced">
+          <summary data-i18n="provider.oauthAdvanced">Advanced</summary>
+          <div class="oauth-advanced-content">
 
         <!-- API Key -->
         <div class="field-group" id="apiKeyGroup">
@@ -178,6 +180,9 @@
           <label for="modelSelect" data-i18n="provider.model">Model</label>
           <select id="modelSelect"></select>
         </div>
+
+          </div><!-- /.oauth-advanced-content -->
+        </details>
 
         <!-- Custom 预设: 自定义模型（选择"自定义模型"时显示） -->
         <div class="field-group hidden" id="customModelInputGroup">

@@ -731,6 +731,16 @@ select option {
   background: var(--border);
 }
 
+.oauth-membership-link {
+  color: var(--accent);
+  text-decoration: none;
+  font-weight: 500;
+}
+
+.oauth-membership-link:hover {
+  text-decoration: underline;
+}
+
 /* 按钮内 Spinner */
 .btn-spinner {
   width: 16px;
