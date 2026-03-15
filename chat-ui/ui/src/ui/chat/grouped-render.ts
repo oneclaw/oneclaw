@@ -1,7 +1,8 @@
 import { html, nothing } from "lit";
 import { unsafeHTML } from "lit/directives/unsafe-html.js";
 import type { AssistantIdentity } from "../assistant-identity.ts";
-import type { MessageGroup } from "../types/chat-types.ts";
+import { icons } from "../icons.ts";
+import type { MessageGroup, ToolCard } from "../types/chat-types.ts";
 import { toSanitizedMarkdownHtml } from "../markdown.ts";
 import { detectTextDirection } from "../text-direction.ts";
 import { renderCopyAsMarkdownButton } from "./copy-as-markdown.ts";
@@ -216,6 +217,34 @@ function renderMessageImages(images: ImageBlock[]) {
   `;
 }
 
+// 将多个 tool card 折叠到 <details> 元素中
+function renderCollapsedToolCards(
+  toolCards: ToolCard[],
+  onOpenSidebar?: (content: string) => void,
+) {
+  const calls = toolCards.filter((c) => c.kind === "call");
+  const results = toolCards.filter((c) => c.kind === "result");
+  const totalTools = Math.max(calls.length, results.length) || toolCards.length;
+  const toolNames = [...new Set(toolCards.map((c) => c.name))];
+  const summaryLabel =
+    toolNames.length <= 3
+      ? toolNames.join(", ")
+      : `${toolNames.slice(0, 2).join(", ")} +${toolNames.length - 2} more`;
+
+  return html`
+    <details class="chat-tools-collapse">
+      <summary class="chat-tools-summary">
+        <span class="chat-tools-summary__icon">${icons.zap}</span>
+        <span class="chat-tools-summary__count">${totalTools} tool${totalTools === 1 ? "" : "s"}</span>
+        <span class="chat-tools-summary__names">${summaryLabel}</span>
+      </summary>
+      <div class="chat-tools-collapse__body">
+        ${toolCards.map((card) => renderToolCardSidebar(card, onOpenSidebar))}
+      </div>
+    </details>
+  `;
+}
+
 function renderGroupedMessage(
   message: unknown,
   opts: { isStreaming: boolean; showReasoning: boolean },
@@ -252,8 +281,9 @@ function renderGroupedMessage(
     .filter(Boolean)
     .join(" ");
 
+  // 纯 tool result（无文本）→ 直接折叠展示
   if (!markdown && hasToolCards && isToolResult) {
-    return html`${toolCards.map((card) => renderToolCardSidebar(card, onOpenSidebar))}`;
+    return renderCollapsedToolCards(toolCards, onOpenSidebar);
   }
 
   if (!markdown && !hasToolCards && !hasImages) {
@@ -276,7 +306,7 @@ function renderGroupedMessage(
           ? html`<div class="chat-text" dir="${detectTextDirection(markdown)}">${unsafeHTML(toSanitizedMarkdownHtml(markdown))}</div>`
           : nothing
       }
-      ${toolCards.map((card) => renderToolCardSidebar(card, onOpenSidebar))}
+      ${hasToolCards ? renderCollapsedToolCards(toolCards, onOpenSidebar) : nothing}
     </div>
   `;
 }

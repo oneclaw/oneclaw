@@ -520,6 +520,12 @@ export function renderChat(props: ChatProps) {
 
 const CHAT_HISTORY_RENDER_LIMIT = 200;
 
+// 分组用 role：tool 和 assistant 归为同一组，共享 avatar 和 footer
+function groupingRole(role: string): string {
+  const r = normalizeRoleForGrouping(role);
+  return r === "tool" ? "assistant" : r;
+}
+
 function groupMessages(items: ChatItem[]): Array<ChatItem | MessageGroup> {
   const result: Array<ChatItem | MessageGroup> = [];
   let currentGroup: MessageGroup | null = null;
@@ -536,16 +542,17 @@ function groupMessages(items: ChatItem[]): Array<ChatItem | MessageGroup> {
 
     const normalized = normalizeMessage(item.message);
     const role = normalizeRoleForGrouping(normalized.role);
+    const gRole = groupingRole(role);
     const timestamp = normalized.timestamp || Date.now();
 
-    if (!currentGroup || currentGroup.role !== role) {
+    if (!currentGroup || groupingRole(currentGroup.role) !== gRole) {
       if (currentGroup) {
         result.push(currentGroup);
       }
       currentGroup = {
         kind: "group",
-        key: `group:${role}:${item.key}`,
-        role,
+        key: `group:${gRole}:${item.key}`,
+        role: gRole,
         messages: [{ message: item.message, key: item.key }],
         timestamp,
         isStreaming: false,
