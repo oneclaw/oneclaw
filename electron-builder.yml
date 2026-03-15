@@ -8,10 +8,27 @@ directories:
 files:
   - dist/**/*
   - chat-ui/dist/**/*
+  - live2d/**/*
   - setup/**/*
   - settings/**/*
   - assets/**/*
+  - resources/live2d/**/*
   - package.json
+
+# sherpa-onnx / naudiodon2 的 native .node 文件需要解出 asar
+asarUnpack:
+  - "node_modules/sherpa-onnx-node/**/*"
+  - "node_modules/sherpa-onnx-darwin-*/**/*"
+  - "node_modules/sherpa-onnx-win-*/**/*"
+  - "node_modules/sherpa-onnx-linux-*/**/*"
+  - "node_modules/naudiodon2/**/*"
+
+# Live2D 模型和语音模型放到 extraResources（不打入 asar，大文件直接复制）
+extraResources:
+  - from: resources/models/
+    to: resources/models/
+    filter:
+      - "**/*"
 
 # afterPack 钩子：绕过 node_modules 剥离，直接注入 resources/ 到 app bundle
 afterPack: ./scripts/afterPack.js

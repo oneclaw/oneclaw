@@ -22,6 +22,12 @@ resources/gateway/
 resources/app-icon.png
 resources/targets/
 
+# 语音模型（大文件，通过 download-speech-models.sh 下载）
+resources/models/speech/
+
+# Live2D vendor bundles（从 node_modules 复制）
+live2d/vendor/
+
 # 系统缓存
 .DS_Store
 

@@ -1,0 +1,220 @@
+/**
+ * 语音对话控制器
+ * 连接主进程 SpeechEngine（sherpa-onnx）与 Live2D 渲染进程
+ */
+
+class VoiceChat {
+  constructor() {
+    this.isListening = false;
+    this.micBtn = document.getElementById("btn-mic");
+    this.chatBubble = window.chatBubble;
+
+    this.bindEvents();
+    this.bindIPC();
+  }
+
+  bindEvents() {
+    // 点击麦克风按钮切换
+    this.micBtn.addEventListener("click", () => {
+      this.toggle();
+    });
+
+    // 按住说话（长按模式）
+    this.micBtn.addEventListener("mousedown", (e) => {
+      if (e.button !== 0) return;
+      // 长按 500ms 后进入按住说话模式
+      this.holdTimer = setTimeout(() => {
+        this.holdMode = true;
+        this.startListening();
+      }, 500);
+    });
+
+    this.micBtn.addEventListener("mouseup", () => {
+      if (this.holdTimer) {
+        clearTimeout(this.holdTimer);
+        this.holdTimer = null;
+      }
+      if (this.holdMode) {
+        this.holdMode = false;
+        this.stopListening();
+      }
+    });
+
+    this.micBtn.addEventListener("mouseleave", () => {
+      if (this.holdTimer) {
+        clearTimeout(this.holdTimer);
+        this.holdTimer = null;
+      }
+      if (this.holdMode) {
+        this.holdMode = false;
+        this.stopListening();
+      }
+    });
+  }
+
+  bindIPC() {
+    // 接收实时识别中间结果
+    window.live2dAPI.onInterimResult((text) => {
+      if (text) {
+        this.chatBubble.showUserText(text, { interim: true });
+      }
+    });
+
+    // 接收最终识别结果
+    window.live2dAPI.onFinalResult((text) => {
+      if (text) {
+        this.chatBubble.showUserText(text, { interim: false });
+        this.chatBubble.showStatus("思考中...");
+      }
+    });
+
+    // 接收 AI 回复（含可选 TTS 音频）
+    window.live2dAPI.onAIReply((reply, audioData) => {
+      this.chatBubble.clearStatus();
+      this.chatBubble.showAIText(reply);
+
+      // 播放 TTS 音频并同步嘴型
+      if (audioData && audioData.byteLength > 0) {
+        this.playTTSAndSyncLips(audioData);
+      } else {
+        // 无音频时用文字长度模拟嘴型
+        this.simulateLipSync(reply.length);
+      }
+    });
+
+    // 监听状态变化
+    window.live2dAPI.onListeningStateChange((state) => {
+      if (state === "listening") {
+        this.setListeningUI(true);
+      } else if (state === "stopped") {
+        this.setListeningUI(false);
+      }
+    });
+  }
+
+  toggle() {
+    if (this.holdMode) return; // 长按模式中不处理点击切换
+    if (this.isListening) {
+      this.stopListening();
+    } else {
+      this.startListening();
+    }
+  }
+
+  async startListening() {
+    if (this.isListening) return;
+
+    try {
+      this.chatBubble.showStatus("正在听...");
+      this.setListeningUI(true);
+      await window.live2dAPI.startListening();
+      this.isListening = true;
+    } catch (err) {
+      console.error("开始语音识别失败:", err);
+      this.chatBubble.showStatus("语音识别不可用");
+      this.setListeningUI(false);
+      setTimeout(() => this.chatBubble.clearStatus(), 3000);
+    }
+  }
+
+  async stopListening() {
+    if (!this.isListening) return;
+
+    try {
+      await window.live2dAPI.stopListening();
+      this.isListening = false;
+      this.setListeningUI(false);
+      this.chatBubble.clearStatus();
+    } catch (err) {
+      console.error("停止语音识别失败:", err);
+    }
+  }
+
+  setListeningUI(active) {
+    if (active) {
+      this.micBtn.classList.add("active");
+    } else {
+      this.micBtn.classList.remove("active");
+    }
+  }
+
+  // 播放 TTS 音频并驱动 Live2D 嘴型
+  playTTSAndSyncLips(audioData) {
+    try {
+      const sampleRate = 44100; // 默认，可根据实际 TTS 输出调整
+      const audioContext = new (window.AudioContext || window.webkitAudioContext)({ sampleRate });
+
+      const float32 = new Float32Array(audioData);
+      const audioBuffer = audioContext.createBuffer(1, float32.length, sampleRate);
+      audioBuffer.getChannelData(0).set(float32);
+
+      const source = audioContext.createBufferSource();
+      const analyser = audioContext.createAnalyser();
+      analyser.fftSize = 256;
+
+      source.buffer = audioBuffer;
+      source.connect(analyser);
+      analyser.connect(audioContext.destination);
+
+      // 实时分析音量驱动嘴型
+      const dataArray = new Uint8Array(analyser.frequencyBinCount);
+      let animFrameId = null;
+
+      const updateMouth = () => {
+        analyser.getByteFrequencyData(dataArray);
+
+        let sum = 0;
+        for (let i = 0; i < dataArray.length; i++) sum += dataArray[i];
+        const volume = sum / dataArray.length / 255;
+        const mouthOpen = Math.min(1.0, volume * 3);
+
+        if (window.live2dApp) {
+          window.live2dApp.setMouthOpenY(mouthOpen);
+        }
+
+        animFrameId = requestAnimationFrame(updateMouth);
+      };
+
+      source.start(0);
+      updateMouth();
+
+      source.onended = () => {
+        if (animFrameId) cancelAnimationFrame(animFrameId);
+        if (window.live2dApp) {
+          window.live2dApp.setMouthOpenY(0);
+        }
+        audioContext.close();
+      };
+    } catch (err) {
+      console.error("TTS 播放失败:", err);
+      // 降级到文字模拟
+      this.simulateLipSync(20);
+    }
+  }
+
+  // 文字长度模拟嘴型（无 TTS 音频时的降级方案）
+  simulateLipSync(textLength) {
+    const durationMs = textLength * 150;
+    const startTime = Date.now();
+
+    const interval = setInterval(() => {
+      const elapsed = Date.now() - startTime;
+      if (elapsed > durationMs) {
+        clearInterval(interval);
+        if (window.live2dApp) {
+          window.live2dApp.setMouthOpenY(0);
+        }
+        return;
+      }
+      const n = Math.sin(elapsed / 100) * 0.4 + 0.4;
+      if (window.live2dApp) {
+        window.live2dApp.setMouthOpenY(n);
+      }
+    }, 50);
+  }
+}
+
+// 等待 DOM 和其他组件初始化完成
+window.addEventListener("load", () => {
+  window.voiceChat = new VoiceChat();
+});

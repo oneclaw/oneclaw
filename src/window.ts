@@ -39,6 +39,14 @@ function maskToken(token: string): string {
 export class WindowManager {
   private win: BrowserWindow | null = null;
   private allowAppQuit = false;
+  private onShowCallback?: () => void;
+  private onHideCallback?: () => void;
+
+  // 设置窗口显示/隐藏回调（用于 Live2D 互斥联动）
+  setCallbacks(opts: { onShow?: () => void; onHide?: () => void }): void {
+    this.onShowCallback = opts.onShow;
+    this.onHideCallback = opts.onHide;
+  }
 
   // 显示主窗口（加载 Chat UI）
   async show(opts: ShowOptions): Promise<void> {
@@ -124,6 +132,7 @@ export class WindowManager {
       if (!shouldHideWindowOnClose({ allowAppQuit: this.allowAppQuit })) return;
       e.preventDefault();
       this.win?.hide();
+      this.onHideCallback?.();
     });
     // 窗口真正销毁后重置状态，避免退出标记泄漏到后续窗口生命周期
     this.win.on("closed", () => {
@@ -158,6 +167,7 @@ export class WindowManager {
     }
 
     this.win.show();
+    this.onShowCallback?.();
     if (process.env.ONECLAW_DEBUG || process.env.OPENCLAW_DEBUG) {
       this.win.webContents.openDevTools();
     }

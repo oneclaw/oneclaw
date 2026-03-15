@@ -9,7 +9,7 @@
     "build:chat": "cd chat-ui/ui && npm install --prefer-offline && npx vite build",
     "build": "npm run generate:settings-icons && npm run build:chat && tsc -p tsconfig.json",
     "predev": "npm run build",
-    "dev": "electron .",
+    "dev": "DYLD_LIBRARY_PATH=$PWD/node_modules/sherpa-onnx-darwin-x64:$DYLD_LIBRARY_PATH electron .",
     "package:resources": "node scripts/run-with-env.js node scripts/package-resources.js",
     "dist:mac": "npm run dist:mac:arm64",
     "dist:mac:arm64": "npm run build && ONECLAW_TARGET=darwin-arm64 npm run package:resources -- --platform darwin --arch arm64 && ONECLAW_TARGET=darwin-arm64 node scripts/run-with-env.js node scripts/run-mac-builder.js --arch arm64 --output out/darwin-arm64",
@@ -21,7 +21,13 @@
     "clean": "rm -rf dist resources/runtime resources/gateway resources/targets out"
   },
   "dependencies": {
-    "electron-updater": "^6.3.9"
+    "@pixi/unsafe-eval": "^6.5.10",
+    "electron-updater": "^6.3.9",
+    "pixi-live2d-display": "^0.4.0",
+    "pixi.js": "^6.5.10",
+    "naudiodon2": "^2.5.0",
+    "sherpa-onnx-darwin-x64": "1.12.28",
+    "sherpa-onnx-node": "1.12.28"
   },
   "devDependencies": {
     "@types/node": "^22.15.0",

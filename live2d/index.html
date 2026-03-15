@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self' 'unsafe-eval' 'unsafe-inline' data: blob: file:;">
+  <title>Live2D Pet</title>
+  <link rel="stylesheet" href="live2d.css">
+</head>
+<body>
+  <!-- Live2D 画布 -->
+  <canvas id="live2d-canvas"></canvas>
+
+  <!-- 对话气泡 -->
+  <div id="chat-bubble" class="chat-bubble hidden">
+    <div id="chat-bubble-content"></div>
+  </div>
+
+  <!-- 底部控制栏 -->
+  <div id="controls">
+    <button id="btn-mic" class="control-btn" title="按住说话">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
+        <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+        <line x1="12" y1="19" x2="12" y2="23"/>
+        <line x1="8" y1="23" x2="16" y2="23"/>
+      </svg>
+    </button>
+    <button id="btn-skin" class="control-btn" title="更换皮肤">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M20.38 3.46L16 2 12 5.5 8 2 3.62 3.46a2 2 0 0 0-1.34 2.23l.58 3.47c.13.8.69 1.46 1.47 1.73L7 12v7a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2v-7l2.67-1.11a2 2 0 0 0 1.47-1.73l.58-3.47a2 2 0 0 0-1.34-2.23z"/>
+      </svg>
+    </button>
+    <button id="btn-settings" class="control-btn" title="设置">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <circle cx="12" cy="12" r="3"/>
+        <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+      </svg>
+    </button>
+  </div>
+
+  <!-- 加载状态 -->
+  <div id="loading-overlay">
+    <div class="loading-spinner"></div>
+    <div class="loading-text">加载模型中...</div>
+  </div>
+
+  <!-- 右键菜单 -->
+  <div id="context-menu" class="context-menu hidden">
+    <div class="menu-item" data-action="open-main">打开 OneClaw</div>
+    <div class="menu-separator"></div>
+    <div class="menu-item" data-action="voice-chat">语音对话</div>
+    <div class="menu-item" data-action="change-model">切换模型</div>
+    <div class="menu-separator"></div>
+    <div class="menu-item" data-action="quit">退出</div>
+  </div>
+
+  <!-- 模型选择面板 -->
+  <div id="skin-panel" class="skin-panel hidden">
+    <div class="skin-panel-header">
+      <span>更换皮肤</span>
+      <button id="skin-panel-close" class="skin-panel-close">&times;</button>
+    </div>
+    <div id="skin-list" class="skin-list"></div>
+  </div>
+
+  <!-- 依赖库 -->
+  <script src="../resources/live2d/live2dcubismcore.min.js"></script>
+  <script src="vendor/pixi.min.js"></script>
+  <script src="vendor/pixi-live2d-display.min.js"></script>
+
+  <!-- 应用代码 -->
+  <script src="live2d-app.js"></script>
+  <script src="chat-bubble.js"></script>
+  <script src="voice-chat.js"></script>
+</body>
+</html>

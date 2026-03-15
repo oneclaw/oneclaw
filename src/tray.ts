@@ -12,6 +12,8 @@ interface TrayOptions {
   onOpenSettings: () => void;
   onQuit: () => void;
   onCheckUpdates: () => void;
+  onToggleLive2D?: () => void;
+  isLive2DEnabled?: () => boolean;
 }
 
 // 托盘菜单国际化
@@ -27,6 +29,8 @@ type TrayStrings = {
   settings: string;
   checkUpdates: string;
   quit: string;
+  live2dEnable: string;
+  live2dDisable: string;
 };
 
 const I18N: Record<string, TrayStrings> = {
@@ -42,6 +46,8 @@ const I18N: Record<string, TrayStrings> = {
     settings: "Settings",
     checkUpdates: "Check for Updates",
     quit: "Quit OneClaw",
+    live2dEnable: "Enable Live2D Pet",
+    live2dDisable: "Disable Live2D Pet",
   },
   zh: {
     stateRunning: "Gateway: 运行中",
@@ -55,6 +61,8 @@ const I18N: Record<string, TrayStrings> = {
     settings: "设置",
     checkUpdates: "检查更新",
     quit: "退出 OneClaw",
+    live2dEnable: "开启 Live2D 桌面宠物",
+    live2dDisable: "关闭 Live2D 桌面宠物",
   },
 };
 
@@ -112,12 +120,14 @@ export class TrayManager {
   updateMenu(): void {
     if (!this.tray || !this.opts) return;
 
-    const { windowManager, gateway, onRestartGateway, onStartGateway, onStopGateway, onOpenSettings, onQuit, onCheckUpdates } = this.opts;
+    const { windowManager, gateway, onRestartGateway, onStartGateway, onStopGateway, onOpenSettings, onQuit, onCheckUpdates, onToggleLive2D, isLive2DEnabled } = this.opts;
     const t = getTrayStrings();
     const state = gateway.getState();
     const inTransition = state === "starting" || state === "stopping";
     const showStart = state === "stopped" || state === "stopping";
     const showStop = state === "running" || state === "starting";
+
+    const live2dEnabled = isLive2DEnabled?.() ?? false;
 
     const menu = Menu.buildFromTemplate([
       {
@@ -125,6 +135,11 @@ export class TrayManager {
         click: () => windowManager.show({ port: gateway.getPort(), token: gateway.getToken() }),
       },
       { type: "separator" },
+      ...(onToggleLive2D ? [{
+        label: live2dEnabled ? t.live2dDisable : t.live2dEnable,
+        click: onToggleLive2D,
+      }] : []),
+      ...(onToggleLive2D ? [{ type: "separator" as const }] : []),
       { label: getStateLabel(state), enabled: false },
       { label: t.restartGateway, enabled: !inTransition, click: onRestartGateway },
       ...(showStart ? [{ label: t.startGateway, enabled: state === "stopped", click: onStartGateway }] : []),

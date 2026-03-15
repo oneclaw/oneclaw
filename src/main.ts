@@ -3,6 +3,8 @@ import { GatewayProcess } from "./gateway-process";
 import { WindowManager } from "./window";
 import { TrayManager } from "./tray";
 import { SetupManager } from "./setup-manager";
+import { Live2DWindowManager, getModelList } from "./live2d-window";
+import { SpeechEngine, checkSpeechModels } from "./speech-engine";
 import { registerSetupIpc } from "./setup-ipc";
 import {
   approveFeishuPairingRequest,
@@ -126,6 +128,16 @@ const gateway = new GatewayProcess({
 const windowManager = new WindowManager();
 const tray = new TrayManager();
 const setupManager = new SetupManager();
+const live2dManager = new Live2DWindowManager();
+const speechEngine = new SpeechEngine();
+
+// Live2D ↔ 主窗口互斥联动
+windowManager.setCallbacks({
+  onShow: () => live2dManager.hide(),
+  onHide: () => {
+    if (live2dManager.isEnabled()) live2dManager.show();
+  },
+});
 
 // 应用前台判定：任一窗口拿到系统焦点即视为前台；否则视为后台。
 function isAppInForeground(): boolean {
@@ -441,6 +453,73 @@ registerSettingsIpc({
 });
 registerSkillStoreIpc();
 
+// ── Live2D IPC ──
+
+ipcMain.on("live2d:open-main", () => {
+  showMainWindow().catch((err) => {
+    log.error(`live2d:open-main 失败: ${err}`);
+  });
+});
+
+ipcMain.on("live2d:drag-window", (_e, deltaX: number, deltaY: number) => {
+  const win = live2dManager.getWindow();
+  if (win && !win.isDestroyed()) {
+    const [x, y] = win.getPosition();
+    win.setPosition(x + deltaX, y + deltaY);
+  }
+});
+
+ipcMain.handle("live2d:get-config", () => live2dManager.getConfig());
+ipcMain.handle("live2d:get-model-list", () => getModelList());
+ipcMain.handle("live2d:get-models-dir", () => live2dManager.getModelsDir());
+ipcMain.handle("live2d:change-model", (_e, modelPath: string) => {
+  live2dManager.changeModel(modelPath);
+});
+
+ipcMain.handle("live2d:send-chat", async (_e, text: string) => {
+  try {
+    const port = gateway.getPort();
+    const token = gateway.getToken();
+    const res = await fetch(`http://127.0.0.1:${port}/api/chat`, {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ message: text }),
+    });
+    const data = await res.json();
+    return data.reply || data.message || "";
+  } catch (err) {
+    log.error(`live2d:send-chat 失败: ${err}`);
+    return "抱歉，无法连接到 AI 服务";
+  }
+});
+
+// 语音引擎 IPC（sherpa-onnx）
+ipcMain.handle("live2d:start-listening", async () => {
+  log.info("live2d:start-listening 调用");
+  const win = live2dManager.getWindow();
+  if (win && !win.isDestroyed()) {
+    speechEngine.setTargetWindow(win);
+  }
+  try {
+    await speechEngine.startListening();
+  } catch (err) {
+    log.error(`语音识别启动失败: ${err}`);
+    throw err;
+  }
+});
+
+ipcMain.handle("live2d:stop-listening", async () => {
+  log.info("live2d:stop-listening 调用");
+  speechEngine.stopListening();
+});
+
+ipcMain.handle("live2d:check-speech-models", () => {
+  return checkSpeechModels();
+});
+
 // ── 退出 ──
 
 async function quit(): Promise<void> {
@@ -448,6 +527,8 @@ async function quit(): Promise<void> {
   pairingMonitor?.stop();
   analytics.track("app_closed");
   await analytics.shutdown();
+  live2dManager.destroy();
+  speechEngine.destroy();
   windowManager.destroy();
   gateway.stop();
   tray.destroy();
@@ -598,6 +679,17 @@ app.whenReady().then(async () => {
     },
     onQuit: quit,
     onCheckUpdates: () => checkForUpdates(true),
+    onToggleLive2D: () => {
+      const enabled = !live2dManager.isEnabled();
+      live2dManager.setEnabled(enabled);
+      if (enabled) {
+        live2dManager.show();
+      } else {
+        live2dManager.hide();
+      }
+      tray.updateMenu();
+    },
+    isLive2DEnabled: () => live2dManager.isEnabled(),
   });
   pairingMonitor?.start();
 
@@ -705,6 +797,8 @@ app.on("before-quit", () => {
   // 先放行窗口关闭，避免 close handler 拦截 WM_CLOSE 导致 NSIS 安装器报"无法关闭"
   windowManager.prepareForAppQuit();
   pairingMonitor?.stop();
+  live2dManager.destroy();
+  speechEngine.destroy();
   windowManager.destroy();
   gateway.stop();
 });
