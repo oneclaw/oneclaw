@@ -442,6 +442,7 @@ ipcMain.on("app:refresh-pairing-state", () => pairingMonitor?.triggerNow());
 ipcMain.handle("app:get-feishu-pairing-state", () => pairingMonitor?.getState().channels.feishu);
 ipcMain.on("app:refresh-feishu-pairing-state", () => pairingMonitor?.triggerNow());
 ipcMain.handle("app:open-external", (_e, url: string) => shell.openExternal(url));
+ipcMain.handle("app:open-path", (_e, filePath: string) => shell.openPath(filePath));
 
 // 文件选择对话框 — 返回文件绝对路径数组
 ipcMain.handle("dialog:select-files", async (_e, options?: { filters?: Electron.FileFilter[] }) => {

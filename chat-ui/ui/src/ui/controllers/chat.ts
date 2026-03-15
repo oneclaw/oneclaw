@@ -3,6 +3,32 @@ import type { ChatAttachment } from "../ui-types.ts";
 import { extractText } from "../chat/message-extract.ts";
 import { generateUUID } from "../uuid.ts";
 
+// delivery-mirror 是 gateway 将外发消息镜像写回 transcript 的副本。
+// 当 agent 已在 transcript 中写过同文本的 assistant 消息时，mirror 条目是冗余的，
+// 显示两条会让用户困惑。此函数按内容指纹去除这类重复。
+function deduplicateDeliveryMirrors(messages: unknown[]): unknown[] {
+  const seen = new Set<string>();
+  return messages.filter((m) => {
+    const rec = m as Record<string, unknown>;
+    if (rec.role !== "assistant") {
+      return true;
+    }
+    const text = extractText(m)?.trim();
+    if (!text) {
+      return true;
+    }
+    // 用内容前 200 字符作为指纹，足够区分不同消息又避免长文本开销
+    const fingerprint = text.slice(0, 200);
+    if (rec.model === "delivery-mirror") {
+      // mirror 条目：仅当同文本 agent 条目已存在时才丢弃
+      return !seen.has(fingerprint);
+    }
+    // 非 mirror 的 assistant 条目：记录指纹
+    seen.add(fingerprint);
+    return true;
+  });
+}
+
 export type ChatState = {
   client: GatewayBrowserClient | null;
   connected: boolean;
@@ -45,7 +71,8 @@ export async function loadChatHistory(state: ChatState) {
     if (state.sessionKey !== requestSessionKey) {
       return;
     }
-    state.chatMessages = Array.isArray(res.messages) ? res.messages : [];
+    const raw = Array.isArray(res.messages) ? res.messages : [];
+    state.chatMessages = deduplicateDeliveryMirrors(raw);
     state.chatThinkingLevel = res.thinkingLevel ?? null;
   } catch (err) {
     if (state.sessionKey !== requestSessionKey) {

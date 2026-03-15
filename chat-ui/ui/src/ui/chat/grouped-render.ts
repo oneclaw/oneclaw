@@ -12,6 +12,7 @@ import {
   formatReasoningMarkdown,
 } from "./message-extract.ts";
 import { isToolResultMessage, normalizeRoleForGrouping } from "./message-normalizer.ts";
+import { linkifyPaths } from "./path-linker.ts";
 import { extractToolCards, renderToolCardSidebar } from "./tool-cards.ts";
 
 type ImageBlock = {
@@ -297,13 +298,13 @@ function renderGroupedMessage(
       ${
         reasoningMarkdown
           ? html`<div class="chat-thinking">${unsafeHTML(
-              toSanitizedMarkdownHtml(reasoningMarkdown),
+              linkifyPaths(toSanitizedMarkdownHtml(reasoningMarkdown)),
             )}</div>`
           : nothing
       }
       ${
         markdown
-          ? html`<div class="chat-text" dir="${detectTextDirection(markdown)}">${unsafeHTML(toSanitizedMarkdownHtml(markdown))}</div>`
+          ? html`<div class="chat-text" dir="${detectTextDirection(markdown)}">${unsafeHTML(linkifyPaths(toSanitizedMarkdownHtml(markdown)))}</div>`
           : nothing
       }
       ${hasToolCards ? renderCollapsedToolCards(toolCards, onOpenSidebar) : nothing}

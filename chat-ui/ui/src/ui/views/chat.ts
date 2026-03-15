@@ -233,6 +233,19 @@ export function renderChat(props: ChatProps) {
       role="log"
       aria-live="polite"
       @scroll=${props.onChatScroll}
+      @click=${(e: Event) => {
+        const link = (e.target as HTMLElement).closest(".chat-path-link");
+        if (!link) {
+          return;
+        }
+        e.preventDefault();
+        const path = (link as HTMLElement).dataset.path;
+        if (path) {
+          const w = window as Record<string, unknown>;
+          const oneclaw = w.oneclaw as Record<string, (p: string) => void> | undefined;
+          oneclaw?.openPath?.(path);
+        }
+      }}
     >
       ${
         props.loading

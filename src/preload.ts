@@ -125,6 +125,8 @@ contextBridge.exposeInMainWorld("oneclaw", {
 
   // 打开外部链接（走 IPC 到主进程，sandbox 下 shell 不可用）
   openExternal: (url: string) => ipcRenderer.invoke("app:open-external", url),
+  // 打开本地文件/目录
+  openPath: (path: string) => ipcRenderer.invoke("app:open-path", path),
 
   // 文件选择
   selectFiles: (options?: { filters?: Array<{ name: string; extensions: string[] }> }) =>
