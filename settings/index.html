@@ -81,6 +81,25 @@
         <!-- 当前 provider 状态指示 -->
         <div class="current-provider-status hidden" id="currentProviderStatus"></div>
 
+        <!-- 左右分栏：模型列表 + 表单 -->
+        <div class="provider-split">
+
+          <!-- 左侧模型列表面板 -->
+          <div class="model-list-panel">
+            <div class="model-list-header">
+              <span data-i18n="settings.modelList">Models</span>
+            </div>
+            <div class="model-list" id="modelList">
+              <!-- JS 动态渲染 -->
+            </div>
+            <button class="btn-secondary model-list-add" id="addModelBtn" type="button">
+              <span data-i18n="settings.addModel">+ Add Model</span>
+            </button>
+          </div>
+
+          <!-- 右侧表单面板 -->
+          <div class="provider-form-panel">
+
         <!-- Provider 分段选择器 -->
         <div class="provider-tabs" id="providerTabs">
           <button class="provider-tab active" data-provider="moonshot">Kimi</button>
@@ -211,6 +230,12 @@
           </div>
         </details>
 
+        <!-- 模型别名 -->
+        <div class="field-group hidden" id="modelAliasGroup">
+          <label data-i18n="settings.modelAlias">Alias</label>
+          <input type="text" id="modelAlias" placeholder="" data-i18n-placeholder="settings.modelAliasPlaceholder" autocomplete="off">
+        </div>
+
         <!-- Custom 预设: 自定义模型（选择"自定义模型"时显示） -->
         <div class="field-group hidden" id="customModelInputGroup">
           <label for="customModelInput" data-i18n="provider.customModelId">Custom Model ID</label>
@@ -254,12 +279,17 @@
         <div class="msg-box hidden" id="msgBox"></div>
 
         <!-- 操作按钮 -->
-        <div class="btn-row bottom-actions">
+        <div class="btn-row bottom-actions" id="providerBtnRow">
+          <button class="btn-secondary danger" id="deleteModelBtn" type="button" style="display:none" data-i18n="settings.deleteModel">Delete</button>
+          <button class="btn-secondary" id="setDefaultBtn" type="button" style="display:none" data-i18n="settings.setDefault">Set as Default</button>
           <button class="btn-primary" id="btnSave">
             <span class="btn-text" data-i18n="provider.save">Save</span>
             <span class="btn-spinner hidden"></span>
           </button>
         </div>
+
+          </div><!-- /provider-form-panel -->
+        </div><!-- /provider-split -->
       </section>
 
       <!-- Channels Tab -->

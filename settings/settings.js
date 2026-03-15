@@ -389,6 +389,17 @@
       "about.downloading": "Downloading",
       "about.installRestart": "Install & Restart",
       "about.updateFailed": "Check failed, try again later",
+      "settings.modelList": "Models",
+      "settings.addModel": "+ Add Model",
+      "settings.modelAlias": "Alias",
+      "settings.modelAliasPlaceholder": "Optional, for easy identification",
+      "settings.deleteModel": "Delete",
+      "settings.setDefault": "Set as Default",
+      "settings.addModelSave": "Add",
+      "settings.confirmDelete": "Delete this model?",
+      "settings.cannotDeleteDefault": "Cannot delete the default model",
+      "settings.modelDeleted": "Model deleted",
+      "settings.defaultModelSet": "Default model updated",
     },
     zh: {
       "settings.backToChat": "返回",
@@ -662,6 +673,17 @@
       "about.downloading": "下载中",
       "about.installRestart": "安装并重启",
       "about.updateFailed": "检查失败 请稍后重试",
+      "settings.modelList": "模型列表",
+      "settings.addModel": "+ 新增模型",
+      "settings.modelAlias": "别名",
+      "settings.modelAliasPlaceholder": "可选，方便识别",
+      "settings.deleteModel": "删除",
+      "settings.setDefault": "设为默认",
+      "settings.addModelSave": "新增",
+      "settings.confirmDelete": "确认删除此模型？",
+      "settings.cannotDeleteDefault": "不能删除当前默认模型",
+      "settings.modelDeleted": "模型已删除",
+      "settings.defaultModelSet": "默认模型已更新",
     },
   };
 
@@ -715,6 +737,12 @@
     usageLimitBar: $("#usageLimitBar"),
     usageRefreshTime: $("#usageRefreshTime"),
     btnUsageRefresh: $("#btnUsageRefresh"),
+    modelAliasGroup: $("#modelAliasGroup"),
+    modelAlias: $("#modelAlias"),
+    modelList: $("#modelList"),
+    addModelBtn: $("#addModelBtn"),
+    deleteModelBtn: $("#deleteModelBtn"),
+    setDefaultBtn: $("#setDefaultBtn"),
     msgBox: $("#msgBox"),
     btnSave: $("#btnSave"),
     btnSaveText: $("#btnSave .btn-text"),
@@ -853,6 +881,8 @@
   // ── 状态 ──
 
   let currentProvider = "moonshot";
+  let currentEditingModelKey = null; // null = 新增模式, string = 编辑模式
+  let modelListData = []; // settingsGetConfiguredModels 返回的模型列表缓存
   let saving = false;
   let currentChatPlatform = "feishu";
   let chSaving = false;
@@ -928,6 +958,10 @@
     document.title = t("title");
     document.querySelectorAll("[data-i18n]").forEach((el) => {
       el.textContent = t(el.getAttribute("data-i18n"));
+    });
+    // placeholder 国际化
+    document.querySelectorAll("[data-i18n-placeholder]").forEach((el) => {
+      el.placeholder = t(el.getAttribute("data-i18n-placeholder"));
     });
     if (els.btnChAccessRefresh) {
       els.btnChAccessRefresh.setAttribute("title", t("feishu.refreshPairing"));
@@ -1126,6 +1160,9 @@
     }
 
     updateOAuthVisibility();
+
+    // 新增/编辑模式下始终显示别名
+    toggleEl(els.modelAliasGroup, true);
 
     // 从缓存回填已保存的 provider 配置
     fillSavedProviderFields(provider);
@@ -1598,8 +1635,13 @@
         return;
       }
 
+      // 构造保存 payload，注入别名
+      var payload = buildSavePayload(params);
+      var alias = (els.modelAlias.value || "").trim();
+      if (alias) payload.modelAlias = alias;
+
       // 再保存
-      var saveResult = await window.oneclaw.settingsSaveProvider(buildSavePayload(params));
+      var saveResult = await window.oneclaw.settingsSaveProvider(payload);
       if (!saveResult.success) {
         showMsg(saveResult.message || "Save failed", "error");
         setSaving(false);
@@ -1616,6 +1658,23 @@
           savedProviders = refreshResult.data.savedProviders;
         }
       } catch { }
+
+      // 保存后如果有别名，单独更新别名（不重启 gateway）
+      if (alias && params.modelID) {
+        var provKey = params.provider;
+        if (provKey === "moonshot") {
+          provKey = params.subPlatform === "kimi-code" ? "kimi-coding" : "moonshot";
+        } else if (provKey === "custom" && params.customPreset) {
+          var p = CUSTOM_PRESETS[params.customPreset];
+          if (p) provKey = p.providerKey;
+        }
+        try {
+          await window.oneclaw.settingsUpdateModelAlias({ modelKey: provKey + "/" + params.modelID, alias: alias });
+        } catch { }
+      }
+
+      // 刷新模型列表
+      await renderModelList();
     } catch (err) {
       showMsg(t("error.connection") + (err.message || "Unknown error"), "error");
       setSaving(false);
@@ -3298,6 +3357,238 @@
 
   // ── 从配置 + 预设合并出模型列表（配置优先，预设补充） ──
 
+  // ── 模型列表面板 ──
+
+  // 从后端拉取已配置模型列表并渲染左侧面板
+  async function renderModelList() {
+    if (!window.oneclaw || !window.oneclaw.settingsGetConfiguredModels) return;
+    try {
+      var result = await window.oneclaw.settingsGetConfiguredModels();
+      if (!result.success || !result.data) return;
+      modelListData = result.data;
+    } catch { return; }
+
+    var container = els.modelList;
+    if (!container) return;
+    container.innerHTML = "";
+
+    modelListData.forEach(function (item) {
+      var div = document.createElement("div");
+      div.className = "model-list-item";
+      if (item.key === currentEditingModelKey) {
+        div.classList.add("active");
+      }
+      div.dataset.modelKey = item.key;
+
+      var nameDiv = document.createElement("div");
+      nameDiv.className = "model-list-item__name";
+      nameDiv.textContent = item.name || item.key;
+      div.appendChild(nameDiv);
+
+      var metaDiv = document.createElement("div");
+      metaDiv.className = "model-list-item__meta";
+      metaDiv.textContent = item.provider;
+      if (item.isDefault) {
+        var star = document.createElement("span");
+        star.className = "model-list-item__default";
+        star.textContent = "★ " + t("settings.setDefault");
+        metaDiv.appendChild(star);
+      }
+      div.appendChild(metaDiv);
+
+      div.addEventListener("click", function () {
+        selectModelInList(item.key);
+      });
+      container.appendChild(div);
+    });
+  }
+
+  // 选中列表中的某个模型，进入编辑模式
+  function selectModelInList(modelKey) {
+    currentEditingModelKey = modelKey;
+    hideMsg();
+
+    // 高亮列表项
+    $$(".model-list-item").forEach(function (el) {
+      el.classList.toggle("active", el.dataset.modelKey === modelKey);
+    });
+
+    // 解析 modelKey → providerKey / modelId
+    var slashIdx = modelKey.indexOf("/");
+    if (slashIdx <= 0) return;
+    var providerKey = modelKey.slice(0, slashIdx);
+    var modelId = modelKey.slice(slashIdx + 1);
+
+    // 从 modelListData 获取元数据
+    var modelEntry = modelListData.find(function (m) { return m.key === modelKey; });
+
+    // providerKey → UI provider tab 映射
+    var uiProvider = resolveUiProvider(providerKey);
+    var subPlatform = resolveSubPlatform(providerKey);
+
+    // 切换到对应 provider（先设子平台，再 switch）
+    if (uiProvider === "moonshot" && subPlatform) {
+      var radio = document.querySelector('input[name="subPlatform"][value="' + subPlatform + '"]');
+      if (radio) radio.checked = true;
+    }
+    if (uiProvider === "custom") {
+      // 检查 customPreset
+      var presetKey = resolveCustomPresetKey(providerKey);
+      if (presetKey) {
+        switchProvider("custom");
+        els.customPreset.value = presetKey;
+        applyCustomPreset(presetKey);
+      } else {
+        switchProvider("custom");
+        els.customPreset.value = "";
+        applyCustomPreset("");
+      }
+    } else {
+      switchProvider(uiProvider);
+    }
+
+    // 锁定 provider tabs
+    lockProviderTabs(uiProvider);
+
+    // 从 savedProviders 回填 apiKey
+    fillSavedProviderFields(uiProvider, subPlatform);
+
+    // 选中模型
+    selectOrAppendModel(modelId);
+
+    // 显示别名
+    var alias = modelEntry && modelEntry.name !== modelId ? modelEntry.name : "";
+    els.modelAlias.value = alias;
+    toggleEl(els.modelAliasGroup, true);
+
+    // 显示编辑按钮
+    els.deleteModelBtn.style.display = "";
+    els.setDefaultBtn.style.display = "";
+    if (modelEntry && modelEntry.isDefault) {
+      els.setDefaultBtn.disabled = true;
+      els.setDefaultBtn.textContent = "★ " + t("settings.setDefault");
+    } else {
+      els.setDefaultBtn.disabled = false;
+      els.setDefaultBtn.textContent = t("settings.setDefault");
+    }
+    els.btnSaveText.textContent = t("provider.save");
+  }
+
+  // 进入新增模式
+  function enterAddMode() {
+    currentEditingModelKey = null;
+    hideMsg();
+
+    // 取消列表高亮
+    $$(".model-list-item").forEach(function (el) {
+      el.classList.remove("active");
+    });
+
+    // 解锁 provider tabs
+    unlockProviderTabs();
+
+    // 清空表单
+    els.apiKeyInput.value = "";
+    els.modelAlias.value = "";
+    toggleEl(els.modelAliasGroup, true);
+
+    // 隐藏编辑按钮
+    els.deleteModelBtn.style.display = "none";
+    els.setDefaultBtn.style.display = "none";
+    els.btnSaveText.textContent = t("settings.addModelSave");
+
+    // 回填当前 provider 的已保存配置（保留 apiKey）
+    fillSavedProviderFields(currentProvider);
+  }
+
+  // providerKey → UI tab provider 名
+  function resolveUiProvider(providerKey) {
+    if (providerKey === "kimi-coding" || providerKey === "moonshot") return "moonshot";
+    if (providerKey === "anthropic") return "anthropic";
+    if (providerKey === "openai") return "openai";
+    if (providerKey === "google") return "google";
+    // 所有其他 → custom
+    if (PROVIDERS[providerKey]) return providerKey;
+    return "custom";
+  }
+
+  // providerKey → Moonshot 子平台
+  function resolveSubPlatform(providerKey) {
+    if (providerKey === "kimi-coding") return "kimi-code";
+    if (providerKey === "moonshot") return "moonshot-cn";
+    return null;
+  }
+
+  // providerKey → custom preset key（反查）
+  function resolveCustomPresetKey(providerKey) {
+    for (var key in CUSTOM_PRESETS) {
+      if (CUSTOM_PRESETS[key].providerKey === providerKey) return key;
+    }
+    return null;
+  }
+
+  // 锁定 provider tabs（编辑模式下禁止切换）
+  function lockProviderTabs(activeProvider) {
+    $$(".provider-tab").forEach(function (tab) {
+      if (tab.dataset.provider !== activeProvider) {
+        tab.classList.add("locked");
+        tab.disabled = true;
+      } else {
+        tab.classList.remove("locked");
+        tab.disabled = false;
+      }
+    });
+  }
+
+  // 解锁 provider tabs
+  function unlockProviderTabs() {
+    $$(".provider-tab").forEach(function (tab) {
+      tab.classList.remove("locked");
+      tab.disabled = false;
+    });
+  }
+
+  // 删除模型
+  async function handleDeleteModel() {
+    if (!currentEditingModelKey) return;
+    var entry = modelListData.find(function (m) { return m.key === currentEditingModelKey; });
+    if (entry && entry.isDefault) {
+      showMsg(t("settings.cannotDeleteDefault"), "error");
+      return;
+    }
+    if (!confirm(t("settings.confirmDelete"))) return;
+    try {
+      var result = await window.oneclaw.settingsDeleteModel({ modelKey: currentEditingModelKey });
+      if (!result.success) {
+        showMsg(result.message || "Delete failed", "error");
+        return;
+      }
+      showToast(t("settings.modelDeleted"));
+      enterAddMode();
+      await renderModelList();
+    } catch (err) {
+      showMsg(t("error.connection") + (err.message || ""), "error");
+    }
+  }
+
+  // 设为默认模型
+  async function handleSetDefault() {
+    if (!currentEditingModelKey) return;
+    try {
+      var result = await window.oneclaw.settingsSetDefaultModel({ modelKey: currentEditingModelKey });
+      if (!result.success) {
+        showMsg(result.message || "Set default failed", "error");
+        return;
+      }
+      showToast(t("settings.defaultModelSet"));
+      await renderModelList();
+      // 刷新编辑态按钮
+      selectModelInList(currentEditingModelKey);
+    } catch (err) {
+      showMsg(t("error.connection") + (err.message || ""), "error");
+    }
+  }
+
   function buildMergedModelList(configuredModels, provider, subPlatform) {
     // 以配置中的模型为基础
     var models = configuredModels ? configuredModels.slice() : [];
@@ -3884,6 +4175,19 @@
     }
     els.btnToggleKey.addEventListener("click", togglePasswordVisibility);
 
+    // 模型列表：新增按钮
+    if (els.addModelBtn) {
+      els.addModelBtn.addEventListener("click", function () { enterAddMode(); });
+    }
+    // 模型列表：删除按钮
+    if (els.deleteModelBtn) {
+      els.deleteModelBtn.addEventListener("click", handleDeleteModel);
+    }
+    // 模型列表：设为默认按钮
+    if (els.setDefaultBtn) {
+      els.setDefaultBtn.addEventListener("click", handleSetDefault);
+    }
+
     // 保存
     els.btnSave.addEventListener("click", handleSave);
 
@@ -4330,6 +4634,7 @@
     switchChatPlatform(initialChatPlatform || "feishu");
     applyRecoveryNotice(startupNotice);
     loadCurrentConfig();
+    renderModelList();
     loadChannelConfig();
     loadWecomConfig();
     loadDingtalkConfig();
