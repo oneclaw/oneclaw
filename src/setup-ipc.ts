@@ -1,4 +1,4 @@
-import { app, ipcMain } from "electron";
+import { app, BrowserWindow, ipcMain } from "electron";
 import { ensureGatewayAuthTokenInConfig } from "./gateway-auth";
 import { SetupManager } from "./setup-manager";
 import * as analytics from "./analytics";
@@ -148,9 +148,19 @@ export function registerSetupIpc(deps: SetupIpcDeps): void {
   });
 
   // ── Kimi OAuth ──
-  ipcMain.handle("kimi-oauth:login", async () => {
+  ipcMain.handle("kimi-oauth:login", async (event) => {
     const { kimiOAuthLogin } = await import("./kimi-oauth");
-    return kimiOAuthLogin();
+    const result = await kimiOAuthLogin();
+    // 轮询成功后将窗口拉回前台，避免用户停留在浏览器找不到程序
+    if (result.success) {
+      const win = BrowserWindow.fromWebContents(event.sender);
+      if (win) {
+        if (win.isMinimized()) win.restore();
+        win.show();
+        win.focus();
+      }
+    }
+    return result;
   });
 
   ipcMain.handle("kimi-oauth:cancel", async () => {
