@@ -75,22 +75,33 @@ export async function sendChatMessage(
   if (!state.client || !state.connected) {
     return null;
   }
-  const msg = message.trim();
-  const hasAttachments = attachments && attachments.length > 0;
+  // 分离图片附件和文件路径附件
+  const imageAttachments = attachments?.filter((a) => a.dataUrl) ?? [];
+  const fileAttachments = attachments?.filter((a) => a.filePath && !a.dataUrl) ?? [];
+  const hasImages = imageAttachments.length > 0;
+  const hasFiles = fileAttachments.length > 0;
+
+  // 文件路径拼到消息前面，让 gateway 自行读取
+  const filePaths = fileAttachments.map((a) => a.filePath!);
+  const filePrefix = filePaths.length > 0
+    ? filePaths.join("\n") + "\n\n"
+    : "";
+  const msg = (filePrefix + message).trim();
+
+  const hasAttachments = hasImages || hasFiles;
   if (!msg && !hasAttachments) {
     return null;
   }
 
   const now = Date.now();
 
-  // Build user message content blocks
+  // 构建用户消息内容块（用于本地 UI 显示）
   const contentBlocks: Array<{ type: string; text?: string; source?: unknown }> = [];
   if (msg) {
     contentBlocks.push({ type: "text", text: msg });
   }
-  // Add image previews to the message for display
-  if (hasAttachments) {
-    for (const att of attachments) {
+  if (hasImages) {
+    for (const att of imageAttachments) {
       contentBlocks.push({
         type: "image",
         source: { type: "base64", media_type: att.mimeType, data: att.dataUrl },
@@ -114,9 +125,9 @@ export async function sendChatMessage(
   state.chatStream = "";
   state.chatStreamStartedAt = now;
 
-  // Convert attachments to API format
-  const apiAttachments = hasAttachments
-    ? attachments
+  // 只有图片附件走 base64 API，文件路径已拼入消息文本
+  const apiAttachments = hasImages
+    ? imageAttachments
         .map((att) => {
           const parsed = dataUrlToBase64(att.dataUrl);
           if (!parsed) {

@@ -1478,6 +1478,45 @@ select {
   background: #0009
 }
 
+/* 文件附件（非图片） */
+.chat-attachment--file {
+  width: auto;
+  max-width: 200px;
+  height: auto;
+  min-height: 36px;
+  padding: 6px 28px 6px 8px
+}
+
+.chat-attachment__file {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0
+}
+
+.chat-attachment__file-icon {
+  display: inline-flex;
+  flex-shrink: 0;
+  color: var(--muted)
+}
+
+.chat-attachment__file-icon svg {
+  width: 16px;
+  height: 16px;
+  stroke: currentColor;
+  fill: none;
+  stroke-width: 1.5px
+}
+
+.chat-attachment__file-name {
+  font-size: 12px;
+  line-height: 1.3;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap
+}
+
 .chat-message-images {
   display: flex;
   flex-wrap: wrap;
@@ -1500,6 +1539,45 @@ select {
 
 .chat-group.user .chat-message-images {
   justify-content: flex-end
+}
+
+/* 附件按钮 */
+.chat-compose__attach-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  min-width: 40px;
+  height: 40px;
+  padding: 0;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  transition: color .15s ease-out, background .15s ease-out;
+  flex-shrink: 0;
+  align-self: flex-end
+}
+
+.chat-compose__attach-btn svg {
+  width: 18px;
+  height: 18px;
+  stroke: currentColor;
+  fill: none;
+  stroke-width: 2px;
+  stroke-linecap: round;
+  stroke-linejoin: round
+}
+
+.chat-compose__attach-btn:hover:not(:disabled) {
+  color: var(--text);
+  background: rgba(128, 128, 128, .1)
+}
+
+.chat-compose__attach-btn:disabled {
+  opacity: .4;
+  cursor: not-allowed
 }
 
 .chat-compose__row {
