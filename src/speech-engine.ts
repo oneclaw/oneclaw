@@ -76,7 +76,7 @@ export function checkSpeechModels(): SpeechModelStatus {
       fs.existsSync(path.join(asrPath, "decoder.int8.onnx")) &&
       fs.existsSync(path.join(asrPath, "tokens.txt")),
     ttsAvailable:
-      fs.existsSync(path.join(ttsPath, "model.onnx")) &&
+      fs.existsSync(path.join(ttsPath, "theresa.onnx")) &&
       fs.existsSync(path.join(ttsPath, "tokens.txt")),
     vadPath,
     asrPath,
@@ -98,6 +98,9 @@ export class SpeechEngine {
   private audioInput: AudioIO | null = null;
   private portAudio: typeof import("naudiodon2") | null = null;
 
+  // 外部回调：ASR 最终结果
+  private onFinalResultCallback: ((text: string) => void) | null = null;
+
   // Live2D 窗口引用，用于发送 IPC 事件
   private targetWindow: BrowserWindow | null = null;
 
@@ -116,6 +119,13 @@ export class SpeechEngine {
    */
   setTargetWindow(win: BrowserWindow | null): void {
     this.targetWindow = win;
+  }
+
+  /**
+   * 设置 ASR 最终结果回调（用于语音→聊天→TTS 流程）
+   */
+  onFinalResult(callback: (text: string) => void): void {
+    this.onFinalResultCallback = callback;
   }
 
   /**
@@ -304,7 +314,7 @@ export class SpeechEngine {
         const ttsConfig = {
           model: {
             vits: {
-              model: path.join(ttsDir, "model.onnx"),
+              model: path.join(ttsDir, "theresa.onnx"),
               tokens: path.join(ttsDir, "tokens.txt"),
               lexicon: path.join(ttsDir, "lexicon.txt"),
             },
@@ -518,6 +528,15 @@ export class SpeechEngine {
   private sendFinalResult(text: string): void {
     if (!this.targetWindow || this.targetWindow.isDestroyed()) return;
     this.targetWindow.webContents.send("live2d:final-result", text);
+
+    // 触发外部回调（主进程用于发送到 Gateway 并 TTS）
+    if (this.onFinalResultCallback) {
+      try {
+        this.onFinalResultCallback(text);
+      } catch (err) {
+        log.error(`onFinalResultCallback 出错: ${err}`);
+      }
+    }
   }
 
   private sendStateChange(state: "listening" | "stopped"): void {

@@ -477,23 +477,12 @@ ipcMain.handle("live2d:change-model", (_e, modelPath: string) => {
 });
 
 ipcMain.handle("live2d:send-chat", async (_e, text: string) => {
-  try {
-    const port = gateway.getPort();
-    const token = gateway.getToken();
-    const res = await fetch(`http://127.0.0.1:${port}/api/chat`, {
-      method: "POST",
-      headers: {
-        "Authorization": `Bearer ${token}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ message: text }),
-    });
-    const data = await res.json();
-    return data.reply || data.message || "";
-  } catch (err) {
-    log.error(`live2d:send-chat 失败: ${err}`);
-    return "抱歉，无法连接到 AI 服务";
+  const sent = await windowManager.injectChatMessage(text);
+  if (!sent) {
+    log.warn(`live2d:send-chat: Chat UI 窗口不可用`);
+    return "主窗口未打开，无法发送消息";
   }
+  return "";
 });
 
 // 语音引擎 IPC（sherpa-onnx）
@@ -518,6 +507,69 @@ ipcMain.handle("live2d:stop-listening", async () => {
 
 ipcMain.handle("live2d:check-speech-models", () => {
   return checkSpeechModels();
+});
+
+// 清理 AI 回复中 TTS 不支持的字符（markdown 标记、emoji 等）
+function cleanTextForTts(text: string): string {
+  return text
+    .replace(/\*{1,3}([^*]+)\*{1,3}/g, "$1")  // **bold**, *italic*
+    .replace(/`([^`]+)`/g, "$1")                // `code`
+    .replace(/#{1,6}\s*/g, "")                  // ### heading
+    .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1")    // [link](url)
+    .replace(/[^\p{L}\p{N}\p{P}\p{Z}\n]/gu, "") // 移除 emoji 等非文字字符
+    .replace(/\n{2,}/g, "\n")
+    .trim();
+}
+
+// ── 语音→聊天→TTS 自动流程 ──
+// ASR 识别到最终文本后，注入 Chat UI 发送，等待回复后 TTS 合成发给 Live2D
+speechEngine.onFinalResult(async (text: string) => {
+  log.info(`[voice-chat] ASR 最终文本: ${text}`);
+
+  const live2dWin = live2dManager.getWindow();
+
+  // 注入到 Chat UI 发送，并等待 AI 回复
+  const reply = await windowManager.injectChatMessage(text);
+  if (!reply) {
+    log.warn(`[voice-chat] 未收到 AI 回复`);
+    if (live2dWin && !live2dWin.isDestroyed()) {
+      live2dWin.webContents.send("live2d:ai-reply", "主窗口未打开或未收到回复");
+    }
+    return;
+  }
+
+  log.info(`[voice-chat] AI 回复: ${reply.slice(0, 80)}...`);
+
+  if (!live2dWin || live2dWin.isDestroyed()) return;
+
+  // TTS 合成（可选）
+  let audioBuffer: Uint8Array | null = null;
+  let ttsSampleRate = 0;
+  try {
+    const ttsText = cleanTextForTts(reply);
+    const ttsResult = await speechEngine.synthesize(ttsText);
+    if (ttsResult) {
+      // sherpa-onnx 返回的 Float32Array 底层是 native external buffer，
+      // Electron IPC（structured clone）禁止传输 external ArrayBuffer。
+      // JSON 序列化/反序列化是最可靠的深拷贝方式，但对大数组太慢。
+      // 用 DataView 逐值写入全新 ArrayBuffer 彻底脱离 native 内存。
+      const samples = ttsResult.samples;
+      const ab = new ArrayBuffer(samples.length * 4);
+      const dv = new DataView(ab);
+      for (let i = 0; i < samples.length; i++) {
+        dv.setFloat32(i * 4, samples[i], true);
+      }
+      audioBuffer = new Uint8Array(ab);
+      ttsSampleRate = ttsResult.sampleRate;
+    }
+  } catch (ttsErr) {
+    log.warn(`[voice-chat] TTS 合成失败（降级为纯文字）: ${ttsErr}`);
+  }
+
+  // 发送 AI 回复 + 音频到 Live2D 窗口
+  if (!live2dWin.isDestroyed()) {
+    live2dWin.webContents.send("live2d:ai-reply", reply, audioBuffer, ttsSampleRate);
+  }
 });
 
 // ── 退出 ──

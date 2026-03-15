@@ -191,6 +191,104 @@ export class WindowManager {
     this.allowAppQuit = true;
   }
 
+  /**
+   * 向 Chat UI 注入聊天消息并发送，等待 AI 回复完成后返回回复文本
+   * @returns AI 回复文本，或 null 表示窗口不可用/超时
+   */
+  async injectChatMessage(text: string): Promise<string | null> {
+    if (!this.win || this.win.isDestroyed()) return null;
+    const escaped = text.replace(/\\/g, "\\\\").replace(/'/g, "\\'").replace(/\n/g, "\\n");
+    try {
+      // 1. 注入并发送消息
+      const ok = await this.win.webContents.executeJavaScript(`
+        (() => {
+          const app = document.querySelector('openclaw-app');
+          if (app && typeof app.handleSendChat === 'function') {
+            app.handleSendChat('${escaped}');
+            return true;
+          }
+          return false;
+        })()
+      `);
+      if (!ok) return null;
+
+      // 2. 轮询等待 AI 回复完成（chatRunId 从非 null 变为 null）
+      const reply = await this.waitForChatReply();
+      return reply;
+    } catch (err) {
+      log.error(`injectChatMessage 失败: ${err}`);
+      return null;
+    }
+  }
+
+  /**
+   * 等待 Chat UI 回复完成并返回最后一条 assistant 消息的文本
+   */
+  private waitForChatReply(timeoutMs = 60_000): Promise<string | null> {
+    return new Promise((resolve) => {
+      if (!this.win || this.win.isDestroyed()) {
+        resolve(null);
+        return;
+      }
+      const startTime = Date.now();
+      let pollTimer: ReturnType<typeof setInterval> | null = null;
+      const cleanup = () => {
+        if (pollTimer) clearInterval(pollTimer);
+      };
+
+      // 先等 chatRunId 变为非 null（发送中），再等它变回 null（回复完成）
+      let wasRunning = false;
+      pollTimer = setInterval(async () => {
+        if (!this.win || this.win.isDestroyed()) {
+          cleanup();
+          resolve(null);
+          return;
+        }
+        if (Date.now() - startTime > timeoutMs) {
+          cleanup();
+          resolve(null);
+          return;
+        }
+        try {
+          const state = await this.win.webContents.executeJavaScript(`
+            (() => {
+              const app = document.querySelector('openclaw-app');
+              if (!app) return { running: false, reply: null };
+              const running = app.chatRunId != null || app.chatSending;
+              if (running) return { running: true, reply: null };
+              // 回复完成，取最后一条 assistant 消息
+              const msgs = app.chatMessages || [];
+              for (let i = msgs.length - 1; i >= 0; i--) {
+                const m = msgs[i];
+                if (m && m.role === 'assistant' && m.content) {
+                  const c = m.content;
+                  if (typeof c === 'string') return { running: false, reply: c };
+                  if (Array.isArray(c)) {
+                    const texts = c.filter(b => b.type === 'text' && b.text).map(b => b.text);
+                    if (texts.length) return { running: false, reply: texts.join('\\n') };
+                  }
+                }
+              }
+              return { running: false, reply: null };
+            })()
+          `);
+
+          if (state.running) {
+            wasRunning = true;
+          } else if (wasRunning) {
+            // 从 running → not running：回复完成
+            cleanup();
+            resolve(state.reply || null);
+          }
+          // 还没开始 running，继续等
+        } catch {
+          cleanup();
+          resolve(null);
+        }
+      }, 300);
+    });
+  }
+
   // 向渲染层广播更新侧栏状态（若窗口存在）。
   pushUpdateBannerState(state: UpdateBannerState): void {
     if (!this.win || this.win.isDestroyed()) {

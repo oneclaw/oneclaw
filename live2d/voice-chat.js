@@ -65,17 +65,18 @@ class VoiceChat {
       if (text) {
         this.chatBubble.showUserText(text, { interim: false });
         this.chatBubble.showStatus("思考中...");
+        // AI 回复由主进程自动处理（ASR→Gateway→TTS→live2d:ai-reply）
       }
     });
 
     // 接收 AI 回复（含可选 TTS 音频）
-    window.live2dAPI.onAIReply((reply, audioData) => {
+    window.live2dAPI.onAIReply((reply, audioData, sampleRate) => {
       this.chatBubble.clearStatus();
       this.chatBubble.showAIText(reply);
 
       // 播放 TTS 音频并同步嘴型
       if (audioData && audioData.byteLength > 0) {
-        this.playTTSAndSyncLips(audioData);
+        this.playTTSAndSyncLips(audioData, sampleRate || 22050);
       } else {
         // 无音频时用文字长度模拟嘴型
         this.simulateLipSync(reply.length);
@@ -139,9 +140,8 @@ class VoiceChat {
   }
 
   // 播放 TTS 音频并驱动 Live2D 嘴型
-  playTTSAndSyncLips(audioData) {
+  playTTSAndSyncLips(audioData, sampleRate) {
     try {
-      const sampleRate = 44100; // 默认，可根据实际 TTS 输出调整
       const audioContext = new (window.AudioContext || window.webkitAudioContext)({ sampleRate });
 
       const float32 = new Float32Array(audioData);
