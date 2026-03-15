@@ -19,10 +19,9 @@ class VoiceChat {
       this.toggle();
     });
 
-    // 按住说话（长按模式）
+    // 按住说话（麦克风按钮长按模式）
     this.micBtn.addEventListener("mousedown", (e) => {
       if (e.button !== 0) return;
-      // 长按 500ms 后进入按住说话模式
       this.holdTimer = setTimeout(() => {
         this.holdMode = true;
         this.startListening();
@@ -47,6 +46,37 @@ class VoiceChat {
       }
       if (this.holdMode) {
         this.holdMode = false;
+        this.stopListening();
+      }
+    });
+
+    // ── 键盘快捷键：按住 C 键说话，松开停止 ──
+    this.keyHolding = false;
+    document.addEventListener("keydown", (e) => {
+      // 忽略输入框中的按键、重复事件、带修饰键的组合
+      if (e.repeat) return;
+      if (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA") return;
+      if (e.ctrlKey || e.metaKey || e.altKey || e.shiftKey) return;
+      if (e.key.toLowerCase() !== "c") return;
+
+      e.preventDefault();
+      this.keyHolding = true;
+      this.startListening();
+    });
+
+    document.addEventListener("keyup", (e) => {
+      if (e.key.toLowerCase() !== "c") return;
+      if (!this.keyHolding) return;
+
+      e.preventDefault();
+      this.keyHolding = false;
+      this.stopListening();
+    });
+
+    // 窗口失焦时自动停止（防止按键松开事件丢失）
+    window.addEventListener("blur", () => {
+      if (this.keyHolding) {
+        this.keyHolding = false;
         this.stopListening();
       }
     });

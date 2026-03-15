@@ -9,10 +9,12 @@ OneClaw is a cross-platform desktop app that wraps the [openclaw](https://github
 ```
 Electron Main Process
   ├── Gateway child process  (Node.js 22 → openclaw entry.js, port configurable, default 18789)
-  └── BrowserWindow          (loads Lit Chat UI via file://, connects to gateway via WebSocket)
+  ├── TTS worker child process (Node.js → tts-worker.js, on-demand, sherpa-onnx OfflineTts)
+  ├── BrowserWindow          (loads Lit Chat UI via file://, connects to gateway via WebSocket)
+  └── Live2D BrowserWindow   (transparent overlay, pixi-live2d-display, voice chat UI)
 ```
 
-The main process spawns a gateway subprocess, waits for its health check, then opens a BrowserWindow that loads a local Lit-based Chat UI (via `file://`). The Chat UI connects to the gateway over WebSocket for chat and HTTP for API calls. A system tray icon keeps the app alive when all windows are closed.
+The main process spawns a gateway subprocess, waits for its health check, then opens a BrowserWindow that loads a local Lit-based Chat UI (via `file://`). A separate transparent Live2D window provides an interactive desktop pet with voice chat capabilities. A system tray icon keeps the app alive when all windows are closed.
 
 ## Tech Stack
 
@@ -25,6 +27,11 @@ The main process spawns a gateway subprocess, waits for its health check, then o
 | Updater | electron-updater (generic provider, CDN at `oneclaw.cn`) |
 | Targets | macOS DMG + ZIP (arm64/x64), Windows NSIS (x64/arm64) |
 | Version scheme | Calendar-based: `2026.2.26` (auto-fetched from openclaw npm at build time) |
+| Live2D | pixi-live2d-display (transparent BrowserWindow overlay) |
+| ASR | sherpa-onnx-node (streaming paraformer bilingual zh-en) |
+| TTS | sherpa-onnx-node OfflineTts (VITS, run in Node.js child process) |
+| VAD | Silero VAD via sherpa-onnx (optional) |
+| Microphone | naudiodon2 (PortAudio N-API binding) |
 
 ## Repository Layout
 
@@ -36,10 +43,14 @@ oneclaw/
 │   ├── gateway-process.ts  # Child process state machine + diagnostics
 │   ├── gateway-auth.ts     # Auth token read/generate/persist
 │   ├── gateway-rpc.ts      # WebSocket RPC client for main↔gateway communication
-│   ├── window.ts           # BrowserWindow lifecycle, token injection, retry
+│   ├── window.ts           # BrowserWindow lifecycle, token injection, chat message injection
 │   ├── window-close-policy.ts  # Close behavior: hide vs destroy
 │   ├── tray.ts             # System tray icon + i18n context menu
 │   ├── preload.ts          # contextBridge IPC whitelist (42 methods + 4 listeners)
+│   ├── live2d-window.ts    # Live2D transparent BrowserWindow lifecycle + model management
+│   ├── live2d-preload.ts   # Live2D window contextBridge (voice, chat, model IPC)
+│   ├── speech-engine.ts    # sherpa-onnx ASR (streaming paraformer) + VAD + TTS subprocess
+│   ├── tts-worker.js       # Standalone Node.js script for TTS (avoids Electron external buffer restriction)
 │   ├── provider-config.ts  # Provider presets, verification, config R/W
 │   ├── setup-manager.ts    # Setup wizard window lifecycle
 │   ├── setup-ipc.ts        # Setup validation + config write + CLI install
@@ -59,6 +70,15 @@ oneclaw/
 │   └── logger.ts           # Dual-write logger (file + console)
 ├── chat-ui/                # Lit-based Chat UI SPA (file:// loaded)
 │   └── ui/                 # Vite project: Lit 3 components, sidebar, settings view
+├── live2d/                 # Live2D desktop pet frontend (vanilla HTML/CSS/JS)
+│   ├── index.html          # Live2D transparent window layout (model canvas + chat bubble + mic button)
+│   ├── live2d.css          # Transparent window styling, chat bubble, mic button
+│   ├── voice-chat.js       # Voice chat controller (ASR events, TTS playback, lip sync, keyboard shortcut)
+│   └── chat-bubble.js      # Chat bubble UI component (user/AI text display)
+├── resources/models/speech/ # Speech models (sherpa-onnx, gitignored)
+│   ├── silero_vad.onnx                                    # Silero VAD model
+│   ├── sherpa-onnx-streaming-paraformer-bilingual-zh-en/  # Streaming ASR model (encoder + decoder + tokens)
+│   └── vits-zh-hf-theresa/                                # VITS TTS model (theresa.onnx + tokens + lexicon)
 ├── setup/                  # Setup wizard frontend (vanilla HTML/CSS/JS)
 │   ├── index.html          # 3-step wizard with data-i18n attributes
 │   ├── setup.css           # Dark/light theme via prefers-color-scheme
@@ -275,6 +295,75 @@ CDN-based updates via `electron-updater`:
 - Download progress shown in tray tooltip
 - Pre-quit callback ensures window close policy doesn't block `quitAndInstall()`
 
+### Live2D Desktop Pet (`live2d-window.ts`, `live2d/`)
+
+Transparent always-on-top window displaying an interactive Live2D model:
+
+- **Transparent BrowserWindow**: `transparent: true`, frameless, always-on-top, click-through regions around the model
+- **Model management**: Model list scanning, hot-swap via IPC (`live2d:change-model`), config persistence
+- **Drag support**: Custom drag handling via `live2d:drag-window` IPC (transparent windows can't use native drag)
+- **Mutual exclusion with main window**: When main Chat UI opens, Live2D hides; when Chat UI closes, Live2D reappears
+
+### Speech Engine (`speech-engine.ts`, `tts-worker.js`)
+
+Sherpa-onnx powered speech pipeline running in the Electron main process (ASR/VAD) and a Node.js child process (TTS):
+
+**ASR (Automatic Speech Recognition):**
+- Streaming paraformer bilingual (zh-en) via `OnlineRecognizer`
+- Real-time microphone capture via naudiodon2 (PortAudio)
+- Endpoint detection with configurable silence thresholds
+- Interim results streamed to Live2D window via IPC (`live2d:interim-result`)
+- Final results trigger the voice→chat→TTS pipeline
+
+**VAD (Voice Activity Detection):**
+- Optional Silero VAD model for speech/silence classification
+- Non-fatal: ASR works without VAD
+
+**TTS (Text-to-Speech):**
+- VITS model (theresa, Chinese) via `OfflineTts`
+- **Runs in a separate Node.js child process** (`tts-worker.js`) because Electron 40's V8 forbids N-API external ArrayBuffers — sherpa-onnx's `generate()` returns `Float32Array` backed by native external memory, which crashes in Electron's V8
+- Child process writes PCM 16-bit mono WAV file to `$TMPDIR/oneclaw-tts/`
+- Main process registers `oneclaw-tts://` custom protocol, renderer loads audio via `new Audio("oneclaw-tts://audio/<filename>.wav")`
+
+**Voice→Chat→TTS pipeline:**
+1. User holds `C` key → microphone starts recording
+2. ASR produces final text → injected into Chat UI via `executeJavaScript` calling `handleSendChat()`
+3. Main process polls Chat UI state (`chatRunId`/`chatSending`) until AI reply completes
+4. Reply text cleaned of markdown/emoji → TTS child process generates WAV
+5. WAV filename sent to Live2D renderer → `Audio` element plays via `oneclaw-tts://` protocol
+6. `AnalyserNode` drives real-time lip sync (`setMouthOpenY`) during playback
+
+### Voice Chat UI (`live2d/voice-chat.js`)
+
+Voice interaction controller in the Live2D renderer process:
+
+**Input methods:**
+- **Keyboard shortcut**: Hold `C` key to talk, release to stop (push-to-talk). Ignores input fields, modifier combos, and `e.repeat`. Auto-stops on window blur
+- **Mic button click**: Toggle listening on/off
+- **Mic button long-press** (500ms): Push-to-talk mode via mouse hold
+
+**Audio playback + lip sync:**
+- TTS audio loaded via `oneclaw-tts://` custom protocol URL
+- `MediaElementSource` → `AnalyserNode` for real-time frequency analysis
+- Volume mapped to `mouthOpenY` (0–1) driving Live2D model mouth animation
+- Fallback: text-length-based sine wave simulation when TTS unavailable
+
+### Chat UI Injection (`window.ts`)
+
+Voice-to-chat bridge via Chromium's `executeJavaScript`:
+
+- `injectChatMessage(text)`: Calls `document.querySelector('openclaw-app').handleSendChat(text)` to inject ASR text as if typed
+- `waitForChatReply()`: Polls every 300ms (60s timeout) watching `chatRunId`/`chatSending` transition from running→done, then extracts last assistant message from `chatMessages` array
+- Returns full AI reply text to main process for TTS synthesis
+
+### Custom Protocol for TTS Audio (`main.ts`)
+
+Registered before `app.ready` via `protocol.registerSchemesAsPrivileged`:
+
+- Scheme: `oneclaw-tts://` with `secure`, `supportFetchAPI`, `bypassCSP`, `stream` privileges
+- Handler: `protocol.handle("oneclaw-tts", ...)` maps `oneclaw-tts://audio/<filename>` to `net.fetch("file://<tmpdir>/<filename>")`
+- Security: Path traversal prevention — only serves files from `$TMPDIR/oneclaw-tts/`
+
 ### Incremental Resource Packaging (`package-resources.js`)
 
 A stamp file (`resources/targets/<target>/.node-stamp`) records `version-platform-arch`. If stamp matches, skip download. Cross-platform builds (e.g., building win32-x64 on darwin-arm64) auto-detect the mismatch and re-download.
@@ -304,6 +393,13 @@ Electron 40 defaults to sandbox mode. 42 IPC methods + 4 event listeners are exp
 **Event listeners:** `onSettingsNavigate`, `onNavigate`, `onUpdateState`, `onFeishuPairingState`
 **Chat UI:** `openSettings`, `openWebUI`, `getGatewayPort`
 **Utility:** `openExternal`
+
+**Live2D window IPC** (`live2d-preload.ts`):
+**Window:** `openMainWindow`, `dragWindow`
+**Model:** `getConfig`, `getModelList`, `changeModel`, `getModelsDir`, `onChangeModel`
+**Chat:** `sendChat`
+**Voice:** `startListening`, `stopListening`, `checkSpeechModels`
+**Voice events:** `onInterimResult`, `onFinalResult`, `onAIReply`, `onListeningStateChange`
 
 `openExternal` exists because `shell.openExternal` is unavailable in sandboxed preload — must go through IPC to main process.
 
@@ -378,6 +474,16 @@ For comprehensive design guidelines, please refer to:
 
 18. **`oneclaw.config.json` is the ownership marker.** OneClaw uses this file to detect config ownership at startup. Detection flow: `oneclaw.config.json` exists → normal startup; `.device-id` exists → legacy migration; `openclaw.json` exists without marker → external OpenClaw takeover; nothing → fresh Setup. Do not delete this file manually.
 
+19. **TTS must run in a child process, not in Electron.** Electron 40's V8 forbids N-API external ArrayBuffers. sherpa-onnx's `OfflineTts.generate()` returns `Float32Array` backed by native external memory, which causes `External buffers are not allowed` errors in Electron. The TTS worker (`tts-worker.js`) runs in a separate system `node` process to avoid this restriction.
+
+20. **TTS audio served via custom protocol.** Renderers can't access `file://` paths from temp directories due to security restrictions. The `oneclaw-tts://` custom protocol registered via `protocol.handle()` serves WAV files from `$TMPDIR/oneclaw-tts/` to the Live2D renderer.
+
+21. **`tts-worker.js` must be copied to `dist/` during build.** It's a plain `.js` file (not TypeScript), so `tsc` won't process it. The build script includes `cp src/tts-worker.js dist/tts-worker.js`.
+
+22. **Speech models are not bundled in the repo.** Models in `resources/models/speech/` are gitignored and must be downloaded separately. ASR requires `encoder.int8.onnx`, `decoder.int8.onnx`, `tokens.txt`; TTS requires `theresa.onnx`, `tokens.txt`, `lexicon.txt`.
+
+23. **`DYLD_LIBRARY_PATH` must be set before Electron starts (dev mode).** sherpa-onnx native addon depends on co-located `.dylib` files. macOS's DYLD_LIBRARY_PATH cannot be set after process start. The `dev` script sets it: `DYLD_LIBRARY_PATH=$PWD/node_modules/sherpa-onnx-darwin-x64:$DYLD_LIBRARY_PATH electron .`
+
 ## Architecture Diagram
 
 ```
@@ -388,8 +494,12 @@ For comprehensive design guidelines, please refer to:
 │     │              │                     │                   │
 │     │         spawn child ──────── path resolution           │
 │     │              │                                         │
-│     ├── window.ts (BrowserWindow + token inject)             │
+│     ├── window.ts (BrowserWindow + token inject + chat inject)│
 │     │     └── window-close-policy.ts (hide vs destroy)       │
+│     ├── live2d-window.ts (transparent Live2D BrowserWindow)  │
+│     │     └── live2d-preload.ts (voice/chat/model IPC)       │
+│     ├── speech-engine.ts (ASR + VAD + TTS subprocess mgmt)  │
+│     │     └── tts-worker.js (child process: sherpa-onnx TTS) │
 │     ├── tray.ts   (system tray + i18n menu)                  │
 │     ├── provider-config.ts (presets + verify + config)       │
 │     ├── config-backup.ts (rolling backups + recovery)        │
@@ -409,17 +519,25 @@ For comprehensive design guidelines, please refer to:
 │     └── logger.ts (file + console)                           │
 │                                                              │
 │  preload.ts ─── contextBridge (42 IPC + 4 listeners)         │
-└──────────────────┬───────────────────────────────────────────┘
-                   │
-     ┌─────────────┴─────────────┐
-     │   Gateway Child Process   │
-     │   Node.js 22 + openclaw   │
-     │   :configurable loopback  │
-     └─────────────┬─────────────┘
-                   │ HTTP + WebSocket
-     ┌─────────────┴─────────────┐
-     │      BrowserWindow        │
-     │  loads Lit Chat UI from   │
-     │  file:// (chat-ui/dist/)  │
-     └───────────────────────────┘
+│  protocol: oneclaw-tts:// (serves TTS WAV from temp dir)     │
+└──────────────────┬───────────────┬───────────────────────────┘
+                   │               │
+     ┌─────────────┴──────┐  ┌────┴──────────────────────┐
+     │  Gateway Child Proc │  │  Live2D BrowserWindow     │
+     │  Node.js 22+openclaw│  │  transparent overlay      │
+     │  :configurable port │  │  pixi-live2d-display      │
+     └─────────────┬───────┘  │  voice-chat.js (C key PTT)│
+                   │          │  chat-bubble.js           │
+                   │ WS+HTTP  └────┬──────────────────────┘
+     ┌─────────────┴──────┐       │ IPC (ASR/TTS/chat)
+     │    BrowserWindow   │       │
+     │  Lit Chat UI from  │◄──────┘ injectChatMessage()
+     │  file:// (chat-ui/)│
+     └────────────────────┘
+
+Voice Pipeline:
+  [Mic] → naudiodon2 → SpeechEngine(ASR) → final text
+    → injectChatMessage(text) → Chat UI → AI reply
+    → cleanTextForTts() → tts-worker.js(child proc) → WAV file
+    → oneclaw-tts:// protocol → Audio element → AnalyserNode → lip sync
 ```
