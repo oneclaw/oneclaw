@@ -282,6 +282,22 @@ export function registerSettingsIpc(opts: SettingsIpcOptions = {}): void {
     return runTrackedSettingsAction("set_default_model" as any, { model_key: modelKey }, async () => {
       try {
         const config = readUserConfig();
+        // 验证目标模型确实存在
+        const slashIdx = modelKey.indexOf("/");
+        if (slashIdx <= 0) {
+          return { success: false, message: "无效的 modelKey 格式" };
+        }
+        const providerKey = modelKey.slice(0, slashIdx);
+        const modelId = modelKey.slice(slashIdx + 1);
+        const prov = config?.models?.providers?.[providerKey];
+        if (!prov || !Array.isArray(prov.models)) {
+          return { success: false, message: "模型不存在" };
+        }
+        const found = prov.models.some((m: any) => (typeof m === "string" ? m : m?.id) === modelId);
+        if (!found) {
+          return { success: false, message: "模型不存在" };
+        }
+
         config.agents ??= {};
         config.agents.defaults ??= {};
         config.agents.defaults.model ??= {};
@@ -314,14 +330,24 @@ export function registerSettingsIpc(opts: SettingsIpcOptions = {}): void {
           return { success: false, message: "模型不存在" };
         }
 
-        const entry = prov.models.find((m: any) => {
+        const idx = prov.models.findIndex((m: any) => {
           const id = typeof m === "string" ? m : m?.id;
           return id === modelId;
         });
-        if (!entry || typeof entry !== "object") {
+        if (idx < 0) {
           return { success: false, message: "模型不存在" };
         }
-        entry.name = alias || modelId;
+        // 字符串条目升级为对象格式
+        let entry = prov.models[idx];
+        if (typeof entry === "string") {
+          entry = { id: entry, name: entry, input: ["text"] };
+          prov.models[idx] = entry;
+        }
+        if (alias) {
+          entry.name = alias;
+        } else {
+          delete entry.name;
+        }
 
         writeUserConfig(config);
         return { success: true };
@@ -2257,15 +2283,25 @@ function mergeModels(provEntry: any, selectedID: string, prevModels: any[]): voi
   provEntry.models = merged;
 }
 
-// 给指定模型设置别名（name 字段）
+// 给指定模型设置别名（name 字段），空别名时移除 name 让 UI 回退显示 id
 function applyModelAlias(provEntry: any, modelId: string, alias?: string): void {
   if (!provEntry || !Array.isArray(provEntry.models)) return;
-  const entry = provEntry.models.find((m: any) => {
+  const idx = provEntry.models.findIndex((m: any) => {
     const id = typeof m === "string" ? m : m?.id;
     return id === modelId;
   });
-  if (entry && typeof entry === "object") {
-    entry.name = alias || modelId;
+  if (idx < 0) return;
+  // 字符串条目升级为对象格式
+  let entry = provEntry.models[idx];
+  if (typeof entry === "string") {
+    entry = { id: entry, name: entry, input: ["text"] };
+    provEntry.models[idx] = entry;
+  }
+  const trimmed = typeof alias === "string" ? alias.trim() : "";
+  if (trimmed) {
+    entry.name = trimmed;
+  } else {
+    delete entry.name;
   }
 }
 

@@ -1635,10 +1635,14 @@
         return;
       }
 
-      // 构造保存 payload，注入别名
+      // 构造保存 payload，注入别名和 add 模式标志
       var payload = buildSavePayload(params);
       var alias = (els.modelAlias.value || "").trim();
       if (alias) payload.modelAlias = alias;
+      // add 模式（新增模型）不切换默认模型
+      if (currentEditingModelKey === null) {
+        payload.setAsDefault = false;
+      }
 
       // 再保存
       var saveResult = await window.oneclaw.settingsSaveProvider(payload);
@@ -1658,20 +1662,6 @@
           savedProviders = refreshResult.data.savedProviders;
         }
       } catch { }
-
-      // 保存后如果有别名，单独更新别名（不重启 gateway）
-      if (alias && params.modelID) {
-        var provKey = params.provider;
-        if (provKey === "moonshot") {
-          provKey = params.subPlatform === "kimi-code" ? "kimi-coding" : "moonshot";
-        } else if (provKey === "custom" && params.customPreset) {
-          var p = CUSTOM_PRESETS[params.customPreset];
-          if (p) provKey = p.providerKey;
-        }
-        try {
-          await window.oneclaw.settingsUpdateModelAlias({ modelKey: provKey + "/" + params.modelID, alias: alias });
-        } catch { }
-      }
 
       // 刷新模型列表
       await renderModelList();
