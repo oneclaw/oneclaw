@@ -202,6 +202,135 @@ export function registerSettingsIpc(opts: SettingsIpcOptions = {}): void {
     }
   });
 
+  // ── 聚合所有 provider 的已配置模型列表 ──
+  ipcMain.handle("settings:get-configured-models", async () => {
+    try {
+      const config = readUserConfig();
+      const providers = config?.models?.providers ?? {};
+      const primary: string = config?.agents?.defaults?.model?.primary ?? "";
+      const result: Array<{ key: string; name: string; provider: string; isDefault: boolean }> = [];
+
+      for (const [providerKey, prov] of Object.entries(providers)) {
+        if (!prov || typeof prov !== "object") continue;
+        const models = (prov as any).models;
+        if (!Array.isArray(models)) continue;
+        for (const m of models) {
+          const id = typeof m === "string" ? m : m?.id;
+          if (!id) continue;
+          const modelKey = `${providerKey}/${id}`;
+          const name = typeof m === "object" ? (m.name || id) : id;
+          result.push({
+            key: modelKey,
+            name,
+            provider: providerKey,
+            isDefault: modelKey === primary,
+          });
+        }
+      }
+      return { success: true, data: result };
+    } catch (err: any) {
+      return { success: false, message: err.message };
+    }
+  });
+
+  // ── 删除指定模型（禁止删除默认模型） ──
+  ipcMain.handle("settings:delete-model", async (_event, params) => {
+    const modelKey = typeof params?.modelKey === "string" ? params.modelKey : "";
+    return runTrackedSettingsAction("delete_model" as any, { model_key: modelKey }, async () => {
+      try {
+        const config = readUserConfig();
+        const primary: string = config?.agents?.defaults?.model?.primary ?? "";
+        if (modelKey === primary) {
+          return { success: false, message: "不能删除当前默认模型" };
+        }
+
+        const slashIdx = modelKey.indexOf("/");
+        if (slashIdx <= 0) {
+          return { success: false, message: "无效的 modelKey 格式" };
+        }
+        const providerKey = modelKey.slice(0, slashIdx);
+        const modelId = modelKey.slice(slashIdx + 1);
+
+        config.models ??= {};
+        config.models.providers ??= {};
+        const prov = config.models.providers[providerKey];
+        if (!prov || !Array.isArray(prov.models)) {
+          return { success: false, message: "模型不存在" };
+        }
+
+        prov.models = prov.models.filter((m: any) => {
+          const id = typeof m === "string" ? m : m?.id;
+          return id !== modelId;
+        });
+
+        // provider 下无模型时移除整个 provider
+        if (prov.models.length === 0) {
+          delete config.models.providers[providerKey];
+        }
+
+        writeUserConfigAndRestart(config);
+        return { success: true };
+      } catch (err: any) {
+        return { success: false, message: err.message || String(err) };
+      }
+    });
+  });
+
+  // ── 设置默认模型 ──
+  ipcMain.handle("settings:set-default-model", async (_event, params) => {
+    const modelKey = typeof params?.modelKey === "string" ? params.modelKey : "";
+    return runTrackedSettingsAction("set_default_model" as any, { model_key: modelKey }, async () => {
+      try {
+        const config = readUserConfig();
+        config.agents ??= {};
+        config.agents.defaults ??= {};
+        config.agents.defaults.model ??= {};
+        config.agents.defaults.model.primary = modelKey;
+
+        writeUserConfigAndRestart(config);
+        return { success: true };
+      } catch (err: any) {
+        return { success: false, message: err.message || String(err) };
+      }
+    });
+  });
+
+  // ── 更新模型别名（不重启 gateway） ──
+  ipcMain.handle("settings:update-model-alias", async (_event, params) => {
+    const modelKey = typeof params?.modelKey === "string" ? params.modelKey : "";
+    const alias = typeof params?.alias === "string" ? params.alias : "";
+    return runTrackedSettingsAction("update_model_alias" as any, { model_key: modelKey }, async () => {
+      try {
+        const slashIdx = modelKey.indexOf("/");
+        if (slashIdx <= 0) {
+          return { success: false, message: "无效的 modelKey 格式" };
+        }
+        const providerKey = modelKey.slice(0, slashIdx);
+        const modelId = modelKey.slice(slashIdx + 1);
+
+        const config = readUserConfig();
+        const prov = config?.models?.providers?.[providerKey];
+        if (!prov || !Array.isArray(prov.models)) {
+          return { success: false, message: "模型不存在" };
+        }
+
+        const entry = prov.models.find((m: any) => {
+          const id = typeof m === "string" ? m : m?.id;
+          return id === modelId;
+        });
+        if (!entry || typeof entry !== "object") {
+          return { success: false, message: "模型不存在" };
+        }
+        entry.name = alias || modelId;
+
+        writeUserConfig(config);
+        return { success: true };
+      } catch (err: any) {
+        return { success: false, message: err.message || String(err) };
+      }
+    });
+  });
+
   // ── 验证 API Key（复用 provider-config） ──
   ipcMain.handle("settings:verify-key", async (_event, params) => {
     const provider = typeof params?.provider === "string" ? params.provider : "";
@@ -225,7 +354,7 @@ export function registerSettingsIpc(opts: SettingsIpcOptions = {}): void {
 
   // ── 保存 provider 配置 ──
   ipcMain.handle("settings:save-provider", async (_event, params) => {
-    const { provider, apiKey, modelID, baseURL, api, subPlatform, supportImage, customPreset } = params;
+    const { provider, apiKey, modelID, baseURL, api, subPlatform, supportImage, customPreset, setAsDefault, modelAlias } = params;
     const trackedProps = {
       provider,
       model: modelID,
@@ -249,10 +378,20 @@ export function registerSettingsIpc(opts: SettingsIpcOptions = {}): void {
           const provKey = sub?.providerKey || "moonshot";
           const prevModels: any[] = config.models.providers[provKey]?.models ?? [];
 
+          // saveMoonshotConfig 内部会设置 primary，需先保存原值
+          const prevPrimary = config.agents.defaults.model.primary;
           saveMoonshotConfig(config, apiKey, modelID, subPlatform);
+
+          // add 模式：不切换默认模型，恢复原 primary
+          if (setAsDefault === false && prevPrimary) {
+            config.agents.defaults.model.primary = prevPrimary;
+          }
 
           // 合并：保留已有模型，确保选中模型在列表中
           mergeModels(config.models.providers[provKey], modelID, prevModels);
+
+          // 设置模型别名
+          applyModelAlias(config.models.providers[provKey], modelID, modelAlias);
         } else {
           // 内置预设命中时，使用预设的 providerKey 作为配置键
           const customPre = customPreset ? CUSTOM_PROVIDER_PRESETS[customPreset] : undefined;
@@ -261,9 +400,16 @@ export function registerSettingsIpc(opts: SettingsIpcOptions = {}): void {
 
           const providerConfig = buildProviderConfig(provider, apiKey, modelID, baseURL, api, supportImage, customPreset);
           config.models.providers[configKey] = providerConfig;
-          config.agents.defaults.model.primary = `${configKey}/${modelID}`;
+
+          // add 模式：不切换默认模型
+          if (setAsDefault !== false) {
+            config.agents.defaults.model.primary = `${configKey}/${modelID}`;
+          }
 
           mergeModels(config.models.providers[configKey], modelID, prevModels);
+
+          // 设置模型别名
+          applyModelAlias(config.models.providers[configKey], modelID, modelAlias);
         }
 
         // 配置 kimi-code 时自动启用搜索插件
@@ -2109,6 +2255,18 @@ function mergeModels(provEntry: any, selectedID: string, prevModels: any[]): voi
     merged.push(newEntry);
   }
   provEntry.models = merged;
+}
+
+// 给指定模型设置别名（name 字段）
+function applyModelAlias(provEntry: any, modelId: string, alias?: string): void {
+  if (!provEntry || !Array.isArray(provEntry.models)) return;
+  const entry = provEntry.models.find((m: any) => {
+    const id = typeof m === "string" ? m : m?.id;
+    return id === modelId;
+  });
+  if (entry && typeof entry === "object") {
+    entry.name = alias || modelId;
+  }
 }
 
 // API Key 掩码：保留首尾各 4 字符
