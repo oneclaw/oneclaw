@@ -3,7 +3,7 @@ import { ref } from "lit/directives/ref.js";
 import { repeat } from "lit/directives/repeat.js";
 import type { SessionsListResult } from "../types.ts";
 import type { ChatItem, MessageGroup } from "../types/chat-types.ts";
-import type { ChatAttachment, ChatQueueItem } from "../ui-types.ts";
+import type { ChatAttachment, ChatQueueItem, ConfiguredModel } from "../ui-types.ts";
 import {
   renderMessageGroup,
   renderReadingIndicatorGroup,
@@ -52,6 +52,10 @@ export type ChatProps = {
   splitRatio?: number;
   assistantName: string;
   assistantAvatar: string | null;
+  // 模型选择器
+  configuredModels?: ConfiguredModel[];
+  currentModel?: string | null;
+  onModelChange?: (modelKey: string) => void;
   // Image attachments
   attachments?: ChatAttachment[];
   onAttachmentsChange?: (attachments: ChatAttachment[]) => void;
@@ -382,6 +386,28 @@ export function renderChat(props: ChatProps) {
             </button>
           `
           : nothing
+      }
+
+      ${props.configuredModels && props.configuredModels.length > 1
+        ? html`
+          <div class="chat-model-selector">
+            <select
+              class="chat-model-select"
+              .value=${props.currentModel ?? ""}
+              @change=${(e: Event) => {
+                const val = (e.target as HTMLSelectElement).value;
+                props.onModelChange?.(val);
+              }}
+            >
+              ${props.configuredModels.map(m => html`
+                <option value=${m.key} ?selected=${m.key === props.currentModel}>
+                  ${m.name}${m.isDefault ? " \u2605" : ""}
+                </option>
+              `)}
+            </select>
+          </div>
+        `
+        : nothing
       }
 
       <div class="chat-compose">

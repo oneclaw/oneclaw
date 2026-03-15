@@ -22,6 +22,14 @@ export type ChatQueueItem = {
   [key: string]: unknown;
 };
 
+/** 已配置的模型（从 Settings 聚合所有 provider 的模型列表） */
+export interface ConfiguredModel {
+  key: string;      // "providerKey/modelId"
+  name: string;     // 别名或模型 id
+  provider: string;
+  isDefault: boolean;
+}
+
 export type CronFormState = {
   name: string;
   description: string;

@@ -7218,3 +7218,43 @@ img.chat-avatar {
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.06) !important;
   outline: none !important;
 }
+
+/* 8. 模型选择器 — 聊天输入框上方 */
+.chat-model-selector {
+  padding: 0 16px;
+  display: flex;
+  align-items: center;
+}
+
+.chat-model-select {
+  appearance: none;
+  -webkit-appearance: none;
+  background: transparent;
+  border: none;
+  border-bottom: 1px solid transparent;
+  font-size: 12px;
+  color: var(--muted);
+  padding: 4px 20px 4px 0;
+  cursor: pointer;
+  outline: none;
+  font-family: var(--font-body);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%23999'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 4px center;
+  background-size: 8px;
+  max-width: 200px;
+  transition: border-bottom-color var(--duration-fast) var(--ease-in-out);
+}
+
+.chat-model-select:hover {
+  border-bottom-color: var(--muted);
+}
+
+.chat-model-select:focus {
+  border-bottom-color: var(--accent);
+}
+
+.chat-model-select option {
+  color: var(--text);
+  background: var(--bg);
+}

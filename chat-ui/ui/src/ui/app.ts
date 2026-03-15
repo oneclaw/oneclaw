@@ -81,7 +81,7 @@ import { resolveInjectedAssistantIdentity } from "./assistant-identity.ts";
 import { loadAssistantIdentity as loadAssistantIdentityInternal } from "./controllers/assistant-identity.ts";
 import { getLocale, t } from "./i18n.ts";
 import { loadSettings, type UiSettings } from "./storage.ts";
-import { type ChatAttachment, type ChatQueueItem, type CronFormState } from "./ui-types.ts";
+import { type ChatAttachment, type ChatQueueItem, type ConfiguredModel, type CronFormState } from "./ui-types.ts";
 
 declare global {
   interface Window {
@@ -218,6 +218,8 @@ export class OpenClawApp extends LitElement {
     chatThinkingLevel: { state: true },
     chatQueue: { state: true },
     chatAttachments: { state: true },
+    configuredModels: { state: true },
+    currentModel: { state: true },
     chatManualRefreshInFlight: { state: true },
     sidebarOpen: { state: true },
     sidebarContent: { state: true },
@@ -439,6 +441,8 @@ export class OpenClawApp extends LitElement {
   chatThinkingLevel: string | null = null;
   chatQueue: ChatQueueItem[] = [];
   chatAttachments: ChatAttachment[] = [];
+  configuredModels: ConfiguredModel[] = [];
+  currentModel: string | null = null;
   chatManualRefreshInFlight = false;
   // Sidebar state for tool output viewing
   sidebarOpen = false;
@@ -1020,6 +1024,52 @@ export class OpenClawApp extends LitElement {
       this as unknown as Parameters<typeof removeQueuedMessageInternal>[0],
       id,
     );
+  }
+
+  // 从 preload 加载已配置的模型列表
+  async loadConfiguredModels() {
+    const w = window as Record<string, unknown>;
+    const oneclaw = w.oneclaw as Record<string, (...args: unknown[]) => Promise<unknown>> | undefined;
+    if (!oneclaw?.settingsGetConfiguredModels) {
+      return;
+    }
+    try {
+      const models = (await oneclaw.settingsGetConfiguredModels()) as ConfiguredModel[] | undefined;
+      this.configuredModels = Array.isArray(models) ? models : [];
+      // 没有手动选择时，默认选中 isDefault 的模型
+      if (!this.currentModel && this.configuredModels.length > 0) {
+        const defaultModel = this.configuredModels.find((m) => m.isDefault);
+        this.currentModel = defaultModel?.key ?? this.configuredModels[0].key;
+      }
+    } catch {
+      this.configuredModels = [];
+    }
+  }
+
+  // 切换当前 session 的模型（通过 sessions.patch RPC）
+  async handleModelChange(modelKey: string) {
+    this.currentModel = modelKey;
+    if (!this.client || !this.connected) {
+      return;
+    }
+    try {
+      await this.client.request("sessions.patch", {
+        key: this.sessionKey,
+        model: modelKey,
+      });
+    } catch (err) {
+      this.lastError = String(err);
+    }
+  }
+
+  // 重置模型选择为默认值（新建 session 时调用）
+  resetModelToDefault() {
+    if (this.configuredModels.length > 0) {
+      const defaultModel = this.configuredModels.find((m) => m.isDefault);
+      this.currentModel = defaultModel?.key ?? this.configuredModels[0].key;
+    } else {
+      this.currentModel = null;
+    }
   }
 
   // 恢复分享弹窗状态（累计发送次数 + 已展示版本集合）。

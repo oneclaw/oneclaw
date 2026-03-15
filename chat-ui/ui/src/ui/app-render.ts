@@ -587,6 +587,8 @@ function createNewSession(state: AppViewState) {
     sessions: [{ key: newKey, label, updatedAt: Date.now() }, ...sessions],
   };
   applySessionKey(state, newKey, true);
+  // 新建会话时重置模型选择为默认
+  state.resetModelToDefault();
   // 注意：此时 Gateway 尚无此会话（无消息），sessions.patch 不会生效。
   // label 持久化在首条消息发送后由 autoRenameOnFirstMessage (app-chat.ts) 完成。
 }
@@ -1068,6 +1070,9 @@ export function renderApp(state: AppViewState) {
                   onToggleFocusMode: () => {},
                   onChatScroll: (event) => state.handleChatScroll(event),
                   onDraftChange: (next) => (state.chatMessage = next),
+                  configuredModels: state.configuredModels,
+                  currentModel: state.currentModel,
+                  onModelChange: (modelKey) => state.handleModelChange(modelKey),
                   attachments: state.chatAttachments,
                   onAttachmentsChange: (next) => (state.chatAttachments = next),
                   onSend: () => state.handleSendChat(),
