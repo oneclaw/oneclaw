@@ -7,7 +7,7 @@
   "scripts": {
     "generate:settings-icons": "node scripts/generate-settings-icons.js",
     "build:chat": "cd chat-ui/ui && npm install --prefer-offline && npx vite build",
-    "build": "npm run generate:settings-icons && npm run build:chat && tsc -p tsconfig.json",
+    "build": "npm run generate:settings-icons && npm run build:chat && tsc -p tsconfig.json && cp src/tts-worker.js dist/tts-worker.js",
     "predev": "npm run build",
     "dev": "DYLD_LIBRARY_PATH=$PWD/node_modules/sherpa-onnx-darwin-x64:$DYLD_LIBRARY_PATH electron .",
     "package:resources": "node scripts/run-with-env.js node scripts/package-resources.js",

@@ -69,14 +69,14 @@ class VoiceChat {
       }
     });
 
-    // 接收 AI 回复（含可选 TTS 音频）
-    window.live2dAPI.onAIReply((reply, audioData, sampleRate) => {
+    // 接收 AI 回复（含可选 TTS 音频文件名）
+    window.live2dAPI.onAIReply((reply, audioFileName, sampleRate) => {
       this.chatBubble.clearStatus();
       this.chatBubble.showAIText(reply);
 
       // 播放 TTS 音频并同步嘴型
-      if (audioData && audioData.byteLength > 0) {
-        this.playTTSAndSyncLips(audioData, sampleRate || 22050);
+      if (audioFileName && typeof audioFileName === "string") {
+        this.playTTSFromFile(audioFileName, sampleRate || 22050);
       } else {
         // 无音频时用文字长度模拟嘴型
         this.simulateLipSync(reply.length);
@@ -139,24 +139,28 @@ class VoiceChat {
     }
   }
 
-  // 播放 TTS 音频并驱动 Live2D 嘴型
-  playTTSAndSyncLips(audioData, sampleRate) {
+  // 从 WAV 文件播放 TTS 音频并驱动 Live2D 嘴型
+  async playTTSFromFile(fileName, sampleRate) {
     try {
-      const audioContext = new (window.AudioContext || window.webkitAudioContext)({ sampleRate });
+      // 通过自定义协议加载 TTS WAV 文件（绕过 file:// 安全限制）
+      const audioUrl = `oneclaw-tts://audio/${encodeURIComponent(fileName)}`;
+      const audio = new Audio(audioUrl);
 
-      const float32 = new Float32Array(audioData);
-      const audioBuffer = audioContext.createBuffer(1, float32.length, sampleRate);
-      audioBuffer.getChannelData(0).set(float32);
+      await new Promise((resolve, reject) => {
+        audio.addEventListener("canplaythrough", resolve, { once: true });
+        audio.addEventListener("error", (e) => reject(new Error(`Audio load error: ${e.message || "unknown"}`)), { once: true });
+        audio.load();
+      });
 
-      const source = audioContext.createBufferSource();
+      // 创建 AudioContext + MediaElementSource 用于音量分析驱动嘴型
+      const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+      const source = audioContext.createMediaElementSource(audio);
       const analyser = audioContext.createAnalyser();
       analyser.fftSize = 256;
 
-      source.buffer = audioBuffer;
       source.connect(analyser);
       analyser.connect(audioContext.destination);
 
-      // 实时分析音量驱动嘴型
       const dataArray = new Uint8Array(analyser.frequencyBinCount);
       let animFrameId = null;
 
@@ -175,18 +179,18 @@ class VoiceChat {
         animFrameId = requestAnimationFrame(updateMouth);
       };
 
-      source.start(0);
+      audio.play();
       updateMouth();
 
-      source.onended = () => {
+      audio.addEventListener("ended", () => {
         if (animFrameId) cancelAnimationFrame(animFrameId);
         if (window.live2dApp) {
           window.live2dApp.setMouthOpenY(0);
         }
         audioContext.close();
-      };
+      });
     } catch (err) {
-      console.error("TTS 播放失败:", err);
+      console.error("TTS 文件播放失败:", err);
       // 降级到文字模拟
       this.simulateLipSync(20);
     }

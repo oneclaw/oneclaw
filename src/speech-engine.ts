@@ -307,33 +307,9 @@ export class SpeechEngine {
       }
     }
 
-    // ── 初始化 TTS（可选）──
+    // ── TTS 不在主进程初始化（改由 tts-worker.js 子进程按需加载）──
     if (models.ttsAvailable) {
-      try {
-        const ttsDir = resolveTtsDir();
-        const ttsConfig = {
-          model: {
-            vits: {
-              model: path.join(ttsDir, "theresa.onnx"),
-              tokens: path.join(ttsDir, "tokens.txt"),
-              lexicon: path.join(ttsDir, "lexicon.txt"),
-            },
-            numThreads: 2,
-            provider: "cpu",
-            debug: false,
-          },
-          maxNumSentences: 1,
-        };
-        this.tts = new this.sherpa.OfflineTts(
-          ttsConfig,
-        );
-        log.info(
-          `OfflineTts 初始化成功: speakers=${this.tts.numSpeakers} sampleRate=${this.tts.sampleRate}`,
-        );
-      } catch (err) {
-        log.warn(`TTS 初始化失败（非致命）: ${err}`);
-        this.tts = null;
-      }
+      log.info(`TTS 模型可用: ${models.ttsPath}（将通过子进程执行）`);
     }
 
     // ── 初始化 naudiodon2（麦克风）──
@@ -478,29 +454,90 @@ export class SpeechEngine {
    * TTS 合成
    * @returns Float32Array 音频数据 + 采样率，或 null 表示 TTS 不可用
    */
+  /**
+   * TTS 合成 — 通过独立 Node.js 子进程执行
+   *
+   * Electron 40 的 V8 禁止 N-API external ArrayBuffer，
+   * sherpa-onnx 的 generate() 返回值底层就是 external buffer，
+   * 无论同步/异步，在 Electron 进程中调用都会报错。
+   * 改用系统 Node.js 子进程执行 TTS，直接输出 WAV 文件。
+   *
+   * @returns WAV 文件路径 + 采样率，或 null 表示不可用/失败
+   */
   async synthesize(
     text: string,
-  ): Promise<{ samples: Float32Array; sampleRate: number } | null> {
-    if (!this.tts) {
-      log.warn("TTS 不可用");
+  ): Promise<{ wavPath: string; sampleRate: number } | null> {
+    const models = checkSpeechModels();
+    if (!models.ttsAvailable) {
+      log.warn("TTS 模型不可用");
       return null;
     }
 
     log.info(`TTS 合成: ${text.slice(0, 50)}...`);
-    try {
-      const audio = await this.tts.generateAsync({
-        text,
-        sid: 0,
-        speed: 1.0,
-      });
-      log.info(
-        `TTS 合成完成: ${audio.samples.length} samples @ ${audio.sampleRate}Hz`,
+
+    const tmpDir = path.join(app.getPath("temp"), "oneclaw-tts");
+    if (!fs.existsSync(tmpDir)) fs.mkdirSync(tmpDir, { recursive: true });
+    const wavPath = path.join(tmpDir, `tts-${Date.now()}.wav`);
+
+    const workerScript = path.join(__dirname, "tts-worker.js");
+    const ttsDir = resolveTtsDir();
+
+    return new Promise((resolve) => {
+      // Electron 的 process.execPath 是 Electron 二进制，不能跑纯 Node 脚本。
+      // 必须用系统 node。打包后用 bundled runtime 的 node。
+      let nodeBin = "node";
+      if (app.isPackaged) {
+        const runtimeNode = path.join(process.resourcesPath, "resources", "runtime", "node");
+        if (fs.existsSync(runtimeNode)) {
+          nodeBin = runtimeNode;
+        }
+      }
+
+      const child = require("child_process").spawn(
+        nodeBin,
+        [workerScript, ttsDir, wavPath, text],
+        {
+          stdio: ["ignore", "pipe", "pipe"],
+          env: {
+            ...process.env,
+            // 确保子进程能找到 sherpa-onnx 的 native 动态库
+            DYLD_LIBRARY_PATH: process.env.DYLD_LIBRARY_PATH || "",
+            NODE_PATH: path.join(app.getAppPath(), "node_modules"),
+          },
+        },
       );
-      return audio;
-    } catch (err) {
-      log.error(`TTS 合成失败: ${err}`);
-      return null;
-    }
+
+      let stdout = "";
+      let stderr = "";
+      child.stdout.on("data", (d: Buffer) => { stdout += d.toString(); });
+      child.stderr.on("data", (d: Buffer) => { stderr += d.toString(); });
+
+      child.on("close", (code: number | null) => {
+        if (code !== 0) {
+          log.error(`TTS worker 退出码 ${code}: ${stderr || stdout}`);
+          resolve(null);
+          return;
+        }
+        try {
+          const result = JSON.parse(stdout);
+          if (result.ok) {
+            log.info(`TTS 合成完成: ${wavPath} (${result.numSamples} samples @ ${result.sampleRate}Hz)`);
+            resolve({ wavPath, sampleRate: result.sampleRate });
+          } else {
+            log.error(`TTS worker 错误: ${result.error}`);
+            resolve(null);
+          }
+        } catch (parseErr) {
+          log.error(`TTS worker 输出解析失败: ${parseErr}, stdout=${stdout}`);
+          resolve(null);
+        }
+      });
+
+      child.on("error", (err: Error) => {
+        log.error(`TTS worker 启动失败: ${err.message}`);
+        resolve(null);
+      });
+    });
   }
 
   /**

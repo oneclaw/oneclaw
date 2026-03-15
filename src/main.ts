@@ -1,4 +1,6 @@
-import { app, dialog, ipcMain, shell, Menu, BrowserWindow } from "electron";
+import { app, dialog, ipcMain, shell, Menu, BrowserWindow, protocol, net } from "electron";
+import * as path from "path";
+import * as fs from "fs";
 import { GatewayProcess } from "./gateway-process";
 import { WindowManager } from "./window";
 import { TrayManager } from "./tray";
@@ -542,33 +544,23 @@ speechEngine.onFinalResult(async (text: string) => {
 
   if (!live2dWin || live2dWin.isDestroyed()) return;
 
-  // TTS 合成（可选）
-  let audioBuffer: Uint8Array | null = null;
+  // TTS 合成（可选）— 子进程生成 WAV 文件，IPC 只传文件名
+  let audioFileName: string | null = null;
   let ttsSampleRate = 0;
   try {
     const ttsText = cleanTextForTts(reply);
     const ttsResult = await speechEngine.synthesize(ttsText);
     if (ttsResult) {
-      // sherpa-onnx 返回的 Float32Array 底层是 native external buffer，
-      // Electron IPC（structured clone）禁止传输 external ArrayBuffer。
-      // JSON 序列化/反序列化是最可靠的深拷贝方式，但对大数组太慢。
-      // 用 DataView 逐值写入全新 ArrayBuffer 彻底脱离 native 内存。
-      const samples = ttsResult.samples;
-      const ab = new ArrayBuffer(samples.length * 4);
-      const dv = new DataView(ab);
-      for (let i = 0; i < samples.length; i++) {
-        dv.setFloat32(i * 4, samples[i], true);
-      }
-      audioBuffer = new Uint8Array(ab);
+      audioFileName = path.basename(ttsResult.wavPath);
       ttsSampleRate = ttsResult.sampleRate;
     }
   } catch (ttsErr) {
     log.warn(`[voice-chat] TTS 合成失败（降级为纯文字）: ${ttsErr}`);
   }
 
-  // 发送 AI 回复 + 音频到 Live2D 窗口
+  // 发送 AI 回复 + 音频文件名到 Live2D 窗口
   if (!live2dWin.isDestroyed()) {
-    live2dWin.webContents.send("live2d:ai-reply", reply, audioBuffer, ttsSampleRate);
+    live2dWin.webContents.send("live2d:ai-reply", reply, audioFileName, ttsSampleRate);
   }
 });
 
@@ -645,10 +637,40 @@ function syncAppFocusState(trigger: string): void {
   }
 }
 
+// ── 注册 oneclaw-tts:// 自定义协议（必须在 app ready 之前）──
+protocol.registerSchemesAsPrivileged([
+  {
+    scheme: "oneclaw-tts",
+    privileges: {
+      standard: false,
+      secure: true,
+      supportFetchAPI: true,
+      bypassCSP: true,
+      stream: true,
+    },
+  },
+]);
+
 // ── 应用就绪 ──
 
 app.whenReady().then(async () => {
   log.info("app ready");
+
+  // 注册 oneclaw-tts:// 协议处理：映射到 TTS 临时目录下的文件
+  protocol.handle("oneclaw-tts", (request) => {
+    // URL 格式: oneclaw-tts://audio/<filename>.wav
+    const url = new URL(request.url);
+    const fileName = decodeURIComponent(url.pathname.replace(/^\/+/, ""));
+    const tmpDir = path.join(app.getPath("temp"), "oneclaw-tts");
+    const filePath = path.resolve(path.join(tmpDir, fileName));
+
+    // 安全检查：只允许读取 TTS 临时目录下的文件
+    if (!filePath.startsWith(tmpDir)) {
+      return new Response("Forbidden", { status: 403 });
+    }
+
+    return net.fetch(`file://${filePath}`);
+  });
 
   // 所有窗口的 show/hide/closed 事件统一驱动 Dock 可见性
   app.on("browser-window-created", (_e, win) => {

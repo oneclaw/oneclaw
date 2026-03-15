@@ -32,8 +32,8 @@ contextBridge.exposeInMainWorld("live2dAPI", {
   onFinalResult: (callback: (text: string) => void) => {
     ipcRenderer.on("live2d:final-result", (_e, text) => callback(text));
   },
-  onAIReply: (callback: (reply: string, audioData?: ArrayBuffer, sampleRate?: number) => void) => {
-    ipcRenderer.on("live2d:ai-reply", (_e, reply, audioData, sampleRate) => callback(reply, audioData, sampleRate));
+  onAIReply: (callback: (reply: string, audioFilePath?: string | null, sampleRate?: number) => void) => {
+    ipcRenderer.on("live2d:ai-reply", (_e, reply, audioFilePath, sampleRate) => callback(reply, audioFilePath, sampleRate));
   },
   onListeningStateChange: (callback: (state: string) => void) => {
     ipcRenderer.on("live2d:listening-state", (_e, state) => callback(state));
