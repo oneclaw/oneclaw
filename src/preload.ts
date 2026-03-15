@@ -96,6 +96,15 @@ contextBridge.exposeInMainWorld("oneclaw", {
   settingsResetConfigAndRelaunch: () => ipcRenderer.invoke("settings:reset-config-and-relaunch"),
   settingsGetShareCopy: () => ipcRenderer.invoke("settings:get-share-copy"),
 
+  // 多模型管理
+  settingsGetConfiguredModels: () => ipcRenderer.invoke("settings:get-configured-models"),
+  settingsDeleteModel: (params: Record<string, unknown>) =>
+    ipcRenderer.invoke("settings:delete-model", params),
+  settingsSetDefaultModel: (params: Record<string, unknown>) =>
+    ipcRenderer.invoke("settings:set-default-model", params),
+  settingsUpdateModelAlias: (params: Record<string, unknown>) =>
+    ipcRenderer.invoke("settings:update-model-alias", params),
+
   // 技能商店
   skillStoreList: (params?: Record<string, unknown>) =>
     ipcRenderer.invoke("skill-store:list", params),
