@@ -151,9 +151,9 @@
         </div>
 
         <!-- OAuth 高级选项折叠区（仅 kimi-code OAuth 模式显示） -->
-        <details class="oauth-advanced hidden" id="oauthAdvanced">
+        <details class="details-advanced hidden" id="oauthAdvanced">
           <summary data-i18n="provider.oauthAdvanced">Advanced</summary>
-          <div class="oauth-advanced-content">
+          <div>
 
         <!-- API Key -->
         <div class="field-group" id="apiKeyGroup">
@@ -181,7 +181,7 @@
           <select id="modelSelect"></select>
         </div>
 
-          </div><!-- /.oauth-advanced-content -->
+          </div>
         </details>
 
         <!-- Custom 预设: 自定义模型（选择"自定义模型"时显示） -->
@@ -679,7 +679,7 @@
             </div>
 
             <!-- 高级配置：自定义 Service Base URL -->
-            <details class="search-advanced" id="searchAdvanced">
+            <details class="details-advanced" id="searchAdvanced">
               <summary data-i18n="search.advancedToggle">Advanced</summary>
               <div class="field-group">
                 <label for="searchServiceBaseUrl" data-i18n="search.serviceBaseUrlLabel">Service Base URL</label>

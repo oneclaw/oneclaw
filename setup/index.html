@@ -170,10 +170,12 @@
           </button>
           <button class="btn-oauth-cancel hidden" id="btnOAuthCancel" type="button" data-i18n="config.oauthCancel">Cancel</button>
           <div class="oauth-status hidden" id="oauthStatus"></div>
-          <div class="oauth-divider hidden" id="oauthDivider">
-            <span data-i18n="config.oauthOr">或手动输入 API Key</span>
-          </div>
         </div>
+
+        <!-- OAuth 高级选项折叠区 -->
+        <details class="details-advanced hidden" id="oauthAdvanced">
+          <summary data-i18n="config.oauthAdvanced">Advanced</summary>
+          <div>
 
         <!-- API Key 输入 -->
         <div class="field-group" id="apiKeyGroup">
@@ -195,6 +197,9 @@
           <label for="modelSelect" data-i18n="config.model">Model</label>
           <select id="modelSelect"></select>
         </div>
+
+          </div>
+        </details>
 
         <!-- Custom 预设: 自定义模型（选择"自定义模型"时显示） -->
         <div class="field-group hidden" id="customModelInputGroup">

@@ -149,6 +149,7 @@
       "config.oauthSuccess": "Login successful!",
       "config.oauthNoMembership": "Login succeeded, but your account has no active Kimi membership. Please subscribe and try again.",
       "config.oauthSubscribeLink": "Subscribe now →",
+      "config.oauthAdvanced": "Advanced options",
       "config.oauthOr": "or enter API Key manually",
       "done.title": "All Set!",
       "done.subtitle": "OneClaw is ready — switch providers or models anytime in Settings",
@@ -218,6 +219,7 @@
       "config.oauthSuccess": "登录成功！",
       "config.oauthNoMembership": "登录成功，但当前账号未开通 Kimi 会员，请订阅后重试。",
       "config.oauthSubscribeLink": "前往订阅 →",
+      "config.oauthAdvanced": "高级选项",
       "config.oauthOr": "或手动输入 API Key",
       "done.title": "配置完成！",
       "done.subtitle": "OneClaw 已就绪 随时可在设置中切换服务商或模型",
@@ -286,7 +288,7 @@
     btnOAuthSpinner: document.querySelector("#btnOAuth .btn-oauth-spinner"),
     btnOAuthCancel: $("#btnOAuthCancel"),
     oauthStatus: $("#oauthStatus"),
-    oauthDivider: $("#oauthDivider"),
+    oauthAdvanced: $("#oauthAdvanced"),
     errorMsg: $("#errorMsg"),
     btnBackToStep1: $("#btnBackToStep1"),
     btnVerify: $("#btnVerify"),
@@ -607,9 +609,19 @@
 
   // 控制 OAuth 登录区域显隐（仅 kimi-code 子平台）
   function updateOAuthVisibility() {
-    var show = currentProvider === "moonshot" && getSubPlatform() === "kimi-code";
-    toggleEl(els.oauthGroup, show);
-    toggleEl(els.oauthDivider, show);
+    var isOAuth = currentProvider === "moonshot" && getSubPlatform() === "kimi-code";
+    toggleEl(els.oauthGroup, isOAuth);
+    if (isOAuth) {
+      // OAuth 模式：API Key / Model 收入折叠高级选项，隐藏平台链接
+      els.oauthAdvanced.classList.remove("hidden", "details-advanced--plain");
+      els.oauthAdvanced.removeAttribute("open");
+      els.platformLink.classList.add("hidden");
+    } else {
+      // 非 OAuth 模式：展开且隐藏折叠外观
+      els.oauthAdvanced.classList.remove("hidden");
+      els.oauthAdvanced.classList.add("details-advanced--plain");
+      els.oauthAdvanced.setAttribute("open", "");
+    }
   }
 
   // 填充模型下拉选项

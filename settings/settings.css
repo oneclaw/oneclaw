@@ -341,34 +341,18 @@ button, input, select, label, a {
 .current-provider-status {
   display: flex;
   align-items: center;
-  gap: 8px;
   padding: 8px 12px;
   font-size: 12.5px;
   font-weight: 500;
-  color: var(--success);
-  background: var(--success-bg);
-  border: 1px solid rgba(212, 119, 106, 0.2);
+  color: var(--text-secondary);
+  background: var(--bg-secondary);
   border-radius: var(--radius-sm);
-}
-
-.current-provider-status::before {
-  content: "";
-  width: 6px;
-  height: 6px;
-  background: var(--success);
-  border-radius: 50%;
-  flex-shrink: 0;
 }
 
 /* 断连/错误状态 */
 .current-provider-status.disconnected {
   color: var(--error);
   background: var(--error-bg);
-  border-color: rgba(192, 57, 43, 0.2);
-}
-
-.current-provider-status.disconnected::before {
-  background: var(--error);
 }
 
 /* ── Provider 分段选择器 ── */
@@ -681,29 +665,7 @@ select option {
   margin: 0;
 }
 
-.search-advanced {
-  margin-top: 12px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  padding: 0;
-}
-
-.search-advanced summary {
-  cursor: pointer;
-  padding: 8px 12px;
-  font-size: 13px;
-  color: var(--text-secondary);
-  user-select: none;
-}
-
-.search-advanced[open] summary {
-  border-bottom: 1px solid var(--border);
-}
-
-.search-advanced .field-group {
-  padding: 12px;
-  margin: 0;
-}
+/* search-advanced 已统一为 details-advanced 通用类 */
 
 /* ── 按钮 ── */
 
@@ -840,6 +802,7 @@ select option {
 }
 
 .btn-oauth-cancel {
+  width: 100%;
   background: transparent;
   border: 1px solid var(--border);
   color: var(--text-secondary);
@@ -857,9 +820,11 @@ select option {
 }
 
 .btn-oauth-logout {
-  display: inline-flex;
+  display: flex;
   align-items: center;
+  justify-content: center;
   gap: 6px;
+  width: 100%;
   background: transparent;
   border: 1px solid var(--border);
   color: var(--text-secondary);
@@ -892,35 +857,43 @@ select option {
   color: #27ae60;
 }
 
-/* OAuth 高级选项折叠 */
-.oauth-advanced > summary {
+/* ── 通用折叠高级选项（details-advanced）── */
+.details-advanced {
+  margin-top: 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 0;
+}
+
+.details-advanced > summary {
   cursor: pointer;
+  padding: 8px 12px;
   font-size: 13px;
   color: var(--text-secondary);
-  padding: 6px 0;
   user-select: none;
-  list-style: none;
 }
 
-.oauth-advanced > summary::-webkit-details-marker {
+.details-advanced[open] > summary {
+  border-bottom: 1px solid var(--border);
+}
+
+.details-advanced .field-group {
+  padding: 12px;
+  margin: 0;
+}
+
+/* 非折叠模式：去掉外观，summary 隐藏，无边框 */
+.details-advanced--plain {
+  border: none;
+  margin-top: 0;
+}
+
+.details-advanced--plain > summary {
   display: none;
 }
 
-.oauth-advanced > summary::before {
-  content: "▸ ";
-}
-
-.oauth-advanced[open] > summary::before {
-  content: "▾ ";
-}
-
-.oauth-advanced-content {
-  padding-top: 4px;
-}
-
-/* 非 OAuth 模式：去掉折叠外观，summary 完全隐藏 */
-.oauth-advanced--plain > summary {
-  display: none;
+.details-advanced--plain .field-group {
+  padding: 0;
 }
 
 .oauth-membership-link {

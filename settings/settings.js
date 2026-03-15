@@ -1229,14 +1229,14 @@
     toggleEl(els.oauthGroup, isOAuth);
     if (isOAuth) {
       // OAuth 模式：API Key / Model 收入折叠高级选项
-      els.oauthAdvanced.classList.remove("hidden", "oauth-advanced--plain");
+      els.oauthAdvanced.classList.remove("hidden", "details-advanced--plain");
       els.oauthAdvanced.removeAttribute("open");
       els.platformLink.classList.add("hidden");
       checkOAuthStatus();
     } else {
       // 非 OAuth 模式：展开且隐藏折叠外观，字段正常显示
       els.oauthAdvanced.classList.remove("hidden");
-      els.oauthAdvanced.classList.add("oauth-advanced--plain");
+      els.oauthAdvanced.classList.add("details-advanced--plain");
       els.oauthAdvanced.setAttribute("open", "");
     }
   }
