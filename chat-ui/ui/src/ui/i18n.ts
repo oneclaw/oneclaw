@@ -97,7 +97,7 @@ const dict: Record<Locale, Record<string, string>> = {
     "settings.backToChat": "返回对话",
 
     // Chat
-    "chat.placeholder": "输入消息…",
+    "chat.placeholder": "输入消息或粘贴图片…",
     "chat.placeholder.busy": "继续发送消息将排队等待…",
     "chat.placeholder.image": "添加消息或粘贴更多图片…",
     "chat.placeholder.disconnected": "连接 Gateway 后即可聊天…",
@@ -117,7 +117,6 @@ const dict: Record<Locale, Record<string, string>> = {
     "chat.removeAttachment": "移除图片",
     "chat.removeQueuedMessage": "移除排队消息",
     "chat.attachmentPreview": "图片预览",
-    "chat.attachFile": "添加图片",
 
     // Share prompt
     "sharePrompt.title": "分享 OneClaw 给朋友",
@@ -235,7 +234,7 @@ const dict: Record<Locale, Record<string, string>> = {
     "settings.backToChat": "Back to chat",
 
     // Chat
-    "chat.placeholder": "Type a message...",
+    "chat.placeholder": "Type a message or paste an image...",
     "chat.placeholder.busy": "Messages sent now will be queued…",
     "chat.placeholder.image": "Add a message or paste more images...",
     "chat.placeholder.disconnected": "Connect to the gateway to start chatting…",
@@ -256,7 +255,6 @@ const dict: Record<Locale, Record<string, string>> = {
     "chat.removeAttachment": "Remove attachment",
     "chat.removeQueuedMessage": "Remove queued message",
     "chat.attachmentPreview": "Attachment preview",
-    "chat.attachFile": "Attach file",
 
     // Share prompt
     "sharePrompt.title": "Share OneClaw with friends",

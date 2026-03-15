@@ -1502,49 +1502,6 @@ select {
   justify-content: flex-end
 }
 
-/* 隐藏的文件选择 input */
-.chat-compose__file-input {
-  display: none
-}
-
-/* 附件按钮 */
-.chat-compose__attach-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 40px;
-  min-width: 40px;
-  height: 40px;
-  padding: 0;
-  border: none;
-  border-radius: 8px;
-  background: transparent;
-  color: var(--muted);
-  cursor: pointer;
-  transition: color .15s ease-out, background .15s ease-out;
-  flex-shrink: 0
-}
-
-.chat-compose__attach-btn svg {
-  width: 18px;
-  height: 18px;
-  stroke: currentColor;
-  fill: none;
-  stroke-width: 2px;
-  stroke-linecap: round;
-  stroke-linejoin: round
-}
-
-.chat-compose__attach-btn:hover:not(:disabled) {
-  color: var(--text);
-  background: var(--bg-hover, rgba(255,255,255,.06))
-}
-
-.chat-compose__attach-btn:disabled {
-  opacity: .4;
-  cursor: not-allowed
-}
-
 .chat-compose__row {
   display: flex;
   align-items: stretch;
