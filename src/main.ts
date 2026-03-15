@@ -438,6 +438,21 @@ ipcMain.handle("app:get-feishu-pairing-state", () => pairingMonitor?.getState().
 ipcMain.on("app:refresh-feishu-pairing-state", () => pairingMonitor?.triggerNow());
 ipcMain.handle("app:open-external", (_e, url: string) => shell.openExternal(url));
 
+// 文件选择对话框 — 返回文件绝对路径数组
+ipcMain.handle("dialog:select-files", async (_e, options?: { filters?: Electron.FileFilter[] }) => {
+  const win = BrowserWindow.getFocusedWindow();
+  const result = await dialog.showOpenDialog(win ?? {
+    // fallback: 无聚焦窗口时仍可弹出
+  } as any, {
+    properties: ["openFile", "multiSelections"],
+    filters: options?.filters,
+  });
+  if (result.canceled) {
+    return [];
+  }
+  return result.filePaths;
+});
+
 // Chat UI 侧边栏 IPC
 ipcMain.on("app:open-settings", () => {
   openSettingsInMainWindow().catch((err) => {
