@@ -101,12 +101,6 @@
       placeholder: "sk-...",
       models: ["deepseek-chat", "deepseek-reasoner"],
     },
-    "ollama": {
-      providerKey: "ollama",
-      placeholder: "",
-      models: [],
-      keyOptional: true,
-    },
   };
 
   // ---- 国际化文案 ----
@@ -519,12 +513,8 @@
       toggleEl(els.apiTypeGroup, false);
       toggleEl(els.imageSupportGroup, false);
       toggleEl(els.modelInputGroup, false);
-      // Ollama 等本地 provider：显示可编辑 Base URL，隐藏 API Key
-      toggleEl(els.baseURLGroup, !!preset.keyOptional);
-      toggleEl(els.apiKeyGroup, !preset.keyOptional);
-      if (preset.keyOptional) {
-        $("#baseURL").value = $("#baseURL").value || preset.defaultBaseUrl || "http://localhost:11434";
-      }
+      toggleEl(els.baseURLGroup, false);
+      toggleEl(els.apiKeyGroup, true);
 
       // 无预设模型列表时直接显示自定义输入框，跳过空下拉
       var hasModels = preset.models && preset.models.length > 0;
@@ -734,9 +724,7 @@
     if (verifying) return;
 
     const apiKey = els.apiKeyInput.value.trim();
-    // Ollama 等本地 provider 不需要 API Key
-    const activePreset = currentProvider === "custom" ? CUSTOM_PRESETS[els.customPreset.value] : null;
-    if (!apiKey && !(activePreset && activePreset.keyOptional)) {
+    if (!apiKey) {
       showError(t("error.noKey"));
       return;
     }
@@ -788,11 +776,6 @@
           params.modelID = els.modelSelect.value;
         }
         params.customPreset = presetKey;
-        // 本地 provider 用户可能改了端口，传递前端编辑的 Base URL
-        var presetObj = CUSTOM_PRESETS[presetKey];
-        if (presetObj && presetObj.keyOptional) {
-          params.baseURL = ($("#baseURL").value || "").trim();
-        }
       } else {
         // 手动模式
         const baseURL = ($("#baseURL").value || "").trim();
