@@ -117,6 +117,7 @@ const dict: Record<Locale, Record<string, string>> = {
     "chat.removeAttachment": "移除图片",
     "chat.removeQueuedMessage": "移除排队消息",
     "chat.attachmentPreview": "图片预览",
+    "chat.attachFile": "添加图片",
 
     // Share prompt
     "sharePrompt.title": "分享 OneClaw 给朋友",
@@ -255,6 +256,7 @@ const dict: Record<Locale, Record<string, string>> = {
     "chat.removeAttachment": "Remove attachment",
     "chat.removeQueuedMessage": "Remove queued message",
     "chat.attachmentPreview": "Attachment preview",
+    "chat.attachFile": "Attach file",
 
     // Share prompt
     "sharePrompt.title": "Share OneClaw with friends",
