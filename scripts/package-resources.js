@@ -1379,6 +1379,26 @@ function installTgzPluginDeps(plugin, pluginDir, targetId, opts) {
     die(`安装 ${plugin.id} 依赖失败: ${err.message || String(err)}`);
   }
 
+  // --ignore-scripts 跳过了 native addon 编译，对需要 node-gyp 的包单独 rebuild
+  // macOS Apple Clang 支持 --arch 交叉编译（arm64 runner 可编译 x64 产物）
+  const nativeAddonPkgs = Object.keys(deps).filter((name) => {
+    const bindingGyp = path.join(depTmpDir, "node_modules", ...name.split("/"), "binding.gyp");
+    return fs.existsSync(bindingGyp);
+  });
+  if (nativeAddonPkgs.length > 0) {
+    log(`为 ${plugin.id} 编译 native addon: ${nativeAddonPkgs.join(", ")} (arch=${opts.arch})`);
+    for (const pkg of nativeAddonPkgs) {
+      try {
+        execSync(`npm rebuild ${pkg} --arch=${opts.arch}`, {
+          cwd: depTmpDir,
+          stdio: "inherit",
+        });
+      } catch (err) {
+        log(`⚠ ${plugin.id} native addon ${pkg} 编译失败（${opts.arch}）: ${err.message || String(err)}`);
+      }
+    }
+  }
+
   // 收集 hoisted 依赖到插件 node_modules
   const tmpNm = path.join(depTmpDir, "node_modules");
   ensureDir(pluginNm);
