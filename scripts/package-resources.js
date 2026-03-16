@@ -1382,6 +1382,7 @@ function installTgzPluginDeps(plugin, pluginDir, targetId, opts) {
 
   // --ignore-scripts 跳过了 native addon 编译，对需要 node-gyp 的包单独 rebuild
   // 只 rebuild 有 binding.gyp 但没有 prebuilds 的包（有 prebuilds 的如 node-pty 不需要编译）
+  // 必须 target Electron 的 Node ABI（gateway 由 Electron binary + ELECTRON_RUN_AS_NODE 启动）
   // macOS Apple Clang 支持 --arch 交叉编译（arm64 runner 可编译 x64 产物）
   const nativeAddonPkgs = Object.keys(deps).filter((name) => {
     const pkgDir = path.join(depTmpDir, "node_modules", ...name.split("/"));
@@ -1390,10 +1391,14 @@ function installTgzPluginDeps(plugin, pluginDir, targetId, opts) {
     return hasBindingGyp && !hasPrebuilds;
   });
   if (nativeAddonPkgs.length > 0) {
-    log(`为 ${plugin.id} 编译 native addon: ${nativeAddonPkgs.join(", ")} (arch=${opts.arch})`);
+    // 读取 Electron 版本，用于 node-gyp --target（确保 ABI 匹配）
+    const electronVersion = JSON.parse(
+      fs.readFileSync(path.join(ROOT, "node_modules", "electron", "package.json"), "utf-8")
+    ).version;
+    log(`为 ${plugin.id} 编译 native addon: ${nativeAddonPkgs.join(", ")} (arch=${opts.arch}, electron=${electronVersion})`);
     for (const pkg of nativeAddonPkgs) {
       try {
-        execSync(`npm rebuild ${pkg} --arch=${opts.arch}`, {
+        execSync(`npm rebuild ${pkg} --arch=${opts.arch} --runtime=electron --target=${electronVersion} --dist-url=https://electronjs.org/headers`, {
           cwd: depTmpDir,
           stdio: "inherit",
         });
