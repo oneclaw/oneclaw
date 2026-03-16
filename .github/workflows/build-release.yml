@@ -164,6 +164,10 @@ jobs:
         run: npm config set script-shell "$(which bash)"
 
       - name: 构建 Windows x64
+        env:
+          # Windows 上 kimi-claw 0.20.x 的 flock/ftruncate 有兼容性问题，锁定 0.19.1
+          ONECLAW_KIMI_CLAW_TGZ_URL: https://cdn.kimi.com/kimi-claw/kimi-claw-0.19.1.tgz
+          ONECLAW_KIMI_CLAW_REFRESH: "true"
         run: npm run dist:win:x64
 
       - name: 清理 blockmap（Windows x64）
@@ -199,6 +203,9 @@ jobs:
         run: npm config set script-shell "$(which bash)"
 
       - name: 构建 Windows arm64
+        env:
+          ONECLAW_KIMI_CLAW_TGZ_URL: https://cdn.kimi.com/kimi-claw/kimi-claw-0.19.1.tgz
+          ONECLAW_KIMI_CLAW_REFRESH: "true"
         run: npm run dist:win:arm64
 
       - name: 清理 blockmap（Windows arm64）
