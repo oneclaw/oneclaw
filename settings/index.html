@@ -145,6 +145,38 @@
           <div class="oauth-status hidden" id="oauthStatus"></div>
         </div>
 
+        <!-- Kimi 用量显示（仅 kimi-code 已登录时显示） -->
+        <div class="usage-panel hidden" id="usagePanel">
+          <div class="usage-cards">
+            <div class="usage-card">
+              <div class="usage-card-header">
+                <span class="usage-card-title" data-i18n="provider.usageWeekly">本周用量</span>
+              </div>
+              <div class="usage-card-body">
+                <span class="usage-card-percent" id="usageWeeklyPercent">—</span>
+                <span class="usage-card-reset" id="usageWeeklyReset"></span>
+              </div>
+              <div class="usage-bar"><div class="usage-bar-fill" id="usageWeeklyBar"></div></div>
+            </div>
+            <div class="usage-card">
+              <div class="usage-card-header">
+                <span class="usage-card-title" id="usageLimitTitle" data-i18n="provider.usageLimit">频限明细</span>
+              </div>
+              <div class="usage-card-body">
+                <span class="usage-card-percent" id="usageLimitPercent">—</span>
+                <span class="usage-card-reset" id="usageLimitReset"></span>
+              </div>
+              <div class="usage-bar"><div class="usage-bar-fill" id="usageLimitBar"></div></div>
+            </div>
+          </div>
+          <div class="usage-refresh-row">
+            <span class="usage-refresh-time" id="usageRefreshTime"></span>
+            <button class="btn-usage-refresh" id="btnUsageRefresh" type="button">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" class="lucide-icon"><use href="#icon-refresh-cw"></use></svg>
+            </button>
+          </div>
+        </div>
+
         <!-- OAuth 高级选项折叠区（仅 kimi-code OAuth 模式显示） -->
         <details class="details-advanced hidden" id="oauthAdvanced">
           <summary data-i18n="provider.oauthAdvanced">Advanced</summary>

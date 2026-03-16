@@ -863,6 +863,124 @@ select option {
   text-align: center;
 }
 
+/* ── Kimi 用量卡片 ── */
+
+.usage-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.usage-cards {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.usage-card {
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg-secondary);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.usage-card-header {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.usage-card-title {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-muted);
+}
+
+.usage-card-body {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.usage-card-percent {
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--text-strong);
+  letter-spacing: -0.02em;
+}
+
+.usage-card-reset {
+  font-size: 11px;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.usage-bar {
+  height: 4px;
+  border-radius: 2px;
+  background: var(--border);
+  overflow: hidden;
+}
+
+.usage-bar-fill {
+  height: 100%;
+  border-radius: 2px;
+  background: var(--text-strong);
+  transition: width 0.3s ease;
+  width: 0;
+}
+
+.usage-bar-fill.warn {
+  background: #e6a23c;
+}
+
+.usage-bar-fill.danger {
+  background: var(--error);
+}
+
+.usage-refresh-row {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.usage-refresh-time {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.btn-usage-refresh {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: color var(--transition), background var(--transition);
+}
+
+.btn-usage-refresh:hover {
+  color: var(--text-primary);
+  background: var(--bg-hover);
+}
+
+.btn-usage-refresh .lucide-icon {
+  stroke: currentColor;
+}
+
+.btn-usage-refresh.spinning .lucide-icon {
+  animation: spin 0.8s linear infinite;
+}
+
 .oauth-status.success {
   color: #27ae60;
 }

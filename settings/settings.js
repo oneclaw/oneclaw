@@ -158,6 +158,9 @@
       "provider.oauthSubscribeLink": "Subscribe now →",
       "provider.oauthAdvanced": "Advanced options",
       "provider.oauthOr": "or enter API Key manually",
+      "provider.usageWeekly": "Weekly Usage",
+      "provider.usageLimit": "Rate Limit",
+      "provider.usageRefreshed": "Refreshed at ",
       "provider.preset": "Preset",
       "provider.presetManual": "Manual",
       "provider.customModelId": "Custom Model ID",
@@ -428,6 +431,9 @@
       "provider.oauthSubscribeLink": "前往订阅 →",
       "provider.oauthAdvanced": "高级选项",
       "provider.oauthOr": "或手动输入 API Key",
+      "provider.usageWeekly": "本周用量",
+      "provider.usageLimit": "频限明细",
+      "provider.usageRefreshed": "刷新于 ",
       "provider.preset": "预设",
       "provider.presetManual": "手动配置",
       "provider.customModelId": "自定义模型 ID",
@@ -699,6 +705,16 @@
     btnOAuthLogout: $("#btnOAuthLogout"),
     oauthStatus: $("#oauthStatus"),
     oauthAdvanced: $("#oauthAdvanced"),
+    usagePanel: $("#usagePanel"),
+    usageWeeklyPercent: $("#usageWeeklyPercent"),
+    usageWeeklyReset: $("#usageWeeklyReset"),
+    usageWeeklyBar: $("#usageWeeklyBar"),
+    usageLimitTitle: $("#usageLimitTitle"),
+    usageLimitPercent: $("#usageLimitPercent"),
+    usageLimitReset: $("#usageLimitReset"),
+    usageLimitBar: $("#usageLimitBar"),
+    usageRefreshTime: $("#usageRefreshTime"),
+    btnUsageRefresh: $("#btnUsageRefresh"),
     msgBox: $("#msgBox"),
     btnSave: $("#btnSave"),
     btnSaveText: $("#btnSave .btn-text"),
@@ -1234,6 +1250,7 @@
       els.oauthAdvanced.classList.remove("hidden");
       els.oauthAdvanced.classList.add("details-advanced--plain");
       els.oauthAdvanced.setAttribute("open", "");
+      toggleEl(els.usagePanel, false);
     }
   }
 
@@ -1245,9 +1262,12 @@
       if (status && status.loggedIn) {
         toggleEl(els.btnOAuth, false);
         toggleEl(els.btnOAuthLogout, true);
+        loadUsage();
       } else {
         toggleEl(els.btnOAuth, true);
         toggleEl(els.btnOAuthLogout, false);
+        // 即使没有 OAuth 登录，也尝试加载用量（后端会用 config 中的 API key）
+        loadUsage();
       }
     } catch {
       // 获取状态失败时默认显示登录按钮
@@ -1356,6 +1376,7 @@
 
       showOAuthSuccess();
       showToast(t("common.saved"));
+      loadUsage();
 
       // 刷新缓存
       try {
@@ -1387,6 +1408,7 @@
     // 隐藏退出按钮，恢复登录按钮
     toggleEl(els.btnOAuthLogout, false);
     toggleEl(els.btnOAuth, true);
+    toggleEl(els.usagePanel, false);
     els.oauthStatus.classList.add("hidden");
     els.oauthStatus.classList.remove("success");
     showToast(t("provider.oauthLogout"));
@@ -1410,6 +1432,144 @@
     // OAuth 成功后显示退出按钮
     toggleEl(els.btnOAuth, false);
     toggleEl(els.btnOAuthLogout, true);
+  }
+
+  // ── Kimi 用量查询 ──
+
+  // 格式化剩余时间（秒 → "Xh后重置" / "Xm后重置"）
+  function formatResetDuration(seconds) {
+    if (!seconds || seconds <= 0) return "";
+    var h = Math.floor(seconds / 3600);
+    var m = Math.floor((seconds % 3600) / 60);
+    if (h > 0) return h + (currentLang === "zh" ? "小时后重置" : "h reset");
+    if (m > 0) return m + (currentLang === "zh" ? "分钟后重置" : "m reset");
+    return (currentLang === "zh" ? "即将重置" : "resetting soon");
+  }
+
+  // 从 ISO 时间戳计算剩余秒数
+  function parseResetAt(val) {
+    if (!val) return 0;
+    try {
+      // 截断纳秒/微秒 → 毫秒（JS Date 仅支持 3 位小数）
+      var str = String(val);
+      if (str.indexOf(".") !== -1 && str.endsWith("Z")) {
+        var parts = str.slice(0, -1).split(".");
+        str = parts[0] + "." + parts[1].slice(0, 3) + "Z";
+      }
+      var dt = new Date(str);
+      var diff = (dt.getTime() - Date.now()) / 1000;
+      return diff > 0 ? Math.round(diff) : 0;
+    } catch { return 0; }
+  }
+
+  // 从 usage payload 中提取 reset 提示秒数
+  function extractResetSeconds(data) {
+    // 优先 reset_at / resetAt
+    var keys = ["reset_at", "resetAt", "reset_time", "resetTime"];
+    for (var i = 0; i < keys.length; i++) {
+      if (data[keys[i]]) return parseResetAt(data[keys[i]]);
+    }
+    // 回退 reset_in / resetIn / ttl / window
+    var durKeys = ["reset_in", "resetIn", "ttl", "window"];
+    for (var j = 0; j < durKeys.length; j++) {
+      var v = parseInt(data[durKeys[j]], 10);
+      if (v > 0) return v;
+    }
+    return 0;
+  }
+
+  // 设置用量卡片数据
+  function setUsageCard(percentEl, resetEl, barEl, used, limit, resetSeconds) {
+    if (!limit || limit <= 0) {
+      percentEl.textContent = "—";
+      resetEl.textContent = "";
+      barEl.style.width = "0";
+      return;
+    }
+    var pct = Math.round((used / limit) * 100);
+    percentEl.textContent = pct + "%";
+    resetEl.textContent = formatResetDuration(resetSeconds);
+    barEl.style.width = Math.min(pct, 100) + "%";
+    barEl.classList.remove("warn", "danger");
+    if (pct >= 90) barEl.classList.add("danger");
+    else if (pct >= 70) barEl.classList.add("warn");
+  }
+
+  // 加载用量数据
+  async function loadUsage() {
+    if (!window.oneclaw?.kimiGetUsage) return;
+    els.btnUsageRefresh.classList.add("spinning");
+    try {
+      var result = await window.oneclaw.kimiGetUsage();
+      if (!result.success || !result.data) {
+        setUsageCard(els.usageWeeklyPercent, els.usageWeeklyReset, els.usageWeeklyBar, 0, 0, 0);
+        setUsageCard(els.usageLimitPercent, els.usageLimitReset, els.usageLimitBar, 0, 0, 0);
+        els.usageLimitTitle.textContent = t("provider.usageLimit");
+        els.usageRefreshTime.textContent = "";
+        toggleEl(els.usagePanel, true);
+        return;
+      }
+      var payload = result.data;
+
+      // 总用量（usage 字段 = 周用量）
+      var usage = payload.usage || {};
+      var usedW = parseInt(usage.used, 10) || 0;
+      var limitW = parseInt(usage.limit, 10) || 0;
+      if (usage.remaining !== undefined && !usage.used) {
+        usedW = limitW - (parseInt(usage.remaining, 10) || 0);
+      }
+      var resetW = extractResetSeconds(usage);
+      setUsageCard(els.usageWeeklyPercent, els.usageWeeklyReset, els.usageWeeklyBar, usedW, limitW, resetW);
+
+      // 频限明细（limits 数组第一项）
+      var limits = Array.isArray(payload.limits) ? payload.limits : [];
+      if (limits.length > 0) {
+        var item = limits[0];
+        var detail = (item.detail && typeof item.detail === "object") ? item.detail : item;
+        var usedL = parseInt(detail.used, 10) || 0;
+        var limitL = parseInt(detail.limit, 10) || 0;
+        if (detail.remaining !== undefined && !detail.used) {
+          usedL = limitL - (parseInt(detail.remaining, 10) || 0);
+        }
+        var resetL = extractResetSeconds(detail);
+        // 动态标题：从 window.duration + timeUnit 推导
+        var window_ = (item.window && typeof item.window === "object") ? item.window : {};
+        var dur = parseInt(window_.duration || item.duration || detail.duration, 10) || 0;
+        var unit = window_.timeUnit || item.timeUnit || detail.timeUnit || "";
+        if (dur > 0) {
+          var label;
+          if (unit.indexOf("MINUTE") !== -1) {
+            label = (dur >= 60 && dur % 60 === 0)
+              ? (currentLang === "zh" ? (dur / 60) + "小时用量" : (dur / 60) + "h usage")
+              : (currentLang === "zh" ? dur + "分钟用量" : dur + "m usage");
+          } else if (unit.indexOf("HOUR") !== -1) {
+            label = currentLang === "zh" ? dur + "小时用量" : dur + "h usage";
+          } else if (unit.indexOf("DAY") !== -1) {
+            label = currentLang === "zh" ? dur + "天用量" : dur + "d usage";
+          } else {
+            label = dur + "s";
+          }
+          els.usageLimitTitle.textContent = label;
+        } else {
+          els.usageLimitTitle.textContent = t("provider.usageLimit");
+        }
+        setUsageCard(els.usageLimitPercent, els.usageLimitReset, els.usageLimitBar, usedL, limitL, resetL);
+      }
+
+      // 刷新时间
+      var now = new Date();
+      var timeStr = now.getHours().toString().padStart(2, "0") + ":" + now.getMinutes().toString().padStart(2, "0");
+      els.usageRefreshTime.textContent = t("provider.usageRefreshed") + timeStr;
+
+      toggleEl(els.usagePanel, true);
+    } catch {
+      setUsageCard(els.usageWeeklyPercent, els.usageWeeklyReset, els.usageWeeklyBar, 0, 0, 0);
+      setUsageCard(els.usageLimitPercent, els.usageLimitReset, els.usageLimitBar, 0, 0, 0);
+      els.usageRefreshTime.textContent = "";
+      toggleEl(els.usagePanel, true);
+    } finally {
+      els.btnUsageRefresh.classList.remove("spinning");
+    }
   }
 
   // ── 保存 Provider 配置 ──
@@ -3718,6 +3878,9 @@
     }
     if (els.btnOAuthLogout) {
       els.btnOAuthLogout.addEventListener("click", handleOAuthLogout);
+    }
+    if (els.btnUsageRefresh) {
+      els.btnUsageRefresh.addEventListener("click", loadUsage);
     }
     els.btnToggleKey.addEventListener("click", togglePasswordVisibility);
 

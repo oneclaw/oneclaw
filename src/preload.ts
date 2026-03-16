@@ -34,6 +34,7 @@ contextBridge.exposeInMainWorld("oneclaw", {
   kimiOAuthCancel: () => ipcRenderer.invoke("kimi-oauth:cancel"),
   kimiOAuthLogout: () => ipcRenderer.invoke("kimi-oauth:logout"),
   kimiOAuthStatus: () => ipcRenderer.invoke("kimi-oauth:status"),
+  kimiGetUsage: () => ipcRenderer.invoke("kimi:get-usage"),
 
   // Settings 相关
   settingsGetConfig: () => ipcRenderer.invoke("settings:get-config"),
