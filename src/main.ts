@@ -462,8 +462,9 @@ ipcMain.on("app:open-settings", () => {
 ipcMain.on("app:open-webui", () => {
   const port = gateway.getPort();
   const token = gateway.getToken().trim();
-  const query = token ? `?token=${encodeURIComponent(token)}` : "";
-  shell.openExternal(`http://127.0.0.1:${port}/${query}`);
+  // UI 端只从 URL fragment (#token=) 读取 token，不从 query param (?token=) 读取
+  const fragment = token ? `#token=${encodeURIComponent(token)}` : "";
+  shell.openExternal(`http://127.0.0.1:${port}/${fragment}`);
 });
 ipcMain.handle("gateway:port", () => gateway.getPort());
 
