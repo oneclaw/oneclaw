@@ -215,8 +215,7 @@ jobs:
   # ── 合并 + 上传 OSS + 刷新 CDN + 创建 GitHub Release ──
   release:
     if: github.event_name == 'push'  # 仅 tag 推送时发布，手动触发只构建不发布
-    needs: [build-mac-arm64, build-mac-x64, build-win-x64]
-    # build-win-arm64 是可选的，失败不阻塞发布
+    needs: [build-mac-arm64, build-mac-x64, build-win-x64, build-win-arm64]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -244,7 +243,6 @@ jobs:
           path: out/win32-x64
 
       - uses: actions/download-artifact@v4
-        continue-on-error: true
         with:
           name: win-arm64
           path: out/win32-arm64
