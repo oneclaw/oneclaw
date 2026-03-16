@@ -380,18 +380,7 @@ async function startGatewayAndShowMain(source: string, opts: StartMainOptions = 
   }
   // OAuth token 后台刷新：gateway 启动后检查是否有 kimi-coding OAuth token
   if (running && loadOAuthToken()) {
-    startTokenRefresh((refreshedToken) => {
-      try {
-        const cfg = readUserConfig();
-        if (cfg?.models?.providers?.["kimi-coding"]) {
-          cfg.models.providers["kimi-coding"].apiKey = refreshedToken.access_token;
-          writeUserConfig(cfg);
-          requestGatewayRestart("oauth-token-refresh");
-        }
-      } catch (err: any) {
-        log.error(`OAuth token 刷新后更新配置失败: ${err.message}`);
-      }
-    });
+    ensureOAuthTokenRefresh();
   }
 
   await showMainWindow();
@@ -412,6 +401,22 @@ function requestGatewayRestart(source: string): void {
   syncKimiSearchEnv();
   gateway.restart().catch((err) => {
     log.error(`Gateway 重启失败(${source}): ${err}`);
+  });
+}
+
+// 启动 OAuth token 定时刷新（幂等：内部先 stop 再 start）
+function ensureOAuthTokenRefresh(): void {
+  startTokenRefresh((refreshedToken) => {
+    try {
+      const cfg = readUserConfig();
+      if (cfg?.models?.providers?.["kimi-coding"]) {
+        cfg.models.providers["kimi-coding"].apiKey = refreshedToken.access_token;
+        writeUserConfig(cfg);
+        requestGatewayRestart("oauth-token-refresh");
+      }
+    } catch (err: any) {
+      log.error(`OAuth token 刷新后更新配置失败: ${err.message}`);
+    }
   });
 }
 
@@ -468,7 +473,7 @@ ipcMain.on("app:open-webui", () => {
 });
 ipcMain.handle("gateway:port", () => gateway.getPort());
 
-registerSetupIpc({ setupManager, gateway });
+registerSetupIpc({ setupManager, gateway, onOAuthLoginSuccess: ensureOAuthTokenRefresh });
 registerSettingsIpc({
   requestGatewayRestart: () => requestGatewayRestart("settings:kimi-search"),
 });

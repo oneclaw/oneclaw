@@ -12,10 +12,10 @@ const KIMI_CODE_CLIENT_ID = "17e5f671-d194-4dfb-9706-5516cb48c098";
 const OAUTH_HOST = "auth.kimi.com";
 const POLL_MAX_RETRIES = 120;
 
-// token 刷新间隔（5 分钟）
-const REFRESH_CHECK_INTERVAL_MS = 5 * 60 * 1000;
-// 剩余不足 600 秒时触发刷新
-const REFRESH_THRESHOLD_S = 600;
+// token 刷新间隔（60 秒，对齐 kimi-cli）
+const REFRESH_CHECK_INTERVAL_MS = 60 * 1000;
+// 剩余不足 300 秒时触发刷新（对齐 kimi-cli 的 5 分钟阈值）
+const REFRESH_THRESHOLD_S = 300;
 
 // ── 类型 ──
 
@@ -255,24 +255,29 @@ export async function kimiOAuthLogin(): Promise<{
 
 let refreshTimer: ReturnType<typeof setInterval> | null = null;
 
-// 启动定时刷新（每 5 分钟检查一次）
+// 单次检查并刷新（供定时器和启动时复用）
+async function checkAndRefresh(onTokenRefreshed?: (token: OAuthToken) => void): Promise<void> {
+  const token = loadOAuthToken();
+  if (!token) return;
+
+  const remaining = token.expires_at - Math.floor(Date.now() / 1000);
+  if (remaining >= REFRESH_THRESHOLD_S) return;
+
+  try {
+    const refreshed = await refreshOAuthToken(token);
+    log.info("Kimi OAuth: token 已自动刷新");
+    onTokenRefreshed?.(refreshed);
+  } catch (e: unknown) {
+    log.error(`Kimi OAuth: 自动刷新失败 — ${e instanceof Error ? e.message : e}`);
+  }
+}
+
+// 启动定时刷新（立即检查一次，之后每 60 秒轮询）
 export function startTokenRefresh(onTokenRefreshed?: (token: OAuthToken) => void): void {
   stopTokenRefresh();
-  refreshTimer = setInterval(async () => {
-    const token = loadOAuthToken();
-    if (!token) return;
-
-    const remaining = token.expires_at - Math.floor(Date.now() / 1000);
-    if (remaining >= REFRESH_THRESHOLD_S) return;
-
-    try {
-      const refreshed = await refreshOAuthToken(token);
-      log.info("Kimi OAuth: token 已自动刷新");
-      onTokenRefreshed?.(refreshed);
-    } catch (e: unknown) {
-      log.error(`Kimi OAuth: 自动刷新失败 — ${e instanceof Error ? e.message : e}`);
-    }
-  }, REFRESH_CHECK_INTERVAL_MS);
+  // 启动时立即检查，不等第一个 interval（覆盖关闭超过 15 分钟后重启的场景）
+  checkAndRefresh(onTokenRefreshed);
+  refreshTimer = setInterval(() => checkAndRefresh(onTokenRefreshed), REFRESH_CHECK_INTERVAL_MS);
 }
 
 // 停止定时刷新

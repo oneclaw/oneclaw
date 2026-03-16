@@ -27,6 +27,7 @@ import { DEFAULT_PORT } from "./constants";
 interface SetupIpcDeps {
   setupManager: SetupManager;
   gateway?: { setPort: (port: number) => void };
+  onOAuthLoginSuccess?: () => void;
 }
 
 let latestSetupCompletedProps: Record<string, string> | null = null;
@@ -153,6 +154,7 @@ export function registerSetupIpc(deps: SetupIpcDeps): void {
     const result = await kimiOAuthLogin();
     // 轮询成功后将窗口拉回前台，避免用户停留在浏览器找不到程序
     if (result.success) {
+      deps.onOAuthLoginSuccess?.();
       const win = BrowserWindow.fromWebContents(event.sender);
       if (win) {
         if (win.isMinimized()) win.restore();
