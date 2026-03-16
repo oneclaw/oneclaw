@@ -45,7 +45,7 @@ function getTargetPaths(platform, arch) {
     runtimeDir: path.join(targetBase, "runtime"),
     gatewayDir: path.join(targetBase, "gateway"),
     iconPath: path.join(targetBase, "app-icon.png"),
-    analyticsConfigPath: path.join(targetBase, "analytics-config.json"),
+    buildConfigPath: path.join(targetBase, "build-config.json"),
   };
 }
 
@@ -501,10 +501,12 @@ function buildAnalyticsConfig() {
   };
 }
 
-function writeAnalyticsConfig(configPath) {
-  const config = buildAnalyticsConfig();
+function writeBuildConfig(configPath) {
+  const analytics = buildAnalyticsConfig();
+  const clawhubRegistry = readEnvText("ONECLAW_CLAWHUB_REGISTRY");
+  const config = { analytics, clawhubRegistry };
   fs.writeFileSync(configPath, JSON.stringify(config, null, 2));
-  log(`已生成 analytics-config.json（enabled=${config.enabled ? "true" : "false"}）`);
+  log(`已生成 build-config.json（analytics.enabled=${analytics.enabled ? "true" : "false"}, clawhubRegistry=${clawhubRegistry || "(空)"}）`);
 }
 
 // ─── Step 2: 安装 openclaw 生产依赖 ───
@@ -1723,10 +1725,10 @@ function pruneNodeModules(nmDir, platform) {
   log(`node_modules 裁剪统计: 删除文件 ${removedFiles} 个，删除目录 ${removedDirs} 个`);
 }
 
-// ─── Step 3: 生成埋点配置 ───
+// ─── Step 3: 生成构建配置（埋点 + ClawHub Registry） ───
 
-function generateAnalyticsConfig(targetPaths) {
-  writeAnalyticsConfig(targetPaths.analyticsConfigPath);
+function generateBuildConfig(targetPaths) {
+  writeBuildConfig(targetPaths.buildConfigPath);
 }
 
 // ─── Step 4: 拷贝图标资源 ───
@@ -1780,7 +1782,7 @@ function verifyOutput(targetPaths, platform) {
     path.join(targetRel, "gateway", "node_modules", "openclaw", "dist", "entry.js"),
     path.join(targetRel, "gateway", "node_modules", "openclaw", "dist", "control-ui", "index.html"),
     path.join(targetRel, "gateway", "node_modules", "clawhub", "bin", "clawdhub.js"),
-    path.join(targetRel, "analytics-config.json"),
+    path.join(targetRel, "build-config.json"),
     path.join(targetRel, "app-icon.png"),
   ];
 
@@ -1844,9 +1846,9 @@ async function main() {
 
   console.log();
 
-  // Step 3: 生成埋点配置（URL / API Key 仅来自打包环境变量）
-  log("Step 3: 生成埋点配置");
-  generateAnalyticsConfig(targetPaths);
+  // Step 3: 生成构建配置（埋点 + ClawHub Registry）
+  log("Step 3: 生成构建配置");
+  generateBuildConfig(targetPaths);
 
   console.log();
 

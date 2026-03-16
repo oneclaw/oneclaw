@@ -15,7 +15,7 @@ const { Arch } = require("builder-util");
 // ── 注入目录列表 ──
 
 const INJECT_DIRS = ["runtime", "gateway"];
-const REQUIRED_FILES = ["analytics-config.json"];
+const REQUIRED_FILES = ["build-config.json"];
 const OPTIONAL_FILES = ["app-icon.png"];
 
 // 解析 electron-builder 产物架构

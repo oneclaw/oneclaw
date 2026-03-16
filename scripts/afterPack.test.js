@@ -66,7 +66,7 @@ test("Windows afterPack 应保留展开的 gateway node_modules 而不是生成 
   fs.writeFileSync(path.join(modulesDir, "openclaw", "openclaw.mjs"), "export {};\n");
   fs.writeFileSync(path.join(modulesDir, "clawhub", "bin", "clawdhub.js"), "console.log('clawhub');\n");
   fs.writeFileSync(path.join(gatewayDir, "gateway-entry.mjs"), "export {};\n");
-  fs.writeFileSync(path.join(resourcesDir, "analytics-config.json"), "{}\n");
+  fs.writeFileSync(path.join(resourcesDir, "build-config.json"), "{}\n");
 
   const sandbox = loadAfterPackSandbox(scriptPath);
   const appOutDir = path.join(tmpRoot, "out");
