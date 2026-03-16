@@ -437,7 +437,7 @@
       "common.cancel": "取消",
       "common.confirm": "确认",
       "common.enable": "启用",
-      "common.saved": "已保存，正在重启核心服务",
+      "common.saved": "已保存 正在重启核心服务",
       "provider.save": "保存",
       "provider.saving": "保存中…",
       "provider.currentUsing": "当前使用: ",
@@ -705,6 +705,12 @@
     btnSave: $("#btnSave"),
     btnSaveText: $("#btnSave .btn-text"),
     btnSaveSpinner: $("#btnSave .btn-spinner"),
+    // 通道状态指示灯
+    feishuStatusDot: $("#feishuStatusDot"),
+    wecomStatusDot: $("#wecomStatusDot"),
+    dingtalkStatusDot: $("#dingtalkStatusDot"),
+    kimiStatusDot: $("#kimiStatusDot"),
+    qqStatusDot: $("#qqStatusDot"),
     // Channels tab
     chEnabled: $("#chEnabled"),
     chFields: $("#chFields"),
@@ -2213,6 +2219,7 @@
       // 回填启用状态
       var enabled = data.enabled && data.appId;
       els.chEnabled.checked = !!enabled;
+
       var dmPolicy = data.dmPolicy === "open" ? "open" : "pairing";
       if (els.chDmPolicy) {
         els.chDmPolicy.value = dmPolicy;
@@ -2351,6 +2358,7 @@
 
       var enabled = !!data.enabled && !!data.botId;
       els.wecomEnabled.checked = enabled;
+
       updateWecomGroupAllowFromState();
       if (currentChatPlatform === "wecom") {
         updateChPairingSectionVisibility();
@@ -2489,6 +2497,7 @@
       var enabled = !!data.enabled && !!data.clientId;
       els.dingtalkEnabled.checked = enabled;
 
+
       if (data.bundled === false) {
         showDingtalkMsg(data.bundleMessage || t("error.dingtalkNotBundled"), "error");
       } else {
@@ -2603,6 +2612,7 @@
 
       var enabled = !!data.enabled && !!data.appId;
       els.qqEnabled.checked = enabled;
+
 
       if (data.bundled === false) {
         showQqMsg(data.bundleMessage || t("error.qqNotBundled"), "error");
@@ -2972,6 +2982,7 @@
       // 回填启用状态
       var enabled = data.enabled && data.botToken;
       els.kimiEnabled.checked = !!enabled;
+
     } catch (err) {
       console.error("[Settings] loadKimiConfig failed:", err);
     }
@@ -3582,6 +3593,23 @@
     el.classList.toggle("hidden", !show);
   }
 
+  // 同步左侧通道列表的状态指示灯
+  function syncStatusDot(dot, enabled) {
+    if (dot) dot.classList.toggle("connected", !!enabled);
+  }
+
+  // 劫持 checkbox.checked setter + 监听用户点击，自动同步指示灯
+  function bindStatusDot(checkbox, dot) {
+    if (!checkbox || !dot) return;
+    var desc = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "checked");
+    Object.defineProperty(checkbox, "checked", {
+      get: function () { return desc.get.call(this); },
+      set: function (v) { desc.set.call(this, v); syncStatusDot(dot, v); },
+      configurable: true,
+    });
+    checkbox.addEventListener("change", function () { syncStatusDot(dot, checkbox.checked); });
+  }
+
   // 短暂浮层提示（3s 自动消失）
   function showToast(msg) {
     var container = document.getElementById("toastContainer");
@@ -3702,6 +3730,13 @@
     els.apiKeyInput.addEventListener("keydown", function (e) {
       if (e.key === "Enter") handleSave();
     });
+
+    // 通道启用指示灯绑定
+    bindStatusDot(els.chEnabled, els.feishuStatusDot);
+    bindStatusDot(els.wecomEnabled, els.wecomStatusDot);
+    bindStatusDot(els.dingtalkEnabled, els.dingtalkStatusDot);
+    bindStatusDot(els.kimiEnabled, els.kimiStatusDot);
+    bindStatusDot(els.qqEnabled, els.qqStatusDot);
 
     // 远程控制页二级平台切换
     els.chatPlatformButtons.forEach(function (button) {

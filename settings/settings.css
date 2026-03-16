@@ -293,6 +293,20 @@ button, input, select, label, a {
   transform: scale(0.985);
 }
 
+/* 通道状态指示灯：仅已启用时显示绿色圆点 */
+.platform-status-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #34c759;
+  flex-shrink: 0;
+  margin-left: auto;
+}
+
+.platform-status-dot:not(.connected) {
+  visibility: hidden;
+}
+
 .chat-platform-label {
   font-size: 13px;
   font-weight: 600;
