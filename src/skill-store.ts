@@ -15,7 +15,8 @@ import * as http from "http";
 import * as log from "./logger";
 import { readOneclawConfig, writeOneclawConfig } from "./oneclaw-config";
 
-const DEFAULT_REGISTRY = "https://clawhub.ai";
+// 环境变量 ONECLAW_CLAWHUB_REGISTRY 可在构建/启动时覆盖默认 registry
+const DEFAULT_REGISTRY = process.env.ONECLAW_CLAWHUB_REGISTRY?.trim() || "https://clawhub.ai";
 const FETCH_TIMEOUT_MS = 15_000;
 const SKILL_STORE_CONFIG = "skill-store.json";
 
