@@ -144,8 +144,7 @@
       "provider.apiKey": "API Key",
       "provider.getKey": "Get API Key →",
       "provider.getKey.kimi-code": "Get Key (Kimi for Code) →",
-      "provider.getKey.moonshot-cn": "Get Key (Moonshot.cn) →",
-      "provider.getKey.moonshot-ai": "Get Key (Moonshot.ai) →",
+      "provider.getKey.moonshot-cn": "Get Key (Kimi Open Platform) →",
       "provider.model": "Model",
       "provider.modelId": "Model ID",
       "provider.apiType": "API Type",
@@ -415,8 +414,7 @@
       "provider.apiKey": "API 密钥",
       "provider.getKey": "获取密钥 →",
       "provider.getKey.kimi-code": "购买会员获取密钥 (Kimi for Code) →",
-      "provider.getKey.moonshot-cn": "获取密钥 (Moonshot.cn) →",
-      "provider.getKey.moonshot-ai": "获取密钥 (Moonshot.ai) →",
+      "provider.getKey.moonshot-cn": "获取密钥 (Kimi 开放平台（企业用户）) →",
       "provider.model": "模型",
       "provider.modelId": "模型 ID",
       "provider.apiType": "接口类型",
@@ -3161,7 +3159,7 @@
   // provider + subPlatform → 人类可读名称
   function getProviderDisplayName(provider, subPlatform) {
     if (provider === "moonshot") {
-      var names = { "moonshot-cn": "Moonshot CN", "moonshot-ai": "Moonshot AI", "kimi-code": "Kimi 会员订阅" };
+      var names = { "moonshot-cn": "Kimi 开放平台（企业用户）", "moonshot-ai": "Moonshot AI", "kimi-code": "Kimi 会员订阅" };
       return names[subPlatform] || "Kimi";
     }
     var map = { anthropic: "Anthropic", openai: "OpenAI", google: "Google", custom: "Custom" };
