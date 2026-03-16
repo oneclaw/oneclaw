@@ -91,6 +91,24 @@ const dict: Record<Locale, Record<string, string>> = {
     "skillStore.installFailed": "安装失败，请稍后重试",
     "skillStore.uninstallFailed": "卸载失败，请稍后重试",
 
+
+    // 工作空间
+    "sidebar.workspace": "工作空间",
+    "workspace.title": "工作空间",
+    "workspace.refresh": "刷新",
+    "workspace.openRoot": "打开根目录",
+    "workspace.close": "关闭",
+    "workspace.open": "打开",
+    "workspace.openFolder": "在文件管理器中打开",
+    "workspace.copy": "复制",
+    "workspace.copied": "已复制",
+    "workspace.empty": "工作空间为空",
+    "workspace.loading": "加载中…",
+    "workspace.error": "加载失败",
+    "workspace.fileTooLarge": "文件过大，无法预览",
+    "workspace.noPreview": "无法预览此文件类型",
+    "workspace.selectFile": "选择一个文件来预览",
+
     // OneClaw settings page
     "settings.title": "设置",
     "settings.subtitle": "管理外观显示与聊天展示偏好",
@@ -228,6 +246,24 @@ const dict: Record<Locale, Record<string, string>> = {
     "skillStore.downloads": "Downloads",
     "skillStore.installFailed": "Install failed. Please try again later.",
     "skillStore.uninstallFailed": "Uninstall failed. Please try again later.",
+
+
+    // Workspace
+    "sidebar.workspace": "Workspace",
+    "workspace.title": "Workspace",
+    "workspace.refresh": "Refresh",
+    "workspace.openRoot": "Open root folder",
+    "workspace.close": "Close",
+    "workspace.open": "Open",
+    "workspace.openFolder": "Open in file manager",
+    "workspace.copy": "Copy",
+    "workspace.copied": "Copied",
+    "workspace.empty": "Workspace is empty",
+    "workspace.loading": "Loading…",
+    "workspace.error": "Failed to load",
+    "workspace.fileTooLarge": "File too large to preview",
+    "workspace.noPreview": "Cannot preview this file type",
+    "workspace.selectFile": "Select a file to preview",
 
     // OneClaw settings page
     "settings.title": "Settings",

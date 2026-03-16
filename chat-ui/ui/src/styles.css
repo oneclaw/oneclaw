@@ -7344,6 +7344,67 @@ img.chat-avatar {
   cursor: not-allowed;
 }
 
+/* ── Workspace 文件浏览器 ── */
+
+.workspace-scroll {
+  overflow-y: auto;
+  height: 100%;
+}
+
+.workspace {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0;
+}
+
+.workspace__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 24px 12px;
+  border-bottom: 1px solid var(--border-color, #e5e5e5);
+  -webkit-app-region: drag;
+}
+
+.workspace__title {
+  font-size: 18px;
+  font-weight: 600;
+  margin: 0;
+  color: var(--text-primary, #1a1a1a);
+}
+
+.workspace__header-actions {
+  display: flex;
+  gap: 4px;
+  -webkit-app-region: no-drag;
+}
+
+.workspace__header-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-secondary, #666);
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+
+.workspace__header-btn:hover {
+  background: var(--bg-hover, rgba(0, 0, 0, 0.06));
+  color: var(--text-primary, #1a1a1a);
+}
+
+.workspace__header-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
 /* CSS tooltip — 替代原生 title（Electron 40 不显示原生 tooltip） */
 [data-tooltip] {
   position: relative;
@@ -7389,4 +7450,227 @@ img.chat-avatar {
   top: 50%;
   left: calc(100% + 6px);
   transform: translateY(-50%);
+}
+
+.workspace__header-btn svg {
+  width: 18px;
+  height: 18px;
+}
+
+.workspace__body {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* 左侧文件列表 */
+
+.workspace__file-list {
+  width: 220px;
+  min-width: 180px;
+  max-width: 280px;
+  border-right: 1px solid var(--border-color, #e5e5e5);
+  overflow-y: auto;
+  padding: 8px 0;
+  flex-shrink: 0;
+}
+
+.workspace__file-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 14px;
+  cursor: pointer;
+  color: var(--text-primary, #1a1a1a);
+  font-size: 13px;
+  line-height: 1.4;
+  transition: background 0.1s;
+  position: relative;
+}
+
+.workspace__file-item:hover {
+  background: var(--bg-hover, rgba(0, 0, 0, 0.04));
+}
+
+.workspace__file-item.active {
+  background: var(--bg-active, rgba(192, 57, 43, 0.08));
+  color: var(--accent, #c0392b);
+}
+
+.workspace__file-item--back {
+  color: var(--text-secondary, #666);
+  font-style: italic;
+}
+
+.workspace__file-icon {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+  width: 18px;
+  height: 18px;
+  color: var(--text-tertiary, #999);
+}
+
+.workspace__file-item.active .workspace__file-icon {
+  color: var(--accent, #c0392b);
+}
+
+.workspace__file-item--dir .workspace__file-icon {
+  color: var(--text-secondary, #888);
+}
+
+.workspace__file-icon svg {
+  width: 16px;
+  height: 16px;
+}
+
+.workspace__file-name {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.workspace__file-action {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text-tertiary, #999);
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background 0.1s, color 0.1s;
+}
+
+.workspace__file-item:hover .workspace__file-action {
+  display: flex;
+}
+
+.workspace__file-action:hover {
+  background: var(--bg-hover, rgba(0, 0, 0, 0.08));
+  color: var(--text-primary, #1a1a1a);
+}
+
+.workspace__file-action svg {
+  width: 14px;
+  height: 14px;
+}
+
+.workspace__loading,
+.workspace__error,
+.workspace__empty-list {
+  padding: 24px 14px;
+  text-align: center;
+  color: var(--text-secondary, #888);
+  font-size: 13px;
+}
+
+/* 右侧预览 */
+
+.workspace__preview {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.workspace__preview-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 20px;
+  border-bottom: 1px solid var(--border-color, #e5e5e5);
+  gap: 12px;
+}
+
+.workspace__preview-path {
+  font-size: 13px;
+  color: var(--text-secondary, #666);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+  font-family: var(--font-mono, 'SF Mono', 'Fira Code', 'Cascadia Code', monospace);
+}
+
+.workspace__preview-actions {
+  display: flex;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.workspace__preview-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: none;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--text-secondary, #666);
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+
+.workspace__preview-btn:hover {
+  background: var(--bg-hover, rgba(0, 0, 0, 0.06));
+  color: var(--text-primary, #1a1a1a);
+}
+
+.workspace__preview-btn svg {
+  width: 16px;
+  height: 16px;
+}
+
+.workspace__preview-content {
+  flex: 1;
+  overflow: auto;
+  padding: 16px 20px;
+}
+
+.workspace__preview-text {
+  margin: 0;
+  padding: 0;
+  font-family: var(--font-mono, 'SF Mono', 'Fira Code', 'Cascadia Code', monospace);
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--text-primary, #1a1a1a);
+  white-space: pre-wrap;
+  word-break: break-all;
+  tab-size: 2;
+}
+
+.workspace__preview-placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: var(--text-tertiary, #aaa);
+  font-size: 14px;
+}
+
+.workspace__preview-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: var(--text-tertiary, #aaa);
+  font-size: 14px;
+}
+
+/* 暗色主题覆盖 */
+:root[data-theme="dark"] .workspace__file-item.active {
+  background: rgba(192, 57, 43, 0.15);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .workspace__file-item.active {
+    background: rgba(192, 57, 43, 0.15);
+  }
 }

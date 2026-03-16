@@ -17,6 +17,7 @@ import {
   registerSettingsIpc,
 } from "./settings-ipc";
 import { registerSkillStoreIpc } from "./skill-store";
+import { registerWorkspaceIpc } from "./workspace-ipc";
 import { ChannelPairingMonitor } from "./channel-pairing-monitor";
 import {
   setupAutoUpdater,
@@ -479,6 +480,7 @@ registerSettingsIpc({
   requestGatewayRestart: () => requestGatewayRestart("settings:kimi-search"),
 });
 registerSkillStoreIpc();
+registerWorkspaceIpc();
 
 // ── 退出 ──
 

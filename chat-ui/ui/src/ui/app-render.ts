@@ -19,6 +19,7 @@ import { renderRestartGatewayDialog } from "./views/restart-gateway-dialog.ts";
 import { renderSharePrompt } from "./views/share-prompt.ts";
 import { patchSession, loadSessions } from "./controllers/sessions.ts";
 import { renderSkillStoreView, type SkillStoreState } from "./skill-store-view.ts";
+import { renderWorkspaceView, initWorkspace } from "./views/workspace.ts";
 import type { SkillStatusEntry } from "./types.ts";
 import {
   loadSkills,
@@ -44,6 +45,11 @@ declare global {
       skillStoreInstall?: (params?: Record<string, unknown>) => Promise<any>;
       skillStoreUninstall?: (params?: Record<string, unknown>) => Promise<any>;
       skillStoreListInstalled?: () => Promise<any>;
+      workspaceSetRoot?: (root: string) => Promise<any>;
+      workspaceOpenFile?: (filePath: string) => Promise<any>;
+      workspaceOpenFolder?: (filePath: string) => Promise<any>;
+      workspaceListDir?: (dirPath: string) => Promise<any>;
+      workspaceReadFile?: (filePath: string) => Promise<any>;
     };
   }
 }
@@ -212,7 +218,7 @@ async function deleteSessionFromSidebar(state: AppViewState, key: string) {
   await loadSessions(s);
 }
 
-function setOneClawView(state: AppViewState, next: "chat" | "settings" | "skills") {
+function setOneClawView(state: AppViewState, next: "chat" | "settings" | "skills" | "workspace") {
   if ((state.settings.oneclawView ?? "chat") === next) {
     return;
   }
@@ -574,6 +580,12 @@ function openSkillsView(state: AppViewState, subTab: "installed" | "store" = "in
   }
 }
 
+// 打开工作区文件浏览视图
+function openWorkspaceView(state: AppViewState) {
+  setOneClawView(state, "workspace");
+  void initWorkspace(state);
+}
+
 // 新建会话：同步写入本地列表后再切换，异步同步到 Gateway 供跨终端访问
 function createNewSession(state: AppViewState) {
   const id = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
@@ -816,6 +828,7 @@ export function renderApp(state: AppViewState) {
   const oneclawView = state.settings.oneclawView ?? "chat";
   const settingsActive = oneclawView === "settings";
   const skillsActive = oneclawView === "skills";
+  const workspaceActive = oneclawView === "workspace";
   const updateBannerState = state.updateBannerState;
 
   return html`
@@ -830,6 +843,7 @@ export function renderApp(state: AppViewState) {
             sessionOptions,
             settingsActive,
             skillsActive,
+            workspaceActive,
             updateStatus: updateBannerState.status,
             updateVersion: updateBannerState.version,
             updatePercent: updateBannerState.percent,
@@ -855,6 +869,7 @@ export function renderApp(state: AppViewState) {
               state.pairingState.pendingCount > 0 ? "channels" : null,
             ),
             onOpenSkillStore: () => openSkillsView(state),
+            onOpenWorkspace: () => openWorkspaceView(state),
             onOpenWebUI: () => void handleOpenWebUI(state),
             onOpenDocs: () => {
               if (window.oneclaw?.openExternal) {
@@ -1043,7 +1058,9 @@ export function renderApp(state: AppViewState) {
                     </section>
                   </div>
                 `
-              : html`
+              : workspaceActive
+                ? renderWorkspaceView(state, () => setOneClawView(state, "chat"))
+                : html`
                 ${renderChat({
                   sessionKey: state.sessionKey,
                   onSessionKeyChange: (next) => applySessionKey(state, next),

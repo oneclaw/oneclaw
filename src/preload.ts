@@ -119,6 +119,18 @@ contextBridge.exposeInMainWorld("oneclaw", {
   skillStoreListInstalled: () =>
     ipcRenderer.invoke("skill-store:list-installed"),
 
+  // 工作空间文件操作
+  workspaceSetRoot: (root: string) =>
+    ipcRenderer.invoke("workspace:set-root", root),
+  workspaceOpenFile: (filePath: string) =>
+    ipcRenderer.invoke("workspace:open-file", filePath),
+  workspaceOpenFolder: (filePath: string) =>
+    ipcRenderer.invoke("workspace:open-folder", filePath),
+  workspaceListDir: (dirPath: string) =>
+    ipcRenderer.invoke("workspace:list-dir", dirPath),
+  workspaceReadFile: (filePath: string) =>
+    ipcRenderer.invoke("workspace:read-file", filePath),
+
   onSettingsNavigate: (cb: (payload: { tab: string; notice: string }) => void) => {
     ipcRenderer.on("settings:navigate", (_e, payload) => cb(payload));
   },

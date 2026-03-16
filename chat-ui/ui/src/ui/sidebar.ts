@@ -15,6 +15,7 @@ export type SidebarProps = {
   sessionOptions: Array<{ key: string; label: string; updatedAt?: number }>;
   settingsActive: boolean;
   skillsActive: boolean;
+  workspaceActive: boolean;
   updateStatus: "hidden" | "available" | "downloading";
   updateVersion: string | null;
   updatePercent: number | null;
@@ -28,6 +29,7 @@ export type SidebarProps = {
   onRefresh: () => void;
   onOpenSettings: () => void;
   onOpenSkillStore: () => void;
+  onOpenWorkspace: () => void;
   onOpenWebUI: () => void;
   onOpenDocs: () => void;
   onApplyUpdate: () => void;
@@ -219,6 +221,16 @@ export function renderSidebar(props: SidebarProps) {
         >
           <span class="oneclaw-sidebar__icon">${icons.puzzle}</span>
           <span class="oneclaw-sidebar__label">${t("sidebar.skillStore")}</span>
+        </button>
+
+        <button
+          class="oneclaw-sidebar__item ${props.workspaceActive ? "active" : ""}"
+          type="button"
+          @click=${props.onOpenWorkspace}
+          title=${t("sidebar.workspace")}
+        >
+          <span class="oneclaw-sidebar__icon">${icons.folder}</span>
+          <span class="oneclaw-sidebar__label">${t("sidebar.workspace")}</span>
         </button>
 
         <button
