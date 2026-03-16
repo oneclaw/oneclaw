@@ -35,7 +35,7 @@
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
             <use href="#icon-message-circle"></use>
           </svg>
-          <span data-i18n="nav.chat">Chat Integration</span>
+          <span data-i18n="nav.chat">Remote Control</span>
         </li>
         <li class="nav-item" data-tab="search">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
@@ -236,8 +236,8 @@
 
       <!-- Channels Tab -->
       <section class="tab-panel" id="tabChannels">
-        <h2 data-i18n="chat.title">Chat Integration</h2>
-        <p class="desc" data-i18n="chat.desc">Connect Feishu, DingTalk, Kimi, or QQ and chat with AI directly inside your messaging app.</p>
+        <h2 data-i18n="chat.title">Remote Control</h2>
+        <p class="desc" data-i18n="chat.desc">Connect Feishu, WeCom, DingTalk, Kimi, or QQ to control OneClaw remotely from your messaging app.</p>
 
         <div class="chat-integration-shell">
           <div class="chat-platform-nav" role="tablist" aria-label="Chat integration platforms">
@@ -246,50 +246,30 @@
                 <span class="chat-platform-label" data-i18n="chat.platformFeishu">Feishu</span>
                 <span class="chat-platform-meta" data-i18n="chat.platformFeishuMeta">Lark / Feishu bot</span>
               </button>
-              <label class="toggle-switch chat-platform-toggle" aria-label="Toggle Feishu">
-                <input type="checkbox" id="chEnabled">
-                <span class="toggle-slider"></span>
-              </label>
             </div>
             <div class="chat-platform-item" data-chat-platform="wecom">
               <button type="button" class="chat-platform-btn" data-chat-platform="wecom">
                 <span class="chat-platform-label" data-i18n="chat.platformWecom">企业微信</span>
                 <span class="chat-platform-meta" data-i18n="chat.platformWecomMeta">WeCom AI bot</span>
               </button>
-              <label class="toggle-switch chat-platform-toggle" aria-label="Toggle WeCom">
-                <input type="checkbox" id="wecomEnabled">
-                <span class="toggle-slider"></span>
-              </label>
             </div>
             <div class="chat-platform-item" data-chat-platform="dingtalk">
               <button type="button" class="chat-platform-btn" data-chat-platform="dingtalk">
                 <span class="chat-platform-label" data-i18n="chat.platformDingtalk">DingTalk</span>
                 <span class="chat-platform-meta" data-i18n="chat.platformDingtalkMeta">DingTalk stream connector</span>
               </button>
-              <label class="toggle-switch chat-platform-toggle" aria-label="Toggle DingTalk">
-                <input type="checkbox" id="dingtalkEnabled">
-                <span class="toggle-slider"></span>
-              </label>
             </div>
             <div class="chat-platform-item" data-chat-platform="kimi">
               <button type="button" class="chat-platform-btn" data-chat-platform="kimi">
                 <span class="chat-platform-label" data-i18n="chat.platformKimi">KimiClaw</span>
                 <span class="chat-platform-meta" data-i18n="chat.platformKimiMeta">Kimi bot bridge</span>
               </button>
-              <label class="toggle-switch chat-platform-toggle" aria-label="Toggle KimiClaw">
-                <input type="checkbox" id="kimiEnabled">
-                <span class="toggle-slider"></span>
-              </label>
             </div>
             <div class="chat-platform-item" data-chat-platform="qqbot">
               <button type="button" class="chat-platform-btn" data-chat-platform="qqbot">
                 <span class="chat-platform-label" data-i18n="chat.platformQq">QQ</span>
                 <span class="chat-platform-meta" data-i18n="chat.platformQqMeta">QQ Open Platform Bot</span>
               </button>
-              <label class="toggle-switch chat-platform-toggle" aria-label="Toggle QQ Bot">
-                <input type="checkbox" id="qqEnabled">
-                <span class="toggle-slider"></span>
-              </label>
             </div>
           </div>
 
@@ -304,6 +284,14 @@
                   <a href="#" class="platform-link" id="chDocsLink" data-i18n="feishu.docs">Setup Guide →</a>
                   <a href="#" class="platform-link" id="chConsoleLink" data-i18n="feishu.getKey">Open Feishu Console →</a>
                 </div>
+              </div>
+
+              <div class="toggle-row">
+                <span class="toggle-label" data-i18n="common.enable">Enable</span>
+                <label class="toggle-switch" aria-label="Toggle Feishu">
+                  <input type="checkbox" id="chEnabled">
+                  <span class="toggle-slider"></span>
+                </label>
               </div>
 
               <div id="chFields">
@@ -416,6 +404,14 @@
                 </div>
               </div>
 
+              <div class="toggle-row">
+                <span class="toggle-label" data-i18n="common.enable">Enable</span>
+                <label class="toggle-switch" aria-label="Toggle DingTalk">
+                  <input type="checkbox" id="dingtalkEnabled">
+                  <span class="toggle-slider"></span>
+                </label>
+              </div>
+
               <div id="dingtalkFields">
                 <div class="field-group">
                   <label for="dingtalkClientId" data-i18n="dingtalk.clientId">Client ID / AppKey</label>
@@ -461,6 +457,14 @@
                   <a href="#" class="platform-link" id="wecomDocsLink" data-i18n="wecom.docs">插件说明 →</a>
                   <a href="#" class="platform-link" id="wecomConsoleLink" data-i18n="wecom.getKey">打开企业微信后台 →</a>
                 </div>
+              </div>
+
+              <div class="toggle-row">
+                <span class="toggle-label" data-i18n="common.enable">Enable</span>
+                <label class="toggle-switch" aria-label="Toggle WeCom">
+                  <input type="checkbox" id="wecomEnabled">
+                  <span class="toggle-slider"></span>
+                </label>
               </div>
 
               <div id="wecomFields">
@@ -546,6 +550,14 @@
                 </div>
               </div>
 
+              <div class="toggle-row">
+                <span class="toggle-label" data-i18n="common.enable">Enable</span>
+                <label class="toggle-switch" aria-label="Toggle KimiClaw">
+                  <input type="checkbox" id="kimiEnabled">
+                  <span class="toggle-slider"></span>
+                </label>
+              </div>
+
               <div id="kimiFields">
                 <p class="kimi-guide-text" data-i18n="kimi.guideText">Click 'Associate existing OpenClaw' → copy command → paste below</p>
 
@@ -581,6 +593,14 @@
                 <div class="channel-links">
                   <a href="#" class="platform-link" id="qqConsoleLink" data-i18n="qq.getKey">Open QQ Open Platform →</a>
                 </div>
+              </div>
+
+              <div class="toggle-row">
+                <span class="toggle-label" data-i18n="common.enable">Enable</span>
+                <label class="toggle-switch" aria-label="Toggle QQ Bot">
+                  <input type="checkbox" id="qqEnabled">
+                  <span class="toggle-slider"></span>
+                </label>
               </div>
 
               <div id="qqFields">

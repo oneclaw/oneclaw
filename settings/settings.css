@@ -305,10 +305,6 @@ button, input, select, label, a {
   display: none;
 }
 
-.chat-platform-toggle {
-  margin-left: auto;
-}
-
 .chat-platform-panels {
   flex: 1;
   min-width: 0;

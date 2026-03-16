@@ -121,10 +121,10 @@
       "settings.backToChat": "Back",
       "title": "Settings",
       "nav.provider": "Model",
-      "nav.chat": "Chat Integration",
+      "nav.chat": "Remote Control",
       "nav.feishu": "Feishu Integration",
-      "chat.title": "Chat Integration",
-      "chat.desc": "Connect Feishu, WeCom, DingTalk, Kimi, or QQ and chat with AI directly inside your messaging app",
+      "chat.title": "Remote Control",
+      "chat.desc": "Connect Feishu, WeCom, DingTalk, Kimi, or QQ to control OneClaw remotely from your messaging app",
       "chat.platformFeishu": "Feishu",
       "chat.platformFeishuMeta": "Lark / Feishu bot",
       "chat.platformWecom": "WeCom",
@@ -165,6 +165,7 @@
       "provider.customModelOption": "Custom Model…",
       "common.cancel": "Cancel",
       "common.confirm": "Confirm",
+      "common.enable": "Enable",
       "common.saved": "Saved, restarting Gateway",
       "provider.save": "Save",
       "provider.saving": "Saving…",
@@ -391,10 +392,10 @@
       "settings.backToChat": "返回",
       "title": "设置",
       "nav.provider": "模型配置",
-      "nav.chat": "聊天集成",
+      "nav.chat": "远程控制",
       "nav.feishu": "飞书集成",
-      "chat.title": "聊天集成",
-      "chat.desc": "连接飞书、企业微信、钉钉、Kimi 或 QQ 让用户直接在聊天软件里和 OneClaw 对话",
+      "chat.title": "远程控制",
+      "chat.desc": "连接飞书、企业微信、钉钉、Kimi 或 QQ，从聊天软件远程控制 OneClaw",
       "chat.platformFeishu": "飞书",
       "chat.platformFeishuMeta": "Lark / 飞书机器人",
       "chat.platformWecom": "企业微信",
@@ -435,6 +436,7 @@
       "provider.customModelOption": "自定义模型…",
       "common.cancel": "取消",
       "common.confirm": "确认",
+      "common.enable": "启用",
       "common.saved": "已保存，正在重启核心服务",
       "provider.save": "保存",
       "provider.saving": "保存中…",
@@ -930,7 +932,7 @@
     return TAB_ALIAS_MAP[raw] || raw;
   }
 
-  // 兼容 feishu / dingtalk / qq / qqbot 这类历史入口，把它们映射到聊天集成子平台。
+  // 兼容 feishu / dingtalk / qq / qqbot 这类历史入口，把它们映射到远程控制子平台。
   function normalizeChatPlatformName(platformName) {
     var raw = String(platformName || "").trim().toLowerCase();
     if (raw === "wecom" || raw === "wechat-work" || raw === "wecom-openclaw-plugin") return "wecom";
@@ -958,7 +960,7 @@
     return "";
   }
 
-  // 聊天集成页内部的二级平台切换。
+  // 远程控制页内部的二级平台切换。
   function switchChatPlatform(platformName) {
     var target = normalizeChatPlatformName(platformName);
     currentChatPlatform = target;
@@ -3701,7 +3703,7 @@
       if (e.key === "Enter") handleSave();
     });
 
-    // 聊天集成页二级平台切换
+    // 远程控制页二级平台切换
     els.chatPlatformButtons.forEach(function (button) {
       button.addEventListener("click", function () {
         switchChatPlatform(button.dataset.chatPlatform || "feishu");
