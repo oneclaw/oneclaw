@@ -110,6 +110,10 @@ contextBridge.exposeInMainWorld("oneclaw", {
   skillStoreListInstalled: () =>
     ipcRenderer.invoke("skill-store:list-installed"),
 
+  // Live2D 显示状态（供外观设置页读写）
+  live2dGetEnabled: () => ipcRenderer.invoke("live2d:get-enabled"),
+  live2dSetEnabled: (enabled: boolean) => ipcRenderer.invoke("live2d:set-enabled", enabled),
+
   onSettingsNavigate: (cb: (payload: { tab: string; notice: string }) => void) => {
     ipcRenderer.on("settings:navigate", (_e, payload) => cb(payload));
   },

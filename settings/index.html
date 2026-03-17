@@ -542,10 +542,10 @@
                 <div class="field-group hidden" id="wecomGroupAllowFromGroup">
                   <label for="wecomGroupAllowFrom" data-i18n="wecom.groupAllowFrom">群聊白名单</label>
                   <textarea id="wecomGroupAllowFrom" placeholder="group-id-1&#10;group-id-2" spellcheck="false"></textarea>
-                  <p class="field-hint" data-i18n="wecom.groupAllowFromHint">每行一个群 ID。只有在群聊访问模式为“仅白名单群可访问”时才会生效。</p>
+                  <p class="field-hint" data-i18n="wecom.groupAllowFromHint">每行一个群 ID。只有在群聊访问模式为"仅白名单群可访问"时才会生效。</p>
                 </div>
 
-                <p class="field-hint" data-i18n="wecom.dmHint">私聊默认建议使用“先配对再访问”；切到“所有人可直接访问”时，OneClaw 会自动写入 allowFrom=["*"]。</p>
+                <p class="field-hint" data-i18n="wecom.dmHint">私聊默认建议使用"先配对再访问"；切到"所有人可直接访问"时，OneClaw 会自动写入 allowFrom=["*"]。</p>
 
                 <div id="wecomPairingSection" class="hidden">
                   <div class="pairing-panel">
@@ -686,7 +686,6 @@
             <p class="desc" data-i18n="search.desc">Enable web search and fetch tools powered by Kimi.</p>
           </div>
 
-          <!-- 启用/禁用开关 -->
           <div class="toggle-row">
             <span class="toggle-label" data-i18n="search.enabled">Enable</span>
             <label class="toggle-switch">
@@ -695,25 +694,20 @@
             </label>
           </div>
 
-          <!-- 配置字段（禁用时隐藏） -->
           <div id="searchFields" class="hidden">
-            <!-- 搜索供应商选择 -->
             <div class="provider-tabs" id="searchProviderTabs">
               <button class="provider-tab active" data-search-provider="kimi">Kimi</button>
             </div>
 
-            <!-- 引导文字（含获取密钥链接） -->
             <p class="search-guide-text" id="searchGuideText">
               <span data-i18n="search.guideText">Kimi for Coding API Key enables search.</span>
               <a href="#" class="platform-link" id="searchPlatformLink" data-i18n="search.getKey">Get API Key →</a>
             </p>
 
-            <!-- 自动复用提示（复用时显示，隐藏输入框） -->
             <p class="search-auto-hint hidden" id="searchAutoKeyHint" data-i18n="search.autoKeyHint">
               Auto-reusing Kimi Code API Key
             </p>
 
-            <!-- API Key 输入（有专属 key 或无 kimi-code 时显示） -->
             <div class="field-group" id="searchApiKeyGroup">
               <label for="searchApiKey" data-i18n="search.apiKeyLabel">API Key</label>
               <div class="input-password-wrap">
@@ -730,7 +724,6 @@
               </div>
             </div>
 
-            <!-- 高级配置：自定义 Service Base URL -->
             <details class="details-advanced" id="searchAdvanced">
               <summary data-i18n="search.advancedToggle">Advanced</summary>
               <div class="field-group">
@@ -741,10 +734,8 @@
             </details>
           </div>
 
-          <!-- 错误 / 成功信息 -->
           <div class="msg-box hidden" id="searchMsgBox"></div>
 
-          <!-- 保存按钮 -->
           <div class="btn-row bottom-actions">
             <button class="btn-primary" id="btnSearchSave">
               <span class="btn-text" data-i18n="search.save">Save</span>
@@ -759,7 +750,6 @@
         <h2 data-i18n="advanced.title">Advanced</h2>
         <p class="desc" data-i18n="advanced.desc">Browser tool and messaging channel settings.</p>
 
-        <!-- ClawHub Registry -->
         <div class="field-group">
           <label for="clawHubRegistry" data-i18n="advanced.clawHubRegistry">ClawHub Registry</label>
           <input type="url" id="clawHubRegistry" class="input"
@@ -767,7 +757,6 @@
             data-i18n-placeholder="advanced.clawHubRegistryPlaceholder">
         </div>
 
-        <!-- Browser Profile -->
         <div class="field-group">
           <label data-i18n="advanced.browserProfile">Browser Profile</label>
           <div class="radio-group">
@@ -782,7 +771,6 @@
           </div>
         </div>
 
-        <!-- Session Memory Hook -->
         <div class="toggle-row">
           <span class="toggle-label" data-i18n="advanced.sessionMemory">Auto-save session memory on /new</span>
           <label class="toggle-switch">
@@ -791,7 +779,6 @@
           </label>
         </div>
 
-        <!-- iMessage 频道 -->
         <div class="toggle-row">
           <span class="toggle-label" data-i18n="advanced.imessage">iMessage channel</span>
           <label class="toggle-switch">
@@ -816,10 +803,8 @@
           </label>
         </div>
 
-        <!-- 消息框 -->
         <div class="msg-box hidden" id="advMsgBox"></div>
 
-        <!-- 保存按钮 -->
         <div class="btn-row bottom-actions">
           <button class="btn-primary" id="btnAdvSave">
             <span class="btn-text" data-i18n="advanced.save">Save</span>
@@ -855,6 +840,15 @@
           <span class="toggle-label" data-i18n="appearance.showThinking">显示思考过程</span>
           <label class="toggle-switch">
             <input type="checkbox" id="appearanceShowThinking">
+            <span class="toggle-slider"></span>
+          </label>
+        </div>
+
+        <!-- Live2D 桌面宠物开关 -->
+        <div class="toggle-row">
+          <span class="toggle-label" data-i18n="appearance.live2d">Live2D 桌面宠物</span>
+          <label class="toggle-switch">
+            <input type="checkbox" id="appearanceLive2DEnabled">
             <span class="toggle-slider"></span>
           </label>
         </div>
@@ -944,5 +938,6 @@
   </div>
 
   <script src="settings.js"></script>
+  <script src="live2d-appearance-patch.js"></script>
 </body>
 </html>

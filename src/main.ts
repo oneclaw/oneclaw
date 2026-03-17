@@ -134,13 +134,7 @@ const setupManager = new SetupManager();
 const live2dManager = new Live2DWindowManager();
 const speechEngine = new SpeechEngine();
 
-// Live2D ↔ 主窗口互斥联动
-windowManager.setCallbacks({
-  onShow: () => live2dManager.hide(),
-  onHide: () => {
-    if (live2dManager.isEnabled()) live2dManager.show();
-  },
-});
+// Live2D 独立显示，不与主窗口互斥联动
 
 // 应用前台判定：任一窗口拿到系统焦点即视为前台；否则视为后台。
 function isAppInForeground(): boolean {
@@ -346,7 +340,7 @@ async function ensureGatewayRunning(source: string): Promise<boolean> {
     }
 
     if (gateway.getState() === "running") {
-      // 仅在真正启动成功后刷新“最近可用快照”，保证一键回退目标可启动。
+      // 仅在真正启动成功后刷新"最近可用快照"，保证一键回退目标可启动。
       recordLastKnownGoodConfigSnapshot();
       log.info(`Gateway 启动成功（第 ${attempt} 次尝试）: ${source}`);
       return true;
@@ -516,6 +510,18 @@ ipcMain.handle("live2d:change-model", (_e, modelPath: string) => {
   live2dManager.changeModel(modelPath);
 });
 
+// Live2D 显示状态读写（供设置页"外观"tab 使用）
+ipcMain.handle("live2d:get-enabled", () => live2dManager.isEnabled());
+ipcMain.handle("live2d:set-enabled", (_e, enabled: boolean) => {
+  live2dManager.setEnabled(enabled);
+  if (enabled) {
+    live2dManager.show();
+  } else {
+    live2dManager.hide();
+  }
+  tray.updateMenu();
+});
+
 ipcMain.handle("live2d:send-chat", async (_e, text: string) => {
   const sent = await windowManager.injectChatMessage(text);
   if (!sent) {
@@ -662,7 +668,7 @@ function updateDockVisibility(): void {
 
 let hasAppFocus = false;
 
-// 仅在“失焦 -> 聚焦”状态跃迁时上报一次，避免窗口切换导致重复埋点。
+// 仅在"失焦 -> 聚焦"状态跃迁时上报一次，避免窗口切换导致重复埋点。
 function syncAppFocusState(trigger: string): void {
   const focused = BrowserWindow.getAllWindows().some(
     (w) => !w.isDestroyed() && w.isFocused(),
@@ -762,13 +768,13 @@ app.whenReady().then(async () => {
   analytics.init();
   analytics.track("app_launched");
   setupAutoUpdater();
-  // 自动更新状态变化后推送给当前主窗口，驱动侧栏“重启更新”按钮。
+  // 自动更新状态变化后推送给当前主窗口，驱动侧栏"重启更新"按钮。
   setUpdateBannerStateCallback((state) => {
     windowManager.pushUpdateBannerState(state);
   });
   startAutoCheckSchedule();
 
-  // 更新安装前先放行窗口关闭，避免托盘“隐藏而不退出”拦截 quitAndInstall。
+  // 更新安装前先放行窗口关闭，避免托盘"隐藏而不退出"拦截 quitAndInstall。
   setBeforeQuitForInstallCallback(() => {
     stopAutoCheckSchedule();
     windowManager.prepareForAppQuit();
