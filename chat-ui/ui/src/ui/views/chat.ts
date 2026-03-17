@@ -297,7 +297,7 @@ export function renderChat(props: ChatProps) {
               type="button"
               @click=${props.onToggleFocusMode}
               aria-label=${t("chat.exitFocus")}
-              title=${t("chat.exitFocus")}
+              data-tooltip=${t("chat.exitFocus")}
             >
               ${icons.x}
             </button>
@@ -390,7 +390,7 @@ export function renderChat(props: ChatProps) {
 
       <div class="chat-compose">
         ${renderAttachmentPreview(props)}
-        <label class="field chat-compose__field">
+        <div class="field chat-compose__field">
           <span>${t("chat.messageLabel")}</span>
           <textarea
             ${ref((el) => el && adjustTextareaHeight(el as HTMLTextAreaElement))}
@@ -446,7 +446,7 @@ export function renderChat(props: ChatProps) {
                 }));
                 props.onAttachmentsChange?.([...current, ...additions]);
               }}
-              title=${t("chat.attachFile")}
+              data-tooltip=${t("chat.attachFile")}
               ?disabled=${!props.connected}
             >
               ${icons.paperclip}
@@ -478,18 +478,18 @@ export function renderChat(props: ChatProps) {
                   class="chat-compose__send-btn"
                   ?disabled=${!props.connected}
                   @click=${props.onAbort}
-                  title=${t("chat.stop")}
+                  data-tooltip=${t("chat.stop")}
                 >${icons.stop}</button>`
               : html`<button
                   class="chat-compose__send-btn"
                   ?disabled=${!props.connected}
                   @click=${props.onSend}
-                  title=${t("chat.send")}
+                  data-tooltip=${t("chat.send")}
                 >${icons.arrowUp}</button>`
             }
           </div>
         </div>
-        </label>
+        </div>
       </div>
     </section>
   `;

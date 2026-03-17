@@ -783,7 +783,7 @@ function renderPairingNotice(state: AppViewState) {
           class="oneclaw-pairing-notice__icon-btn is-approve"
           type="button"
           ?disabled=${state.pairingApproving || state.pairingRejecting}
-          title=${t("pairing.approveNow")}
+          data-tooltip=${t("pairing.approveNow")}
           aria-label=${t("pairing.approveNow")}
           @click=${() => void state.approveFirstPairing()}
         >
@@ -793,7 +793,7 @@ function renderPairingNotice(state: AppViewState) {
           class="oneclaw-pairing-notice__icon-btn is-reject"
           type="button"
           ?disabled=${state.pairingApproving || state.pairingRejecting}
-          title=${t("pairing.rejectNow")}
+          data-tooltip=${t("pairing.rejectNow")}
           aria-label=${t("pairing.rejectNow")}
           @click=${() => void state.rejectFirstPairing()}
         >
@@ -885,7 +885,8 @@ export function renderApp(state: AppViewState) {
                                   navCollapsed: false,
                                 });
                               }}
-                              title=${t("sidebar.expand")}
+                              data-tooltip=${t("sidebar.expand")}
+                              data-tooltip-pos="bottom"
                               aria-label=${t("sidebar.expand")}
                             >
                               ${icons.panelLeft}
@@ -894,7 +895,8 @@ export function renderApp(state: AppViewState) {
                               class="oneclaw-floating-btn"
                               type="button"
                               @click=${() => handleSessionChange(state, generateSessionKey())}
-                              title=${t("sidebar.newChat")}
+                              data-tooltip=${t("sidebar.newChat")}
+                              data-tooltip-pos="bottom"
                               aria-label=${t("sidebar.newChat")}
                             >
                               ${icons.messagePlus}
@@ -991,7 +993,7 @@ export function renderApp(state: AppViewState) {
                                       (state.renderRoot?.querySelector(".skill-store__search-input") as HTMLInputElement)?.focus();
                                     });
                                   }}
-                                  title="${t("skillStore.search")}"
+                                  data-tooltip="${t("skillStore.search")}"
                                 ><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg></button>
                               `
                           }
