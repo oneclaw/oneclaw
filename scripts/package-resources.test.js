@@ -33,15 +33,16 @@ function writeFixture(filePath, content = "") {
   fs.writeFileSync(filePath, content);
 }
 
-test("Windows openclaw 补丁应为 exec spawn 注入 windowsHide", () => {
+test("Windows 全局 windowsHide 补丁应覆盖所有 spawn 调用", () => {
   const sandbox = loadPackageResourcesSandbox();
   assert.equal(typeof sandbox.patchWindowsOpenclawArtifacts, "function");
 
   const tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), "oneclaw-package-resources-"));
   const distDir = path.join(tmpRoot, "node_modules", "openclaw", "dist");
   fs.mkdirSync(distDir, { recursive: true });
+
+  // exec 模式（工具执行）
   const execFile = path.join(distDir, "exec-abc.js");
-  const gatewayCliFile = path.join(distDir, "gateway-cli-abc.js");
   fs.writeFileSync(execFile, [
     'const child = spawn(useCmdWrapper ? process$1.env.ComSpec ?? "cmd.exe" : resolvedCommand, useCmdWrapper ? [',
     '\t"/d"',
@@ -52,6 +53,9 @@ test("Windows openclaw 补丁应为 exec spawn 注入 windowsHide", () => {
     "\t});",
     "",
   ].join("\n"));
+
+  // gateway-cli respawn 模式
+  const gatewayCliFile = path.join(distDir, "gateway-cli-abc.js");
   fs.writeFileSync(gatewayCliFile, [
     "const child = spawn(process.execPath, args, {",
     "\t\tenv: process.env,",
@@ -61,44 +65,87 @@ test("Windows openclaw 补丁应为 exec spawn 注入 windowsHide", () => {
     "",
   ].join("\n"));
 
+  // killProcessTree$1 模式（shell-utils.ts，每次工具执行结束后调用）
+  const sessionFile = path.join(distDir, "model-selection-abc.js");
+  fs.writeFileSync(sessionFile, [
+    "function killProcessTree$1(pid) {",
+    '  if (process.platform === "win32") {',
+    "    try {",
+    '      spawn("taskkill", ["/F", "/T", "/PID", String(pid)], {',
+    '        stdio: "ignore",',
+    "        detached: true",
+    "      });",
+    "    } catch {}",
+    "  }",
+    "}",
+    "",
+  ].join("\n"));
+
+  // workspace runCommandWithTimeout 模式
+  const workspaceFile = path.join(distDir, "workspace-abc.js");
+  fs.writeFileSync(workspaceFile, [
+    'const child = spawn(useCmdWrapper ? cmd : resolvedCommand, useCmdWrapper ? ["/d", "/s", "/c", line] : finalArgv.slice(1), {',
+    "\tstdio,",
+    "\tcwd,",
+    "\tenv: resolvedEnv,",
+    "});",
+    "",
+  ].join("\n"));
+
   sandbox.patchWindowsOpenclawArtifacts(tmpRoot);
 
-  const patched = fs.readFileSync(execFile, "utf-8");
-  const patchedGatewayCli = fs.readFileSync(gatewayCliFile, "utf-8");
-  assert.match(patched, /windowsHide:\s*true/);
-  assert.match(patchedGatewayCli, /windowsHide:\s*true/);
+  assert.match(fs.readFileSync(execFile, "utf-8"), /windowsHide:\s*true/);
+  assert.match(fs.readFileSync(gatewayCliFile, "utf-8"), /windowsHide:\s*true/);
+  assert.match(fs.readFileSync(sessionFile, "utf-8"), /windowsHide:\s*true/);
+  assert.match(fs.readFileSync(workspaceFile, "utf-8"), /windowsHide:\s*true/);
 
   fs.rmSync(tmpRoot, { recursive: true, force: true });
 });
 
-test("Windows openclaw 补丁应允许已打过补丁的缓存依赖重复复用", () => {
+test("Windows 全局 windowsHide 补丁应幂等（已有补丁不重复注入）", () => {
   const sandbox = loadPackageResourcesSandbox();
   const tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), "oneclaw-package-resources-"));
   const distDir = path.join(tmpRoot, "node_modules", "openclaw", "dist");
   fs.mkdirSync(distDir, { recursive: true });
 
-  fs.writeFileSync(path.join(distDir, "exec-abc.js"), [
-    'const child = spawn(useCmdWrapper ? process$1.env.ComSpec ?? "cmd.exe" : resolvedCommand, useCmdWrapper ? [',
-    '\t"/d"',
-    '\t] : finalArgv.slice(1), {',
-    "\t\twindowsHide: true,",
-    "\t\tstdio,",
-    "\t\tcwd,",
-    "\t});",
+  // 已包含 windowsHide 的 exec 文件
+  const content = [
+    'const child = spawn(useCmdWrapper ? cmd : resolvedCommand, useCmdWrapper ? ["/d"] : finalArgv.slice(1), {',
+    "\twindowsHide: true,",
+    "\tstdio,",
+    "\tcwd,",
+    "});",
     "",
-  ].join("\n"));
-  fs.writeFileSync(path.join(distDir, "gateway-cli-abc.js"), [
-    "const child = spawn(process.execPath, args, {",
-    "\t\twindowsHide: true,",
-    "\t\tenv: process.env,",
-    "\t\tdetached: true,",
-    '\t\tstdio: "inherit"',
-    "\t});",
-    "",
-  ].join("\n"));
+  ].join("\n");
+  const execFile = path.join(distDir, "exec-abc.js");
+  fs.writeFileSync(execFile, content);
 
   sandbox.patchWindowsOpenclawArtifacts(tmpRoot);
 
+  // 文件应保持不变（只有 1 个 windowsHide，没有重复注入）
+  const after = fs.readFileSync(execFile, "utf-8");
+  assert.equal((after.match(/windowsHide/g) || []).length, 1);
+
+  fs.rmSync(tmpRoot, { recursive: true, force: true });
+});
+
+test("Windows 全局 windowsHide 补丁应覆盖 kimi-claw 插件", () => {
+  const sandbox = loadPackageResourcesSandbox();
+  const tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), "oneclaw-package-resources-"));
+  const distDir = path.join(tmpRoot, "node_modules", "openclaw", "dist");
+  fs.mkdirSync(distDir, { recursive: true });
+  // 需要一个空 exec 文件让 patch 不报错
+  fs.writeFileSync(path.join(distDir, "placeholder.js"), "// empty\n");
+
+  // kimi-claw terminal-session-manager pipe 回退
+  const kimiDir = path.join(tmpRoot, "node_modules", "openclaw", "extensions", "kimi-claw", "dist", "src");
+  fs.mkdirSync(kimiDir, { recursive: true });
+  const termFile = path.join(kimiDir, "terminal-session-manager.js");
+  fs.writeFileSync(termFile, 'const t=spawn(e.shell,[],{cwd:e.cwd,env:process.env,stdio:["pipe","pipe","pipe"]});\n');
+
+  sandbox.patchWindowsOpenclawArtifacts(tmpRoot);
+
+  assert.match(fs.readFileSync(termFile, "utf-8"), /windowsHide:\s*true/);
   fs.rmSync(tmpRoot, { recursive: true, force: true });
 });
 
