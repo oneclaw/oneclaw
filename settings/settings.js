@@ -394,7 +394,7 @@
       "settings.modelAlias": "Alias",
       "settings.modelAliasPlaceholder": "Optional, for easy identification",
       "settings.deleteModel": "Delete",
-      "settings.setDefault": "Set as Default",
+      "settings.setDefault": "Default",
       "settings.addModelSave": "Add",
       "settings.confirmDelete": "Delete this model?",
       "settings.cannotDeleteDefault": "Cannot delete the default model",
@@ -678,7 +678,7 @@
       "settings.modelAlias": "别名",
       "settings.modelAliasPlaceholder": "可选，方便识别",
       "settings.deleteModel": "删除",
-      "settings.setDefault": "设为默认",
+      "settings.setDefault": "默认",
       "settings.addModelSave": "新增",
       "settings.confirmDelete": "确认删除此模型？",
       "settings.cannotDeleteDefault": "不能删除当前默认模型",
@@ -3381,7 +3381,7 @@
       if (item.isDefault) {
         var star = document.createElement("span");
         star.className = "model-list-item__default";
-        star.textContent = "★ " + t("settings.setDefault");
+        star.textContent = "✓ " + t("settings.setDefault");
         metaDiv.appendChild(star);
       }
       div.appendChild(metaDiv);
@@ -3456,7 +3456,7 @@
     els.setDefaultBtn.style.display = "";
     if (modelEntry && modelEntry.isDefault) {
       els.setDefaultBtn.disabled = true;
-      els.setDefaultBtn.textContent = "★ " + t("settings.setDefault");
+      els.setDefaultBtn.textContent = "✓ " + t("settings.setDefault");
     } else {
       els.setDefaultBtn.disabled = false;
       els.setDefaultBtn.textContent = t("settings.setDefault");

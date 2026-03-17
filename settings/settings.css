@@ -456,6 +456,7 @@ button, input, select, label, a {
   display: flex;
   flex-direction: column;
   gap: 16px;
+  overflow-y: auto;
 }
 
 /* Provider tab 锁定态 */
@@ -487,6 +488,7 @@ button, input, select, label, a {
   border-radius: var(--radius-pill);
   padding: 3px;
   overflow: hidden;
+  flex-shrink: 0;
 }
 
 .provider-tab {
