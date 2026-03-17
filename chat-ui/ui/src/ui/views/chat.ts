@@ -388,101 +388,100 @@ export function renderChat(props: ChatProps) {
           : nothing
       }
 
-      ${props.configuredModels && props.configuredModels.length > 1
-        ? html`
-          <div class="chat-model-selector">
-            <select
-              class="chat-model-select"
-              .value=${props.currentModel ?? ""}
-              @change=${(e: Event) => {
-                const val = (e.target as HTMLSelectElement).value;
-                props.onModelChange?.(val);
-              }}
-            >
-              ${props.configuredModels.map(m => html`
-                <option value=${m.key} ?selected=${m.key === props.currentModel}>
-                  ${m.name}${m.isDefault ? " \u2605" : ""}
-                </option>
-              `)}
-            </select>
-          </div>
-        `
-        : nothing
-      }
-
       <div class="chat-compose">
         ${renderAttachmentPreview(props)}
-        <div class="chat-compose__row">
-          <button
-            class="btn chat-compose__attach-btn"
-            type="button"
-            @click=${async () => {
-              const w = window as Record<string, unknown>;
-              const oneclaw = w.oneclaw as Record<string, (...args: unknown[]) => Promise<string[]>> | undefined;
-              if (!oneclaw?.selectFiles) {
-                return;
-              }
-              const paths = await oneclaw.selectFiles();
-              if (!paths?.length) {
-                return;
-              }
-              const current = props.attachments ?? [];
-              const additions = paths.map((p: string) => ({
-                id: generateAttachmentId(),
-                filePath: p,
-                name: p.split(/[/\\]/).pop() || p,
-              }));
-              props.onAttachmentsChange?.([...current, ...additions]);
-            }}
-            title=${t("chat.attachFile")}
+        <label class="field chat-compose__field">
+          <span>${t("chat.messageLabel")}</span>
+          <textarea
+            ${ref((el) => el && adjustTextareaHeight(el as HTMLTextAreaElement))}
+            .value=${props.draft}
+            dir=${detectTextDirection(props.draft)}
             ?disabled=${!props.connected}
-          >
-            ${icons.paperclip}
-          </button>
-          <label class="field chat-compose__field">
-            <span>${t("chat.messageLabel")}</span>
-            <textarea
-              ${ref((el) => el && adjustTextareaHeight(el as HTMLTextAreaElement))}
-              .value=${props.draft}
-              dir=${detectTextDirection(props.draft)}
+            @keydown=${(e: KeyboardEvent) => {
+              if (e.key !== "Enter") {
+                return;
+              }
+              if (e.isComposing || e.keyCode === 229) {
+                return;
+              }
+              if (e.shiftKey) {
+                return;
+              } // Allow Shift+Enter for line breaks
+              if (!props.connected) {
+                return;
+              }
+              e.preventDefault();
+              if (canCompose) {
+                props.onSend();
+              }
+            }}
+            @input=${(e: Event) => {
+              const target = e.target as HTMLTextAreaElement;
+              adjustTextareaHeight(target);
+              props.onDraftChange(target.value);
+            }}
+            @paste=${(e: ClipboardEvent) => handlePaste(e, props)}
+            placeholder=${composePlaceholder}
+          ></textarea>
+        <div class="chat-compose__toolbar">
+          <div class="chat-compose__toolbar-left">
+            <button
+              class="chat-compose__tool-btn"
+              type="button"
+              @click=${async () => {
+                const w = window as Record<string, unknown>;
+                const oneclaw = w.oneclaw as Record<string, (...args: unknown[]) => Promise<string[]>> | undefined;
+                if (!oneclaw?.selectFiles) {
+                  return;
+                }
+                const paths = await oneclaw.selectFiles();
+                if (!paths?.length) {
+                  return;
+                }
+                const current = props.attachments ?? [];
+                const additions = paths.map((p: string) => ({
+                  id: generateAttachmentId(),
+                  filePath: p,
+                  name: p.split(/[/\\]/).pop() || p,
+                }));
+                props.onAttachmentsChange?.([...current, ...additions]);
+              }}
+              title=${t("chat.attachFile")}
               ?disabled=${!props.connected}
-              @keydown=${(e: KeyboardEvent) => {
-                if (e.key !== "Enter") {
-                  return;
-                }
-                if (e.isComposing || e.keyCode === 229) {
-                  return;
-                }
-                if (e.shiftKey) {
-                  return;
-                } // Allow Shift+Enter for line breaks
-                if (!props.connected) {
-                  return;
-                }
-                e.preventDefault();
-                if (canCompose) {
-                  props.onSend();
-                }
-              }}
-              @input=${(e: Event) => {
-                const target = e.target as HTMLTextAreaElement;
-                adjustTextareaHeight(target);
-                props.onDraftChange(target.value);
-              }}
-              @paste=${(e: ClipboardEvent) => handlePaste(e, props)}
-              placeholder=${composePlaceholder}
-            ></textarea>
-          </label>
-          <div class="chat-compose__actions">
+            >
+              ${icons.paperclip}
+            </button>
+            ${props.configuredModels && props.configuredModels.length > 1
+              ? html`
+                <select
+                  class="chat-compose__model-select"
+                  .value=${props.currentModel ?? ""}
+                  @change=${(e: Event) => {
+                    const val = (e.target as HTMLSelectElement).value;
+                    props.onModelChange?.(val);
+                  }}
+                  ?disabled=${!props.connected}
+                >
+                  ${props.configuredModels.map(m => html`
+                    <option value=${m.key} ?selected=${m.key === props.currentModel}>
+                      ${m.name}
+                    </option>
+                  `)}
+                </select>
+              `
+              : nothing
+            }
+          </div>
+          <div class="chat-compose__toolbar-right">
             ${isBusy && canAbort
               ? html`<button
-                  class="btn primary"
+                  class="chat-compose__send-btn"
                   ?disabled=${!props.connected}
                   @click=${props.onAbort}
                   title=${t("chat.stop")}
                 >${icons.stop}</button>`
               : html`<button
-                  class="btn primary"
+                  class="chat-compose__send-btn"
                   ?disabled=${!props.connected}
                   @click=${props.onSend}
                   title=${t("chat.send")}
@@ -490,6 +489,7 @@ export function renderChat(props: ChatProps) {
             }
           </div>
         </div>
+        </label>
       </div>
     </section>
   `;

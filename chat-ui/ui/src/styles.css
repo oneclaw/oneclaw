@@ -1541,45 +1541,7 @@ select {
   justify-content: flex-end
 }
 
-/* 附件按钮 */
-.chat-compose__attach-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 40px;
-  min-width: 40px;
-  height: 40px;
-  padding: 0;
-  border: none;
-  border-radius: 8px;
-  background: transparent;
-  color: var(--muted);
-  cursor: pointer;
-  transition: color .15s ease-out, background .15s ease-out;
-  flex-shrink: 0;
-  align-self: flex-end
-}
-
-.chat-compose__attach-btn svg {
-  width: 18px;
-  height: 18px;
-  stroke: currentColor;
-  fill: none;
-  stroke-width: 2px;
-  stroke-linecap: round;
-  stroke-linejoin: round
-}
-
-.chat-compose__attach-btn:hover:not(:disabled) {
-  color: var(--text);
-  background: rgba(128, 128, 128, .1)
-}
-
-.chat-compose__attach-btn:disabled {
-  opacity: .4;
-  cursor: not-allowed
-}
-
+/* 旧布局兼容 — chat-compose__row（已由 toolbar 取代） */
 .chat-compose__row {
   display: flex;
   align-items: stretch;
@@ -7188,73 +7150,181 @@ img.chat-avatar {
   padding-right: 8px !important;
 }
 
-/* 7. Chat Compose Input Overrides */
+/* 7. Chat Compose — ChatGPT 风格统一容器 */
 .chat-compose {
   padding: 0 8px 8px 8px !important;
-  /* Matches thread padding exactly */
   background: var(--bg) !important;
-  /* Remove gradient to prevent shadow cutoff */
 }
 
-.chat-compose__field textarea {
+/* 统一容器：textarea + 底部工具栏一体化 */
+.chat-compose__field {
+  display: flex !important;
+  flex-direction: column !important;
   border: 1px solid var(--border) !important;
+  border-radius: 20px !important;
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.25) !important;
   transition: border-color 150ms ease, box-shadow 150ms ease !important;
+  overflow: hidden;
 }
 
-:root[data-theme=light] .chat-compose__field textarea {
-  border: 1px solid var(--border) !important;
+:root[data-theme=light] .chat-compose__field {
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.06) !important;
+}
+
+.chat-compose__field:focus-within {
+  border-color: var(--accent) !important;
+}
+
+.chat-compose .chat-compose__field textarea {
+  border: none !important;
+  box-shadow: none !important;
+  border-radius: 0 !important;
+  padding: 10px 14px 2px !important;
+  min-height: 24px !important;
+  height: auto !important;
+  background: transparent !important;
 }
 
 .chat-compose__field textarea:focus {
-  border-color: var(--accent) !important;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.25) !important;
+  border: none !important;
+  box-shadow: none !important;
   outline: none !important;
 }
 
-:root[data-theme=light] .chat-compose__field textarea:focus {
-  border-color: var(--accent) !important;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.06) !important;
-  outline: none !important;
+/* 底部工具栏 — 附件、模型选择器、发送按钮 */
+.chat-compose__toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 4px 6px 6px;
+  gap: 4px;
 }
 
-/* 8. 模型选择器 — 聊天输入框上方 */
-.chat-model-selector {
-  padding: 0 16px;
+.chat-compose__toolbar-left {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.chat-compose__toolbar-right {
   display: flex;
   align-items: center;
 }
 
-.chat-model-select {
-  appearance: none;
-  -webkit-appearance: none;
-  background: transparent;
+/* 工具按钮 — 无外圆角边框 */
+.chat-compose__tool-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
   border: none;
-  border-bottom: 1px solid transparent;
-  font-size: 12px;
+  border-radius: 6px;
+  background: transparent;
   color: var(--muted);
-  padding: 4px 20px 4px 0;
   cursor: pointer;
-  outline: none;
+  transition: color 150ms ease, background 150ms ease;
+  flex-shrink: 0;
+}
+
+.chat-compose__tool-btn svg {
+  width: 18px;
+  height: 18px;
+  stroke: currentColor;
+  fill: none;
+  stroke-width: 2px;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.chat-compose__tool-btn:hover:not(:disabled) {
+  color: var(--text);
+  background: rgba(128, 128, 128, 0.1);
+}
+
+.chat-compose__tool-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* 模型选择器 — 内嵌在工具栏中，完全无边框 */
+.chat-compose__model-select,
+.field .chat-compose__model-select {
+  appearance: none !important;
+  -webkit-appearance: none !important;
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  outline: none !important;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--muted);
+  padding: 6px 18px 6px 8px;
+  cursor: pointer;
   font-family: var(--font-body);
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%23999'/%3E%3C/svg%3E");
-  background-repeat: no-repeat;
-  background-position: right 4px center;
-  background-size: 8px;
-  max-width: 200px;
-  transition: border-bottom-color var(--duration-fast) var(--ease-in-out);
+  border-radius: 6px;
+  transition: color 150ms ease;
+  max-width: 180px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='5'%3E%3Cpath d='M0 0l4 5 4-5z' fill='%23999'/%3E%3C/svg%3E") !important;
+  background-repeat: no-repeat !important;
+  background-position: right 6px center !important;
+  background-size: 8px !important;
 }
 
-.chat-model-select:hover {
-  border-bottom-color: var(--muted);
+.chat-compose__model-select:hover:not(:disabled) {
+  color: var(--text);
 }
 
-.chat-model-select:focus {
-  border-bottom-color: var(--accent);
+.chat-compose__model-select:focus,
+.field .chat-compose__model-select:focus {
+  outline: none !important;
+  border: none !important;
+  box-shadow: none !important;
 }
 
-.chat-model-select option {
+.chat-compose__model-select:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.chat-compose__model-select option {
   color: var(--text);
   background: var(--bg);
+}
+
+/* 发送按钮 — 圆形 */
+.chat-compose__send-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: var(--accent);
+  color: #fff;
+  cursor: pointer;
+  transition: opacity 150ms ease;
+  flex-shrink: 0;
+}
+
+.chat-compose__send-btn svg {
+  width: 16px;
+  height: 16px;
+  stroke: currentColor;
+  fill: none;
+  stroke-width: 2.5px;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.chat-compose__send-btn:hover:not(:disabled) {
+  opacity: 0.85;
+}
+
+.chat-compose__send-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
 }

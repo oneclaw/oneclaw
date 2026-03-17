@@ -343,11 +343,8 @@ export function registerSettingsIpc(opts: SettingsIpcOptions = {}): void {
           entry = { id: entry, name: entry, input: ["text"] };
           prov.models[idx] = entry;
         }
-        if (alias) {
-          entry.name = alias;
-        } else {
-          delete entry.name;
-        }
+        // name 是 gateway schema 必填字段，空别名时回退到 id
+        entry.name = alias || entry.id;
 
         writeUserConfig(config);
         return { success: true };
@@ -2298,11 +2295,8 @@ function applyModelAlias(provEntry: any, modelId: string, alias?: string): void 
     provEntry.models[idx] = entry;
   }
   const trimmed = typeof alias === "string" ? alias.trim() : "";
-  if (trimmed) {
-    entry.name = trimmed;
-  } else {
-    delete entry.name;
-  }
+  // name 是 gateway schema 必填字段，空别名时回退到 id
+  entry.name = trimmed || entry.id;
 }
 
 // API Key 掩码：保留首尾各 4 字符

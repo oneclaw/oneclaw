@@ -1034,7 +1034,8 @@ export class OpenClawApp extends LitElement {
       return;
     }
     try {
-      const models = (await oneclaw.settingsGetConfiguredModels()) as ConfiguredModel[] | undefined;
+      const res = (await oneclaw.settingsGetConfiguredModels()) as { success?: boolean; data?: ConfiguredModel[] } | undefined;
+      const models = res?.data;
       this.configuredModels = Array.isArray(models) ? models : [];
       // 没有手动选择时，默认选中 isDefault 的模型
       if (!this.currentModel && this.configuredModels.length > 0) {
