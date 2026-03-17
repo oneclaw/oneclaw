@@ -104,7 +104,8 @@ export function renderSidebar(props: SidebarProps) {
           class="oneclaw-sidebar__collapse"
           type="button"
           @click=${props.onToggleSidebar}
-          title=${t("sidebar.collapse")}
+          data-tooltip=${t("sidebar.collapse")}
+          data-tooltip-pos="bottom"
           aria-label=${t("sidebar.collapse")}
         >
           ${icons.panelLeft}
@@ -152,7 +153,7 @@ export function renderSidebar(props: SidebarProps) {
                       const span = item.querySelector(".oneclaw-sidebar__session-name") as HTMLSpanElement;
                       startInlineRename(span, s.key, s.label, props.onRenameSession);
                     }}
-                    title=${t("sidebar.rename")}
+                    data-tooltip=${t("sidebar.rename")}
                     aria-label=${t("sidebar.rename")}
                   >
                     ${icons.edit}
@@ -164,7 +165,7 @@ export function renderSidebar(props: SidebarProps) {
                       e.stopPropagation();
                       props.onDeleteSession(s.key);
                     }}
-                    title=${t("sidebar.delete")}
+                    data-tooltip=${t("sidebar.delete")}
                     aria-label=${t("sidebar.delete")}
                   >
                     ${icons.x}
@@ -185,7 +186,7 @@ export function renderSidebar(props: SidebarProps) {
                   : ""}"
                 type="button"
                 @click=${props.onApplyUpdate}
-                title=${props.updateVersion ? `${updateLabel} (${props.updateVersion})` : updateLabel}
+                data-tooltip=${props.updateVersion ? `${updateLabel} (${props.updateVersion})` : updateLabel}
                 ?disabled=${props.updateStatus === "downloading"}
               >
                 <span class="oneclaw-sidebar__icon">
@@ -204,7 +205,7 @@ export function renderSidebar(props: SidebarProps) {
             : ""}"
           type="button"
           @click=${props.onOpenSettings}
-          title=${t("sidebar.settings")}
+          data-tooltip=${t("sidebar.settings")}
         >
           <span class="oneclaw-sidebar__icon">${icons.settings}</span>
           <span class="oneclaw-sidebar__label">${t("sidebar.settings")}</span>
@@ -214,7 +215,7 @@ export function renderSidebar(props: SidebarProps) {
           class="oneclaw-sidebar__item ${props.skillsActive ? "active" : ""}"
           type="button"
           @click=${props.onOpenSkillStore}
-          title=${t("sidebar.skillStore")}
+          data-tooltip=${t("sidebar.skillStore")}
         >
           <span class="oneclaw-sidebar__icon">${icons.puzzle}</span>
           <span class="oneclaw-sidebar__label">${t("sidebar.skillStore")}</span>
@@ -224,7 +225,7 @@ export function renderSidebar(props: SidebarProps) {
           class="oneclaw-sidebar__item"
           type="button"
           @click=${props.onOpenDocs}
-          title=${t("sidebar.docs")}
+          data-tooltip=${t("sidebar.docs")}
         >
           <span class="oneclaw-sidebar__icon">${icons.book}</span>
           <span class="oneclaw-sidebar__label">${t("sidebar.docs")}</span>
@@ -234,7 +235,7 @@ export function renderSidebar(props: SidebarProps) {
           class="oneclaw-sidebar__item"
           type="button"
           @click=${props.onOpenWebUI}
-          title=${t("sidebar.fullUI")}
+          data-tooltip=${t("sidebar.fullUI")}
         >
           <span class="oneclaw-sidebar__icon">${icons.externalLink}</span>
           <span class="oneclaw-sidebar__label">${t("sidebar.fullUI")}</span>
@@ -250,7 +251,7 @@ export function renderSidebar(props: SidebarProps) {
             type="button"
             ?disabled=${props.refreshDisabled}
             @click=${props.onRefresh}
-            title=${t("sidebar.refresh")}
+            data-tooltip=${t("sidebar.refresh")}
             aria-label=${t("sidebar.refresh")}
           >
             ${refreshIcon}

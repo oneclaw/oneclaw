@@ -30,7 +30,7 @@ export function renderSharePrompt(state: AppViewState) {
             class="btn"
             type="button"
             aria-label=${t("sharePrompt.close")}
-            title=${t("sharePrompt.close")}
+            data-tooltip=${t("sharePrompt.close")}
             @click=${() => state.dismissSharePrompt()}
             style="width: 32px; height: 32px; padding: 0; display: inline-flex; align-items: center; justify-content: center;"
           >
