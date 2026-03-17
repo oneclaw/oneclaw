@@ -153,6 +153,12 @@ function handlePaste(e: ClipboardEvent, props: ChatProps) {
   }
 }
 
+// 从路径提取文件名
+function basename(path: string): string {
+  const sep = path.includes("\\") ? "\\" : "/";
+  return path.split(sep).pop() || path;
+}
+
 function renderAttachmentPreview(props: ChatProps) {
   const attachments = props.attachments ?? [];
   if (attachments.length === 0) {
@@ -163,12 +169,19 @@ function renderAttachmentPreview(props: ChatProps) {
     <div class="chat-attachments">
       ${attachments.map(
         (att) => html`
-          <div class="chat-attachment">
-            <img
-              src=${att.dataUrl}
-              alt=${t("chat.attachmentPreview")}
-              class="chat-attachment__img"
-            />
+          <div class="chat-attachment ${att.filePath && !att.dataUrl ? "chat-attachment--file" : ""}">
+            ${
+              att.dataUrl
+                ? html`<img
+                    src=${att.dataUrl}
+                    alt=${t("chat.attachmentPreview")}
+                    class="chat-attachment__img"
+                  />`
+                : html`<div class="chat-attachment__file">
+                    <span class="chat-attachment__file-icon">${icons.fileText}</span>
+                    <span class="chat-attachment__file-name">${att.name || basename(att.filePath ?? "")}</span>
+                  </div>`
+            }
             <button
               class="chat-attachment__remove"
               type="button"
@@ -374,6 +387,32 @@ export function renderChat(props: ChatProps) {
       <div class="chat-compose">
         ${renderAttachmentPreview(props)}
         <div class="chat-compose__row">
+          <button
+            class="btn chat-compose__attach-btn"
+            type="button"
+            @click=${async () => {
+              const w = window as Record<string, unknown>;
+              const oneclaw = w.oneclaw as Record<string, (...args: unknown[]) => Promise<string[]>> | undefined;
+              if (!oneclaw?.selectFiles) {
+                return;
+              }
+              const paths = await oneclaw.selectFiles();
+              if (!paths?.length) {
+                return;
+              }
+              const current = props.attachments ?? [];
+              const additions = paths.map((p: string) => ({
+                id: generateAttachmentId(),
+                filePath: p,
+                name: p.split(/[/\\]/).pop() || p,
+              }));
+              props.onAttachmentsChange?.([...current, ...additions]);
+            }}
+            title=${t("chat.attachFile")}
+            ?disabled=${!props.connected}
+          >
+            ${icons.paperclip}
+          </button>
           <label class="field chat-compose__field">
             <span>${t("chat.messageLabel")}</span>
             <textarea
@@ -432,6 +471,12 @@ export function renderChat(props: ChatProps) {
 
 const CHAT_HISTORY_RENDER_LIMIT = 200;
 
+// 分组用 role：tool 和 assistant 归为同一组，共享 avatar 和 footer
+function groupingRole(role: string): string {
+  const r = normalizeRoleForGrouping(role);
+  return r === "tool" ? "assistant" : r;
+}
+
 function groupMessages(items: ChatItem[]): Array<ChatItem | MessageGroup> {
   const result: Array<ChatItem | MessageGroup> = [];
   let currentGroup: MessageGroup | null = null;
@@ -448,16 +493,17 @@ function groupMessages(items: ChatItem[]): Array<ChatItem | MessageGroup> {
 
     const normalized = normalizeMessage(item.message);
     const role = normalizeRoleForGrouping(normalized.role);
+    const gRole = groupingRole(role);
     const timestamp = normalized.timestamp || Date.now();
 
-    if (!currentGroup || currentGroup.role !== role) {
+    if (!currentGroup || groupingRole(currentGroup.role) !== gRole) {
       if (currentGroup) {
         result.push(currentGroup);
       }
       currentGroup = {
         kind: "group",
-        key: `group:${role}:${item.key}`,
-        role,
+        key: `group:${gRole}:${item.key}`,
+        role: gRole,
         messages: [{ message: item.message, key: item.key }],
         timestamp,
         isStreaming: false,

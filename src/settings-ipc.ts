@@ -933,6 +933,63 @@ export function registerSettingsIpc(opts: SettingsIpcOptions = {}): void {
     });
   });
 
+  // ── 查询 Kimi 会员用量（GET /v1/usages） ──
+  ipcMain.handle("kimi:get-usage", async () => {
+    try {
+      const config = readUserConfig();
+      const info = extractProviderInfo(config);
+      // 仅 kimi-code 子平台支持用量查询
+      if (info.provider !== "moonshot" || info.subPlatform !== "kimi-code") {
+        return { success: false, message: "Usage is only available for Kimi." };
+      }
+      const { loadOAuthToken, refreshOAuthToken } = await import("./kimi-oauth");
+      const url = "https://api.kimi.com/coding/v1/usages";
+
+      // 解析 API Key：优先 OAuth token，回退到配置中的 key
+      const resolveApiKey = (): string => {
+        const oauthToken = loadOAuthToken();
+        if (oauthToken?.access_token) return oauthToken.access_token;
+        return config?.models?.providers?.["kimi-coding"]?.apiKey || "";
+      };
+
+      let apiKey = resolveApiKey();
+      if (!apiKey) {
+        return { success: false, message: "No API key available." };
+      }
+
+      // 首次请求
+      let resp = await fetch(url, {
+        headers: { Authorization: `Bearer ${apiKey}` },
+        signal: AbortSignal.timeout(15000),
+      });
+
+      // 401 且有 OAuth token → 尝试刷新后重试一次
+      if (resp.status === 401) {
+        const oauthToken = loadOAuthToken();
+        if (oauthToken?.refresh_token) {
+          try {
+            await refreshOAuthToken(oauthToken);
+            apiKey = resolveApiKey();
+            resp = await fetch(url, {
+              headers: { Authorization: `Bearer ${apiKey}` },
+              signal: AbortSignal.timeout(15000),
+            });
+          } catch {
+            // 刷新失败，返回原始 401
+          }
+        }
+      }
+
+      if (!resp.ok) {
+        return { success: false, message: `HTTP ${resp.status}` };
+      }
+      const payload = await resp.json();
+      return { success: true, data: payload };
+    } catch (err: any) {
+      return { success: false, message: err.message || String(err) };
+    }
+  });
+
   // ── 读取高级配置（browser profile + iMessage） ──
   ipcMain.handle("settings:get-advanced", async () => {
     try {

@@ -9,6 +9,8 @@ export type ChatAttachment = {
   size?: number;
   dataUrl?: string;
   url?: string;
+  /** 本地文件绝对路径（非图片附件，发送时拼到消息前面） */
+  filePath?: string;
   [key: string]: unknown;
 };
 

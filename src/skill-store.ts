@@ -14,8 +14,10 @@ import * as https from "https";
 import * as http from "http";
 import * as log from "./logger";
 import { readOneclawConfig, writeOneclawConfig } from "./oneclaw-config";
+import { readBuildConfigClawhubRegistry } from "./build-config";
 
-const DEFAULT_REGISTRY = "https://clawhub.ai";
+// 构建时通过 build-config.json 注入的默认 registry，未配置则回退硬编码值
+const DEFAULT_REGISTRY = readBuildConfigClawhubRegistry() || "https://clawhub.ai";
 const FETCH_TIMEOUT_MS = 15_000;
 const SKILL_STORE_CONFIG = "skill-store.json";
 

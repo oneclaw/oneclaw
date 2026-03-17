@@ -46,6 +46,7 @@ import { readUserConfig, writeUserConfig } from "./provider-config";
 import { resolveKimiSearchApiKey } from "./kimi-config";
 import { reconcileCliOnAppLaunch } from "./cli-integration";
 import { detectOwnership, migrateFromLegacy, markSetupComplete } from "./oneclaw-config";
+import { startTokenRefresh, stopTokenRefresh, loadOAuthToken } from "./kimi-oauth";
 import * as log from "./logger";
 import * as analytics from "./analytics";
 
@@ -391,6 +392,11 @@ async function startGatewayAndShowMain(source: string, opts: StartMainOptions = 
     }
     if (!openOnFailure) return false;
   }
+  // OAuth token 后台刷新：gateway 启动后检查是否有 kimi-coding OAuth token
+  if (running && loadOAuthToken()) {
+    ensureOAuthTokenRefresh();
+  }
+
   await showMainWindow();
   return running;
 }
@@ -409,6 +415,22 @@ function requestGatewayRestart(source: string): void {
   syncKimiSearchEnv();
   gateway.restart().catch((err) => {
     log.error(`Gateway 重启失败(${source}): ${err}`);
+  });
+}
+
+// 启动 OAuth token 定时刷新（幂等：内部先 stop 再 start）
+function ensureOAuthTokenRefresh(): void {
+  startTokenRefresh((refreshedToken) => {
+    try {
+      const cfg = readUserConfig();
+      if (cfg?.models?.providers?.["kimi-coding"]) {
+        cfg.models.providers["kimi-coding"].apiKey = refreshedToken.access_token;
+        writeUserConfig(cfg);
+        requestGatewayRestart("oauth-token-refresh");
+      }
+    } catch (err: any) {
+      log.error(`OAuth token 刷新后更新配置失败: ${err.message}`);
+    }
   });
 }
 
@@ -435,6 +457,21 @@ ipcMain.handle("app:get-feishu-pairing-state", () => pairingMonitor?.getState().
 ipcMain.on("app:refresh-feishu-pairing-state", () => pairingMonitor?.triggerNow());
 ipcMain.handle("app:open-external", (_e, url: string) => shell.openExternal(url));
 
+// 文件选择对话框 — 返回文件绝对路径数组
+ipcMain.handle("dialog:select-files", async (_e, options?: { filters?: Electron.FileFilter[] }) => {
+  const win = BrowserWindow.getFocusedWindow();
+  const result = await dialog.showOpenDialog(win ?? {
+    // fallback: 无聚焦窗口时仍可弹出
+  } as any, {
+    properties: ["openFile", "multiSelections"],
+    filters: options?.filters,
+  });
+  if (result.canceled) {
+    return [];
+  }
+  return result.filePaths;
+});
+
 // Chat UI 侧边栏 IPC
 ipcMain.on("app:open-settings", () => {
   openSettingsInMainWindow().catch((err) => {
@@ -444,12 +481,13 @@ ipcMain.on("app:open-settings", () => {
 ipcMain.on("app:open-webui", () => {
   const port = gateway.getPort();
   const token = gateway.getToken().trim();
-  const query = token ? `?token=${encodeURIComponent(token)}` : "";
-  shell.openExternal(`http://127.0.0.1:${port}/${query}`);
+  // UI 端只从 URL fragment (#token=) 读取 token，不从 query param (?token=) 读取
+  const fragment = token ? `#token=${encodeURIComponent(token)}` : "";
+  shell.openExternal(`http://127.0.0.1:${port}/${fragment}`);
 });
 ipcMain.handle("gateway:port", () => gateway.getPort());
 
-registerSetupIpc({ setupManager, gateway });
+registerSetupIpc({ setupManager, gateway, onOAuthLoginSuccess: ensureOAuthTokenRefresh });
 registerSettingsIpc({
   requestGatewayRestart: () => requestGatewayRestart("settings:kimi-search"),
 });
@@ -567,6 +605,7 @@ speechEngine.onFinalResult(async (text: string) => {
 // ── 退出 ──
 
 async function quit(): Promise<void> {
+  stopTokenRefresh();
   stopAutoCheckSchedule();
   pairingMonitor?.stop();
   analytics.track("app_closed");

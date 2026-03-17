@@ -158,7 +158,7 @@ test("verifyOutput 应要求基础扩展插件存在", () => {
   writeFixture(path.join(targetBase, "gateway", "node_modules", "openclaw", "dist", "entry.js"), "module.exports = {};\n");
   writeFixture(path.join(targetBase, "gateway", "node_modules", "openclaw", "dist", "control-ui", "index.html"), "<html></html>\n");
   writeFixture(path.join(targetBase, "gateway", "node_modules", "clawhub", "bin", "clawdhub.js"), "module.exports = {};\n");
-  writeFixture(path.join(targetBase, "analytics-config.json"), "{}\n");
+  writeFixture(path.join(targetBase, "build-config.json"), "{}\n");
   writeFixture(path.join(targetBase, "app-icon.png"), "png\n");
 
   for (const id of [

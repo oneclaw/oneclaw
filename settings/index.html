@@ -35,7 +35,7 @@
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
             <use href="#icon-message-circle"></use>
           </svg>
-          <span data-i18n="nav.chat">Chat Integration</span>
+          <span data-i18n="nav.chat">Remote Control</span>
         </li>
         <li class="nav-item" data-tab="search">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
@@ -100,11 +100,7 @@
             </label>
             <label class="radio-item">
               <input type="radio" name="subPlatform" value="moonshot-cn">
-              <span>Moonshot CN（中国）</span>
-            </label>
-            <label class="radio-item">
-              <input type="radio" name="subPlatform" value="moonshot-ai">
-              <span>Moonshot AI（Global）</span>
+              <span>Kimi 开放平台（企业用户）</span>
             </label>
           </div>
         </div>
@@ -125,7 +121,6 @@
             <option value="qwen">阿里云百炼</option>
             <option value="qwen-coding">阿里云百炼 CodingPlan</option>
             <option value="deepseek">DeepSeek</option>
-            <option value="ollama">Ollama (本地)</option>
           </select>
         </div>
 
@@ -134,6 +129,58 @@
           <label for="baseURL" data-i18n="provider.baseUrl">Base URL</label>
           <input type="url" id="baseURL" placeholder="https://api.example.com/v1" autocomplete="off">
         </div>
+
+        <!-- Kimi OAuth 一键登录（仅 kimi-code 子平台显示） -->
+        <div class="field-group hidden" id="oauthGroup">
+          <button class="btn-oauth" id="btnOAuth" type="button">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" class="lucide-icon"><use href="#icon-log-in"></use></svg>
+            <span class="btn-oauth-text" data-i18n="provider.oauthLogin">Kimi 会员登录</span>
+            <span class="btn-oauth-spinner hidden"></span>
+          </button>
+          <button class="btn-oauth-cancel hidden" id="btnOAuthCancel" type="button" data-i18n="provider.oauthCancel">Cancel</button>
+          <button class="btn-oauth-logout hidden" id="btnOAuthLogout" type="button">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" class="lucide-icon"><use href="#icon-log-out"></use></svg>
+            <span data-i18n="provider.oauthLogout">退出登录</span>
+          </button>
+          <div class="oauth-status hidden" id="oauthStatus"></div>
+        </div>
+
+        <!-- Kimi 用量显示（仅 kimi-code 已登录时显示） -->
+        <div class="usage-panel hidden" id="usagePanel">
+          <div class="usage-cards">
+            <div class="usage-card">
+              <div class="usage-card-header">
+                <span class="usage-card-title" data-i18n="provider.usageWeekly">本周用量</span>
+              </div>
+              <div class="usage-card-body">
+                <span class="usage-card-percent" id="usageWeeklyPercent">—</span>
+                <span class="usage-card-reset" id="usageWeeklyReset"></span>
+              </div>
+              <div class="usage-bar"><div class="usage-bar-fill" id="usageWeeklyBar"></div></div>
+            </div>
+            <div class="usage-card">
+              <div class="usage-card-header">
+                <span class="usage-card-title" id="usageLimitTitle" data-i18n="provider.usageLimit">频限明细</span>
+              </div>
+              <div class="usage-card-body">
+                <span class="usage-card-percent" id="usageLimitPercent">—</span>
+                <span class="usage-card-reset" id="usageLimitReset"></span>
+              </div>
+              <div class="usage-bar"><div class="usage-bar-fill" id="usageLimitBar"></div></div>
+            </div>
+          </div>
+          <div class="usage-refresh-row">
+            <span class="usage-refresh-time" id="usageRefreshTime"></span>
+            <button class="btn-usage-refresh" id="btnUsageRefresh" type="button">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" class="lucide-icon"><use href="#icon-refresh-cw"></use></svg>
+            </button>
+          </div>
+        </div>
+
+        <!-- OAuth 高级选项折叠区（仅 kimi-code OAuth 模式显示） -->
+        <details class="details-advanced hidden" id="oauthAdvanced">
+          <summary data-i18n="provider.oauthAdvanced">Advanced</summary>
+          <div>
 
         <!-- API Key -->
         <div class="field-group" id="apiKeyGroup">
@@ -160,6 +207,9 @@
           <label for="modelSelect" data-i18n="provider.model">Model</label>
           <select id="modelSelect"></select>
         </div>
+
+          </div>
+        </details>
 
         <!-- Custom 预设: 自定义模型（选择"自定义模型"时显示） -->
         <div class="field-group hidden" id="customModelInputGroup">
@@ -214,8 +264,8 @@
 
       <!-- Channels Tab -->
       <section class="tab-panel" id="tabChannels">
-        <h2 data-i18n="chat.title">Chat Integration</h2>
-        <p class="desc" data-i18n="chat.desc">Connect Feishu, DingTalk, Kimi, or QQ and chat with AI directly inside your messaging app.</p>
+        <h2 data-i18n="chat.title">Remote Control</h2>
+        <p class="desc" data-i18n="chat.desc">Connect Feishu, WeCom, DingTalk, Kimi, or QQ to control OneClaw remotely from your messaging app.</p>
 
         <div class="chat-integration-shell">
           <div class="chat-platform-nav" role="tablist" aria-label="Chat integration platforms">
@@ -224,50 +274,35 @@
                 <span class="chat-platform-label" data-i18n="chat.platformFeishu">Feishu</span>
                 <span class="chat-platform-meta" data-i18n="chat.platformFeishuMeta">Lark / Feishu bot</span>
               </button>
-              <label class="toggle-switch chat-platform-toggle" aria-label="Toggle Feishu">
-                <input type="checkbox" id="chEnabled">
-                <span class="toggle-slider"></span>
-              </label>
+              <span class="platform-status-dot" id="feishuStatusDot"></span>
             </div>
             <div class="chat-platform-item" data-chat-platform="wecom">
               <button type="button" class="chat-platform-btn" data-chat-platform="wecom">
                 <span class="chat-platform-label" data-i18n="chat.platformWecom">企业微信</span>
                 <span class="chat-platform-meta" data-i18n="chat.platformWecomMeta">WeCom AI bot</span>
               </button>
-              <label class="toggle-switch chat-platform-toggle" aria-label="Toggle WeCom">
-                <input type="checkbox" id="wecomEnabled">
-                <span class="toggle-slider"></span>
-              </label>
+              <span class="platform-status-dot" id="wecomStatusDot"></span>
             </div>
             <div class="chat-platform-item" data-chat-platform="dingtalk">
               <button type="button" class="chat-platform-btn" data-chat-platform="dingtalk">
                 <span class="chat-platform-label" data-i18n="chat.platformDingtalk">DingTalk</span>
                 <span class="chat-platform-meta" data-i18n="chat.platformDingtalkMeta">DingTalk stream connector</span>
               </button>
-              <label class="toggle-switch chat-platform-toggle" aria-label="Toggle DingTalk">
-                <input type="checkbox" id="dingtalkEnabled">
-                <span class="toggle-slider"></span>
-              </label>
+              <span class="platform-status-dot" id="dingtalkStatusDot"></span>
             </div>
             <div class="chat-platform-item" data-chat-platform="kimi">
               <button type="button" class="chat-platform-btn" data-chat-platform="kimi">
                 <span class="chat-platform-label" data-i18n="chat.platformKimi">KimiClaw</span>
                 <span class="chat-platform-meta" data-i18n="chat.platformKimiMeta">Kimi bot bridge</span>
               </button>
-              <label class="toggle-switch chat-platform-toggle" aria-label="Toggle KimiClaw">
-                <input type="checkbox" id="kimiEnabled">
-                <span class="toggle-slider"></span>
-              </label>
+              <span class="platform-status-dot" id="kimiStatusDot"></span>
             </div>
             <div class="chat-platform-item" data-chat-platform="qqbot">
               <button type="button" class="chat-platform-btn" data-chat-platform="qqbot">
                 <span class="chat-platform-label" data-i18n="chat.platformQq">QQ</span>
                 <span class="chat-platform-meta" data-i18n="chat.platformQqMeta">QQ Open Platform Bot</span>
               </button>
-              <label class="toggle-switch chat-platform-toggle" aria-label="Toggle QQ Bot">
-                <input type="checkbox" id="qqEnabled">
-                <span class="toggle-slider"></span>
-              </label>
+              <span class="platform-status-dot" id="qqStatusDot"></span>
             </div>
           </div>
 
@@ -282,6 +317,14 @@
                   <a href="#" class="platform-link" id="chDocsLink" data-i18n="feishu.docs">Setup Guide →</a>
                   <a href="#" class="platform-link" id="chConsoleLink" data-i18n="feishu.getKey">Open Feishu Console →</a>
                 </div>
+              </div>
+
+              <div class="toggle-row">
+                <span class="toggle-label" data-i18n="common.enable">Enable</span>
+                <label class="toggle-switch" aria-label="Toggle Feishu">
+                  <input type="checkbox" id="chEnabled">
+                  <span class="toggle-slider"></span>
+                </label>
               </div>
 
               <div id="chFields">
@@ -394,6 +437,14 @@
                 </div>
               </div>
 
+              <div class="toggle-row">
+                <span class="toggle-label" data-i18n="common.enable">Enable</span>
+                <label class="toggle-switch" aria-label="Toggle DingTalk">
+                  <input type="checkbox" id="dingtalkEnabled">
+                  <span class="toggle-slider"></span>
+                </label>
+              </div>
+
               <div id="dingtalkFields">
                 <div class="field-group">
                   <label for="dingtalkClientId" data-i18n="dingtalk.clientId">Client ID / AppKey</label>
@@ -439,6 +490,14 @@
                   <a href="#" class="platform-link" id="wecomDocsLink" data-i18n="wecom.docs">插件说明 →</a>
                   <a href="#" class="platform-link" id="wecomConsoleLink" data-i18n="wecom.getKey">打开企业微信后台 →</a>
                 </div>
+              </div>
+
+              <div class="toggle-row">
+                <span class="toggle-label" data-i18n="common.enable">Enable</span>
+                <label class="toggle-switch" aria-label="Toggle WeCom">
+                  <input type="checkbox" id="wecomEnabled">
+                  <span class="toggle-slider"></span>
+                </label>
               </div>
 
               <div id="wecomFields">
@@ -524,6 +583,14 @@
                 </div>
               </div>
 
+              <div class="toggle-row">
+                <span class="toggle-label" data-i18n="common.enable">Enable</span>
+                <label class="toggle-switch" aria-label="Toggle KimiClaw">
+                  <input type="checkbox" id="kimiEnabled">
+                  <span class="toggle-slider"></span>
+                </label>
+              </div>
+
               <div id="kimiFields">
                 <p class="kimi-guide-text" data-i18n="kimi.guideText">Click 'Associate existing OpenClaw' → copy command → paste below</p>
 
@@ -559,6 +626,14 @@
                 <div class="channel-links">
                   <a href="#" class="platform-link" id="qqConsoleLink" data-i18n="qq.getKey">Open QQ Open Platform →</a>
                 </div>
+              </div>
+
+              <div class="toggle-row">
+                <span class="toggle-label" data-i18n="common.enable">Enable</span>
+                <label class="toggle-switch" aria-label="Toggle QQ Bot">
+                  <input type="checkbox" id="qqEnabled">
+                  <span class="toggle-slider"></span>
+                </label>
               </div>
 
               <div id="qqFields">
@@ -656,7 +731,7 @@
             </div>
 
             <!-- 高级配置：自定义 Service Base URL -->
-            <details class="search-advanced" id="searchAdvanced">
+            <details class="details-advanced" id="searchAdvanced">
               <summary data-i18n="search.advancedToggle">Advanced</summary>
               <div class="field-group">
                 <label for="searchServiceBaseUrl" data-i18n="search.serviceBaseUrlLabel">Service Base URL</label>

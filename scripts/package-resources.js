@@ -45,7 +45,7 @@ function getTargetPaths(platform, arch) {
     runtimeDir: path.join(targetBase, "runtime"),
     gatewayDir: path.join(targetBase, "gateway"),
     iconPath: path.join(targetBase, "app-icon.png"),
-    analyticsConfigPath: path.join(targetBase, "analytics-config.json"),
+    buildConfigPath: path.join(targetBase, "build-config.json"),
   };
 }
 
@@ -501,10 +501,12 @@ function buildAnalyticsConfig() {
   };
 }
 
-function writeAnalyticsConfig(configPath) {
-  const config = buildAnalyticsConfig();
+function writeBuildConfig(configPath) {
+  const analytics = buildAnalyticsConfig();
+  const clawhubRegistry = readEnvText("ONECLAW_CLAWHUB_REGISTRY");
+  const config = { analytics, clawhubRegistry };
   fs.writeFileSync(configPath, JSON.stringify(config, null, 2));
-  log(`已生成 analytics-config.json（enabled=${config.enabled ? "true" : "false"}）`);
+  log(`已生成 build-config.json（analytics.enabled=${analytics.enabled ? "true" : "false"}, clawhubRegistry=${clawhubRegistry || "(空)"}）`);
 }
 
 // ─── Step 2: 安装 openclaw 生产依赖 ───
@@ -1046,6 +1048,7 @@ const BUNDLED_PLUGINS = [
     cacheFile: KIMI_CLAW_CACHE_FILE,
     // 校验解压产物必须包含的文件
     requiredFiles: ["package.json", "openclaw.plugin.json"],
+    requiredFiles: ["package.json", "openclaw.plugin.json"],
   },
   {
     id: "kimi-search",
@@ -1377,6 +1380,34 @@ function installTgzPluginDeps(plugin, pluginDir, targetId, opts) {
     die(`安装 ${plugin.id} 依赖失败: ${err.message || String(err)}`);
   }
 
+  // --ignore-scripts 跳过了 native addon 编译，对需要 node-gyp 的包单独 rebuild
+  // 只 rebuild 有 binding.gyp 但没有 prebuilds 的包（有 prebuilds 的如 node-pty 不需要编译）
+  // 必须 target Electron 的 Node ABI（gateway 由 Electron binary + ELECTRON_RUN_AS_NODE 启动）
+  // macOS Apple Clang 支持 --arch 交叉编译（arm64 runner 可编译 x64 产物）
+  const nativeAddonPkgs = Object.keys(deps).filter((name) => {
+    const pkgDir = path.join(depTmpDir, "node_modules", ...name.split("/"));
+    const hasBindingGyp = fs.existsSync(path.join(pkgDir, "binding.gyp"));
+    const hasPrebuilds = fs.existsSync(path.join(pkgDir, "prebuilds"));
+    return hasBindingGyp && !hasPrebuilds;
+  });
+  if (nativeAddonPkgs.length > 0) {
+    // 读取 Electron 版本，用于 node-gyp --target（确保 ABI 匹配）
+    const electronVersion = JSON.parse(
+      fs.readFileSync(path.join(ROOT, "node_modules", "electron", "package.json"), "utf-8")
+    ).version;
+    log(`为 ${plugin.id} 编译 native addon: ${nativeAddonPkgs.join(", ")} (arch=${opts.arch}, electron=${electronVersion})`);
+    for (const pkg of nativeAddonPkgs) {
+      try {
+        execSync(`npm rebuild ${pkg} --arch=${opts.arch} --runtime=electron --target=${electronVersion} --dist-url=https://electronjs.org/headers`, {
+          cwd: depTmpDir,
+          stdio: "inherit",
+        });
+      } catch (err) {
+        log(`⚠ ${plugin.id} native addon ${pkg} 编译失败（${opts.arch}）: ${err.message || String(err)}`);
+      }
+    }
+  }
+
   // 收集 hoisted 依赖到插件 node_modules
   const tmpNm = path.join(depTmpDir, "node_modules");
   ensureDir(pluginNm);
@@ -1485,10 +1516,26 @@ async function bundlePlugin(plugin, gatewayDir, targetId, opts) {
   log(`已注入 ${plugin.id} 插件到 ${path.relative(ROOT, pluginDir)}`);
 }
 
+// 是否 Windows arm64 交叉编译（x64 runner 无法为 arm64 编译 native addon）
+// macOS 交叉编译由 Apple Clang 支持，不视为受限场景
+function isWindowsArm64CrossCompile(opts) {
+  if (opts.platform !== "win32" || opts.arch !== "arm64") return false;
+  return process.arch !== "arm64";
+}
+
 // 注入所有 bundled 插件
 async function bundleAllPlugins(gatewayDir, targetId, opts) {
+  const winArm64Cross = isWindowsArm64CrossCompile(opts);
   for (const plugin of BUNDLED_PLUGINS) {
-    await bundlePlugin(plugin, gatewayDir, targetId, opts);
+    if (winArm64Cross) {
+      try {
+        await bundlePlugin(plugin, gatewayDir, targetId, opts);
+      } catch (err) {
+        log(`⚠ Windows arm64 交叉编译下插件 ${plugin.id} 注入失败，跳过: ${err.message || String(err)}`);
+      }
+    } else {
+      await bundlePlugin(plugin, gatewayDir, targetId, opts);
+    }
   }
 }
 
@@ -1723,10 +1770,10 @@ function pruneNodeModules(nmDir, platform) {
   log(`node_modules 裁剪统计: 删除文件 ${removedFiles} 个，删除目录 ${removedDirs} 个`);
 }
 
-// ─── Step 3: 生成埋点配置 ───
+// ─── Step 3: 生成构建配置（埋点 + ClawHub Registry） ───
 
-function generateAnalyticsConfig(targetPaths) {
-  writeAnalyticsConfig(targetPaths.analyticsConfigPath);
+function generateBuildConfig(targetPaths) {
+  writeBuildConfig(targetPaths.buildConfigPath);
 }
 
 // ─── Step 4: 拷贝图标资源 ───
@@ -1761,9 +1808,10 @@ function generateEntryAndBuildInfo(gatewayDir, platform, arch) {
 }
 
 // 验证目标目录关键文件是否存在
-function verifyOutput(targetPaths, platform) {
+function verifyOutput(targetPaths, opts) {
   log("正在验证输出文件...");
 
+  const platform = opts.platform;
   const nodeExe = platform === "darwin" ? "node" : "node.exe";
   const targetRel = path.relative(ROOT, targetPaths.targetBase);
 
@@ -1780,9 +1828,13 @@ function verifyOutput(targetPaths, platform) {
     path.join(targetRel, "gateway", "node_modules", "openclaw", "dist", "entry.js"),
     path.join(targetRel, "gateway", "node_modules", "openclaw", "dist", "control-ui", "index.html"),
     path.join(targetRel, "gateway", "node_modules", "clawhub", "bin", "clawdhub.js"),
-    path.join(targetRel, "analytics-config.json"),
+    path.join(targetRel, "build-config.json"),
     path.join(targetRel, "app-icon.png"),
   ];
+
+  // Windows arm64 交叉编译时含 native addon 的插件可能注入失败，校验时降级为 warning
+  const winArm64Cross = isWindowsArm64CrossCompile(opts);
+  const crossCompileOptionalExts = new Set(["kimi-claw", "kimi-search"]);
 
   required.push(
     ...REQUIRED_OPENCLAW_EXTENSION_OUTPUTS.map((relPath) =>
@@ -1794,6 +1846,14 @@ function verifyOutput(targetPaths, platform) {
   for (const rel of required) {
     const abs = path.join(ROOT, rel);
     const exists = fs.existsSync(abs);
+
+    // Windows arm64 交叉编译时，可选扩展缺失只 warning
+    const isOptionalExt = winArm64Cross && [...crossCompileOptionalExts].some((ext) => rel.includes(`extensions${path.sep}${ext}`));
+    if (!exists && isOptionalExt) {
+      console.log(`  [跳过] ${rel} (Windows arm64 交叉编译，可选)`);
+      continue;
+    }
+
     const status = exists ? "OK" : "缺失";
     console.log(`  [${status}] ${rel}`);
     if (!exists) allOk = false;
@@ -1844,9 +1904,9 @@ async function main() {
 
   console.log();
 
-  // Step 3: 生成埋点配置（URL / API Key 仅来自打包环境变量）
-  log("Step 3: 生成埋点配置");
-  generateAnalyticsConfig(targetPaths);
+  // Step 3: 生成构建配置（埋点 + ClawHub Registry）
+  log("Step 3: 生成构建配置");
+  generateBuildConfig(targetPaths);
 
   console.log();
 
@@ -1863,7 +1923,7 @@ async function main() {
   console.log();
 
   // 最终验证
-  verifyOutput(targetPaths, opts.platform);
+  verifyOutput(targetPaths, opts);
 
   console.log();
   log("资源打包完成！");

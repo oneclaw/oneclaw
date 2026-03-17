@@ -101,12 +101,6 @@
       placeholder: "sk-...",
       models: ["deepseek-chat", "deepseek-reasoner"],
     },
-    "ollama": {
-      providerKey: "ollama",
-      placeholder: "",
-      models: [],
-      keyOptional: true,
-    },
   };
 
   // ---- 国际化文案 ----
@@ -128,8 +122,7 @@
       "config.apiKey": "API Key",
       "config.getKey": "Get API Key →",
       "config.getKey.kimi-code": "Get Key (Kimi for Code) →",
-      "config.getKey.moonshot-cn": "Get Key (Moonshot.cn) →",
-      "config.getKey.moonshot-ai": "Get Key (Moonshot.ai) →",
+      "config.getKey.moonshot-cn": "Get Key (Kimi Open Platform) →",
       "config.model": "Model",
       "config.modelId": "Model ID",
       "config.apiType": "API Type",
@@ -143,6 +136,14 @@
       "config.back": "Back",
       "config.verify": "Verify & Continue",
       "config.imageSupport": "Model supports image input",
+      "config.oauthLogin": "Log in with Kimi",
+      "config.oauthCancel": "Cancel",
+      "config.oauthWaiting": "Waiting for authorization in browser…",
+      "config.oauthSuccess": "Login successful!",
+      "config.oauthNoMembership": "Login succeeded, but your account has no active Kimi membership. Please subscribe and try again.",
+      "config.oauthSubscribeLink": "Subscribe now →",
+      "config.oauthAdvanced": "Advanced options",
+      "config.oauthOr": "or enter API Key manually",
       "done.title": "All Set!",
       "done.subtitle": "OneClaw is ready — switch providers or models anytime in Settings",
       "done.feature1": "Chat with state-of-the-art language models",
@@ -190,8 +191,7 @@
       "config.apiKey": "API 密钥",
       "config.getKey": "获取密钥 →",
       "config.getKey.kimi-code": "购买会员获取密钥 (Kimi for Code) →",
-      "config.getKey.moonshot-cn": "获取密钥 (Moonshot.cn) →",
-      "config.getKey.moonshot-ai": "获取密钥 (Moonshot.ai) →",
+      "config.getKey.moonshot-cn": "获取密钥 (Kimi 开放平台（企业用户）) →",
       "config.model": "模型",
       "config.modelId": "模型 ID",
       "config.apiType": "接口类型",
@@ -205,6 +205,14 @@
       "config.back": "返回",
       "config.verify": "验证并继续",
       "config.imageSupport": "模型支持图片输入",
+      "config.oauthLogin": "Kimi 会员登录",
+      "config.oauthCancel": "取消",
+      "config.oauthWaiting": "请在浏览器中完成授权…",
+      "config.oauthSuccess": "登录成功！",
+      "config.oauthNoMembership": "登录成功，但当前账号未开通 Kimi 会员，请订阅后重试。",
+      "config.oauthSubscribeLink": "前往订阅 →",
+      "config.oauthAdvanced": "高级选项",
+      "config.oauthOr": "或手动输入 API Key",
       "done.title": "配置完成！",
       "done.subtitle": "OneClaw 已就绪 随时可在设置中切换服务商或模型",
       "done.feature1": "与最先进的大语言模型对话",
@@ -266,6 +274,13 @@
     customPreset: $("#customPreset"),
     customModelInputGroup: $("#customModelInputGroup"),
     customModelInput: $("#customModelInput"),
+    oauthGroup: $("#oauthGroup"),
+    btnOAuth: $("#btnOAuth"),
+    btnOAuthText: document.querySelector("#btnOAuth .btn-oauth-text"),
+    btnOAuthSpinner: document.querySelector("#btnOAuth .btn-oauth-spinner"),
+    btnOAuthCancel: $("#btnOAuthCancel"),
+    oauthStatus: $("#oauthStatus"),
+    oauthAdvanced: $("#oauthAdvanced"),
     errorMsg: $("#errorMsg"),
     btnBackToStep1: $("#btnBackToStep1"),
     btnVerify: $("#btnVerify"),
@@ -470,6 +485,7 @@
       els.btnVerify.disabled = false;
       updateModels();
     }
+    updateOAuthVisibility();
   }
 
   // 自定义 Model ID 哨兵值（下拉最后一项）
@@ -495,12 +511,8 @@
       toggleEl(els.apiTypeGroup, false);
       toggleEl(els.imageSupportGroup, false);
       toggleEl(els.modelInputGroup, false);
-      // Ollama 等本地 provider：显示可编辑 Base URL，隐藏 API Key
-      toggleEl(els.baseURLGroup, !!preset.keyOptional);
-      toggleEl(els.apiKeyGroup, !preset.keyOptional);
-      if (preset.keyOptional) {
-        $("#baseURL").value = $("#baseURL").value || preset.defaultBaseUrl || "http://localhost:11434";
-      }
+      toggleEl(els.baseURLGroup, false);
+      toggleEl(els.apiKeyGroup, true);
 
       // 无预设模型列表时直接显示自定义输入框，跳过空下拉
       var hasModels = preset.models && preset.models.length > 0;
@@ -583,6 +595,23 @@
     }
   }
 
+  // 控制 OAuth 登录区域显隐（仅 kimi-code 子平台）
+  function updateOAuthVisibility() {
+    var isOAuth = currentProvider === "moonshot" && getSubPlatform() === "kimi-code";
+    toggleEl(els.oauthGroup, isOAuth);
+    if (isOAuth) {
+      // OAuth 模式：API Key / Model 收入折叠高级选项，隐藏平台链接
+      els.oauthAdvanced.classList.remove("hidden", "details-advanced--plain");
+      els.oauthAdvanced.removeAttribute("open");
+      els.platformLink.classList.add("hidden");
+    } else {
+      // 非 OAuth 模式：展开且隐藏折叠外观
+      els.oauthAdvanced.classList.remove("hidden");
+      els.oauthAdvanced.classList.add("details-advanced--plain");
+      els.oauthAdvanced.setAttribute("open", "");
+    }
+  }
+
   // 填充模型下拉选项
   function populateModels(models) {
     els.modelSelect.innerHTML = "";
@@ -606,14 +635,94 @@
     eyeOff.classList.toggle("hidden", isPassword);
   }
 
+  // ---- Kimi OAuth 一键登录 ----
+  async function handleOAuthLogin() {
+    if (verifying) return;
+    setOAuthLoading(true);
+    hideError();
+
+    try {
+      var result = await window.oneclaw.kimiOAuthLogin();
+      if (!result.success) {
+        showError(result.message || t("error.verifyFailed"));
+        setOAuthLoading(false);
+        return;
+      }
+
+      // OAuth 成功 → 先验证 token 是否有会员权限
+      var modelID = els.modelSelect.value === CUSTOM_MODEL_SENTINEL
+        ? (els.customModelInput.value || "").trim() || "k2p5"
+        : els.modelSelect.value || "k2p5";
+
+      var verifyResult = await window.oneclaw.verifyKey({
+        provider: "moonshot",
+        apiKey: result.accessToken,
+        modelID: modelID,
+        subPlatform: "kimi-code",
+      });
+
+      if (!verifyResult.success) {
+        // 验证失败 → 退出 OAuth 登录，提示用户需要会员
+        if (window.oneclaw.kimiOAuthLogout) {
+          window.oneclaw.kimiOAuthLogout();
+        }
+        showOAuthNoMembership();
+        setOAuthLoading(false);
+        return;
+      }
+
+      await window.oneclaw.saveConfig({
+        provider: "moonshot",
+        apiKey: result.accessToken,
+        modelID: modelID,
+        baseURL: "",
+        api: "",
+        subPlatform: "kimi-code",
+        supportImage: true,
+        customPreset: "",
+      });
+
+      setOAuthLoading(false);
+      showOAuthSuccess();
+      setTimeout(function () { goToStep(3); }, 600);
+    } catch (err) {
+      showError(t("error.connection") + (err.message || ""));
+      setOAuthLoading(false);
+    }
+  }
+
+  // 取消 OAuth 轮询
+  function handleOAuthCancel() {
+    if (window.oneclaw?.kimiOAuthCancel) {
+      window.oneclaw.kimiOAuthCancel();
+    }
+    setOAuthLoading(false);
+    els.oauthStatus.classList.add("hidden");
+  }
+
+  function setOAuthLoading(loading) {
+    els.btnOAuth.disabled = loading;
+    els.btnOAuthText.classList.toggle("hidden", loading);
+    els.btnOAuthSpinner.classList.toggle("hidden", !loading);
+    toggleEl(els.btnOAuthCancel, loading);
+    if (loading) {
+      els.oauthStatus.textContent = t("config.oauthWaiting");
+      els.oauthStatus.classList.remove("hidden", "success");
+    }
+  }
+
+  function showOAuthSuccess() {
+    els.oauthStatus.textContent = t("config.oauthSuccess");
+    els.oauthStatus.classList.remove("hidden");
+    els.oauthStatus.classList.add("success");
+  }
+
   // ---- 验证并保存配置（Step 2） ----
   async function handleVerify() {
     if (verifying) return;
 
     const apiKey = els.apiKeyInput.value.trim();
-    // Ollama 等本地 provider 不需要 API Key
-    const activePreset = currentProvider === "custom" ? CUSTOM_PRESETS[els.customPreset.value] : null;
-    if (!apiKey && !(activePreset && activePreset.keyOptional)) {
+    if (!apiKey) {
       showError(t("error.noKey"));
       return;
     }
@@ -665,11 +774,6 @@
           params.modelID = els.modelSelect.value;
         }
         params.customPreset = presetKey;
-        // 本地 provider 用户可能改了端口，传递前端编辑的 Base URL
-        var presetObj = CUSTOM_PRESETS[presetKey];
-        if (presetObj && presetObj.keyOptional) {
-          params.baseURL = ($("#baseURL").value || "").trim();
-        }
       } else {
         // 手动模式
         const baseURL = ($("#baseURL").value || "").trim();
@@ -825,6 +929,23 @@
     els.errorMsg.classList.remove("hidden");
   }
 
+  // 非会员提示（带订阅超链接）
+  function showOAuthNoMembership() {
+    var url = "https://kimi.com/membership/pricing?utm_source=oneclaw";
+    els.errorMsg.textContent = "";
+    els.errorMsg.appendChild(document.createTextNode(t("config.oauthNoMembership") + " "));
+    var link = document.createElement("a");
+    link.href = "#";
+    link.textContent = t("config.oauthSubscribeLink");
+    link.className = "oauth-membership-link";
+    link.addEventListener("click", function (e) {
+      e.preventDefault();
+      if (window.oneclaw?.openExternal) window.oneclaw.openExternal(url);
+    });
+    els.errorMsg.appendChild(link);
+    els.errorMsg.classList.remove("hidden");
+  }
+
   function hideError() {
     els.errorMsg.classList.add("hidden");
     els.errorMsg.textContent = "";
@@ -882,6 +1003,7 @@
         if (currentProvider === "moonshot") {
           updateModels();
           updatePlatformLink();
+          updateOAuthVisibility();
         }
       });
     }
@@ -911,6 +1033,10 @@
       }
     });
 
+    els.btnOAuth.addEventListener("click", handleOAuthLogin);
+    if (els.btnOAuthCancel) {
+      els.btnOAuthCancel.addEventListener("click", handleOAuthCancel);
+    }
     els.btnToggleKey.addEventListener("click", toggleKeyVisibility);
     els.btnVerify.addEventListener("click", handleVerify);
 

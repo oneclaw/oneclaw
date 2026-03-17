@@ -119,6 +119,19 @@ export function resolveNodeBin(): string {
   return resolvePackagedWindowsNodeBin();
 }
 
+/**
+ * CLI 专用 Node.js 二进制：始终返回真实 Node.js（SUBSYSTEM:CONSOLE），
+ * 保证交互式 TTY（@clack/prompts 的 raw mode）在 Windows 上正常工作。
+ * Gateway 子进程不需要 TTY，继续用 resolveNodeBin()（Electron binary）即可。
+ */
+export function resolveCliNodeBin(): string {
+  const exe = IS_WIN ? "node.exe" : "node";
+  const bundled = path.join(resolveResourcesPath(), "runtime", exe);
+  if (fs.existsSync(bundled)) return bundled;
+  // dev 模式或打包异常时回退
+  return resolveNodeBin();
+}
+
 /** packaged 模式需要的额外环境变量（让 Electron binary 作为纯 Node.js 运行） */
 export function resolveNodeExtraEnv(): Record<string, string> {
   return app.isPackaged ? { ELECTRON_RUN_AS_NODE: "1" } : {};

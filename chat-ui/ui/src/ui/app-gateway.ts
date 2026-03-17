@@ -115,6 +115,10 @@ function applySessionDefaults(host: GatewayHost, defaults?: SessionDefaultsSnaps
   }
 }
 
+// gap 重连状态：最多重试 3 次，指数退避 (1s, 2s, 4s)
+const GAP_RECONNECT_MAX = 3;
+let gapReconnectCount = 0;
+
 export function connectGateway(host: GatewayHost) {
   console.info("[gateway] connectGateway start");
   host.lastError = null;
@@ -137,6 +141,8 @@ export function connectGateway(host: GatewayHost) {
       }
       host.connected = true;
       host.lastError = null;
+      // 连接成功，重置 gap 重连计数
+      gapReconnectCount = 0;
       host.hello = hello;
       applySnapshot(host, hello);
       // Reset orphaned chat run state from before disconnect.
@@ -172,9 +178,21 @@ export function connectGateway(host: GatewayHost) {
       if (host.client !== client) {
         return;
       }
-      // 序列号跳跃 → 自动重连获取完整 snapshot，无需用户手动刷新
-      console.warn(`[gateway] onGap expected=${expected} received=${received}, auto-reconnecting`);
-      connectGateway(host);
+      // 序列号跳跃 → 带退避的自动重连，最多 3 次
+      if (gapReconnectCount >= GAP_RECONNECT_MAX) {
+        console.warn(`[gateway] onGap expected=${expected} received=${received}, max retries reached`);
+        host.lastError = `event gap detected (expected seq ${expected}, got ${received}); please refresh`;
+        gapReconnectCount = 0;
+        return;
+      }
+      const delay = 1000 * 2 ** gapReconnectCount;
+      gapReconnectCount++;
+      console.warn(`[gateway] onGap expected=${expected} received=${received}, retry ${gapReconnectCount}/${GAP_RECONNECT_MAX} in ${delay}ms`);
+      setTimeout(() => {
+        if (host.client === client) {
+          connectGateway(host);
+        }
+      }, delay);
     },
   });
   host.client = client;

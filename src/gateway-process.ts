@@ -133,6 +133,9 @@ export class GatewayProcess {
       return;
     }
 
+    // 清理升级残留的 lockfile（旧 gateway 可能是半死状态：进程活但 HTTP 不响应）
+    await this.cleanStaleLockfile();
+
     // 启动前探测端口，若有旧 gateway 则自动停止
     const portBusy = await this.probeHealth();
     if (portBusy) {
@@ -336,6 +339,47 @@ export class GatewayProcess {
     return !!this.proc && this.proc.pid === childPid && this.proc.exitCode == null;
   }
 
+  // 清理升级残留的 lockfile：旧 gateway 可能是"半死"状态（进程活但 HTTP 不响应）
+  // 这种情况下 probeHealth 返回 false，stopExistingGateway 不会被调用，
+  // 但新 gateway 会被 lockfile 阻塞并立即 exit(1)。
+  private async cleanStaleLockfile(): Promise<void> {
+    const lockPath = path.join(resolveUserStateDir(), "gateway.lock");
+    let raw: string;
+    try {
+      raw = fs.readFileSync(lockPath, "utf-8").trim();
+    } catch {
+      return; // lockfile 不存在，无需清理
+    }
+
+    // lockfile 内容通常是 PID 数字
+    const stalePid = Number.parseInt(raw, 10);
+    if (!Number.isFinite(stalePid) || stalePid <= 0) {
+      diagLog(`lockfile 内容非法 (${raw})，直接删除`);
+      try { fs.unlinkSync(lockPath); } catch {}
+      return;
+    }
+
+    // 检查持有 lockfile 的进程是否仍活着
+    if (!isProcessAlive(stalePid)) {
+      diagLog(`lockfile 指向 pid=${stalePid} 但进程已不存在，删除残留 lockfile`);
+      try { fs.unlinkSync(lockPath); } catch {}
+      return;
+    }
+
+    // 进程活着但不响应 HTTP（半死状态）→ 强杀后删 lockfile
+    diagLog(`WARN: lockfile 指向 pid=${stalePid}，进程存活但 HTTP 无响应，强制终止`);
+    killProcess(stalePid);
+    // 等待进程退出
+    for (let i = 0; i < 20; i++) {
+      await sleep(250);
+      if (!isProcessAlive(stalePid)) {
+        diagLog(`pid=${stalePid} 已退出`);
+        break;
+      }
+    }
+    try { fs.unlinkSync(lockPath); } catch {}
+  }
+
   private setState(s: GatewayState): void {
     const prev = this.state;
     this.state = s;
@@ -352,6 +396,34 @@ function sleep(ms: number): Promise<void> {
 function maskToken(token: string): string {
   if (token.length <= 8) return "***";
   return `${token.slice(0, 4)}...${token.slice(-4)}`;
+}
+
+// 检查外部 PID 是否存活（跨平台）
+function isProcessAlive(pid: number): boolean {
+  try {
+    process.kill(pid, 0); // signal 0 仅探测，不发送信号
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+// 强制终止外部进程（Windows 用 taskkill，POSIX 用 SIGKILL）
+function killProcess(pid: number): void {
+  try {
+    if (IS_WIN) {
+      const { execFileSync } = require("child_process") as typeof import("child_process");
+      execFileSync("taskkill", ["/PID", String(pid), "/F", "/T"], {
+        timeout: 5000,
+        stdio: "pipe",
+        windowsHide: true,
+      });
+    } else {
+      process.kill(pid, "SIGKILL");
+    }
+  } catch (err: any) {
+    diagLog(`killProcess(${pid}) 失败: ${err.message ?? err}`);
+  }
 }
 
 // 生成 clawhub CLI wrapper 脚本（每次 gateway 启动时确保最新）

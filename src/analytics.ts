@@ -14,7 +14,7 @@ import {
 const HEARTBEAT_MS = 60 * 60 * 1000;
 const DEFAULT_REQUEST_TIMEOUT_MS = 8_000;
 const DEFAULT_RETRY_DELAYS_MS = [0, 500, 1_500];
-const ANALYTICS_CONFIG_NAME = "analytics-config.json";
+const BUILD_CONFIG_NAME = "build-config.json";
 
 interface AnalyticsConfig {
   enabled: boolean;
@@ -70,21 +70,21 @@ function commonProps(): Record<string, string> {
   };
 }
 
-// 构建 analytics 配置文件候选路径，兼容打包安装与本地 unpacked 运行。
+// 构建 build-config.json 候选路径，兼容打包安装与本地 unpacked 运行。
 function buildConfigPathCandidates(): string[] {
   const appPath = app.getAppPath();
   const appDir = path.dirname(appPath);
   const candidates = [
-    path.join(resolveResourcesPath(), ANALYTICS_CONFIG_NAME),
-    path.join(process.resourcesPath, "resources", ANALYTICS_CONFIG_NAME),
-    path.join(process.resourcesPath, ANALYTICS_CONFIG_NAME),
-    path.join(appDir, "resources", ANALYTICS_CONFIG_NAME),
-    path.join(appDir, ANALYTICS_CONFIG_NAME),
+    path.join(resolveResourcesPath(), BUILD_CONFIG_NAME),
+    path.join(process.resourcesPath, "resources", BUILD_CONFIG_NAME),
+    path.join(process.resourcesPath, BUILD_CONFIG_NAME),
+    path.join(appDir, "resources", BUILD_CONFIG_NAME),
+    path.join(appDir, BUILD_CONFIG_NAME),
   ];
   return Array.from(new Set(candidates));
 }
 
-// 从打包注入的 analytics-config.json 读取配置。
+// 从打包注入的 build-config.json 读取 analytics 配置。
 function readPackagedConfig(): Partial<AnalyticsConfig> {
   const candidates = buildConfigPathCandidates();
   const cfgPath = candidates.find((candidate) => fs.existsSync(candidate));
@@ -94,7 +94,9 @@ function readPackagedConfig(): Partial<AnalyticsConfig> {
   try {
     const parsed = JSON.parse(fs.readFileSync(cfgPath, "utf-8"));
     if (!parsed || typeof parsed !== "object") return {};
-    return parsed as Partial<AnalyticsConfig>;
+    // build-config.json 中 analytics 嵌套在 analytics 字段下
+    const analytics = parsed.analytics ?? parsed;
+    return analytics as Partial<AnalyticsConfig>;
   } catch (err) {
     log.warn(`[analytics] 配置解析失败: ${String(err)}`);
     return {};

@@ -1,4 +1,4 @@
-import { app, ipcMain } from "electron";
+import { app, BrowserWindow, ipcMain } from "electron";
 import { ensureGatewayAuthTokenInConfig } from "./gateway-auth";
 import { SetupManager } from "./setup-manager";
 import * as analytics from "./analytics";
@@ -27,6 +27,7 @@ import { DEFAULT_PORT } from "./constants";
 interface SetupIpcDeps {
   setupManager: SetupManager;
   gateway?: { setPort: (port: number) => void };
+  onOAuthLoginSuccess?: () => void;
 }
 
 let latestSetupCompletedProps: Record<string, string> | null = null;
@@ -145,6 +146,38 @@ export function registerSetupIpc(deps: SetupIpcDeps): void {
     } catch (err: any) {
       return { success: false, message: err.message || String(err) };
     }
+  });
+
+  // ── Kimi OAuth ──
+  ipcMain.handle("kimi-oauth:login", async (event) => {
+    const { kimiOAuthLogin } = await import("./kimi-oauth");
+    const result = await kimiOAuthLogin();
+    // 轮询成功后将窗口拉回前台，避免用户停留在浏览器找不到程序
+    if (result.success) {
+      deps.onOAuthLoginSuccess?.();
+      const win = BrowserWindow.fromWebContents(event.sender);
+      if (win) {
+        if (win.isMinimized()) win.restore();
+        win.show();
+        win.focus();
+      }
+    }
+    return result;
+  });
+
+  ipcMain.handle("kimi-oauth:cancel", async () => {
+    const { kimiOAuthCancel } = await import("./kimi-oauth");
+    kimiOAuthCancel();
+  });
+
+  ipcMain.handle("kimi-oauth:logout", async () => {
+    const { kimiOAuthLogout } = await import("./kimi-oauth");
+    kimiOAuthLogout();
+  });
+
+  ipcMain.handle("kimi-oauth:status", async () => {
+    const { getOAuthStatus } = await import("./kimi-oauth");
+    return getOAuthStatus();
   });
 
   // ── 验证 API Key ──

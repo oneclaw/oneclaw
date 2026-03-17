@@ -2,7 +2,7 @@ import * as fs from "fs";
 import * as os from "os";
 import * as path from "path";
 import { execFile } from "child_process";
-import { resolveNodeBin, resolveGatewayEntry, resolveUserStateDir, IS_WIN } from "./constants";
+import { resolveCliNodeBin, resolveGatewayEntry, resolveUserStateDir, IS_WIN } from "./constants";
 import { readOneclawConfig, writeOneclawConfig } from "./oneclaw-config";
 import * as log from "./logger";
 
@@ -194,6 +194,7 @@ export function buildWinPathEnvScript(action: "add" | "remove", binDir: string):
 }
 
 // 生成 POSIX wrapper 脚本（可测试纯函数），直接转发到内置 Node + gateway entry。
+// 注意：使用真实 Node.js binary，不需要 ELECTRON_RUN_AS_NODE。
 export function buildPosixWrapperForPaths(nodeBin: string, entry: string): string {
   const safeNodeBin = escapeForPosixDoubleQuoted(nodeBin);
   const safeEntry = escapeForPosixDoubleQuoted(entry);
@@ -211,7 +212,6 @@ export function buildPosixWrapperForPaths(nodeBin: string, entry: string): strin
     '  echo "Error: OneClaw entry not found at $APP_ENTRY" >&2',
     "  exit 127",
     "fi",
-    "export ELECTRON_RUN_AS_NODE=1",
     "export OPENCLAW_NO_RESPAWN=1",
     'exec "$APP_NODE" "$APP_ENTRY" "$@"',
     "",
@@ -220,10 +220,11 @@ export function buildPosixWrapperForPaths(nodeBin: string, entry: string): strin
 
 // 读取当前运行时路径并生成 POSIX wrapper，避免调用方重复拼路径。
 function buildPosixWrapper(): string {
-  return buildPosixWrapperForPaths(resolveNodeBin(), resolveGatewayEntry());
+  return buildPosixWrapperForPaths(resolveCliNodeBin(), resolveGatewayEntry());
 }
 
 // 生成 Windows wrapper 脚本（可测试纯函数），直接转发到内置 Node + gateway entry。
+// 注意：使用真实 Node.js（SUBSYSTEM:CONSOLE），不需要 ELECTRON_RUN_AS_NODE。
 export function buildWinWrapperForPaths(nodeBin: string, entry: string): string {
   const safeNodeBin = escapeForCmdSetValue(nodeBin);
   const safeEntry = escapeForCmdSetValue(entry);
@@ -242,7 +243,6 @@ export function buildWinWrapperForPaths(nodeBin: string, entry: string): string 
     "  echo Error: OneClaw entry not found. 1>&2",
     "  exit /b 127",
     ")",
-    'set "ELECTRON_RUN_AS_NODE=1"',
     'set "OPENCLAW_NO_RESPAWN=1"',
     '"%APP_NODE%" "%APP_ENTRY%" %*',
     "exit /b %errorlevel%",
@@ -252,7 +252,7 @@ export function buildWinWrapperForPaths(nodeBin: string, entry: string): string 
 
 // 读取当前运行时路径并生成 Windows wrapper，避免调用方重复拼路径。
 function buildWinWrapper(): string {
-  return buildWinWrapperForPaths(resolveNodeBin(), resolveGatewayEntry());
+  return buildWinWrapperForPaths(resolveCliNodeBin(), resolveGatewayEntry());
 }
 
 // 判断指定 wrapper 是否由 OneClaw 管理，避免误删用户自定义脚本。
@@ -409,7 +409,7 @@ function winModifyPath(action: "add" | "remove", binDir: string): Promise<void> 
 
 // 校验 CLI 运行时依赖，避免生成必然损坏的 wrapper。
 function validateCliRuntime(): CliResult | null {
-  const nodeBin = resolveNodeBin();
+  const nodeBin = resolveCliNodeBin();
   const entry = resolveGatewayEntry();
   if (nodeBin === "node" || !fs.existsSync(nodeBin)) {
     return { success: false, message: `Node runtime not found: ${nodeBin}` };

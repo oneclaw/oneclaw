@@ -109,12 +109,6 @@
       placeholder: "sk-...",
       models: ["deepseek-chat", "deepseek-reasoner"],
     },
-    "ollama": {
-      providerKey: "ollama",
-      placeholder: "",
-      models: [],
-      keyOptional: true,
-    },
   };
 
   // 已保存的各 provider 配置缓存（供切换时自动回填）
@@ -127,10 +121,10 @@
       "settings.backToChat": "Back",
       "title": "Settings",
       "nav.provider": "Model",
-      "nav.chat": "Chat Integration",
+      "nav.chat": "Remote Control",
       "nav.feishu": "Feishu Integration",
-      "chat.title": "Chat Integration",
-      "chat.desc": "Connect Feishu, WeCom, DingTalk, Kimi, or QQ and chat with AI directly inside your messaging app",
+      "chat.title": "Remote Control",
+      "chat.desc": "Connect Feishu, WeCom, DingTalk, Kimi, or QQ to control OneClaw remotely from your messaging app",
       "chat.platformFeishu": "Feishu",
       "chat.platformFeishuMeta": "Lark / Feishu bot",
       "chat.platformWecom": "WeCom",
@@ -150,19 +144,31 @@
       "provider.apiKey": "API Key",
       "provider.getKey": "Get API Key →",
       "provider.getKey.kimi-code": "Get Key (Kimi for Code) →",
-      "provider.getKey.moonshot-cn": "Get Key (Moonshot.cn) →",
-      "provider.getKey.moonshot-ai": "Get Key (Moonshot.ai) →",
+      "provider.getKey.moonshot-cn": "Get Key (Kimi Open Platform) →",
       "provider.model": "Model",
       "provider.modelId": "Model ID",
       "provider.apiType": "API Type",
       "provider.supportImage": "Supports image input",
+      "provider.oauthLogin": "Log in with Kimi",
+      "provider.oauthCancel": "Cancel",
+      "provider.oauthLogout": "Log out",
+      "provider.oauthWaiting": "Waiting for authorization in browser…",
+      "provider.oauthSuccess": "Login successful!",
+      "provider.oauthNoMembership": "Login succeeded, but your account has no active Kimi membership. Please subscribe and try again.",
+      "provider.oauthSubscribeLink": "Subscribe now →",
+      "provider.oauthAdvanced": "Advanced options",
+      "provider.oauthOr": "or enter API Key manually",
+      "provider.usageWeekly": "Weekly Usage",
+      "provider.usageLimit": "Rate Limit",
+      "provider.usageRefreshed": "Refreshed at ",
       "provider.preset": "Preset",
       "provider.presetManual": "Manual",
       "provider.customModelId": "Custom Model ID",
       "provider.customModelOption": "Custom Model…",
       "common.cancel": "Cancel",
       "common.confirm": "Confirm",
-      "common.saved": "Saved. Refreshing Gateway",
+      "common.enable": "Enable",
+      "common.saved": "Saved, restarting Gateway",
       "provider.save": "Save",
       "provider.saving": "Saving…",
       "provider.currentUsing": "Current: ",
@@ -388,10 +394,10 @@
       "settings.backToChat": "返回",
       "title": "设置",
       "nav.provider": "模型配置",
-      "nav.chat": "聊天集成",
+      "nav.chat": "远程控制",
       "nav.feishu": "飞书集成",
-      "chat.title": "聊天集成",
-      "chat.desc": "连接飞书、企业微信、钉钉、Kimi 或 QQ 让用户直接在聊天软件里和 OneClaw 对话",
+      "chat.title": "远程控制",
+      "chat.desc": "连接飞书、企业微信、钉钉、Kimi 或 QQ，从聊天软件远程控制 OneClaw",
       "chat.platformFeishu": "飞书",
       "chat.platformFeishuMeta": "Lark / 飞书机器人",
       "chat.platformWecom": "企业微信",
@@ -411,19 +417,31 @@
       "provider.apiKey": "API 密钥",
       "provider.getKey": "获取密钥 →",
       "provider.getKey.kimi-code": "购买会员获取密钥 (Kimi for Code) →",
-      "provider.getKey.moonshot-cn": "获取密钥 (Moonshot.cn) →",
-      "provider.getKey.moonshot-ai": "获取密钥 (Moonshot.ai) →",
+      "provider.getKey.moonshot-cn": "获取密钥 (Kimi 开放平台（企业用户）) →",
       "provider.model": "模型",
       "provider.modelId": "模型 ID",
       "provider.apiType": "接口类型",
       "provider.supportImage": "支持图像输入",
+      "provider.oauthLogin": "Kimi 会员登录",
+      "provider.oauthCancel": "取消",
+      "provider.oauthLogout": "退出登录",
+      "provider.oauthWaiting": "请在浏览器中完成授权…",
+      "provider.oauthSuccess": "登录成功！",
+      "provider.oauthNoMembership": "登录成功，但当前账号未开通 Kimi 会员，请订阅后重试。",
+      "provider.oauthSubscribeLink": "前往订阅 →",
+      "provider.oauthAdvanced": "高级选项",
+      "provider.oauthOr": "或手动输入 API Key",
+      "provider.usageWeekly": "本周用量",
+      "provider.usageLimit": "频限明细",
+      "provider.usageRefreshed": "刷新于 ",
       "provider.preset": "预设",
       "provider.presetManual": "手动配置",
       "provider.customModelId": "自定义模型 ID",
       "provider.customModelOption": "自定义模型…",
       "common.cancel": "取消",
       "common.confirm": "确认",
-      "common.saved": "已保存. 正在刷新 Gateway",
+      "common.enable": "启用",
+      "common.saved": "已保存 正在重启核心服务",
       "provider.save": "保存",
       "provider.saving": "保存中…",
       "provider.currentUsing": "当前使用: ",
@@ -503,7 +521,7 @@
       "dingtalk.clientSecret": "Client Secret / AppSecret",
       "dingtalk.sessionTimeout": "会话超时（毫秒）",
       "dingtalk.sessionTimeoutHint": "默认 1800000 毫秒（30 分钟）",
-      "dingtalk.gatewayHint": "OneClaw 会自动复用当前 Gateway token 并补齐所需的 chatCompletions HTTP 端点",
+      "dingtalk.gatewayHint": "OneClaw会自动复用当前核心服务token并补齐所需的chatCompletions HTTP端点",
       "dingtalk.docs": "配置指南 →",
       "dingtalk.getKey": "打开钉钉开放平台 →",
       "dingtalk.save": "保存",
@@ -607,11 +625,11 @@
       "backup.empty": "暂无备份。先保存一次设置即可生成",
       "backup.restore": "恢复",
       "backup.restoring": "恢复中…",
-      "backup.gatewayTitle": "Gateway 控制",
-      "backup.gatewayRestart": "重启 Gateway",
-      "backup.gatewayStart": "启动 Gateway",
-      "backup.gatewayStop": "停止 Gateway",
-      "backup.gatewayState": "Gateway 状态：",
+      "backup.gatewayTitle": "核心服务控制",
+      "backup.gatewayRestart": "重启核心服务",
+      "backup.gatewayStart": "启动核心服务",
+      "backup.gatewayStop": "停止核心服务",
+      "backup.gatewayState": "核心服务状态：",
       "backup.gatewayStateRunning": "运行中",
       "backup.gatewayStateStarting": "启动中…",
       "backup.gatewayStateStopping": "停止中…",
@@ -627,10 +645,10 @@
       "backup.noLastKnownGood": "暂无“最近可用配置”快照",
       "backup.confirmRestore": "确认恢复该备份并覆盖当前 openclaw.json 吗？",
       "backup.confirmRestoreLastKnownGood": "确认恢复“最近可用配置”并覆盖当前 openclaw.json 吗？",
-      "backup.restored": "配置已恢复 已触发 Gateway 重启",
+      "backup.restored": "配置已恢复，已触发核心服务重启",
       "backup.noticeInvalidJson": "检测到 openclaw.json 无法解析 请恢复历史备份",
-      "backup.noticeGatewayFailed": "Gateway 启动失败 建议恢复历史备份后重试",
-      "backup.noticeGatewayRecoverFailed": "自动回退失败 请手动选择备份恢复",
+      "backup.noticeGatewayFailed": "核心服务启动失败，建议恢复历史备份后重试",
+      "backup.noticeGatewayRecoverFailed": "自动回退失败，请手动选择备份恢复",
       "nav.about": "软件更新",
       "about.title": "软件更新",
       "about.versionInfo": "版本信息",
@@ -679,10 +697,34 @@
     customPreset: $("#customPreset"),
     customModelInputGroup: $("#customModelInputGroup"),
     customModelInput: $("#customModelInput"),
+    oauthGroup: $("#oauthGroup"),
+    btnOAuth: $("#btnOAuth"),
+    btnOAuthText: document.querySelector("#btnOAuth .btn-oauth-text"),
+    btnOAuthSpinner: document.querySelector("#btnOAuth .btn-oauth-spinner"),
+    btnOAuthCancel: $("#btnOAuthCancel"),
+    btnOAuthLogout: $("#btnOAuthLogout"),
+    oauthStatus: $("#oauthStatus"),
+    oauthAdvanced: $("#oauthAdvanced"),
+    usagePanel: $("#usagePanel"),
+    usageWeeklyPercent: $("#usageWeeklyPercent"),
+    usageWeeklyReset: $("#usageWeeklyReset"),
+    usageWeeklyBar: $("#usageWeeklyBar"),
+    usageLimitTitle: $("#usageLimitTitle"),
+    usageLimitPercent: $("#usageLimitPercent"),
+    usageLimitReset: $("#usageLimitReset"),
+    usageLimitBar: $("#usageLimitBar"),
+    usageRefreshTime: $("#usageRefreshTime"),
+    btnUsageRefresh: $("#btnUsageRefresh"),
     msgBox: $("#msgBox"),
     btnSave: $("#btnSave"),
     btnSaveText: $("#btnSave .btn-text"),
     btnSaveSpinner: $("#btnSave .btn-spinner"),
+    // 通道状态指示灯
+    feishuStatusDot: $("#feishuStatusDot"),
+    wecomStatusDot: $("#wecomStatusDot"),
+    dingtalkStatusDot: $("#dingtalkStatusDot"),
+    kimiStatusDot: $("#kimiStatusDot"),
+    qqStatusDot: $("#qqStatusDot"),
     // Channels tab
     chEnabled: $("#chEnabled"),
     chFields: $("#chFields"),
@@ -910,7 +952,7 @@
     return TAB_ALIAS_MAP[raw] || raw;
   }
 
-  // 兼容 feishu / dingtalk / qq / qqbot 这类历史入口，把它们映射到聊天集成子平台。
+  // 兼容 feishu / dingtalk / qq / qqbot 这类历史入口，把它们映射到远程控制子平台。
   function normalizeChatPlatformName(platformName) {
     var raw = String(platformName || "").trim().toLowerCase();
     if (raw === "wecom" || raw === "wechat-work" || raw === "wecom-openclaw-plugin") return "wecom";
@@ -938,7 +980,7 @@
     return "";
   }
 
-  // 聊天集成页内部的二级平台切换。
+  // 远程控制页内部的二级平台切换。
   function switchChatPlatform(platformName) {
     var target = normalizeChatPlatformName(platformName);
     currentChatPlatform = target;
@@ -1083,6 +1125,8 @@
       updateModels();
     }
 
+    updateOAuthVisibility();
+
     // 从缓存回填已保存的 provider 配置
     fillSavedProviderFields(provider);
   }
@@ -1110,12 +1154,8 @@
       toggleEl(els.apiTypeGroup, false);
       toggleEl(els.imageSupportGroup, false);
       toggleEl(els.modelInputGroup, false);
-      // Ollama 等本地 provider：显示可编辑 Base URL，隐藏 API Key
-      toggleEl(els.baseURLGroup, !!preset.keyOptional);
-      toggleEl(els.apiKeyGroup, !preset.keyOptional);
-      if (preset.keyOptional) {
-        els.baseURLInput.value = els.baseURLInput.value || preset.defaultBaseUrl || "http://localhost:11434";
-      }
+      toggleEl(els.baseURLGroup, false);
+      toggleEl(els.apiKeyGroup, true);
 
       // 无预设模型列表时直接显示自定义输入框，跳过空下拉
       var hasModels = preset.models && preset.models.length > 0;
@@ -1195,6 +1235,45 @@
     }
   }
 
+  // 控制 OAuth 登录区域显隐（仅 kimi-code 子平台）
+  function updateOAuthVisibility() {
+    var isOAuth = currentProvider === "moonshot" && getSubPlatform() === "kimi-code";
+    toggleEl(els.oauthGroup, isOAuth);
+    if (isOAuth) {
+      // OAuth 模式：API Key / Model 收入折叠高级选项
+      els.oauthAdvanced.classList.remove("hidden", "details-advanced--plain");
+      els.oauthAdvanced.removeAttribute("open");
+      els.platformLink.classList.add("hidden");
+      checkOAuthStatus();
+    } else {
+      // 非 OAuth 模式：展开且隐藏折叠外观，字段正常显示
+      els.oauthAdvanced.classList.remove("hidden");
+      els.oauthAdvanced.classList.add("details-advanced--plain");
+      els.oauthAdvanced.setAttribute("open", "");
+      toggleEl(els.usagePanel, false);
+    }
+  }
+
+  // 检查当前 OAuth 登录状态，切换登录/退出按钮
+  async function checkOAuthStatus() {
+    if (!window.oneclaw?.kimiOAuthStatus) return;
+    try {
+      var status = await window.oneclaw.kimiOAuthStatus();
+      if (status && status.loggedIn) {
+        toggleEl(els.btnOAuth, false);
+        toggleEl(els.btnOAuthLogout, true);
+        loadUsage();
+      } else {
+        toggleEl(els.btnOAuth, true);
+        toggleEl(els.btnOAuthLogout, false);
+        // 即使没有 OAuth 登录，也尝试加载用量（后端会用 config 中的 API key）
+        loadUsage();
+      }
+    } catch {
+      // 获取状态失败时默认显示登录按钮
+    }
+  }
+
   function populateModels(models) {
     els.modelSelect.innerHTML = "";
     models.forEach((m) => {
@@ -1241,15 +1320,265 @@
     btn.querySelector(".icon-eye-off").classList.toggle("hidden", isPassword);
   }
 
+  // ── Kimi OAuth 一键登录 ──
+
+  async function handleOAuthLogin() {
+    if (saving) return;
+    setOAuthLoading(true);
+    hideMsg();
+
+    try {
+      var result = await window.oneclaw.kimiOAuthLogin();
+      if (!result.success) {
+        showMsg(result.message || t("error.verifyFailed"), "error");
+        setOAuthLoading(false);
+        return;
+      }
+
+      var modelID = els.modelSelect.value === CUSTOM_MODEL_SENTINEL
+        ? (els.customModelInput.value || "").trim() || "k2p5"
+        : els.modelSelect.value || "k2p5";
+
+      // 先验证 token 是否有会员权限
+      var verifyResult = await window.oneclaw.settingsVerifyKey({
+        provider: "moonshot",
+        apiKey: result.accessToken,
+        modelID: modelID,
+        subPlatform: "kimi-code",
+      });
+
+      if (!verifyResult.success) {
+        if (window.oneclaw.kimiOAuthLogout) {
+          window.oneclaw.kimiOAuthLogout();
+        }
+        showOAuthNoMembership();
+        setOAuthLoading(false);
+        return;
+      }
+
+      var saveResult = await window.oneclaw.settingsSaveProvider({
+        provider: "moonshot",
+        apiKey: result.accessToken,
+        modelID: modelID,
+        baseURL: "",
+        api: "",
+        subPlatform: "kimi-code",
+        supportImage: true,
+        customPreset: "",
+      });
+
+      setOAuthLoading(false);
+
+      if (!saveResult.success) {
+        showMsg(saveResult.message || "Save failed", "error");
+        return;
+      }
+
+      showOAuthSuccess();
+      showToast(t("common.saved"));
+      loadUsage();
+
+      // 刷新缓存
+      try {
+        var refreshResult = await window.oneclaw.settingsGetConfig();
+        if (refreshResult.success && refreshResult.data && refreshResult.data.savedProviders) {
+          savedProviders = refreshResult.data.savedProviders;
+        }
+      } catch {}
+    } catch (err) {
+      showMsg(t("error.connection") + (err.message || ""), "error");
+      setOAuthLoading(false);
+    }
+  }
+
+  // 取消 OAuth 轮询
+  function handleOAuthCancel() {
+    if (window.oneclaw?.kimiOAuthCancel) {
+      window.oneclaw.kimiOAuthCancel();
+    }
+    setOAuthLoading(false);
+    els.oauthStatus.classList.add("hidden");
+  }
+
+  // 退出 OAuth 登录
+  async function handleOAuthLogout() {
+    if (window.oneclaw?.kimiOAuthLogout) {
+      await window.oneclaw.kimiOAuthLogout();
+    }
+    // 隐藏退出按钮，恢复登录按钮
+    toggleEl(els.btnOAuthLogout, false);
+    toggleEl(els.btnOAuth, true);
+    toggleEl(els.usagePanel, false);
+    els.oauthStatus.classList.add("hidden");
+    els.oauthStatus.classList.remove("success");
+    showToast(t("provider.oauthLogout"));
+  }
+
+  function setOAuthLoading(loading) {
+    els.btnOAuth.disabled = loading;
+    els.btnOAuthText.classList.toggle("hidden", loading);
+    els.btnOAuthSpinner.classList.toggle("hidden", !loading);
+    toggleEl(els.btnOAuthCancel, loading);
+    if (loading) {
+      els.oauthStatus.textContent = t("provider.oauthWaiting");
+      els.oauthStatus.classList.remove("hidden", "success");
+    }
+  }
+
+  function showOAuthSuccess() {
+    els.oauthStatus.textContent = t("provider.oauthSuccess");
+    els.oauthStatus.classList.remove("hidden");
+    els.oauthStatus.classList.add("success");
+    // OAuth 成功后显示退出按钮
+    toggleEl(els.btnOAuth, false);
+    toggleEl(els.btnOAuthLogout, true);
+  }
+
+  // ── Kimi 用量查询 ──
+
+  // 格式化剩余时间（秒 → "Xh后重置" / "Xm后重置"）
+  function formatResetDuration(seconds) {
+    if (!seconds || seconds <= 0) return "";
+    var h = Math.floor(seconds / 3600);
+    var m = Math.floor((seconds % 3600) / 60);
+    if (h > 0) return h + (currentLang === "zh" ? "小时后重置" : "h reset");
+    if (m > 0) return m + (currentLang === "zh" ? "分钟后重置" : "m reset");
+    return (currentLang === "zh" ? "即将重置" : "resetting soon");
+  }
+
+  // 从 ISO 时间戳计算剩余秒数
+  function parseResetAt(val) {
+    if (!val) return 0;
+    try {
+      // 截断纳秒/微秒 → 毫秒（JS Date 仅支持 3 位小数）
+      var str = String(val);
+      if (str.indexOf(".") !== -1 && str.endsWith("Z")) {
+        var parts = str.slice(0, -1).split(".");
+        str = parts[0] + "." + parts[1].slice(0, 3) + "Z";
+      }
+      var dt = new Date(str);
+      var diff = (dt.getTime() - Date.now()) / 1000;
+      return diff > 0 ? Math.round(diff) : 0;
+    } catch { return 0; }
+  }
+
+  // 从 usage payload 中提取 reset 提示秒数
+  function extractResetSeconds(data) {
+    // 优先 reset_at / resetAt
+    var keys = ["reset_at", "resetAt", "reset_time", "resetTime"];
+    for (var i = 0; i < keys.length; i++) {
+      if (data[keys[i]]) return parseResetAt(data[keys[i]]);
+    }
+    // 回退 reset_in / resetIn / ttl / window
+    var durKeys = ["reset_in", "resetIn", "ttl", "window"];
+    for (var j = 0; j < durKeys.length; j++) {
+      var v = parseInt(data[durKeys[j]], 10);
+      if (v > 0) return v;
+    }
+    return 0;
+  }
+
+  // 设置用量卡片数据
+  function setUsageCard(percentEl, resetEl, barEl, used, limit, resetSeconds) {
+    if (!limit || limit <= 0) {
+      percentEl.textContent = "—";
+      resetEl.textContent = "";
+      barEl.style.width = "0";
+      return;
+    }
+    var pct = Math.round((used / limit) * 100);
+    percentEl.textContent = pct + "%";
+    resetEl.textContent = formatResetDuration(resetSeconds);
+    barEl.style.width = Math.min(pct, 100) + "%";
+    barEl.classList.remove("warn", "danger");
+    if (pct >= 90) barEl.classList.add("danger");
+    else if (pct >= 70) barEl.classList.add("warn");
+  }
+
+  // 加载用量数据
+  async function loadUsage() {
+    if (!window.oneclaw?.kimiGetUsage) return;
+    els.btnUsageRefresh.classList.add("spinning");
+    try {
+      var result = await window.oneclaw.kimiGetUsage();
+      if (!result.success || !result.data) {
+        setUsageCard(els.usageWeeklyPercent, els.usageWeeklyReset, els.usageWeeklyBar, 0, 0, 0);
+        setUsageCard(els.usageLimitPercent, els.usageLimitReset, els.usageLimitBar, 0, 0, 0);
+        els.usageLimitTitle.textContent = t("provider.usageLimit");
+        els.usageRefreshTime.textContent = "";
+        toggleEl(els.usagePanel, true);
+        return;
+      }
+      var payload = result.data;
+
+      // 总用量（usage 字段 = 周用量）
+      var usage = payload.usage || {};
+      var usedW = parseInt(usage.used, 10) || 0;
+      var limitW = parseInt(usage.limit, 10) || 0;
+      if (usage.remaining !== undefined && !usage.used) {
+        usedW = limitW - (parseInt(usage.remaining, 10) || 0);
+      }
+      var resetW = extractResetSeconds(usage);
+      setUsageCard(els.usageWeeklyPercent, els.usageWeeklyReset, els.usageWeeklyBar, usedW, limitW, resetW);
+
+      // 频限明细（limits 数组第一项）
+      var limits = Array.isArray(payload.limits) ? payload.limits : [];
+      if (limits.length > 0) {
+        var item = limits[0];
+        var detail = (item.detail && typeof item.detail === "object") ? item.detail : item;
+        var usedL = parseInt(detail.used, 10) || 0;
+        var limitL = parseInt(detail.limit, 10) || 0;
+        if (detail.remaining !== undefined && !detail.used) {
+          usedL = limitL - (parseInt(detail.remaining, 10) || 0);
+        }
+        var resetL = extractResetSeconds(detail);
+        // 动态标题：从 window.duration + timeUnit 推导
+        var window_ = (item.window && typeof item.window === "object") ? item.window : {};
+        var dur = parseInt(window_.duration || item.duration || detail.duration, 10) || 0;
+        var unit = window_.timeUnit || item.timeUnit || detail.timeUnit || "";
+        if (dur > 0) {
+          var label;
+          if (unit.indexOf("MINUTE") !== -1) {
+            label = (dur >= 60 && dur % 60 === 0)
+              ? (currentLang === "zh" ? (dur / 60) + "小时用量" : (dur / 60) + "h usage")
+              : (currentLang === "zh" ? dur + "分钟用量" : dur + "m usage");
+          } else if (unit.indexOf("HOUR") !== -1) {
+            label = currentLang === "zh" ? dur + "小时用量" : dur + "h usage";
+          } else if (unit.indexOf("DAY") !== -1) {
+            label = currentLang === "zh" ? dur + "天用量" : dur + "d usage";
+          } else {
+            label = dur + "s";
+          }
+          els.usageLimitTitle.textContent = label;
+        } else {
+          els.usageLimitTitle.textContent = t("provider.usageLimit");
+        }
+        setUsageCard(els.usageLimitPercent, els.usageLimitReset, els.usageLimitBar, usedL, limitL, resetL);
+      }
+
+      // 刷新时间
+      var now = new Date();
+      var timeStr = now.getHours().toString().padStart(2, "0") + ":" + now.getMinutes().toString().padStart(2, "0");
+      els.usageRefreshTime.textContent = t("provider.usageRefreshed") + timeStr;
+
+      toggleEl(els.usagePanel, true);
+    } catch {
+      setUsageCard(els.usageWeeklyPercent, els.usageWeeklyReset, els.usageWeeklyBar, 0, 0, 0);
+      setUsageCard(els.usageLimitPercent, els.usageLimitReset, els.usageLimitBar, 0, 0, 0);
+      els.usageRefreshTime.textContent = "";
+      toggleEl(els.usagePanel, true);
+    } finally {
+      els.btnUsageRefresh.classList.remove("spinning");
+    }
+  }
+
   // ── 保存 Provider 配置 ──
 
   async function handleSave() {
     if (saving) return;
 
     var apiKey = els.apiKeyInput.value.trim();
-    // Ollama 等本地 provider 不需要 API Key
-    var activePreset = currentProvider === "custom" ? CUSTOM_PRESETS[els.customPreset.value] : null;
-    if (!apiKey && !(activePreset && activePreset.keyOptional)) {
+    if (!apiKey) {
       showMsg(t("error.noKey"), "error");
       return;
     }
@@ -1309,11 +1638,6 @@
           params.modelID = els.modelSelect.value;
         }
         params.customPreset = presetKey;
-        // 本地 provider 用户可能改了端口，传递前端编辑的 Base URL
-        var presetObj = CUSTOM_PRESETS[presetKey];
-        if (presetObj && presetObj.keyOptional) {
-          params.baseURL = (els.baseURLInput.value || "").trim();
-        }
       } else {
         // 手动模式
         var baseURL = (els.baseURLInput.value || "").trim();
@@ -2053,6 +2377,7 @@
       // 回填启用状态
       var enabled = data.enabled && data.appId;
       els.chEnabled.checked = !!enabled;
+
       var dmPolicy = data.dmPolicy === "open" ? "open" : "pairing";
       if (els.chDmPolicy) {
         els.chDmPolicy.value = dmPolicy;
@@ -2191,6 +2516,7 @@
 
       var enabled = !!data.enabled && !!data.botId;
       els.wecomEnabled.checked = enabled;
+
       updateWecomGroupAllowFromState();
       if (currentChatPlatform === "wecom") {
         updateChPairingSectionVisibility();
@@ -2329,6 +2655,7 @@
       var enabled = !!data.enabled && !!data.clientId;
       els.dingtalkEnabled.checked = enabled;
 
+
       if (data.bundled === false) {
         showDingtalkMsg(data.bundleMessage || t("error.dingtalkNotBundled"), "error");
       } else {
@@ -2443,6 +2770,7 @@
 
       var enabled = !!data.enabled && !!data.appId;
       els.qqEnabled.checked = enabled;
+
 
       if (data.bundled === false) {
         showQqMsg(data.bundleMessage || t("error.qqNotBundled"), "error");
@@ -2812,6 +3140,7 @@
       // 回填启用状态
       var enabled = data.enabled && data.botToken;
       els.kimiEnabled.checked = !!enabled;
+
     } catch (err) {
       console.error("[Settings] loadKimiConfig failed:", err);
     }
@@ -2990,7 +3319,7 @@
   // provider + subPlatform → 人类可读名称
   function getProviderDisplayName(provider, subPlatform) {
     if (provider === "moonshot") {
-      var names = { "moonshot-cn": "Moonshot CN", "moonshot-ai": "Moonshot AI", "kimi-code": "Kimi 会员订阅" };
+      var names = { "moonshot-cn": "Kimi 开放平台（企业用户）", "moonshot-ai": "Moonshot AI", "kimi-code": "Kimi 会员订阅" };
       return names[subPlatform] || "Kimi";
     }
     var map = { anthropic: "Anthropic", openai: "OpenAI", google: "Google", custom: "Custom" };
@@ -3422,6 +3751,23 @@
     el.classList.toggle("hidden", !show);
   }
 
+  // 同步左侧通道列表的状态指示灯
+  function syncStatusDot(dot, enabled) {
+    if (dot) dot.classList.toggle("connected", !!enabled);
+  }
+
+  // 劫持 checkbox.checked setter + 监听用户点击，自动同步指示灯
+  function bindStatusDot(checkbox, dot) {
+    if (!checkbox || !dot) return;
+    var desc = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "checked");
+    Object.defineProperty(checkbox, "checked", {
+      get: function () { return desc.get.call(this); },
+      set: function (v) { desc.set.call(this, v); syncStatusDot(dot, v); },
+      configurable: true,
+    });
+    checkbox.addEventListener("change", function () { syncStatusDot(dot, checkbox.checked); });
+  }
+
   // 短暂浮层提示（3s 自动消失）
   function showToast(msg) {
     var container = document.getElementById("toastContainer");
@@ -3435,6 +3781,23 @@
   function showMsg(msg, type) {
     els.msgBox.textContent = msg;
     els.msgBox.className = "msg-box " + type;
+  }
+
+  // 非会员提示（带订阅超链接）
+  function showOAuthNoMembership() {
+    var url = "https://kimi.com/membership/pricing?utm_source=oneclaw";
+    els.msgBox.textContent = "";
+    els.msgBox.className = "msg-box error";
+    els.msgBox.appendChild(document.createTextNode(t("provider.oauthNoMembership") + " "));
+    var link = document.createElement("a");
+    link.href = "#";
+    link.textContent = t("provider.oauthSubscribeLink");
+    link.className = "oauth-membership-link";
+    link.addEventListener("click", function (e) {
+      e.preventDefault();
+      if (window.oneclaw?.openExternal) window.oneclaw.openExternal(url);
+    });
+    els.msgBox.appendChild(link);
   }
 
   function hideMsg() {
@@ -3484,6 +3847,7 @@
         if (currentProvider === "moonshot") {
           updateModels();
           updatePlatformLink();
+          updateOAuthVisibility();
           // 切换子平台时回填对应配置
           fillSavedProviderFields("moonshot", getSubPlatform());
         }
@@ -3508,6 +3872,16 @@
     });
 
     // 密码可见性
+    els.btnOAuth.addEventListener("click", handleOAuthLogin);
+    if (els.btnOAuthCancel) {
+      els.btnOAuthCancel.addEventListener("click", handleOAuthCancel);
+    }
+    if (els.btnOAuthLogout) {
+      els.btnOAuthLogout.addEventListener("click", handleOAuthLogout);
+    }
+    if (els.btnUsageRefresh) {
+      els.btnUsageRefresh.addEventListener("click", loadUsage);
+    }
     els.btnToggleKey.addEventListener("click", togglePasswordVisibility);
 
     // 保存
@@ -3518,7 +3892,14 @@
       if (e.key === "Enter") handleSave();
     });
 
-    // 聊天集成页二级平台切换
+    // 通道启用指示灯绑定
+    bindStatusDot(els.chEnabled, els.feishuStatusDot);
+    bindStatusDot(els.wecomEnabled, els.wecomStatusDot);
+    bindStatusDot(els.dingtalkEnabled, els.dingtalkStatusDot);
+    bindStatusDot(els.kimiEnabled, els.kimiStatusDot);
+    bindStatusDot(els.qqEnabled, els.qqStatusDot);
+
+    // 远程控制页二级平台切换
     els.chatPlatformButtons.forEach(function (button) {
       button.addEventListener("click", function () {
         switchChatPlatform(button.dataset.chatPlatform || "feishu");

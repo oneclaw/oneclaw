@@ -293,6 +293,20 @@ button, input, select, label, a {
   transform: scale(0.985);
 }
 
+/* 通道状态指示灯：仅已启用时显示绿色圆点 */
+.platform-status-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #34c759;
+  flex-shrink: 0;
+  margin-left: auto;
+}
+
+.platform-status-dot:not(.connected) {
+  visibility: hidden;
+}
+
 .chat-platform-label {
   font-size: 13px;
   font-weight: 600;
@@ -303,10 +317,6 @@ button, input, select, label, a {
 
 .chat-platform-meta {
   display: none;
-}
-
-.chat-platform-toggle {
-  margin-left: auto;
 }
 
 .chat-platform-panels {
@@ -341,34 +351,18 @@ button, input, select, label, a {
 .current-provider-status {
   display: flex;
   align-items: center;
-  gap: 8px;
   padding: 8px 12px;
   font-size: 12.5px;
   font-weight: 500;
-  color: var(--success);
-  background: var(--success-bg);
-  border: 1px solid rgba(212, 119, 106, 0.2);
+  color: var(--text-secondary);
+  background: var(--bg-secondary);
   border-radius: var(--radius-sm);
-}
-
-.current-provider-status::before {
-  content: "";
-  width: 6px;
-  height: 6px;
-  background: var(--success);
-  border-radius: 50%;
-  flex-shrink: 0;
 }
 
 /* 断连/错误状态 */
 .current-provider-status.disconnected {
   color: var(--error);
   background: var(--error-bg);
-  border-color: rgba(192, 57, 43, 0.2);
-}
-
-.current-provider-status.disconnected::before {
-  background: var(--error);
 }
 
 /* ── Provider 分段选择器 ── */
@@ -681,29 +675,7 @@ select option {
   margin: 0;
 }
 
-.search-advanced {
-  margin-top: 12px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  padding: 0;
-}
-
-.search-advanced summary {
-  cursor: pointer;
-  padding: 8px 12px;
-  font-size: 13px;
-  color: var(--text-secondary);
-  user-select: none;
-}
-
-.search-advanced[open] summary {
-  border-bottom: 1px solid var(--border);
-}
-
-.search-advanced .field-group {
-  padding: 12px;
-  margin: 0;
-}
+/* search-advanced 已统一为 details-advanced 通用类 */
 
 /* ── 按钮 ── */
 
@@ -796,6 +768,270 @@ select option {
   margin-top: auto;
   padding-top: 24px;
   padding-bottom: 32px;
+}
+
+/* OAuth 登录按钮 */
+.btn-oauth {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  padding: 10px 16px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  font-size: 14px;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+}
+
+.btn-oauth:hover:not(:disabled) {
+  background: var(--accent-dim);
+  border-color: var(--accent);
+}
+
+.btn-oauth:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.btn-oauth .lucide-icon {
+  stroke: currentColor;
+  flex-shrink: 0;
+}
+
+.btn-oauth-spinner {
+  width: 16px;
+  height: 16px;
+  border: 2px solid var(--text-secondary);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin 0.6s linear infinite;
+}
+
+.btn-oauth-cancel {
+  width: 100%;
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--text-secondary);
+  padding: 8px 20px;
+  border-radius: 8px;
+  font-size: 13px;
+  cursor: pointer;
+  margin-top: 6px;
+  transition: background 0.15s, color 0.15s;
+}
+
+.btn-oauth-cancel:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.btn-oauth-logout {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  width: 100%;
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--text-secondary);
+  padding: 10px 20px;
+  border-radius: 8px;
+  font-size: 14px;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+
+.btn-oauth-logout:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+  border-color: var(--text-secondary);
+}
+
+.btn-oauth-logout .lucide-icon {
+  stroke: currentColor;
+  flex-shrink: 0;
+}
+
+.oauth-status {
+  font-size: 13px;
+  color: var(--text-secondary);
+  margin-top: 6px;
+  text-align: center;
+}
+
+/* ── Kimi 用量卡片 ── */
+
+.usage-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.usage-cards {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.usage-card {
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg-secondary);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.usage-card-header {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.usage-card-title {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-muted);
+}
+
+.usage-card-body {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.usage-card-percent {
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--text-strong);
+  letter-spacing: -0.02em;
+}
+
+.usage-card-reset {
+  font-size: 11px;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.usage-bar {
+  height: 4px;
+  border-radius: 2px;
+  background: var(--border);
+  overflow: hidden;
+}
+
+.usage-bar-fill {
+  height: 100%;
+  border-radius: 2px;
+  background: var(--text-strong);
+  transition: width 0.3s ease;
+  width: 0;
+}
+
+.usage-bar-fill.warn {
+  background: #e6a23c;
+}
+
+.usage-bar-fill.danger {
+  background: var(--error);
+}
+
+.usage-refresh-row {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.usage-refresh-time {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.btn-usage-refresh {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: color var(--transition), background var(--transition);
+}
+
+.btn-usage-refresh:hover {
+  color: var(--text-primary);
+  background: var(--bg-hover);
+}
+
+.btn-usage-refresh .lucide-icon {
+  stroke: currentColor;
+}
+
+.btn-usage-refresh.spinning .lucide-icon {
+  animation: spin 0.8s linear infinite;
+}
+
+.oauth-status.success {
+  color: #27ae60;
+}
+
+/* ── 通用折叠高级选项（details-advanced）── */
+.details-advanced {
+  margin-top: 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 0;
+}
+
+.details-advanced > summary {
+  cursor: pointer;
+  padding: 8px 12px;
+  font-size: 13px;
+  color: var(--text-secondary);
+  user-select: none;
+}
+
+.details-advanced[open] > summary {
+  border-bottom: 1px solid var(--border);
+}
+
+.details-advanced .field-group {
+  padding: 12px;
+  margin: 0;
+}
+
+/* 非折叠模式：去掉外观，summary 隐藏，无边框 */
+.details-advanced--plain {
+  border: none;
+  margin-top: 0;
+}
+
+.details-advanced--plain > summary {
+  display: none;
+}
+
+.details-advanced--plain .field-group {
+  padding: 0;
+}
+
+.oauth-membership-link {
+  color: var(--accent);
+  text-decoration: none;
+  font-weight: 500;
+}
+
+.oauth-membership-link:hover {
+  text-decoration: underline;
 }
 
 .btn-spinner {
