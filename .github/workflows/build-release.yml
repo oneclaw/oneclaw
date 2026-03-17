@@ -266,7 +266,7 @@ jobs:
           path: out/win32-arm64
 
       # 安装 js-yaml（merge 脚本依赖）
-      - run: npm install js-yaml
+      - run: npm install js-yaml --ignore-scripts --no-save --no-audit --no-fund
 
       # 合并多架构 yml + 收集产物
       - name: 合并发布文件
