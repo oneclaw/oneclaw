@@ -24,6 +24,8 @@ jobs:
   # ── macOS arm64：签名 + 公证 ──
   build-mac-arm64:
     runs-on: macos-14
+    env:
+      HAS_MAC_SIGNING: ${{ secrets.CSC_LINK != '' && secrets.CSC_KEY_PASSWORD != '' && secrets.CSC_NAME != '' && secrets.APPLE_API_KEY != '' && secrets.APPLE_API_KEY_ID != '' && secrets.APPLE_API_ISSUER != '' }}
     steps:
       - uses: actions/checkout@v4
 
@@ -38,6 +40,7 @@ jobs:
 
       # 导入签名证书到临时 keychain
       - name: 导入 macOS 签名证书
+        if: ${{ env.HAS_MAC_SIGNING == 'true' }}
         env:
           CSC_LINK: ${{ secrets.CSC_LINK }}
           CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
@@ -52,6 +55,7 @@ jobs:
 
       # 写入 Apple API Key 供公证使用
       - name: 准备 Apple 公证密钥
+        if: ${{ env.HAS_MAC_SIGNING == 'true' }}
         env:
           APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
           APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
@@ -62,6 +66,7 @@ jobs:
       # 构建 macOS arm64（签名 + 公证）
       # APPLE_API_KEY 必须是 .p8 文件路径（notarytool --key 要求），不是文件内容
       - name: 构建 macOS arm64
+        if: ${{ env.HAS_MAC_SIGNING == 'true' }}
         env:
           ONECLAW_MAC_SIGN_AND_NOTARIZE: "true"
           CSC_NAME: ${{ secrets.CSC_NAME }}
@@ -71,6 +76,10 @@ jobs:
         run: |
           export APPLE_API_KEY="$HOME/private_keys/AuthKey_${APPLE_API_KEY_ID}.p8"
           npm run dist:mac:arm64
+
+      - name: 构建 macOS arm64（adhoc）
+        if: ${{ env.HAS_MAC_SIGNING != 'true' }}
+        run: npm run dist:mac:arm64
 
       - name: 清理 blockmap（macOS arm64）
         run: find out/darwin-arm64 -type f -name "*.blockmap" -delete
@@ -87,6 +96,8 @@ jobs:
   # ── macOS x64：签名 + 公证（在 arm64 runner 上交叉编译） ──
   build-mac-x64:
     runs-on: macos-14
+    env:
+      HAS_MAC_SIGNING: ${{ secrets.CSC_LINK != '' && secrets.CSC_KEY_PASSWORD != '' && secrets.CSC_NAME != '' && secrets.APPLE_API_KEY != '' && secrets.APPLE_API_KEY_ID != '' && secrets.APPLE_API_ISSUER != '' }}
     steps:
       - uses: actions/checkout@v4
 
@@ -99,6 +110,7 @@ jobs:
       - run: npm run build
 
       - name: 导入 macOS 签名证书
+        if: ${{ env.HAS_MAC_SIGNING == 'true' }}
         env:
           CSC_LINK: ${{ secrets.CSC_LINK }}
           CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
@@ -112,6 +124,7 @@ jobs:
           rm /tmp/cert.p12
 
       - name: 准备 Apple 公证密钥
+        if: ${{ env.HAS_MAC_SIGNING == 'true' }}
         env:
           APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
           APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
@@ -120,6 +133,7 @@ jobs:
           echo "$APPLE_API_KEY" > ~/private_keys/AuthKey_${APPLE_API_KEY_ID}.p8
 
       - name: 构建 macOS x64
+        if: ${{ env.HAS_MAC_SIGNING == 'true' }}
         env:
           ONECLAW_MAC_SIGN_AND_NOTARIZE: "true"
           CSC_NAME: ${{ secrets.CSC_NAME }}
@@ -129,6 +143,10 @@ jobs:
         run: |
           export APPLE_API_KEY="$HOME/private_keys/AuthKey_${APPLE_API_KEY_ID}.p8"
           npm run dist:mac:x64
+
+      - name: 构建 macOS x64（adhoc）
+        if: ${{ env.HAS_MAC_SIGNING != 'true' }}
+        run: npm run dist:mac:x64
 
       - name: 清理 blockmap（macOS x64）
         run: find out/darwin-x64 -type f -name "*.blockmap" -delete
