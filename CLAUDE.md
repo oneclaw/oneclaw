@@ -24,13 +24,13 @@ The main process spawns a gateway subprocess, waits for its health check, then o
 | Packager | electron-builder 26.7.0 |
 | Updater | electron-updater (generic provider, CDN at `oneclaw.cn`) |
 | Targets | macOS DMG + ZIP (arm64/x64), Windows NSIS (x64/arm64) |
-| Version scheme | Calendar-based: `2026.2.26` (auto-fetched from openclaw npm at build time) |
+| Version scheme | Calendar-based: `YYYY.MMDD.N` (e.g. `2026.318.0`), auto-derived from git tag |
 
 ## Repository Layout
 
 ```
 oneclaw/
-├── src/                    # 25 TypeScript modules (6571 LOC) + 6 test files
+├── src/                    # 35 TypeScript modules (10032 LOC) + 13 test files
 │   ├── main.ts             # App entry, lifecycle, IPC, Dock toggle, config recovery
 │   ├── constants.ts        # Path resolution (dev vs packaged), health check params
 │   ├── gateway-process.ts  # Child process state machine + diagnostics
@@ -39,19 +39,28 @@ oneclaw/
 │   ├── window.ts           # BrowserWindow lifecycle, token injection, retry
 │   ├── window-close-policy.ts  # Close behavior: hide vs destroy
 │   ├── tray.ts             # System tray icon + i18n context menu
-│   ├── preload.ts          # contextBridge IPC whitelist (42 methods + 4 listeners)
+│   ├── preload.ts          # contextBridge IPC whitelist (~66 methods + 5 listeners)
 │   ├── provider-config.ts  # Provider presets, verification, config R/W
 │   ├── setup-manager.ts    # Setup wizard window lifecycle
 │   ├── setup-ipc.ts        # Setup validation + config write + CLI install
 │   ├── setup-completion.ts # Setup wizard completion detection
+│   ├── install-detector.ts # Setup Step 0: installation conflict detection
 │   ├── oneclaw-config.ts   # OneClaw ownership config (deviceId, setupCompletedAt, migration)
 │   ├── settings-ipc.ts     # Settings CRUD, backup/restore, Kimi, CLI, advanced
 │   ├── config-backup.ts    # Rolling backups + last-known-good snapshot + restore
 │   ├── share-copy.ts       # Remote share copy content (CDN fetch + local fallback)
 │   ├── kimi-config.ts      # Kimi robot plugin + Kimi Search configuration
+│   ├── kimi-oauth.ts       # Kimi OAuth device code login + token refresh
+│   ├── skill-store.ts      # Skill marketplace (clawhub CLI integration)
+│   ├── build-config.ts     # Build-time injected config reader (PostHog, registry URL)
 │   ├── cli-integration.ts  # CLI wrapper generation, PATH injection (POSIX + Windows)
 │   ├── launch-at-login.ts  # macOS/Windows launch at login toggle
-│   ├── feishu-pairing-monitor.ts  # Feishu pairing request polling + state
+│   ├── channel-pairing-monitor.ts  # Unified multi-channel pairing polling + state
+│   ├── channel-pairing-store.ts    # Per-channel pairing approval persistence
+│   ├── feishu-pairing-monitor.ts   # Feishu-specific pairing monitor
+│   ├── wecom-config.ts     # WeCom (企业微信) plugin config
+│   ├── dingtalk-config.ts  # DingTalk connector plugin config
+│   ├── qqbot-config.ts     # QQ Bot plugin config
 │   ├── update-banner-state.ts     # Update banner pure state machine
 │   ├── analytics.ts        # Telemetry (PostHog-style, retry + fallback URL)
 │   ├── analytics-events.ts # Event classification + property sanitization
@@ -60,27 +69,33 @@ oneclaw/
 ├── chat-ui/                # Lit-based Chat UI SPA (file:// loaded)
 │   └── ui/                 # Vite project: Lit 3 components, sidebar, settings view
 ├── setup/                  # Setup wizard frontend (vanilla HTML/CSS/JS)
-│   ├── index.html          # 3-step wizard with data-i18n attributes
+│   ├── index.html          # Multi-step wizard with data-i18n attributes
 │   ├── setup.css           # Dark/light theme via prefers-color-scheme
-│   └── setup.js            # i18n dict (en/zh) + form logic
+│   ├── setup.js            # i18n dict (en/zh) + form logic
+│   └── lucide-sprite.generated.js  # Icon sprites
 ├── settings/               # Settings page frontend (vanilla HTML/CSS/JS)
 │   ├── index.html          # Provider, Search, Channels, KimiClaw, Appearance, Advanced, Backup tabs
 │   ├── settings.css        # Dark/light theme via prefers-color-scheme
-│   └── settings.js         # Provider CRUD, Feishu, Kimi, Kimi Search, CLI, backup/restore
+│   ├── settings.js         # Provider CRUD, multi-channel, Kimi, CLI, backup/restore
+│   ├── lucide-sprite.generated.js  # Icon sprites
+│   └── share-copy-content.json     # Fallback share copy content
 ├── scripts/
 │   ├── package-resources.js    # Downloads Node.js 22 + installs openclaw from npm
 │   ├── afterPack.js            # electron-builder hook: injects resources post-strip
 │   ├── run-mac-builder.js      # macOS build wrapper (sign + notarize)
 │   ├── run-with-env.js         # .env loader for child processes
 │   ├── merge-release-yml.js    # Merges per-arch latest.yml for auto-updater
+│   ├── generate-settings-icons.js  # Lucide icon sprite generator
+│   ├── installer.nsh           # NSIS custom installer script
+│   ├── lib/                    # Shared script utilities
 │   ├── dist-all-parallel.sh    # Parallel cross-platform build
 │   └── clean.sh
 ├── assets/                 # Icons: .icns, .ico, .png, tray templates
-├── docs/                   # Plans and documentation
+├── docs/                   # Plans, design guidelines, architecture docs
 ├── .github/workflows/      # CI: build-release.yml + publish-release.yml + publish-share-copy.yml
 ├── electron-builder.yml    # Build config (DMG + ZIP for mac, NSIS for win)
 ├── tsconfig.json           # target ES2022, module CommonJS
-└── .env                    # Signing keys + analytics config (gitignored)
+└── .env                    # Signing keys + build config (gitignored)
 ```
 
 **Generated at build time (all gitignored):**
@@ -120,192 +135,21 @@ npm run clean                # Remove all generated files
 
 ## Key Design Decisions
 
-### Gateway Child Process (`gateway-process.ts`)
-
-State machine: `stopped → starting → running → stopping → stopped`
-
-**Generation tracking:** Each `spawn()` call increments a generation counter. The exit handler only processes exits matching the current generation, preventing stale process exits from corrupting the state machine during rapid restart cycles.
-
-Startup sequence:
-
-1. Inject env vars: `OPENCLAW_LENIENT_CONFIG=1`, `OPENCLAW_GATEWAY_TOKEN`, `OPENCLAW_NPM_BIN`, `OPENCLAW_NO_RESPAWN=1`
-2. Prepend bundled runtime to `PATH`
-3. Resolve entry: try `openclaw.mjs` first, fall back to `gateway-entry.mjs` (legacy)
-4. Resolve port: env `OPENCLAW_GATEWAY_PORT` > config `gateway.port` > default `18789`
-5. Spawn: `<node> <entry.js> gateway run --port <resolved> --bind loopback`
-6. Disable gateway's own npm update check (`update.checkOnStart = false`) — OneClaw is packaged as a whole unit, users can't independently update the gateway
-7. Poll `GET http://127.0.0.1:<port>/` every 500ms, 90s timeout
-8. Verify child PID is still alive (avoid port collision false positives)
-
-Main process retries gateway startup **3 times** before showing an error dialog. This covers Windows cold-start slowness (Defender scanning, disk warmup). On success, the current config is snapshotted as "last known good" for recovery.
-
-All stdout/stderr is captured to `~/.openclaw/gateway.log` for diagnostics.
-
-**Automatic restart:** Gateway automatically restarts after user config changes (provider switch, model change, etc.) to pick up the new settings.
-
-### Token Injection (`window.ts`)
-
-The gateway requires an auth token. The main process generates one (or reads from config), passes it to the gateway via env var, and injects it into the BrowserWindow via `executeJavaScript`:
-
-```js
-localStorage.setItem("openclaw.control.settings.v1", JSON.stringify({token}))
-```
-
-### Provider Configuration (`provider-config.ts`)
-
-Centralized module for all provider presets, API key verification, and config file I/O. Shared by both Setup wizard and Settings page.
-
-Supported providers:
-
-- **Anthropic** — standard Anthropic Messages API
-- **Moonshot** — 3 sub-platforms: `moonshot-cn`, `moonshot-ai`, `kimi-code`
-- **OpenAI** — OpenAI completions API
-- **Google** — Google Generative AI
-- **Custom** — user-supplied base URL + API type
-
-All sub-platforms (including Kimi Code) use a unified config format: `apiKey` + `baseUrl` + `api` + `models` written to `models.providers`.
-
-### Setup Wizard (`setup-ipc.ts`, `setup/`)
-
-First-launch 3-step wizard: Welcome → Provider Config → Done.
-
-Also supports optional Feishu channel configuration (appId + appSecret).
-
-Step 3 (Done) includes optional toggles for:
-
-- **Install CLI**: Auto-install `openclaw` command to PATH (enabled by default)
-- **Launch at Login**: Register app for system startup (macOS/Windows only)
-
-Config is written to `~/.openclaw/openclaw.json`. Setup completion is marked by `config.wizard.lastRunAt`.
-
-### Settings Page (`settings-ipc.ts`, `settings/`)
-
-Post-setup configuration management embedded inside the Chat UI (via `app:navigate` IPC). Opened from tray menu "Settings", Chat UI sidebar button, or macOS `Cmd+,`.
-
-Tabs:
-
-- **Provider** — View/edit provider config, verify API key, switch models
-- **Search** — Kimi Search web search toggle + dedicated API key (auto-reuses Kimi Code key if available)
-- **Channels** — Feishu integration (appId + appSecret, DM scope, group access control, pairing approval/rejection)
-- **KimiClaw** — Kimi robot plugin token + enable/disable toggle
-- **Appearance** — Theme selector (system/light/dark), thinking process visibility
-- **Advanced** — Browser profile selector (openclaw/Chrome), iMessage channel toggle, Launch at login toggle, CLI command (`openclaw`) install/uninstall
-- **Backup & Restore** — Rolling backup list, restore last-known-good, gateway start/stop/restart, factory reset
-
-### Config Backup & Recovery (`config-backup.ts`)
-
-Non-destructive config safety net:
-
-- **Rolling backups**: Max 10 timestamped copies in `~/.openclaw/config-backups/`, created automatically before every config write
-- **Last Known Good**: Snapshot of config at most recent successful gateway startup (`openclaw.last-known-good.json`)
-- **Setup baseline**: Read-only copy of initial post-wizard config
-- **Recovery flow**: On startup, if config is invalid JSON or gateway fails to start, the main process offers "Restore Last Known Good" / "Open Settings" / "Dismiss"
-- **Factory reset**: Delete config entirely and relaunch into Setup wizard (preserves chat history)
-
-### Share Copy (`share-copy.ts`)
-
-Remote marketing content distribution for the "Share OneClaw" feature in Settings:
-
-- Fetches from CDN (`oneclaw.cn/config/share-copy-content.json`) with 5-minute cache
-- Falls back to bundled `settings/share-copy-content.json`, then hardcoded defaults
-- Bilingual (zh/en) with automatic field normalization
-
-### Kimi Plugin & Search (`kimi-config.ts`)
-
-Kimi robot plugin and search configuration management:
-
-- **kimi-claw**: Writes `plugins.entries["kimi-claw"]` with bridge/gateway WebSocket params; validates plugin bundling (`openclaw.plugin.json` + entry file) before enabling
-- **kimi-search**: Dedicated API key stored in sidecar file (`~/.openclaw/credentials/kimi-search-api-key`); auto-reuses kimi-code provider API key if no dedicated key configured; auto-enabled when kimi-claw is enabled
-
-### CLI Integration (`cli-integration.ts`)
-
-Cross-platform `openclaw` command-line wrapper management:
-
-- **POSIX**: Wrapper script at `~/.openclaw/bin/openclaw` + PATH injection into `.zprofile`/`.bash_profile` via `# >>> oneclaw-cli >>>` markers
-- **Windows**: Wrapper `.cmd` at `%LOCALAPPDATA%\OneClaw\bin\` + PowerShell user PATH modification
-- Idempotent install/uninstall with marker-based detection
-- Auto-install during Setup completion (optional, enabled by default); manual toggle in Settings > Advanced
-
-### Launch at Login (`launch-at-login.ts`)
-
-System startup integration via `app.getLoginItemSettings()` / `setLoginItemSettings()`:
-
-- Supported on macOS and Windows only (Linux unsupported)
-- Pure functions for testability
-- Configurable in Setup wizard step 3 and Settings > Advanced
-
-### Feishu Pairing Monitor (`feishu-pairing-monitor.ts`)
-
-Feishu robot pairing request polling and state management:
-
-- Polling intervals: 10s foreground, 60s background
-- Tracks pending pairing requests with auto-approval (oldest request first)
-- Real-time state subscriptions via `onFeishuPairingState()` IPC listener
-
-### Update Banner State Machine (`update-banner-state.ts`)
-
-Pure state machine for update notification UI:
-
-- Status flow: `hidden → available → downloading → (done | failed)`
-- Download progress tracking (0–100%)
-- Badge indicator for new update availability
-- Real-time state subscriptions via `onUpdateState()` IPC listener
-
-### Gateway RPC (`gateway-rpc.ts`)
-
-Low-level WebSocket RPC for main→gateway communication:
-
-- One-shot calls: connect → Protocol 3 handshake → method → close
-- Used internally for gateway CLI invocations (e.g., `gateway stop` to probe stale ports)
-
-### macOS Dock Visibility (`main.ts`)
-
-Dynamic Dock icon toggle: visible when any window is shown, hidden when all windows are closed (pure tray mode). Driven by `browser-window-created` + `show`/`hide`/`closed` events.
-
-### Tray i18n (`tray.ts`)
-
-Tray context menu labels are localized (Chinese/English) based on `app.getLocale()`. Menu includes: Open Dashboard, Gateway status, Restart Gateway, Settings, Check for Updates, Quit.
-
-### Auto-Updater (`auto-updater.ts`)
-
-CDN-based updates via `electron-updater`:
-
-- macOS requires ZIP artifact (DMG is for manual distribution)
-- Auto-check every 4 hours (30s startup delay)
-- Download progress shown in tray tooltip
-- Pre-quit callback ensures window close policy doesn't block `quitAndInstall()`
-
-### Incremental Resource Packaging (`package-resources.js`)
-
-A stamp file (`resources/targets/<target>/.node-stamp`) records `version-platform-arch`. If stamp matches, skip download. Cross-platform builds (e.g., building win32-x64 on darwin-arm64) auto-detect the mismatch and re-download.
-
-openclaw is installed directly from npm (no local upstream directory needed). Node.js download mirrors: npmmirror.com (China) first, nodejs.org fallback.
-
-### afterPack Hook (`afterPack.js`)
-
-electron-builder strips `node_modules` during packaging. The afterPack hook injects the pre-built gateway resources from `resources/targets/<target>/` into the final app bundle **after** stripping, bypassing the strip logic entirely.
-
-Target ID resolution: env `ONECLAW_TARGET` > `${electronPlatformName}-${arch}`.
-
-### Preload Security (`preload.ts`)
-
-Electron 40 defaults to sandbox mode. 42 IPC methods + 4 event listeners are exposed via `contextBridge`:
-
-**Gateway control:** `restartGateway`, `startGateway`, `stopGateway`, `getGatewayState`
-**Auto-update:** `checkForUpdates`, `getUpdateState`, `downloadAndInstallUpdate`
-**Feishu:** `getFeishuPairingState`, `refreshFeishuPairingState`
-**Setup:** `verifyKey`, `saveConfig`, `setupGetLaunchAtLogin`, `completeSetup`
-**Settings — Provider:** `settingsGetConfig`, `settingsVerifyKey`, `settingsSaveProvider`
-**Settings — Channel:** `settingsGetChannelConfig`, `settingsSaveChannel`, `settingsListFeishuPairing`, `settingsListFeishuApproved`, `settingsApproveFeishuPairing`, `settingsRejectFeishuPairing`, `settingsAddFeishuGroupAllowFrom`, `settingsRemoveFeishuApproved`
-**Settings — Kimi:** `settingsGetKimiConfig`, `settingsSaveKimiConfig`, `settingsGetKimiSearchConfig`, `settingsSaveKimiSearchConfig`
-**Settings — Advanced/CLI:** `settingsGetAdvanced`, `settingsSaveAdvanced`, `settingsGetCliStatus`, `settingsInstallCli`, `settingsUninstallCli`
-**Settings — Backup:** `settingsListConfigBackups`, `settingsRestoreConfigBackup`, `settingsRestoreLastKnownGood`, `settingsResetConfigAndRelaunch`
-**Settings — Share:** `settingsGetShareCopy`
-**Event listeners:** `onSettingsNavigate`, `onNavigate`, `onUpdateState`, `onFeishuPairingState`
-**Chat UI:** `openSettings`, `openWebUI`, `getGatewayPort`
-**Utility:** `openExternal`
-
-`openExternal` exists because `shell.openExternal` is unavailable in sandboxed preload — must go through IPC to main process.
+> Detailed per-module design documentation: [docs/architecture.md](docs/architecture.md)
+> Full IPC API reference: [docs/ipc-api.md](docs/ipc-api.md)
+
+**Core subsystems at a glance:**
+
+- **Gateway process** — State machine (`stopped→starting→running→stopping`) with generation tracking to prevent stale exit events. 3 retries on startup, 90s health check timeout, auto-restart on config change.
+- **Token injection** — Auth token passed to gateway via env var, injected into BrowserWindow via URL fragment (`#token=...`).
+- **Provider config** — Unified module shared by Setup + Settings. All Moonshot sub-platforms (moonshot-cn/ai/kimi-code) write `apiKey`+`baseUrl`+`api`+`models` to `models.providers`.
+- **Kimi OAuth** — Device code flow via `auth.kimi.com`, 60s refresh interval, 300s refresh threshold.
+- **Setup wizard** — Step 0 (conflict detection) → Step 1 (welcome) → Step 2 (provider) → Step 3 (done + CLI + login toggle).
+- **Settings** — 7 tabs: Provider, Search, Channels, KimiClaw, Appearance, Advanced, Backup.
+- **Multi-channel integration** — Unified pairing monitor aggregates Feishu, WeCom, DingTalk, QQ Bot with per-channel state tracking and auto-approval.
+- **Skill store** — clawhub CLI integration, skills at `~/.openclaw/workspace/skills/`, registry config in `~/.openclaw/skill-store.json`.
+- **Config backup** — Rolling 10 backups + last-known-good snapshot + factory reset.
+- **Preload security** — ~66 IPC methods + 5 event listeners via `contextBridge` (sandbox mode).
 
 ## Runtime Paths (on user's machine)
 
@@ -321,8 +165,12 @@ Electron 40 defaults to sandbox mode. 42 IPC methods + 4 event listeners are exp
   │   └── openclaw-YYYYMMDD-HHmmss.json
   ├── credentials/
   │   └── kimi-search-api-key          # Kimi Search dedicated API key (sidecar file)
+  ├── workspace/
+  │   └── skills/                      # Installed skills (via clawhub)
+  ├── skill-store.json                 # Skill store registry config (standalone)
   └── bin/
-      └── openclaw                     # CLI wrapper script (POSIX) or .cmd (Windows)
+      ├── openclaw                     # CLI wrapper script (POSIX) or .cmd (Windows)
+      └── clawhub                      # clawhub CLI wrapper
 ```
 
 ## Design Rules
@@ -346,7 +194,7 @@ For comprehensive design guidelines, please refer to:
 
 2. **Cross-platform build needs re-packaging.** After switching target platform, `npm run package:resources` must run again because the Node.js binary and native modules differ per platform.
 
-3. **All Moonshot sub-platforms use unified config.** All three (moonshot-cn, moonshot-ai, kimi-code) write `apiKey` + `baseUrl` + `api` + `models` to `models.providers`. No special-casing.
+3. **All Kimi sub-platforms use unified config.** All three (moonshot-cn, moonshot-ai, kimi-code) write `apiKey` + `baseUrl` + `api` + `models` to `models.providers`. No special-casing.
 
 4. **Health check timeout is 90 seconds.** This is intentionally long for Windows. Don't reduce it without testing on slow machines.
 
@@ -354,7 +202,7 @@ For comprehensive design guidelines, please refer to:
 
 6. **macOS signing.** By default uses ad-hoc identity (`-`). Set `ONECLAW_MAC_SIGN_AND_NOTARIZE=true` + `CSC_NAME`, `APPLE_API_KEY`, `APPLE_API_KEY_ID`, `APPLE_API_ISSUER` in `.env` for real signing.
 
-7. **Version is calendar-based** (`2026.2.26`). Don't manually edit `package.json` version.
+7. **Version is auto-derived from git tag.** Format: `YYYY.MMDD.N` (e.g. `v2026.318.0`). `package.json` stays `0.0.0-dev`; CI extracts version from tag via `npm version`. Never manually edit `package.json` version.
 
 8. **No local upstream directory needed.** openclaw is installed from npm directly during `package:resources`. The `upstream/` directory is no longer required.
 
@@ -378,48 +226,10 @@ For comprehensive design guidelines, please refer to:
 
 18. **`oneclaw.config.json` is the ownership marker.** OneClaw uses this file to detect config ownership at startup. Detection flow: `oneclaw.config.json` exists → normal startup; `.device-id` exists → legacy migration; `openclaw.json` exists without marker → external OpenClaw takeover; nothing → fresh Setup. Do not delete this file manually.
 
-## Architecture Diagram
+19. **Skill store config is standalone.** Registry URL stored in `~/.openclaw/skill-store.json`, not in gateway config. Skills installed to `~/.openclaw/workspace/skills/`, not `~/.openclaw/skills/`.
 
-```
-┌──────────────────────────────────────────────────────────────┐
-│                   Electron Main Process                       │
-│                                                              │
-│  main.ts ─── gateway-process.ts ─── constants.ts             │
-│     │              │                     │                   │
-│     │         spawn child ──────── path resolution           │
-│     │              │                                         │
-│     ├── window.ts (BrowserWindow + token inject)             │
-│     │     └── window-close-policy.ts (hide vs destroy)       │
-│     ├── tray.ts   (system tray + i18n menu)                  │
-│     ├── provider-config.ts (presets + verify + config)       │
-│     ├── config-backup.ts (rolling backups + recovery)        │
-│     ├── setup-manager.ts + setup-ipc.ts (wizard + CLI)       │
-│     │     └── setup-completion.ts (completion detection)     │
-│     ├── settings-ipc.ts + settings/ (embedded settings)      │
-│     ├── share-copy.ts (CDN content + fallback)               │
-│     ├── kimi-config.ts (Kimi plugin + Kimi Search)           │
-│     ├── cli-integration.ts (CLI wrapper + PATH injection)    │
-│     ├── launch-at-login.ts (system startup toggle)           │
-│     ├── feishu-pairing-monitor.ts (pairing request polling)  │
-│     ├── update-banner-state.ts (update UI state machine)     │
-│     ├── gateway-rpc.ts (WebSocket RPC to gateway)            │
-│     ├── analytics.ts + analytics-events.ts (telemetry)       │
-│     ├── auto-updater.ts (CDN updates + progress)             │
-│     ├── gateway-auth.ts (token management)                   │
-│     └── logger.ts (file + console)                           │
-│                                                              │
-│  preload.ts ─── contextBridge (42 IPC + 4 listeners)         │
-└──────────────────┬───────────────────────────────────────────┘
-                   │
-     ┌─────────────┴─────────────┐
-     │   Gateway Child Process   │
-     │   Node.js 22 + openclaw   │
-     │   :configurable loopback  │
-     └─────────────┬─────────────┘
-                   │ HTTP + WebSocket
-     ┌─────────────┴─────────────┐
-     │      BrowserWindow        │
-     │  loads Lit Chat UI from   │
-     │  file:// (chat-ui/dist/)  │
-     └───────────────────────────┘
-```
+20. **CLI wrapper invokes bundled Node.js.** The wrapper scripts use the real bundled Node.js binary from the app package, not the system node.
+
+21. **Token injection uses URL fragment.** Gateway auth token is passed via `#token=...` in the loaded URL, not query parameter or localStorage.
+
+22. **Build config replaces analytics config.** `build-config.json` (renamed from `analytics-config.json`) is injected at build time and read by `build-config.ts`. Contains PostHog key, clawhub registry, and other build constants.

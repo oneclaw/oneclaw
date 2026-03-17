@@ -1,5 +1,6 @@
 # 自动构建 + 发布工作流
-# 触发：推送 v* 标签（如 git tag v2026.2.10 && git push --tags）
+# 触发：推送 v* 标签（如 git tag v2026.318.0 && git push origin v2026.318.0）
+# 版本号格式：YYYY.MMDD.N（年.月日.当天构建序号），从 tag 自动提取
 # 流程：4 并行构建 → 合并 yml → 上传 OSS → 刷新 CDN → 创建 GitHub Release
 
 name: Build & Release
@@ -32,6 +33,11 @@ jobs:
           node-version: 22
 
       - run: npm ci
+
+      # 从 git tag 提取版本号写入 package.json（非 tag 触发时跳过，保持 0.0.0-dev）
+      - name: 注入版本号
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: npm version "${GITHUB_REF_NAME#v}" --no-git-tag-version --allow-same-version
 
       # TypeScript 编译（dist:* 脚本不含 tsc）
       - run: npm run build
@@ -96,6 +102,10 @@ jobs:
 
       - run: npm ci
 
+      - name: 注入版本号
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: npm version "${GITHUB_REF_NAME#v}" --no-git-tag-version --allow-same-version
+
       - run: npm run build
 
       - name: 导入 macOS 签名证书
@@ -157,6 +167,10 @@ jobs:
 
       - run: npm ci
 
+      - name: 注入版本号
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: npm version "${GITHUB_REF_NAME#v}" --no-git-tag-version --allow-same-version
+
       - run: npm run build
 
       # npm 在 Windows 默认用 cmd.exe 跑 scripts，package.json 里的 ENV=val 语法是 bash 专属
@@ -195,6 +209,10 @@ jobs:
           node-version: 22
 
       - run: npm ci
+
+      - name: 注入版本号
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: npm version "${GITHUB_REF_NAME#v}" --no-git-tag-version --allow-same-version
 
       - run: npm run build
 
