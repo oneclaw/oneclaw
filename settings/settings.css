@@ -1748,3 +1748,16 @@ select option {
 .btn-back-to-chat:hover {
   background: var(--bg-hover);
 }
+
+/* 功能标签（红底白字） */
+.feature-badge {
+  display: inline-block;
+  font-size: 10px;
+  line-height: 1;
+  padding: 2px 6px;
+  margin-left: 6px;
+  border-radius: 3px;
+  background: var(--accent);
+  color: #fff;
+  vertical-align: middle;
+}
