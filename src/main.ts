@@ -412,7 +412,7 @@ function ensureOAuthTokenRefresh(): void {
       if (cfg?.models?.providers?.["kimi-coding"]) {
         cfg.models.providers["kimi-coding"].apiKey = refreshedToken.access_token;
         writeUserConfig(cfg);
-        requestGatewayRestart("oauth-token-refresh");
+        // gateway 通过 chokidar 监控配置文件变化，自动热加载 apiKey，无需重启
       }
     } catch (err: any) {
       log.error(`OAuth token 刷新后更新配置失败: ${err.message}`);
