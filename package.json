@@ -24,6 +24,7 @@
     "electron-updater": "^6.3.9"
   },
   "devDependencies": {
+    "@electron/asar": "^4.1.0",
     "@types/node": "^22.15.0",
     "electron": "^40.2.1",
     "electron-builder": "^26.7.0",

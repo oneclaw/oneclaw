@@ -102,9 +102,11 @@ export function setupAutoUpdater(): void {
     publishUpdateBannerState({ type: "download-finished" });
     log.info("[updater] 准备自动重启安装更新");
     beforeQuitForInstallCallback?.();
-    // isSilent=true: 用户已在应用内确认更新，NSIS 无需再弹 UI（避免与 WM_CLOSE 竞争）
+    // isSilent=false: 显示 NSIS 安装进度条，避免用户以为应用消失了。
+    //   WM_CLOSE 竞争已由 installer.nsh(taskkill) + before-quit(prepareForAppQuit) 双重覆盖，
+    //   不再需要静默模式绕过。
     // isForceRunAfter=true: 安装完成后自动重启应用
-    autoUpdater.quitAndInstall(true, true);
+    autoUpdater.quitAndInstall(false, true);
   });
 
   // 错误处理

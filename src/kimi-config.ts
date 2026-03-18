@@ -1,6 +1,6 @@
 import * as fs from "fs";
 import * as path from "path";
-import { resolveGatewayPort, resolveGatewayCwd, resolveUserStateDir } from "./constants";
+import { resolveGatewayPort, resolveGatewayPackageDir, resolveUserStateDir } from "./constants";
 
 export const KIMI_PLUGIN_ID = "kimi-claw";
 export const KIMI_SEARCH_PLUGIN_ID = "kimi-search";
@@ -71,7 +71,7 @@ export function saveKimiPluginConfig(config: any, params: SaveKimiPluginParams):
 
 // 解析内置插件目录（packaged/dev 环境统一）
 export function resolveKimiPluginDir(): string {
-  return path.join(resolveGatewayCwd(), "extensions", KIMI_PLUGIN_ID);
+  return path.join(resolveGatewayPackageDir(), "extensions", KIMI_PLUGIN_ID);
 }
 
 // 检查 kimi-claw 插件是否随应用内置（缺失则拒绝写配置，避免网关启动失败）
@@ -203,7 +203,7 @@ export function saveKimiSearchConfig(
 
 // 检查 kimi-search 插件是否随应用内置
 export function isKimiSearchPluginBundled(): boolean {
-  const pluginDir = path.join(resolveGatewayCwd(), "extensions", KIMI_SEARCH_PLUGIN_ID);
+  const pluginDir = path.join(resolveGatewayPackageDir(), "extensions", KIMI_SEARCH_PLUGIN_ID);
   const hasEntry =
     fs.existsSync(path.join(pluginDir, "index.ts")) ||
     fs.existsSync(path.join(pluginDir, "dist", "index.js"));

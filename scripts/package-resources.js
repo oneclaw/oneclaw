@@ -56,6 +56,7 @@ function parseArgs() {
     platform: process.platform,
     arch: process.platform === "win32" ? "x64" : "arm64",
     locale: "en",
+    asar: process.env.ONECLAW_GATEWAY_ASAR === "1",
   };
 
   for (let i = 0; i < args.length; i++) {
@@ -63,6 +64,8 @@ function parseArgs() {
       opts.platform = args[++i];
     } else if (args[i] === "--arch" && args[i + 1]) {
       opts.arch = args[++i];
+    } else if (args[i] === "--asar") {
+      opts.asar = true;
     }
   }
 
@@ -1823,6 +1826,95 @@ function generateEntryAndBuildInfo(gatewayDir, platform, arch) {
   log("已生成 build-info.json");
 }
 
+// ─── Step 6: Gateway ASAR 打包（可选） ───
+
+// koffi 平台名映射（从 afterPack.js 前移）
+const KOFFI_PLATFORM_MAP = {
+  "darwin-x64": "darwin_x64",
+  "darwin-arm64": "darwin_arm64",
+  "win32-x64": "win32_x64",
+  "win32-arm64": "win32_arm64",
+};
+
+// koffi 仅保留目标平台的 native binary，asar 打包前必须裁剪（asar 打包后无法修改）
+function pruneKoffiPlatforms(gatewayDir, platform, arch) {
+  const koffiBuildsDir = path.join(gatewayDir, "node_modules", "koffi", "build", "koffi");
+  if (!fs.existsSync(koffiBuildsDir)) return;
+
+  const keepDir = KOFFI_PLATFORM_MAP[`${platform}-${arch}`];
+  let removedCount = 0;
+  for (const entry of fs.readdirSync(koffiBuildsDir, { withFileTypes: true })) {
+    if (entry.isDirectory() && entry.name !== keepDir) {
+      rmDir(path.join(koffiBuildsDir, entry.name));
+      removedCount++;
+    }
+  }
+  log(`koffi: 保留 ${keepDir}，删除 ${removedCount} 个其余平台目录`);
+}
+
+// 将 gateway/ 散文件打包为 gateway.asar + gateway.asar.unpacked/
+async function packGatewayAsar(gatewayDir, targetBase, platform, arch) {
+  const asar = require("@electron/asar");
+  const asarPath = path.join(targetBase, "gateway.asar");
+
+  // asar 打包前执行 koffi 平台裁剪（asar 内文件不可修改）
+  pruneKoffiPlatforms(gatewayDir, platform, arch);
+
+  // 保守 unpack 规则：所有二进制文件类型都放到 .unpacked/
+  log("正在打包 gateway.asar ...");
+  await asar.createPackageWithOptions(gatewayDir, asarPath, {
+    unpack: "{**/*.node,**/*.exe,**/*.dll,**/*.dylib,**/*.so,**/spawn-helper}",
+  });
+
+  const asarSize = (fs.statSync(asarPath).size / 1048576).toFixed(1);
+  log(`gateway.asar 打包完成: ${asarSize} MB`);
+
+  // 校验 asar 内关键文件
+  verifyAsarContents(asarPath);
+
+  // 统计 unpacked 文件数
+  const unpackedDir = path.join(targetBase, "gateway.asar.unpacked");
+  if (fs.existsSync(unpackedDir)) {
+    const unpackedFiles = countFilesRecursive(unpackedDir);
+    log(`gateway.asar.unpacked: ${unpackedFiles} 个文件`);
+  }
+
+  // 删除散文件目录
+  rmDir(gatewayDir);
+  log("已删除 gateway/ 散文件目录");
+}
+
+// 校验 asar 内关键入口文件存在
+function verifyAsarContents(asarPath) {
+  const asar = require("@electron/asar");
+  const files = asar.listPackage(asarPath);
+
+  const required = [
+    "/node_modules/openclaw/openclaw.mjs",
+    "/node_modules/openclaw/dist/entry.js",
+    "/node_modules/clawhub/bin/clawdhub.js",
+  ];
+
+  const missing = required.filter((f) => !files.includes(f));
+  if (missing.length > 0) {
+    die(`gateway.asar 缺少关键文件:\n${missing.map((f) => `  - ${f}`).join("\n")}`);
+  }
+  log(`gateway.asar 关键文件校验通过 (${files.length} 个文件)`);
+}
+
+// 递归统计文件数
+function countFilesRecursive(dir) {
+  let count = 0;
+  for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+    if (entry.isDirectory()) {
+      count += countFilesRecursive(path.join(dir, entry.name));
+    } else {
+      count++;
+    }
+  }
+  return count;
+}
+
 // 验证目标目录关键文件是否存在
 function verifyOutput(targetPaths, opts) {
   log("正在验证输出文件...");
@@ -1835,6 +1927,30 @@ function verifyOutput(targetPaths, opts) {
   const npmDir = platform === "darwin"
     ? path.join(targetRel, "runtime", "vendor", "npm")
     : path.join(targetRel, "runtime", "node_modules", "npm");
+
+  // asar 模式下散文件已被删除，只校验 gateway.asar 和基础资源
+  if (opts.asar) {
+    const required = [
+      path.join(targetRel, "runtime", nodeExe),
+      npmDir,
+      path.join(targetRel, "gateway.asar"),
+      path.join(targetRel, "build-config.json"),
+      path.join(targetRel, "app-icon.png"),
+    ];
+
+    let allOk = true;
+    for (const rel of required) {
+      const abs = path.join(ROOT, rel);
+      const exists = fs.existsSync(abs);
+      const status = exists ? "OK" : "缺失";
+      console.log(`  [${status}] ${rel}`);
+      if (!exists) allOk = false;
+    }
+
+    if (!allOk) die("关键文件缺失，打包失败");
+    log("所有关键文件验证通过 (asar 模式)");
+    return;
+  }
 
   const required = [
     path.join(targetRel, "runtime", nodeExe),
@@ -1935,6 +2051,16 @@ async function main() {
   // Step 5: 生成入口文件和构建信息
   log("Step 5: 生成入口文件和构建信息");
   generateEntryAndBuildInfo(targetPaths.gatewayDir, opts.platform, opts.arch);
+
+  console.log();
+
+  // Step 6: Gateway ASAR 打包（--asar 或 ONECLAW_GATEWAY_ASAR=1 时启用）
+  if (opts.asar) {
+    log("Step 6: Gateway ASAR 打包");
+    await packGatewayAsar(targetPaths.gatewayDir, targetPaths.targetBase, opts.platform, opts.arch);
+  } else {
+    log("Step 6: 跳过 ASAR 打包（未指定 --asar）");
+  }
 
   console.log();
 

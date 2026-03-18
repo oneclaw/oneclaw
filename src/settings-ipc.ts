@@ -5,6 +5,7 @@ import {
   resolveNodeExtraEnv,
   resolveGatewayEntry,
   resolveGatewayCwd,
+  resolveGatewayPackageDir,
   resolveResourcesPath,
   resolveUserConfigPath,
   resolveUserStateDir,
@@ -1303,7 +1304,7 @@ export function registerSettingsIpc(opts: SettingsIpcOptions = {}): void {
     const oneClawVersion = app.getVersion();
     let openClawVersion = "unknown";
     try {
-      const pkgPath = path.join(resolveGatewayCwd(), "package.json");
+      const pkgPath = path.join(resolveGatewayPackageDir(), "package.json");
       const raw = fs.readFileSync(pkgPath, "utf-8");
       const pkg = JSON.parse(raw);
       if (pkg.version) openClawVersion = pkg.version;
