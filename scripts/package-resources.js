@@ -1887,7 +1887,8 @@ async function packGatewayAsar(gatewayDir, targetBase, platform, arch) {
 // 校验 asar 内关键入口文件存在
 function verifyAsarContents(asarPath) {
   const asar = require("@electron/asar");
-  const files = asar.listPackage(asarPath);
+  // Windows 上 listPackage 返回反斜杠路径，统一转正斜杠再比较
+  const files = new Set(asar.listPackage(asarPath).map((f) => f.replace(/\\/g, "/")));
 
   const required = [
     "/node_modules/openclaw/openclaw.mjs",
@@ -1895,7 +1896,7 @@ function verifyAsarContents(asarPath) {
     "/node_modules/clawhub/bin/clawdhub.js",
   ];
 
-  const missing = required.filter((f) => !files.includes(f));
+  const missing = required.filter((f) => !files.has(f));
   if (missing.length > 0) {
     die(`gateway.asar 缺少关键文件:\n${missing.map((f) => `  - ${f}`).join("\n")}`);
   }
