@@ -48,11 +48,14 @@ win:
   icon: assets/icon.ico
 
 nsis:
-  oneClick: true
+  oneClick: false
   perMachine: false
+  # 允许用户自选安装目录
+  allowToChangeInstallationDirectory: true
   # 安装前强制终止旧进程，避免托盘模式下 WM_CLOSE 被拦截
   include: "scripts/installer.nsh"
-  createDesktopShortcut: true
+  # "always" 确保更新安装时也重新创建快捷方式（默认 true 只在首次安装创建）
+  createDesktopShortcut: always
   createStartMenuShortcut: true
   runAfterFinish: true
   # 关闭 NSIS 差分包，避免生成 .exe.blockmap
