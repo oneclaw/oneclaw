@@ -87,7 +87,8 @@ jobs:
       - name: 验证产物完整性（macOS arm64）
         run: |
           ls -lh out/darwin-arm64/*.dmg
-          APP="$(ls -d out/darwin-arm64/mac/*.app | head -n 1)"
+          APP="$(find out/darwin-arm64 -maxdepth 3 -type d -name '*.app' | head -n 1)"
+          test -n "$APP"
           test -f "$APP/Contents/Frameworks/Electron Framework.framework/Versions/A/Electron Framework"
 
       - uses: actions/upload-artifact@v4
@@ -160,7 +161,8 @@ jobs:
       - name: 验证产物完整性（macOS x64）
         run: |
           ls -lh out/darwin-x64/*.dmg
-          APP="$(ls -d out/darwin-x64/mac/*.app | head -n 1)"
+          APP="$(find out/darwin-x64 -maxdepth 3 -type d -name '*.app' | head -n 1)"
+          test -n "$APP"
           test -f "$APP/Contents/Frameworks/Electron Framework.framework/Versions/A/Electron Framework"
 
       - uses: actions/upload-artifact@v4
