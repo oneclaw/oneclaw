@@ -1860,10 +1860,13 @@ async function packGatewayAsar(gatewayDir, targetBase, platform, arch) {
   // asar 打包前执行 koffi 平台裁剪（asar 内文件不可修改）
   pruneKoffiPlatforms(gatewayDir, platform, arch);
 
-  // 保守 unpack 规则：所有二进制文件类型都放到 .unpacked/
+  // unpack 规则：
+  //   1. 二进制文件（.node/.exe/.dll/.dylib/.so/spawn-helper）不能从 asar 内 dlopen
+  //   2. extensions/ 目录必须在真实文件系统上——openclaw gateway 的插件安全校验
+  //      拒绝包含 .asar 的路径（"unsafe plugin manifest path"）
   log("正在打包 gateway.asar ...");
   await asar.createPackageWithOptions(gatewayDir, asarPath, {
-    unpack: "{**/*.node,**/*.exe,**/*.dll,**/*.dylib,**/*.so,**/spawn-helper}",
+    unpack: "{**/*.node,**/*.exe,**/*.dll,**/*.dylib,**/*.so,**/spawn-helper,**/openclaw/extensions/**}",
   });
 
   const asarSize = (fs.statSync(asarPath).size / 1048576).toFixed(1);
