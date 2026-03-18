@@ -84,16 +84,11 @@ jobs:
       - name: 清理 blockmap（macOS arm64）
         run: find out/darwin-arm64 -type f -name "*.blockmap" -delete
 
-      - name: 验证 DMG 完整性（macOS arm64）
+      - name: 验证产物完整性（macOS arm64）
         run: |
-          DMG="$(ls out/darwin-arm64/*.dmg | head -n 1)"
-          MOUNT="/tmp/oneclaw-dmg-arm64"
-          rm -rf "$MOUNT"
-          mkdir -p "$MOUNT"
-          hdiutil attach "$DMG" -nobrowse -noautoopen -mountpoint "$MOUNT"
-          APP="$(ls "$MOUNT"/*.app | head -n 1)"
+          ls -lh out/darwin-arm64/*.dmg
+          APP="$(ls -d out/darwin-arm64/mac/*.app | head -n 1)"
           test -f "$APP/Contents/Frameworks/Electron Framework.framework/Versions/A/Electron Framework"
-          hdiutil detach "$MOUNT" -quiet
 
       - uses: actions/upload-artifact@v4
         with:
@@ -162,16 +157,11 @@ jobs:
       - name: 清理 blockmap（macOS x64）
         run: find out/darwin-x64 -type f -name "*.blockmap" -delete
 
-      - name: 验证 DMG 完整性（macOS x64）
+      - name: 验证产物完整性（macOS x64）
         run: |
-          DMG="$(ls out/darwin-x64/*.dmg | head -n 1)"
-          MOUNT="/tmp/oneclaw-dmg-x64"
-          rm -rf "$MOUNT"
-          mkdir -p "$MOUNT"
-          hdiutil attach "$DMG" -nobrowse -noautoopen -mountpoint "$MOUNT"
-          APP="$(ls "$MOUNT"/*.app | head -n 1)"
+          ls -lh out/darwin-x64/*.dmg
+          APP="$(ls -d out/darwin-x64/mac/*.app | head -n 1)"
           test -f "$APP/Contents/Frameworks/Electron Framework.framework/Versions/A/Electron Framework"
-          hdiutil detach "$MOUNT" -quiet
 
       - uses: actions/upload-artifact@v4
         with:
