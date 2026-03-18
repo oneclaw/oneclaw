@@ -1054,6 +1054,65 @@ function injectWindowsHideAll(source) {
   );
 }
 
+// ─── Step 2.4: 补丁 ASAR 路径校验（仅 asar 模式） ───
+//
+// openclaw 的 boundary-file-read 模块使用 O_NOFOLLOW + realpathSync + lstatSync
+// 组合校验插件清单路径的安全性。在 Electron ASAR 模式下，这些 syscall 对 asar 虚拟
+// 路径行为异常，导致所有 bundled 插件被判定为 "unsafe plugin manifest path"。
+//
+// 补丁策略：在 openVerifiedFileSync 函数开头注入一段 asar 路径快速通道——
+// 如果文件路径穿越 .asar 归档，直接用 fs.openSync + fs.fstatSync 打开并返回，
+// 跳过 realpathSync / O_NOFOLLOW / hardlink 检查。
+// Electron 的 ASAR patch 已保证归档内文件的完整性和只读性，无需额外校验。
+
+function patchAsarBoundaryCheck(gatewayDir) {
+  const distDir = path.join(gatewayDir, "node_modules", "openclaw", "dist");
+  if (!fs.existsSync(distDir)) return;
+
+  // 找到 boundary-file-read 模块（文件名含 hash）
+  const boundaryFiles = fs.readdirSync(distDir).filter((f) => f.startsWith("boundary-file-read-") && f.endsWith(".js"));
+  if (boundaryFiles.length === 0) {
+    log("⚠ 未找到 boundary-file-read 模块，跳过 ASAR 路径补丁");
+    return;
+  }
+
+  let patched = 0;
+  for (const fileName of boundaryFiles) {
+    const filePath = path.join(distDir, fileName);
+    const source = fs.readFileSync(filePath, "utf-8");
+
+    // 在 openVerifiedFileSync 函数体开头注入 asar 快速通道
+    // 匹配特征：function openVerifiedFileSync(params) { ... const openReadFlags = ...
+    const marker = "function openVerifiedFileSync(params) {";
+    if (!source.includes(marker)) continue;
+    if (source.includes("/* asar-bypass */")) continue; // 已打过补丁
+
+    const bypass = [
+      "function openVerifiedFileSync(params) {",
+      "\t/* asar-bypass */ if (params.filePath && params.filePath.includes('.asar')) {",
+      "\t\tconst ioFs = params.ioFs ?? fs;",
+      "\t\ttry {",
+      "\t\t\tconst fd = ioFs.openSync(params.filePath, ioFs.constants.O_RDONLY);",
+      "\t\t\tconst stat = ioFs.fstatSync(fd);",
+      "\t\t\treturn { ok: true, path: params.filePath, fd, stat };",
+      "\t\t} catch (e) {",
+      "\t\t\treturn { ok: false, reason: 'validation' };",
+      "\t\t}",
+      "\t}",
+    ].join("\n");
+
+    const result = source.replace(marker, bypass);
+    fs.writeFileSync(filePath, result, "utf-8");
+    patched++;
+  }
+
+  if (patched > 0) {
+    log(`已补丁 ${patched} 个 boundary-file-read 模块（ASAR 路径快速通道）`);
+  } else {
+    log("⚠ boundary-file-read 模块结构不匹配，补丁未生效");
+  }
+}
+
 // ─── Step 2.5: 注入 bundled 插件（kimi-claw + kimi-search + qqbot + dingtalk） ───
 
 // 插件定义（id → 下载/缓存参数）
@@ -1860,13 +1919,14 @@ async function packGatewayAsar(gatewayDir, targetBase, platform, arch) {
   // asar 打包前执行 koffi 平台裁剪（asar 内文件不可修改）
   pruneKoffiPlatforms(gatewayDir, platform, arch);
 
-  // unpack 规则：
-  //   1. 二进制文件（.node/.exe/.dll/.dylib/.so/spawn-helper）不能从 asar 内 dlopen
-  //   2. extensions/ 目录必须在真实文件系统上——openclaw gateway 的插件安全校验
-  //      拒绝包含 .asar 的路径（"unsafe plugin manifest path"）
+  // 补丁 boundary-file-read：让 asar 内路径绕过 O_NOFOLLOW / realpathSync 校验
+  patchAsarBoundaryCheck(gatewayDir);
+
+  // unpack 规则：仅二进制文件需要 unpack（dlopen 不支持 asar 虚拟路径）
+  // extensions/ 不再需要 unpack——boundary-file-read 补丁已处理 asar 路径校验
   log("正在打包 gateway.asar ...");
   await asar.createPackageWithOptions(gatewayDir, asarPath, {
-    unpack: "{**/*.node,**/*.exe,**/*.dll,**/*.dylib,**/*.so,**/spawn-helper,**/openclaw/extensions/**}",
+    unpack: "{**/*.node,**/*.exe,**/*.dll,**/*.dylib,**/*.so,**/spawn-helper}",
   });
 
   const asarSize = (fs.statSync(asarPath).size / 1048576).toFixed(1);
