@@ -91,7 +91,8 @@ jobs:
           rm -rf "$MOUNT"
           mkdir -p "$MOUNT"
           hdiutil attach "$DMG" -nobrowse -noautoopen -mountpoint "$MOUNT"
-          test -f "$MOUNT/OneClaw.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Electron Framework"
+          APP="$(ls "$MOUNT"/*.app | head -n 1)"
+          test -f "$APP/Contents/Frameworks/Electron Framework.framework/Versions/A/Electron Framework"
           hdiutil detach "$MOUNT" -quiet
 
       - uses: actions/upload-artifact@v4
@@ -105,7 +106,7 @@ jobs:
 
   # ── macOS x64：签名 + 公证（在 arm64 runner 上交叉编译） ──
   build-mac-x64:
-    runs-on: macos-13
+    runs-on: macos-14
     env:
       HAS_MAC_SIGNING: ${{ secrets.CSC_LINK != '' && secrets.CSC_KEY_PASSWORD != '' && secrets.CSC_NAME != '' && secrets.APPLE_API_KEY != '' && secrets.APPLE_API_KEY_ID != '' && secrets.APPLE_API_ISSUER != '' }}
     steps:
@@ -168,7 +169,8 @@ jobs:
           rm -rf "$MOUNT"
           mkdir -p "$MOUNT"
           hdiutil attach "$DMG" -nobrowse -noautoopen -mountpoint "$MOUNT"
-          test -f "$MOUNT/OneClaw.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Electron Framework"
+          APP="$(ls "$MOUNT"/*.app | head -n 1)"
+          test -f "$APP/Contents/Frameworks/Electron Framework.framework/Versions/A/Electron Framework"
           hdiutil detach "$MOUNT" -quiet
 
       - uses: actions/upload-artifact@v4

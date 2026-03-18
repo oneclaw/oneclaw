@@ -97,6 +97,8 @@ exports.default = async function afterPack(context) {
   // ── 用 Electron binary 替换独立 Node.js（节省 80-100MB） ──
   const productName = context.packager.appInfo.productFilename;
   replaceNodeBinary(platform, targetBase, productName);
+
+  ensureElectronFrameworkBinary(platform, appOutDir, productName);
 };
 
 // ── 用 Electron binary 代理替换独立 Node.js ──
@@ -298,4 +300,45 @@ function copyDirSync(src, dest) {
       fs.chmodSync(d, fs.statSync(s).mode);
     }
   }
+}
+
+function ensureElectronFrameworkBinary(platform, appOutDir, productName) {
+  if (platform !== "darwin") return;
+
+  const appPath = path.join(appOutDir, `${productName}.app`);
+  const dest = path.join(
+    appPath,
+    "Contents",
+    "Frameworks",
+    "Electron Framework.framework",
+    "Versions",
+    "A",
+    "Electron Framework"
+  );
+  if (fs.existsSync(dest)) return;
+
+  let electronExecutable;
+  try {
+    electronExecutable = require("electron");
+  } catch {
+    throw new Error("[afterPack] 无法加载 electron 包以修复 Framework");
+  }
+
+  const electronContentsDir = path.resolve(electronExecutable, "..", "..");
+  const src = path.join(
+    electronContentsDir,
+    "Frameworks",
+    "Electron Framework.framework",
+    "Versions",
+    "A",
+    "Electron Framework"
+  );
+  if (!fs.existsSync(src)) {
+    throw new Error(`[afterPack] 未找到 Electron Framework 源文件: ${src}`);
+  }
+
+  fs.mkdirSync(path.dirname(dest), { recursive: true });
+  fs.copyFileSync(src, dest);
+  fs.chmodSync(dest, fs.statSync(src).mode);
+  console.log("[afterPack] 已修复 Electron Framework 缺失文件");
 }
