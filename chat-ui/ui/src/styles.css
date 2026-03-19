@@ -7499,8 +7499,7 @@ img.chat-avatar {
 }
 
 .workspace__file-item.active {
-  background: var(--bg-active, rgba(192, 57, 43, 0.08));
-  color: var(--accent, #c0392b);
+  background: var(--bg-hover, rgba(0, 0, 0, 0.04));
 }
 
 .workspace__file-item--back {
@@ -7518,7 +7517,7 @@ img.chat-avatar {
 }
 
 .workspace__file-item.active .workspace__file-icon {
-  color: var(--accent, #c0392b);
+  color: var(--text-secondary, #666);
 }
 
 .workspace__file-item--dir .workspace__file-icon {
@@ -7546,6 +7545,10 @@ img.chat-avatar {
   display: none;
   align-items: center;
   justify-content: center;
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
   width: 24px;
   height: 24px;
   border: none;
@@ -7553,7 +7556,6 @@ img.chat-avatar {
   background: transparent;
   color: var(--text-tertiary, #999);
   cursor: pointer;
-  flex-shrink: 0;
   transition: background 0.1s, color 0.1s;
 }
 
@@ -7687,10 +7689,10 @@ img.chat-avatar {
 
 /* 暗色主题覆盖 */
 :root[data-theme="dark"] .workspace__file-item.active {
-  background: rgba(192, 57, 43, 0.15);
+  background: rgba(255, 255, 255, 0.06);
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) .workspace__file-item.active {
-    background: rgba(192, 57, 43, 0.15);
+    background: rgba(255, 255, 255, 0.06);
   }
 }

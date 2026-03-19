@@ -210,10 +210,10 @@ export function refreshWorkspace(state: AppViewState) {
 type CloseCallback = () => void;
 
 // 渲染工作空间视图
-export function renderWorkspaceView(state: AppViewState, onClose: CloseCallback) {
+export function renderWorkspaceView(state: AppViewState, _onClose: CloseCallback) {
   const {
     root, currentPath, items, loading, error,
-    selectedFile, selectedFileName, fileContent, fileLoading, copySuccess,
+    selectedFile, selectedFileName, fileContent, fileLoading,
   } = workspaceState;
 
   const isAtRoot = !currentPath || !root || currentPath === root;
@@ -228,28 +228,6 @@ export function renderWorkspaceView(state: AppViewState, onClose: CloseCallback)
         <!-- 顶栏 -->
         <div class="workspace__header">
           <h2 class="workspace__title">${t("workspace.title")}</h2>
-          <div class="workspace__header-actions">
-            <button
-              class="workspace__header-btn"
-              type="button"
-              @click=${() => refreshWorkspace(state)}
-              title=${t("workspace.refresh")}
-              ?disabled=${loading}
-            >${icons.refreshCw}</button>
-            <button
-              class="workspace__header-btn"
-              type="button"
-              @click=${() => root && openFolder(root)}
-              title=${t("workspace.openRoot")}
-              ?disabled=${!root}
-            >${icons.folderOpen}</button>
-            <button
-              class="workspace__header-btn"
-              type="button"
-              @click=${onClose}
-              title=${t("workspace.close")}
-            >${icons.x}</button>
-          </div>
         </div>
 
         <!-- 主体：左侧文件列表 + 右侧预览 -->
@@ -280,21 +258,12 @@ export function renderWorkspaceView(state: AppViewState, onClose: CloseCallback)
                           ${item.isDir ? icons.folder : icons.fileText}
                         </span>
                         <span class="workspace__file-name" title=${item.name}>${item.name}</span>
-                        ${item.isDir ? html`
-                          <button
-                            class="workspace__file-action"
-                            type="button"
-                            @click=${(e: Event) => { e.stopPropagation(); openFolder(item.path); }}
-                            title=${t("workspace.openFolder")}
-                          >${icons.folderOpen}</button>
-                        ` : html`
-                          <button
-                            class="workspace__file-action"
-                            type="button"
-                            @click=${(e: Event) => { e.stopPropagation(); openFile(item.path); }}
-                            title=${t("workspace.open")}
-                          >${icons.externalLink}</button>
-                        `}
+                        <button
+                          class="workspace__file-action"
+                          type="button"
+                          @click=${(e: Event) => { e.stopPropagation(); openFolder(item.path); }}
+                          title=${t("workspace.openFolder")}
+                        >${icons.folderOpen}</button>
                       </div>
                     `)
             }
@@ -305,22 +274,6 @@ export function renderWorkspaceView(state: AppViewState, onClose: CloseCallback)
             ${selectedFile ? html`
               <div class="workspace__preview-header">
                 <span class="workspace__preview-path" title=${selectedFile}>${breadcrumb}</span>
-                <div class="workspace__preview-actions">
-                  ${fileContent != null ? html`
-                    <button
-                      class="workspace__preview-btn"
-                      type="button"
-                      @click=${() => void copyContent(state)}
-                      title=${copySuccess ? t("workspace.copied") : t("workspace.copy")}
-                    >${icons.copy}</button>
-                  ` : nothing}
-                  <button
-                    class="workspace__preview-btn"
-                    type="button"
-                    @click=${() => openFile(selectedFile!)}
-                    title=${t("workspace.open")}
-                  >${icons.externalLink}</button>
-                </div>
               </div>
               <div class="workspace__preview-content">
                 ${fileLoading
