@@ -10,6 +10,7 @@ import {
   WINDOW_MIN_WIDTH,
   WINDOW_MIN_HEIGHT,
   resolveChatUiPath,
+  resolveDevBranchTag,
 } from "./constants";
 
 interface ShowOptions {
@@ -23,10 +24,11 @@ interface NavigateOptions {
 }
 
 function resolveMainWindowTitle(): string {
+  const tag = resolveDevBranchTag();
   // 主窗口标题直接解释产品定位，方便用户在系统标题栏里理解 OneClaw 是什么。
   return app.getLocale().startsWith("zh")
-    ? "OneClaw 一键安装OpenClaw"
-    : "OneClaw - One-click installer for OpenClaw";
+    ? `OneClaw 一键安装OpenClaw${tag}`
+    : `OneClaw - One-click installer for OpenClaw${tag}`;
 }
 
 function maskToken(token: string): string {

@@ -1,6 +1,7 @@
 import { app } from "electron";
 import * as path from "path";
 import * as fs from "fs";
+import { execFileSync } from "child_process";
 import { isSetupCompleteFromConfig } from "./setup-completion";
 import { readOneclawConfig } from "./oneclaw-config";
 
@@ -245,6 +246,21 @@ export function resolveChatUiPath(): string {
 }
 
 // ── Setup 完成判断 ──
+
+// 多实例模式下读取 git 分支名，拼入窗口标题以区分不同 worktree 实例
+export function resolveDevBranchTag(): string {
+  if (!process.env.ONECLAW_MULTI_INSTANCE) return "";
+  try {
+    const branch = execFileSync("git", ["rev-parse", "--abbrev-ref", "HEAD"], {
+      cwd: app.getAppPath(),
+      timeout: 3000,
+      encoding: "utf-8",
+    }).trim();
+    return branch ? ` [${branch}]` : "";
+  } catch {
+    return "";
+  }
+}
 
 /** 检查 Setup 是否已完成（优先读 oneclaw.config.json，兼容旧版） */
 export function isSetupComplete(): boolean {

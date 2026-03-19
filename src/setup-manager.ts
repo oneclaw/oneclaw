@@ -1,6 +1,7 @@
 import { BrowserWindow, app } from "electron";
 import * as path from "path";
 import * as analytics from "./analytics";
+import { resolveDevBranchTag } from "./constants";
 
 // Setup 窗口生命周期管理
 export class SetupManager {
@@ -15,9 +16,10 @@ export class SetupManager {
 
   // 显示 Setup 窗口
   showSetup(): void {
-    // 标题本地化
+    // 标题本地化 + 多实例分支标识
     const lang = app.getLocale().startsWith("zh") ? "zh" : "en";
-    const title = lang === "zh" ? "OneClaw 安装引导" : "OneClaw Setup";
+    const tag = resolveDevBranchTag();
+    const title = lang === "zh" ? `OneClaw 安装引导${tag}` : `OneClaw Setup${tag}`;
 
     this.setupWin = new BrowserWindow({
       width: 580,
