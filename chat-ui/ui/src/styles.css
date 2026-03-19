@@ -7455,6 +7455,11 @@ img.chat-avatar {
 .workspace__header-btn svg {
   width: 18px;
   height: 18px;
+  stroke: currentColor;
+  fill: none;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 
 .workspace__body {
@@ -7523,6 +7528,11 @@ img.chat-avatar {
 .workspace__file-icon svg {
   width: 16px;
   height: 16px;
+  stroke: currentColor;
+  fill: none;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 
 .workspace__file-name {
@@ -7559,6 +7569,11 @@ img.chat-avatar {
 .workspace__file-action svg {
   width: 14px;
   height: 14px;
+  stroke: currentColor;
+  fill: none;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 
 .workspace__loading,
@@ -7627,6 +7642,11 @@ img.chat-avatar {
 .workspace__preview-btn svg {
   width: 16px;
   height: 16px;
+  stroke: currentColor;
+  fill: none;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 
 .workspace__preview-content {
