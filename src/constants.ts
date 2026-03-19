@@ -156,8 +156,11 @@ export function resolveNpmBin(): string {
  */
 function resolveGatewayRoot(): string {
   const res = resolveResourcesPath();
+  // dev 模式用真实 Node.js，无法读取 asar 虚拟路径，直接走散文件
+  if (!app.isPackaged) {
+    return path.join(res, "gateway");
+  }
   const asarPath = path.join(res, "gateway.asar");
-  // 检测 asar 文件存在性：extname 防止把普通目录误判为 asar
   if (path.extname(asarPath) === ".asar" && fs.existsSync(asarPath)) {
     return asarPath;
   }
