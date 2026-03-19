@@ -30,16 +30,16 @@ The main process spawns a gateway subprocess, waits for its health check, then o
 
 ```
 oneclaw/
-├── src/                    # 35 TypeScript modules (10032 LOC) + 13 test files
+├── src/                    # 35 TypeScript modules (10270 LOC) + 13 test files
 │   ├── main.ts             # App entry, lifecycle, IPC, Dock toggle, config recovery
-│   ├── constants.ts        # Path resolution (dev vs packaged), health check params
+│   ├── constants.ts        # Path resolution (dev vs packaged vs ASAR), health check params
 │   ├── gateway-process.ts  # Child process state machine + diagnostics
 │   ├── gateway-auth.ts     # Auth token read/generate/persist
 │   ├── gateway-rpc.ts      # WebSocket RPC client for main↔gateway communication
 │   ├── window.ts           # BrowserWindow lifecycle, token injection, retry
 │   ├── window-close-policy.ts  # Close behavior: hide vs destroy
 │   ├── tray.ts             # System tray icon + i18n context menu
-│   ├── preload.ts          # contextBridge IPC whitelist (~66 methods + 5 listeners)
+│   ├── preload.ts          # contextBridge IPC whitelist (~75 methods + 5 listeners)
 │   ├── provider-config.ts  # Provider presets, verification, config R/W
 │   ├── setup-manager.ts    # Setup wizard window lifecycle
 │   ├── setup-ipc.ts        # Setup validation + config write + CLI install
@@ -66,8 +66,8 @@ oneclaw/
 │   ├── analytics-events.ts # Event classification + property sanitization
 │   ├── auto-updater.ts     # electron-updater wrapper + progress callback
 │   └── logger.ts           # Dual-write logger (file + console)
-├── chat-ui/                # Lit-based Chat UI SPA (file:// loaded)
-│   └── ui/                 # Vite project: Lit 3 components, sidebar, settings view
+├── chat-ui/                # Lit-based Chat UI SPA (file:// loaded, ~35K LOC)
+│   └── ui/                 # Vite project: Lit 3 components, sidebar, settings view, model selector
 ├── setup/                  # Setup wizard frontend (vanilla HTML/CSS/JS)
 │   ├── index.html          # Multi-step wizard with data-i18n attributes
 │   ├── setup.css           # Dark/light theme via prefers-color-scheme
@@ -103,7 +103,9 @@ oneclaw/
 ```
 resources/targets/<platform-arch>/   # Per-target Node.js + gateway deps
   ├── runtime/node[.exe]             # Node.js 22 binary
-  ├── gateway/                       # openclaw production node_modules
+  ├── gateway/                       # openclaw production node_modules (散文件)
+  ├── gateway.asar                   # Gateway ASAR archive (CI 构建产物)
+  ├── gateway.asar.unpacked/         # ASAR unpacked files (native modules, extensions)
   └── .node-stamp                    # Incremental build marker
 chat-ui/dist/                        # Vite output (Lit Chat UI SPA)
 dist/                                # tsc output
@@ -128,7 +130,7 @@ npm run clean                # Remove all generated files
 
 **Full build pipeline** (what `dist:mac:arm64` does):
 
-1. `package:resources` — download Node.js 22, `npm install openclaw --production --install-links` (version auto-fetched from npm)
+1. `package:resources` — download Node.js 22, `npm install openclaw --production --install-links` (version auto-fetched from npm), optionally create `gateway.asar` (set `ONECLAW_GATEWAY_ASAR=1`)
 2. `build:chat` — Vite builds Lit Chat UI into `chat-ui/dist/`
 3. `tsc` — compile TypeScript
 4. `electron-builder` → `afterPack.js` injects `resources/targets/<target>/` into app bundle → DMG/ZIP/NSIS
@@ -149,7 +151,9 @@ npm run clean                # Remove all generated files
 - **Multi-channel integration** — Unified pairing monitor aggregates Feishu, WeCom, DingTalk, QQ Bot with per-channel state tracking and auto-approval.
 - **Skill store** — clawhub CLI integration, skills at `~/.openclaw/workspace/skills/`, registry config in `~/.openclaw/skill-store.json`.
 - **Config backup** — Rolling 10 backups + last-known-good snapshot + factory reset.
-- **Preload security** — ~66 IPC methods + 5 event listeners via `contextBridge` (sandbox mode).
+- **Multi-model management** — IPC handlers for listing, deleting, setting default, and aliasing models across providers.
+- **Gateway ASAR packaging** — Optional `gateway.asar` archive (enabled by `ONECLAW_GATEWAY_ASAR=1`) reduces 5000+ files to a single archive for faster Windows installs. Patched openclaw boundary check for ASAR paths. Extensions unpacked to `gateway.asar.unpacked/`.
+- **Preload security** — ~75 IPC methods + 5 event listeners via `contextBridge` (sandbox mode).
 
 ## Runtime Paths (on user's machine)
 
@@ -233,3 +237,11 @@ For comprehensive design guidelines, please refer to:
 21. **Token injection uses URL fragment.** Gateway auth token is passed via `#token=...` in the loaded URL, not query parameter or localStorage.
 
 22. **Build config replaces analytics config.** `build-config.json` (renamed from `analytics-config.json`) is injected at build time and read by `build-config.ts`. Contains PostHog key, clawhub registry, and other build constants.
+
+23. **Gateway ASAR mode requires patched boundary check.** `package-resources.js` patches openclaw's `openBoundaryFileSync()` to skip validation for `.asar` paths. Without this patch, the plugin security check rejects ASAR virtual paths and gateway fails to start.
+
+24. **ASAR mode changes path resolution.** `resolveGatewayRoot()` auto-detects `gateway.asar` vs `gateway/` directory. ASAR mode: `resolveGatewayCwd()` returns `~/.openclaw/` (OS can't chdir into ASAR). Gateway subprocess uses Electron binary + `ELECTRON_RUN_AS_NODE` to read ASAR transparently. CLI interactive mode on Windows requires a CONSOLE subsystem binary (Electron is GUI subsystem, cannot hold interactive TTY).
+
+25. **Windows uses assisted installer.** NSIS `oneClick: false` mode enables installation directory selection and custom uninstall options. `installer.nsh` provides CLI cleanup and user data removal checkboxes. `createDesktopShortcut: "always"` ensures shortcut is recreated on update.
+
+26. **Windows CLI wrapper lives in `%LOCALAPPDATA%\OneClaw\bin\`.** Not in `~/.openclaw/bin/` like POSIX. Legacy path migration handles old users who had wrappers in `~/.openclaw/bin/`.
