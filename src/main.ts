@@ -97,9 +97,9 @@ function attachRendererDebugHandlers(label: string, webContents: Electron.WebCon
   });
 }
 
-// ── 单实例锁 ──
+// ── 单实例锁（ONECLAW_MULTI_INSTANCE=1 时跳过，允许多 worktree 并行 dev） ──
 
-if (!app.requestSingleInstanceLock()) {
+if (!process.env.ONECLAW_MULTI_INSTANCE && !app.requestSingleInstanceLock()) {
   app.quit();
   process.exit(0);
 }

@@ -40,4 +40,7 @@ private_keys/
 # Git worktrees
 .worktrees/
 
+# dev 多实例隔离状态目录
+.dev-state/
+
 docs/plans/

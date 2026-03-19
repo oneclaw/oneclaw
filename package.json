@@ -10,6 +10,7 @@
     "build": "npm run generate:settings-icons && npm run build:chat && tsc -p tsconfig.json",
     "predev": "npm run build",
     "dev": "electron .",
+    "dev:isolated": "node scripts/dev-isolated.js",
     "package:resources": "node scripts/run-with-env.js node scripts/package-resources.js",
     "dist:mac": "npm run dist:mac:arm64",
     "dist:mac:arm64": "npm run build && ONECLAW_TARGET=darwin-arm64 npm run package:resources -- --platform darwin --arch arm64 && ONECLAW_TARGET=darwin-arm64 node scripts/run-with-env.js node scripts/run-mac-builder.js --arch arm64 --output out/darwin-arm64",
