@@ -27,9 +27,9 @@ jobs:
   build-mac-arm64:
     runs-on: macos-14
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
           node-version: 22
 
@@ -82,7 +82,7 @@ jobs:
       - name: 清理 blockmap（macOS arm64）
         run: find out/darwin-arm64 -type f -name "*.blockmap" -delete
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v5
         with:
           name: mac-arm64
           retention-days: ${{ env.ARTIFACT_RETENTION_DAYS }}
@@ -95,9 +95,9 @@ jobs:
   build-mac-x64:
     runs-on: macos-14
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
           node-version: 22
 
@@ -144,7 +144,7 @@ jobs:
       - name: 清理 blockmap（macOS x64）
         run: find out/darwin-x64 -type f -name "*.blockmap" -delete
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v5
         with:
           name: mac-x64
           retention-days: ${{ env.ARTIFACT_RETENTION_DAYS }}
@@ -160,9 +160,9 @@ jobs:
       run:
         shell: bash
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
           node-version: 22
 
@@ -188,7 +188,7 @@ jobs:
       - name: 清理 blockmap（Windows x64）
         run: find out/win32-x64 -type f -name "*.blockmap" -delete
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v5
         with:
           name: win-x64
           retention-days: ${{ env.ARTIFACT_RETENTION_DAYS }}
@@ -203,9 +203,9 @@ jobs:
       run:
         shell: bash
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
           node-version: 22
 
@@ -230,7 +230,7 @@ jobs:
       - name: 清理 blockmap（Windows arm64）
         run: find out/win32-arm64 -type f -name "*.blockmap" -delete
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v5
         with:
           name: win-arm64
           retention-days: ${{ env.ARTIFACT_RETENTION_DAYS }}
@@ -246,29 +246,29 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
           node-version: 22
 
       # 下载四个平台的构建产物到对应目录
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v5
         with:
           name: mac-arm64
           path: out/darwin-arm64
 
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v5
         with:
           name: mac-x64
           path: out/darwin-x64
 
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v5
         with:
           name: win-x64
           path: out/win32-x64
 
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v5
         with:
           name: win-arm64
           path: out/win32-arm64
