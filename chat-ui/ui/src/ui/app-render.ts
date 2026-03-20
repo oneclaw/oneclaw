@@ -833,9 +833,9 @@ export function renderApp(state: AppViewState) {
 
   return html`
     <div
-      class="oneclaw-shell ${navigator.platform?.includes("Mac") ? "is-mac" : ""} ${chatFocus ? "oneclaw-shell--focus" : ""} ${sidebarCollapsed ? "oneclaw-shell--sidebar-collapsed" : ""} ${settingsActive ? "oneclaw-shell--fullpage" : ""}"
+      class="oneclaw-shell ${navigator.platform?.includes("Mac") ? "is-mac" : ""} ${chatFocus ? "oneclaw-shell--focus" : ""} ${sidebarCollapsed ? "oneclaw-shell--sidebar-collapsed" : ""} ${settingsActive || skillsActive || workspaceActive ? "oneclaw-shell--fullpage" : ""}"
     >
-      ${chatFocus || sidebarCollapsed
+      ${chatFocus || sidebarCollapsed || settingsActive || skillsActive || workspaceActive
         ? nothing
         : renderSidebar({
             connected: state.connected,
@@ -882,47 +882,56 @@ export function renderApp(state: AppViewState) {
           })}
 
       <div class="oneclaw-main">
-        ${
-          settingsActive
-            ? html`<div style="position: absolute; top: 0; left: 0; right: 0; height: 44px; -webkit-app-region: drag;"></div>`
-            : html`
-                <div class="oneclaw-titlebar">
-                  ${
-                    sidebarCollapsed && !chatFocus
-                      ? html`
-                          <div class="oneclaw-floating-actions">
-                            <button
-                              class="oneclaw-floating-btn"
-                              type="button"
-                              @click=${() => {
-                                state.applySettings({
-                                  ...state.settings,
-                                  navCollapsed: false,
-                                });
-                              }}
-                              data-tooltip=${t("sidebar.expand")}
-                              data-tooltip-pos="bottom"
-                              aria-label=${t("sidebar.expand")}
-                            >
-                              ${icons.panelLeft}
-                            </button>
-                            <button
-                              class="oneclaw-floating-btn"
-                              type="button"
-                              @click=${() => handleSessionChange(state, generateSessionKey())}
-                              data-tooltip=${t("sidebar.newChat")}
-                              data-tooltip-pos="bottom"
-                              aria-label=${t("sidebar.newChat")}
-                            >
-                              ${icons.messagePlus}
-                            </button>
-                          </div>
-                        `
-                      : nothing
-                  }
-                </div>
-              `
-        }
+        <div class="oneclaw-titlebar">
+          ${
+            settingsActive || skillsActive || workspaceActive
+              ? html`
+                  <div class="oneclaw-fullpage-close">
+                    <button
+                      class="oneclaw-floating-btn"
+                      type="button"
+                      @click=${() => setOneClawView(state, "chat")}
+                      data-tooltip=${t("sidebar.backToChat")}
+                      data-tooltip-pos="bottom"
+                      aria-label=${t("sidebar.backToChat")}
+                    >
+                      ${icons.x}
+                    </button>
+                  </div>
+                `
+              : sidebarCollapsed && !chatFocus
+                ? html`
+                    <div class="oneclaw-floating-actions">
+                      <button
+                        class="oneclaw-floating-btn"
+                        type="button"
+                        @click=${() => {
+                          state.applySettings({
+                            ...state.settings,
+                            navCollapsed: false,
+                          });
+                        }}
+                        data-tooltip=${t("sidebar.expand")}
+                        data-tooltip-pos="bottom"
+                        aria-label=${t("sidebar.expand")}
+                      >
+                        ${icons.panelLeft}
+                      </button>
+                      <button
+                        class="oneclaw-floating-btn"
+                        type="button"
+                        @click=${() => handleSessionChange(state, generateSessionKey())}
+                        data-tooltip=${t("sidebar.newChat")}
+                        data-tooltip-pos="bottom"
+                        aria-label=${t("sidebar.newChat")}
+                      >
+                        ${icons.messagePlus}
+                      </button>
+                    </div>
+                  `
+                : nothing
+          }
+        </div>
 
         <main class="oneclaw-content">
           ${renderPairingNotice(state)}

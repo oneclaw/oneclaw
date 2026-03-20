@@ -6457,6 +6457,16 @@ img.chat-avatar {
   stroke-linejoin: round;
 }
 
+/* 全屏页面右上角关闭按钮 */
+.oneclaw-fullpage-close {
+  margin-left: auto;
+  margin-right: 16px;
+  padding-top: 3px;
+  -webkit-app-region: no-drag;
+  position: relative;
+  z-index: 101;
+}
+
 .shell {
   display: contents !important;
 }
@@ -6631,7 +6641,8 @@ img.chat-avatar {
 .skill-store {
   max-width: 720px;
   margin: 0 auto;
-  padding: 24px 16px;
+  /* 顶部留出 titlebar 高度 */
+  padding: 48px 16px 24px;
 }
 
 .skill-store__header {
@@ -7358,15 +7369,16 @@ img.chat-avatar {
   max-width: 1200px;
   margin: 0 auto;
   padding: 0;
+  /* 顶部留出 titlebar 高度 */
+  padding-top: 44px;
 }
 
 .workspace__header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 16px 24px 12px;
+  padding: 8px 24px 12px;
   border-bottom: 1px solid var(--border-color, #e5e5e5);
-  -webkit-app-region: drag;
 }
 
 .workspace__title {

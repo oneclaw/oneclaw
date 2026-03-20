@@ -4097,18 +4097,6 @@
   // ── 事件绑定 ──
 
   function bindEvents() {
-    var btnBackToChat = document.getElementById("btnBackToChat");
-    if (btnBackToChat) {
-      btnBackToChat.addEventListener("click", function() {
-        if (window.parent && window.parent !== window) {
-          window.parent.postMessage({ source: 'oneclaw-settings-embed', type: 'navigate-back' }, '*');
-        } else if (window.oneclaw && window.oneclaw.onNavigate) {
-          // Fallback
-          window.oneclaw.openWebUI?.();
-        }
-      });
-    }
-
     // 左侧导航 tab 切换
     els.navItems.forEach(function (item) {
       item.addEventListener("click", function () {
