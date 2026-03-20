@@ -1,4 +1,4 @@
-import { app, dialog, ipcMain, shell, Menu, BrowserWindow } from "electron";
+import { app, clipboard, dialog, ipcMain, shell, Menu, BrowserWindow } from "electron";
 import { GatewayProcess } from "./gateway-process";
 import { WindowManager } from "./window";
 import { TrayManager } from "./tray";
@@ -458,6 +458,36 @@ ipcMain.handle("dialog:select-files", async (_e, options?: { filters?: Electron.
     return [];
   }
   return result.filePaths;
+});
+
+// 读取剪贴板中的文件路径（macOS: NSFilenamesPboardType, Windows: CF_HDROP）
+ipcMain.handle("clipboard:read-file-paths", () => {
+  try {
+    if (process.platform === "darwin") {
+      // macOS 剪贴板文件列表是 XML plist 格式
+      const buf = clipboard.readBuffer("NSFilenamesPboardType");
+      if (!buf?.length) return [];
+      const xml = buf.toString("utf-8");
+      const paths: string[] = [];
+      // 简单解析 <string>...</string> 标签提取路径
+      const re = /<string>(.*?)<\/string>/g;
+      let m: RegExpExecArray | null;
+      while ((m = re.exec(xml)) !== null) {
+        if (m[1] && !m[1].includes("<")) paths.push(m[1]);
+      }
+      return paths;
+    }
+    if (process.platform === "win32") {
+      const buf = clipboard.readBuffer("FileNameW");
+      if (!buf?.length) return [];
+      // Windows FileNameW 是 UTF-16LE 以 null 结尾的路径
+      const raw = buf.toString("utf16le").replace(/\0+$/, "");
+      return raw ? [raw] : [];
+    }
+    return [];
+  } catch {
+    return [];
+  }
 });
 
 // Chat UI 侧边栏 IPC

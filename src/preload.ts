@@ -143,6 +143,9 @@ contextBridge.exposeInMainWorld("oneclaw", {
   // 文件选择
   selectFiles: (options?: { filters?: Array<{ name: string; extensions: string[] }> }) =>
     ipcRenderer.invoke("dialog:select-files", options) as Promise<string[]>,
+  // 读取剪贴板中的文件路径（Cmd+C / Ctrl+C 复制的文件）
+  readClipboardFilePaths: () =>
+    ipcRenderer.invoke("clipboard:read-file-paths") as Promise<string[]>,
 
   // Chat UI 侧边栏操作
   openSettings: () => ipcRenderer.send("app:open-settings"),
@@ -277,48 +280,26 @@ contextBridge.exposeInMainWorld("oneclaw", {
   },
 });
 
-// 拖拽 / 粘贴文件 → 提取真实路径并派发给渲染进程
-// sandbox 模式下 File.path 为空，必须用 webUtils.getPathForFile()
-function extractFilePaths(files: FileList | undefined): string[] {
-  if (!files?.length) return [];
+// 拖拽文件 → 提取路径并派发给渲染进程
+// dragover 必须无条件 preventDefault，否则 drop 事件不会触发
+document.addEventListener("dragover", (e) => {
+  e.preventDefault();
+  e.stopPropagation();
+});
+
+document.addEventListener("drop", (e) => {
+  e.preventDefault();
+  e.stopPropagation();
+  const files = e.dataTransfer?.files;
+  if (!files?.length) return;
   const paths: string[] = [];
   for (let i = 0; i < files.length; i++) {
-    const p = webUtils.getPathForFile(files[i]);
-    if (p) paths.push(p);
+    try {
+      const p = webUtils.getPathForFile(files[i]);
+      if (p) paths.push(p);
+    } catch { /* 忽略无法获取路径的文件 */ }
   }
-  return paths;
-}
-
-function dispatchFilePaths(paths: string[]) {
   if (paths.length > 0) {
     window.dispatchEvent(new CustomEvent("oneclaw:file-drop", { detail: { paths } }));
-  }
-}
-
-// 拖拽文件
-document.addEventListener("drop", (e) => {
-  const paths = extractFilePaths(e.dataTransfer?.files);
-  if (paths.length > 0) {
-    e.preventDefault();
-    dispatchFilePaths(paths);
-  }
-});
-document.addEventListener("dragover", (e) => {
-  if (e.dataTransfer?.types?.includes("Files")) e.preventDefault();
-});
-
-// 粘贴文件（非图片走路径附件，图片保留原有 dataUrl 逻辑）
-document.addEventListener("paste", (e) => {
-  const files = e.clipboardData?.files;
-  if (!files?.length) return;
-  const nonImagePaths: string[] = [];
-  for (let i = 0; i < files.length; i++) {
-    if (!files[i].type.startsWith("image/")) {
-      const p = webUtils.getPathForFile(files[i]);
-      if (p) nonImagePaths.push(p);
-    }
-  }
-  if (nonImagePaths.length > 0) {
-    dispatchFilePaths(nonImagePaths);
   }
 });

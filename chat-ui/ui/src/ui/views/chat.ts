@@ -125,44 +125,46 @@ function generateAttachmentId(): string {
 }
 
 function handlePaste(e: ClipboardEvent, props: ChatProps) {
+  if (!props.onAttachmentsChange) return;
+
+  // 图片粘贴：走 dataUrl 内嵌
   const items = e.clipboardData?.items;
-  if (!items || !props.onAttachmentsChange) {
-    return;
-  }
-
-  const imageItems: DataTransferItem[] = [];
-  for (let i = 0; i < items.length; i++) {
-    const item = items[i];
-    if (item.type.startsWith("image/")) {
-      imageItems.push(item);
+  if (items) {
+    const imageItems: DataTransferItem[] = [];
+    for (let i = 0; i < items.length; i++) {
+      if (items[i].type.startsWith("image/")) imageItems.push(items[i]);
+    }
+    if (imageItems.length > 0) {
+      e.preventDefault();
+      for (const item of imageItems) {
+        const file = item.getAsFile();
+        if (!file) continue;
+        const reader = new FileReader();
+        reader.addEventListener("load", () => {
+          const dataUrl = reader.result as string;
+          const current = props.attachments ?? [];
+          props.onAttachmentsChange?.([...current, {
+            id: generateAttachmentId(), dataUrl, mimeType: file.type,
+          }]);
+        });
+        reader.readAsDataURL(file);
+      }
+      return;
     }
   }
 
-  if (imageItems.length === 0) {
-    return;
-  }
-
-  e.preventDefault();
-
-  for (const item of imageItems) {
-    const file = item.getAsFile();
-    if (!file) {
-      continue;
-    }
-
-    const reader = new FileReader();
-    reader.addEventListener("load", () => {
-      const dataUrl = reader.result as string;
-      const newAttachment: ChatAttachment = {
-        id: generateAttachmentId(),
-        dataUrl,
-        mimeType: file.type,
-      };
-      const current = props.attachments ?? [];
-      props.onAttachmentsChange?.([...current, newAttachment]);
-    });
-    reader.readAsDataURL(file);
-  }
+  // 文件粘贴：从剪贴板读取文件路径（Cmd+C / Ctrl+C 复制的文件）
+  const w = window as Record<string, unknown>;
+  const oneclaw = w.oneclaw as Record<string, (...args: unknown[]) => Promise<string[]>> | undefined;
+  if (!oneclaw?.readClipboardFilePaths) return;
+  oneclaw.readClipboardFilePaths().then((paths: string[]) => {
+    if (!paths?.length) return;
+    const current = props.attachments ?? [];
+    const additions = paths.map((p: string) => ({
+      id: generateAttachmentId(), filePath: p, name: basename(p),
+    }));
+    props.onAttachmentsChange?.([...current, ...additions]);
+  });
 }
 
 // 从路径提取文件名
