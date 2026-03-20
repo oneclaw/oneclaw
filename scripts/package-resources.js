@@ -1083,29 +1083,53 @@ function patchAsarBoundaryCheck(gatewayDir) {
     const filePath = path.join(distDir, fileName);
     const source = fs.readFileSync(filePath, "utf-8");
 
-    // 在 openVerifiedFileSync 函数体开头注入 asar 快速通道
-    // 匹配特征：function openVerifiedFileSync(params) { ... const openReadFlags = ...
-    const marker = "function openVerifiedFileSync(params) {";
-    if (!source.includes(marker)) continue;
     if (source.includes("/* asar-bypass */")) continue; // 已打过补丁
 
-    const bypass = [
-      "function openVerifiedFileSync(params) {",
-      "\t/* asar-bypass */ if (params.filePath && params.filePath.includes('.asar')) {",
-      "\t\tconst ioFs = params.ioFs ?? fs;",
-      "\t\ttry {",
-      "\t\t\tconst fd = ioFs.openSync(params.filePath, ioFs.constants.O_RDONLY);",
-      "\t\t\tconst stat = ioFs.fstatSync(fd);",
-      "\t\t\treturn { ok: true, path: params.filePath, fd, stat };",
-      "\t\t} catch (e) {",
-      "\t\t\treturn { ok: false, reason: 'validation' };",
-      "\t\t}",
-      "\t}",
-    ].join("\n");
+    let result = source;
 
-    const result = source.replace(marker, bypass);
-    fs.writeFileSync(filePath, result, "utf-8");
-    patched++;
+    // 补丁 1: openBoundaryFileSync — 插件清单加载的入口函数
+    // 在 resolveBoundaryPathSync 之前拦截，避免 ASAR 虚拟路径触发 realpath/lstat 校验失败
+    const boundaryMarker = "function openBoundaryFileSync(params) {";
+    if (result.includes(boundaryMarker)) {
+      const boundaryBypass = [
+        "function openBoundaryFileSync(params) {",
+        "\t/* asar-bypass */ if (params.absolutePath && params.absolutePath.includes('.asar')) {",
+        "\t\tconst ioFs = params.ioFs ?? fs;",
+        "\t\ttry {",
+        "\t\t\tconst fd = ioFs.openSync(params.absolutePath, ioFs.constants.O_RDONLY);",
+        "\t\t\tconst stat = ioFs.fstatSync(fd);",
+        "\t\t\treturn { ok: true, path: params.absolutePath, fd, stat, rootRealPath: params.rootPath };",
+        "\t\t} catch (e) {",
+        "\t\t\treturn { ok: false, reason: 'validation' };",
+        "\t\t}",
+        "\t}",
+      ].join("\n");
+      result = result.replace(boundaryMarker, boundaryBypass);
+    }
+
+    // 补丁 2: openVerifiedFileSync — 兜底，防止其他调用路径也触发校验
+    const verifiedMarker = "function openVerifiedFileSync(params) {";
+    if (result.includes(verifiedMarker)) {
+      const verifiedBypass = [
+        "function openVerifiedFileSync(params) {",
+        "\t/* asar-bypass-verified */ if (params.filePath && params.filePath.includes('.asar')) {",
+        "\t\tconst ioFs = params.ioFs ?? fs;",
+        "\t\ttry {",
+        "\t\t\tconst fd = ioFs.openSync(params.filePath, ioFs.constants.O_RDONLY);",
+        "\t\t\tconst stat = ioFs.fstatSync(fd);",
+        "\t\t\treturn { ok: true, path: params.filePath, fd, stat };",
+        "\t\t} catch (e) {",
+        "\t\t\treturn { ok: false, reason: 'validation' };",
+        "\t\t}",
+        "\t}",
+      ].join("\n");
+      result = result.replace(verifiedMarker, verifiedBypass);
+    }
+
+    if (result !== source) {
+      fs.writeFileSync(filePath, result, "utf-8");
+      patched++;
+    }
   }
 
   if (patched > 0) {
