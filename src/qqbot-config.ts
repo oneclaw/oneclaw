@@ -40,7 +40,7 @@ export function extractQqbotConfig(config: any): ExtractedQqbotConfig {
     enabled: entry?.enabled === true || channel?.enabled === true,
     appId: typeof channel?.appId === "string" ? channel.appId : "",
     clientSecret: typeof channel?.clientSecret === "string" ? channel.clientSecret : "",
-    markdownSupport: channel?.markdownSupport !== false,
+    markdownSupport: channel?.markdownSupport === true,
   };
 }
 
@@ -94,7 +94,7 @@ export function saveQqbotConfig(config: any, params: SaveQqbotConfigParams): voi
     enabled: true,
     appId: String(params.appId ?? "").trim(),
     clientSecret: String(params.clientSecret ?? "").trim(),
-    markdownSupport: params.markdownSupport !== false,
+    markdownSupport: params.markdownSupport === true,
     allowFrom: normalizeQqbotAllowFrom(existingChannel.allowFrom),
   };
 

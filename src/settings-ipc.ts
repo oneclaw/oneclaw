@@ -633,7 +633,7 @@ export function registerSettingsIpc(opts: SettingsIpcOptions = {}): void {
     const enabled = params?.enabled === true;
     const appId = typeof params?.appId === "string" ? params.appId.trim() : "";
     const clientSecret = typeof params?.clientSecret === "string" ? params.clientSecret.trim() : "";
-    const markdownSupport = params?.markdownSupport !== false;
+    const markdownSupport = params?.markdownSupport === true;
     return runTrackedSettingsAction(
       "save_channel",
       { platform: "qqbot", enabled, markdown_support: markdownSupport },
