@@ -56,6 +56,7 @@ function parseArgs() {
     platform: process.platform,
     arch: process.platform === "win32" ? "x64" : "arm64",
     locale: "en",
+    asar: process.env.ONECLAW_GATEWAY_ASAR === "1",
   };
 
   for (let i = 0; i < args.length; i++) {
@@ -63,6 +64,8 @@ function parseArgs() {
       opts.platform = args[++i];
     } else if (args[i] === "--arch" && args[i + 1]) {
       opts.arch = args[++i];
+    } else if (args[i] === "--asar") {
+      opts.asar = true;
     }
   }
 
@@ -953,86 +956,102 @@ function installDependencies(opts, gatewayDir) {
   log("node_modules 裁剪完成");
 }
 
-// Windows 上给 openclaw 已知的 spawn 热点统一补 windowsHide，避免黑框闪烁。
+// Windows 上给 openclaw + kimi-claw 所有 spawn 调用统一补 windowsHide，避免黑框闪烁。
+// 采用全局扫描策略，不再逐文件 whack-a-mole，确保上游新增 spawn 调用自动被覆盖。
 function patchWindowsOpenclawArtifacts(gatewayDir, platform = "win32") {
   if (platform !== "win32") return;
 
+  // 收集所有需要扫描的 JS 目录
+  const scanDirs = [];
+
+  // openclaw 核心 dist
   const distDir = path.join(gatewayDir, "node_modules", "openclaw", "dist");
   if (!fs.existsSync(distDir)) {
     die(`openclaw dist 目录不存在，无法应用 Windows 补丁: ${distDir}`);
   }
+  scanDirs.push(distDir);
 
-  const distEntries = fs.readdirSync(distDir);
-  const execFiles = distEntries.filter((name) => /^exec-.*\.js$/.test(name));
-  const gatewayCliFiles = distEntries.filter((name) => /^gateway-cli-.*\.js$/.test(name));
-
-  const execResult = patchWindowsOpenclawFiles(distDir, execFiles, injectExecWindowsHide, hasExecWindowsHide);
-  const gatewayCliResult = patchWindowsOpenclawFiles(
-    distDir,
-    gatewayCliFiles,
-    injectGatewayRespawnWindowsHide,
-    hasGatewayRespawnWindowsHide
+  // kimi-claw 插件（terminal-session-manager 有 pipe 回退未加 windowsHide）
+  const kimiClawDist = path.join(
+    gatewayDir, "node_modules", "openclaw", "extensions", "kimi-claw", "dist"
   );
-
-  if (execFiles.length === 0 || execResult.ready === 0) {
-    die("未能为 openclaw exec Windows spawn 注入 windowsHide，构建已终止");
-  }
-  if (gatewayCliFiles.length === 0 || gatewayCliResult.ready === 0) {
-    die("未能为 openclaw gateway-cli respawn 注入 windowsHide，构建已终止");
+  if (fs.existsSync(kimiClawDist)) {
+    scanDirs.push(kimiClawDist);
   }
 
-  log(
-    `已应用 openclaw Windows 补丁：exec=${execResult.patched}/${execResult.ready} gateway-cli=${gatewayCliResult.patched}/${gatewayCliResult.ready}`
-  );
+  let totalFiles = 0;
+  let totalPatched = 0;
+
+  for (const dir of scanDirs) {
+    const result = patchWindowsHideGlobal(dir);
+    totalFiles += result.scanned;
+    totalPatched += result.patched;
+  }
+
+  if (totalPatched > 0) {
+    log(`已全局注入 windowsHide: 扫描 ${totalFiles} 文件，补丁 ${totalPatched} 文件`);
+  } else {
+    log(`windowsHide 全局扫描完成: ${totalFiles} 文件均已就绪，无需补丁`);
+  }
 }
 
-// 扫描并重写目标文件；若上游产物结构变化，让构建直接失败而不是静默漂移。
-function patchWindowsOpenclawFiles(distDir, fileNames, transform, isReady) {
+// 全局扫描目录下所有 .js 文件，给缺失 windowsHide 的 spawn 调用注入补丁。
+// 幂等：已有 windowsHide 的 spawn 不会重复注入。
+function patchWindowsHideGlobal(dir) {
+  const jsFiles = collectJsFilesRecursive(dir);
+  let scanned = 0;
   let patched = 0;
-  let ready = 0;
-  for (const fileName of fileNames) {
-    const filePath = path.join(distDir, fileName);
+
+  for (const filePath of jsFiles) {
+    scanned += 1;
     const before = fs.readFileSync(filePath, "utf-8");
-    const after = transform(before);
+    const after = injectWindowsHideAll(before);
     if (after !== before) {
       fs.writeFileSync(filePath, after, "utf-8");
       patched += 1;
-      ready += 1;
-      continue;
-    }
-    if (isReady(before)) {
-      ready += 1;
     }
   }
-  return { patched, ready };
+
+  return { scanned, patched };
 }
 
-// exec helper 会走 cmd.exe / batch；这里漏掉 windowsHide 就会直接闪黑框。
-function injectExecWindowsHide(source) {
-  const eol = source.includes("\r\n") ? "\r\n" : "\n";
+// 递归收集目录下所有 .js 文件
+function collectJsFilesRecursive(dir) {
+  const results = [];
+  for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+    const full = path.join(dir, entry.name);
+    if (entry.isDirectory()) {
+      results.push(...collectJsFilesRecursive(full));
+    } else if (entry.isFile() && entry.name.endsWith(".js")) {
+      results.push(full);
+    }
+  }
+  return results;
+}
+
+// 给源码中所有 spawn(..., { ... }) 调用注入 windowsHide: true。
+// 策略：匹配 spawn options 对象的起始 `{` 后第一个属性，回看确认是 spawn 上下文，
+// 前探确认同一 options 块内无 windowsHide 后注入。
+function injectWindowsHideAll(source) {
+  // 匹配 spawn options 对象的起始模式：
+  //   ], { stdio  — 数组参数后的 options（killProcessTree, exec 等）
+  //   ), { stdio  — 函数调用结果后的 options（slice(1) 等）
+  //   var, { stdio — 变量参数后的 options（spawn(cmd, args, { stdio...）
+  //   [], { cwd   — 空数组后的 options（kimi-claw terminal）
   return source.replace(
-    /(\] : finalArgv\.slice\(1\), \{)(\r?\n)(\s*)stdio,/,
-    `$1$2$3windowsHide: true,${eol}$3stdio,`
+    /([)\]\w"']\s*,\s*\{)(\s*)(stdio|detached|cwd\b|env\s*[,:{])/g,
+    (match, prefix, ws, keyword, offset) => {
+      // 前探 600 字符：同一 options 块内已有 windowsHide 则跳过
+      const lookahead = source.slice(offset, offset + 600);
+      if (lookahead.includes("windowsHide")) return match;
+
+      // 回看 500 字符：确认在 spawn( 调用上下文中，避免误伤非 spawn 的对象字面量
+      const lookback = source.slice(Math.max(0, offset - 500), offset);
+      if (!/spawn\s*\(/.test(lookback)) return match;
+
+      return prefix + ws + "windowsHide: true," + ws + keyword;
+    }
   );
-}
-
-// 幂等校验：缓存依赖若已带 windowsHide，不应因为补丁再次运行而失败。
-function hasExecWindowsHide(source) {
-  return /\] : finalArgv\.slice\(1\), \{[\s\S]*?windowsHide:\s*true[\s\S]*?stdio,/.test(source);
-}
-
-// respawn 已被 OPENCLAW_NO_RESPAWN 大多压住，但这里补上更稳，避免旁路重新污染主进程树。
-function injectGatewayRespawnWindowsHide(source) {
-  const eol = source.includes("\r\n") ? "\r\n" : "\n";
-  return source.replace(
-    /(spawn\(process\.execPath, args, \{)(\r?\n)(\s*)env: process\.env,/,
-    `$1$2$3windowsHide: true,${eol}$3env: process.env,`
-  );
-}
-
-// 幂等校验：已打过补丁的 gateway-cli 允许重复复用，不重复报错。
-function hasGatewayRespawnWindowsHide(source) {
-  return /spawn\(process\.execPath, args, \{[\s\S]*?windowsHide:\s*true[\s\S]*?env: process\.env,/.test(source);
 }
 
 // ─── Step 2.5: 注入 bundled 插件（kimi-claw + kimi-search + qqbot + dingtalk） ───
@@ -1807,6 +1826,99 @@ function generateEntryAndBuildInfo(gatewayDir, platform, arch) {
   log("已生成 build-info.json");
 }
 
+// ─── Step 6: Gateway ASAR 打包（可选） ───
+
+// koffi 平台名映射（从 afterPack.js 前移）
+const KOFFI_PLATFORM_MAP = {
+  "darwin-x64": "darwin_x64",
+  "darwin-arm64": "darwin_arm64",
+  "win32-x64": "win32_x64",
+  "win32-arm64": "win32_arm64",
+};
+
+// koffi 仅保留目标平台的 native binary，asar 打包前必须裁剪（asar 打包后无法修改）
+function pruneKoffiPlatforms(gatewayDir, platform, arch) {
+  const koffiBuildsDir = path.join(gatewayDir, "node_modules", "koffi", "build", "koffi");
+  if (!fs.existsSync(koffiBuildsDir)) return;
+
+  const keepDir = KOFFI_PLATFORM_MAP[`${platform}-${arch}`];
+  let removedCount = 0;
+  for (const entry of fs.readdirSync(koffiBuildsDir, { withFileTypes: true })) {
+    if (entry.isDirectory() && entry.name !== keepDir) {
+      rmDir(path.join(koffiBuildsDir, entry.name));
+      removedCount++;
+    }
+  }
+  log(`koffi: 保留 ${keepDir}，删除 ${removedCount} 个其余平台目录`);
+}
+
+// 将 gateway/ 散文件打包为 gateway.asar + gateway.asar.unpacked/
+async function packGatewayAsar(gatewayDir, targetBase, platform, arch) {
+  const asar = require("@electron/asar");
+  const asarPath = path.join(targetBase, "gateway.asar");
+
+  // asar 打包前执行 koffi 平台裁剪（asar 内文件不可修改）
+  pruneKoffiPlatforms(gatewayDir, platform, arch);
+
+  // unpack 规则：
+  //   1. 二进制文件（.node/.exe/.dll/.dylib/.so/spawn-helper）不能从 asar 内 dlopen
+  //   2. extensions/ 目录必须在真实文件系统上——openclaw gateway 的插件安全校验
+  //      拒绝包含 .asar 的路径（"unsafe plugin manifest path"）
+  log("正在打包 gateway.asar ...");
+  await asar.createPackageWithOptions(gatewayDir, asarPath, {
+    unpack: "{**/*.node,**/*.exe,**/*.dll,**/*.dylib,**/*.so,**/spawn-helper,**/openclaw/extensions/**}",
+  });
+
+  const asarSize = (fs.statSync(asarPath).size / 1048576).toFixed(1);
+  log(`gateway.asar 打包完成: ${asarSize} MB`);
+
+  // 校验 asar 内关键文件
+  verifyAsarContents(asarPath);
+
+  // 统计 unpacked 文件数
+  const unpackedDir = path.join(targetBase, "gateway.asar.unpacked");
+  if (fs.existsSync(unpackedDir)) {
+    const unpackedFiles = countFilesRecursive(unpackedDir);
+    log(`gateway.asar.unpacked: ${unpackedFiles} 个文件`);
+  }
+
+  // 删除散文件目录
+  rmDir(gatewayDir);
+  log("已删除 gateway/ 散文件目录");
+}
+
+// 校验 asar 内关键入口文件存在
+function verifyAsarContents(asarPath) {
+  const asar = require("@electron/asar");
+  // Windows 上 listPackage 返回反斜杠路径，统一转正斜杠再比较
+  const files = new Set(asar.listPackage(asarPath).map((f) => f.replace(/\\/g, "/")));
+
+  const required = [
+    "/node_modules/openclaw/openclaw.mjs",
+    "/node_modules/openclaw/dist/entry.js",
+    "/node_modules/clawhub/bin/clawdhub.js",
+  ];
+
+  const missing = required.filter((f) => !files.has(f));
+  if (missing.length > 0) {
+    die(`gateway.asar 缺少关键文件:\n${missing.map((f) => `  - ${f}`).join("\n")}`);
+  }
+  log(`gateway.asar 关键文件校验通过 (${files.length} 个文件)`);
+}
+
+// 递归统计文件数
+function countFilesRecursive(dir) {
+  let count = 0;
+  for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+    if (entry.isDirectory()) {
+      count += countFilesRecursive(path.join(dir, entry.name));
+    } else {
+      count++;
+    }
+  }
+  return count;
+}
+
 // 验证目标目录关键文件是否存在
 function verifyOutput(targetPaths, opts) {
   log("正在验证输出文件...");
@@ -1819,6 +1931,30 @@ function verifyOutput(targetPaths, opts) {
   const npmDir = platform === "darwin"
     ? path.join(targetRel, "runtime", "vendor", "npm")
     : path.join(targetRel, "runtime", "node_modules", "npm");
+
+  // asar 模式下散文件已被删除，只校验 gateway.asar 和基础资源
+  if (opts.asar) {
+    const required = [
+      path.join(targetRel, "runtime", nodeExe),
+      npmDir,
+      path.join(targetRel, "gateway.asar"),
+      path.join(targetRel, "build-config.json"),
+      path.join(targetRel, "app-icon.png"),
+    ];
+
+    let allOk = true;
+    for (const rel of required) {
+      const abs = path.join(ROOT, rel);
+      const exists = fs.existsSync(abs);
+      const status = exists ? "OK" : "缺失";
+      console.log(`  [${status}] ${rel}`);
+      if (!exists) allOk = false;
+    }
+
+    if (!allOk) die("关键文件缺失，打包失败");
+    log("所有关键文件验证通过 (asar 模式)");
+    return;
+  }
 
   const required = [
     path.join(targetRel, "runtime", nodeExe),
@@ -1919,6 +2055,16 @@ async function main() {
   // Step 5: 生成入口文件和构建信息
   log("Step 5: 生成入口文件和构建信息");
   generateEntryAndBuildInfo(targetPaths.gatewayDir, opts.platform, opts.arch);
+
+  console.log();
+
+  // Step 6: Gateway ASAR 打包（--asar 或 ONECLAW_GATEWAY_ASAR=1 时启用）
+  if (opts.asar) {
+    log("Step 6: Gateway ASAR 打包");
+    await packGatewayAsar(targetPaths.gatewayDir, targetPaths.targetBase, opts.platform, opts.arch);
+  } else {
+    log("Step 6: 跳过 ASAR 打包（未指定 --asar）");
+  }
 
   console.log();
 

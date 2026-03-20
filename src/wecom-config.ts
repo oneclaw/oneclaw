@@ -2,7 +2,7 @@ import * as crypto from "crypto";
 import * as fs from "fs";
 import * as https from "https";
 import * as path from "path";
-import { resolveGatewayCwd } from "./constants";
+import { resolveGatewayPackageDir } from "./constants";
 
 export const WECOM_PLUGIN_ID = "wecom-openclaw-plugin";
 export const WECOM_CHANNEL_ID = "wecom";
@@ -30,7 +30,7 @@ export interface SaveWecomConfigParams {
 
 // 统一解析企业微信插件目录，兼容 dev / packaged 环境。
 export function resolveWecomPluginDir(): string {
-  return path.join(resolveGatewayCwd(), "extensions", WECOM_PLUGIN_ID);
+  return path.join(resolveGatewayPackageDir(), "extensions", WECOM_PLUGIN_ID);
 }
 
 // 检查企业微信插件是否已经随应用一起打包。

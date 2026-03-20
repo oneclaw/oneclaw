@@ -147,23 +147,56 @@ export function resolveNpmBin(): string {
   return path.join(resolveResourcesPath(), "runtime", IS_WIN ? "npm.cmd" : "npm");
 }
 
-/** Gateway 入口（优先使用 openclaw.mjs；旧包回退 gateway-entry.mjs） */
-export function resolveGatewayEntry(): string {
-  const openclawCliEntry = path.join(resolveResourcesPath(), "gateway", "node_modules", "openclaw", "openclaw.mjs");
-  if (fs.existsSync(openclawCliEntry)) {
-    return openclawCliEntry;
+// ── Gateway 路径（自动适配 asar / 散文件两种打包模式） ──
+
+/**
+ * Gateway 根目录：优先检测 gateway.asar，回退 gateway/ 散文件（dev 兼容）。
+ * 返回值可用于拼接 JS 文件路径（ASAR patch 透明可读），
+ * 但不可用作 spawn 的 cwd（OS 不认识 asar 虚拟路径）。
+ */
+function resolveGatewayRoot(): string {
+  const res = resolveResourcesPath();
+  const asarPath = path.join(res, "gateway.asar");
+  // 检测 asar 文件存在性：extname 防止把普通目录误判为 asar
+  if (path.extname(asarPath) === ".asar" && fs.existsSync(asarPath)) {
+    return asarPath;
   }
-  return path.join(resolveResourcesPath(), "gateway", "gateway-entry.mjs");
+  return path.join(res, "gateway");
 }
 
-/** Gateway 工作目录（统一使用 npm 安装的 openclaw 包路径） */
+/** Gateway 入口（优先 openclaw.mjs，旧包回退 gateway-entry.mjs） */
+export function resolveGatewayEntry(): string {
+  const root = resolveGatewayRoot();
+  const entry = path.join(root, "node_modules", "openclaw", "openclaw.mjs");
+  if (fs.existsSync(entry)) return entry;
+  return path.join(root, "gateway-entry.mjs");
+}
+
+/**
+ * Gateway 子进程的 cwd。
+ * asar 模式下不能指向 asar 内路径（OS chdir 不认识 asar），
+ * 返回 ~/.openclaw/；dev 模式保持散文件目录。
+ */
 export function resolveGatewayCwd(): string {
-  return path.join(resolveResourcesPath(), "gateway", "node_modules", "openclaw");
+  const root = resolveGatewayRoot();
+  if (root.endsWith(".asar")) {
+    return resolveUserStateDir();
+  }
+  return path.join(root, "node_modules", "openclaw");
+}
+
+/**
+ * Gateway 内 openclaw 包路径（main process 的 fs 读取专用）。
+ * 插件检测、版本读取等在 main process 中运行，ASAR patch 保证透明可读。
+ * 与 resolveGatewayCwd() 不同，此函数始终指向包内路径。
+ */
+export function resolveGatewayPackageDir(): string {
+  return path.join(resolveGatewayRoot(), "node_modules", "openclaw");
 }
 
 /** clawhub CLI bin 入口（与 openclaw 同一 node_modules） */
 export function resolveClawhubEntry(): string {
-  return path.join(resolveResourcesPath(), "gateway", "node_modules", "clawhub", "bin", "clawdhub.js");
+  return path.join(resolveGatewayRoot(), "node_modules", "clawhub", "bin", "clawdhub.js");
 }
 
 /** 用户 bin 目录（~/.openclaw/bin/，存放 CLI wrapper 脚本） */

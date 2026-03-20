@@ -1,6 +1,6 @@
 {
   "name": "OneClaw",
-  "version": "2026.3.16",
+  "version": "0.0.0-dev",
   "private": true,
   "description": "OneClaw desktop app — cross-platform Electron shell for openclaw",
   "main": "dist/main.js",
@@ -36,6 +36,7 @@
     "sherpa-onnx-win-x64": "1.12.28"
   },
   "devDependencies": {
+    "@electron/asar": "^4.1.0",
     "@types/node": "^22.15.0",
     "electron": "^40.2.1",
     "electron-builder": "^26.7.0",

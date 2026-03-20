@@ -4,6 +4,10 @@
  * 在 electron-builder 完成文件收集（含 node_modules 剥离）之后、
  * 签名和生成安装包之前，将 resources/targets/<platform-arch>/ 下的资源
  * 注入到 app bundle 中，避免多目标并行打包时资源相互覆盖。
+ *
+ * 自动检测 asar / 散文件两种 gateway 打包模式：
+ *   - asar 模式：注入 gateway.asar + gateway.asar.unpacked/
+ *   - 散文件模式：注入 gateway/ 目录 + 执行 koffi 平台裁剪
  */
 
 "use strict";
@@ -12,9 +16,8 @@ const path = require("path");
 const fs = require("fs");
 const { Arch } = require("builder-util");
 
-// ── 注入目录列表 ──
+// ── 固定注入资源 ──
 
-const INJECT_DIRS = ["runtime", "gateway"];
 const REQUIRED_FILES = ["build-config.json"];
 const OPTIONAL_FILES = ["app-icon.png"];
 
@@ -57,25 +60,32 @@ exports.default = async function afterPack(context) {
   }
   console.log(`[afterPack] 使用目标资源: ${targetId}`);
 
-  for (const name of INJECT_DIRS) {
-    const src = path.join(sourceBase, name);
-    const dest = path.join(targetBase, name);
+  // ── 检测 gateway 打包模式 ──
+  const gatewayAsarPath = path.join(sourceBase, "gateway.asar");
+  const useAsar = fs.existsSync(gatewayAsarPath);
 
-    if (!fs.existsSync(src)) {
-      throw new Error(`[afterPack] 资源目录不存在: ${src}`);
-    }
-
-    copyDirSync(src, dest);
-    console.log(`[afterPack] 已注入 ${name}/ → ${path.relative(appOutDir, dest)}`);
+  if (useAsar) {
+    injectGatewayAsar(sourceBase, targetBase, appOutDir);
+  } else {
+    injectGatewayLoose(sourceBase, targetBase, appOutDir, platform, context);
   }
 
-  // 注入必须存在的单文件资源（如打包时动态生成的埋点配置）
+  // runtime 目录始终以散文件注入
+  const runtimeSrc = path.join(sourceBase, "runtime");
+  if (!fs.existsSync(runtimeSrc)) {
+    throw new Error(`[afterPack] 资源目录不存在: ${runtimeSrc}`);
+  }
+  copyDirSync(runtimeSrc, path.join(targetBase, "runtime"));
+  console.log(`[afterPack] 已注入 runtime/ → ${path.relative(appOutDir, path.join(targetBase, "runtime"))}`);
+
+  // 注入必须存在的单文件资源
   for (const name of REQUIRED_FILES) {
     const src = path.join(sourceBase, name);
     const dest = path.join(targetBase, name);
     if (!fs.existsSync(src)) {
       throw new Error(`[afterPack] 必需文件不存在: ${src}`);
     }
+    fs.mkdirSync(path.dirname(dest), { recursive: true });
     fs.copyFileSync(src, dest);
     console.log(`[afterPack] 已注入 ${name}`);
   }
@@ -89,11 +99,6 @@ exports.default = async function afterPack(context) {
     console.log(`[afterPack] 已注入 ${name}`);
   }
 
-  // ── 裁剪 gateway node_modules 中的冗余文件 ──
-  const arch = resolveArchName(context.arch);
-  const gatewayDir = path.join(targetBase, "gateway");
-  pruneGatewayModules(gatewayDir, platform, arch);
-
   // ── 用 Electron binary 替换独立 Node.js（节省 80-100MB） ──
   const productName = context.packager.appInfo.productFilename;
   replaceNodeBinary(platform, targetBase, productName);
@@ -101,19 +106,49 @@ exports.default = async function afterPack(context) {
   ensureElectronFrameworkBinary(platform, appOutDir, productName);
 };
 
+// ── asar 模式：注入 gateway.asar + gateway.asar.unpacked/ ──
+
+function injectGatewayAsar(sourceBase, targetBase, appOutDir) {
+  const asarSrc = path.join(sourceBase, "gateway.asar");
+  const asarDest = path.join(targetBase, "gateway.asar");
+  fs.mkdirSync(path.dirname(asarDest), { recursive: true });
+  fs.copyFileSync(asarSrc, asarDest);
+  const sizeMB = (fs.statSync(asarDest).size / 1048576).toFixed(1);
+  console.log(`[afterPack] 已注入 gateway.asar (${sizeMB} MB) → ${path.relative(appOutDir, asarDest)}`);
+
+  // native modules 目录（可能不存在，比如纯 JS 依赖的场景）
+  const unpackedSrc = path.join(sourceBase, "gateway.asar.unpacked");
+  if (fs.existsSync(unpackedSrc)) {
+    const unpackedDest = path.join(targetBase, "gateway.asar.unpacked");
+    copyDirSync(unpackedSrc, unpackedDest);
+    console.log(`[afterPack] 已注入 gateway.asar.unpacked/ → ${path.relative(appOutDir, unpackedDest)}`);
+  }
+
+  // asar 模式下所有裁剪已在 package-resources 阶段完成，此处无需 prune
+}
+
+// ── 散文件模式：注入 gateway/ 目录 + koffi 平台裁剪 ──
+
+function injectGatewayLoose(sourceBase, targetBase, appOutDir, platform, context) {
+  const gatewaySrc = path.join(sourceBase, "gateway");
+  if (!fs.existsSync(gatewaySrc)) {
+    throw new Error(`[afterPack] 资源目录不存在: ${gatewaySrc}`);
+  }
+  const gatewayDest = path.join(targetBase, "gateway");
+  copyDirSync(gatewaySrc, gatewayDest);
+  console.log(`[afterPack] 已注入 gateway/ → ${path.relative(appOutDir, gatewayDest)}`);
+
+  // 散文件模式保留 koffi 平台裁剪（asar 模式已前移到 package-resources）
+  const arch = resolveArchName(context.arch);
+  pruneGatewayModules(gatewayDest, platform, arch);
+}
+
 // ── 用 Electron binary 代理替换独立 Node.js ──
-//
-// packaged 模式下 process.execPath 就是 Electron binary，配合
-// ELECTRON_RUN_AS_NODE=1 即可作为纯 Node.js 使用。
-// macOS 写入代理 shell 脚本（供 npm wrapper 链式调用 "$dir/node"）；
-// Windows 删除 node.exe 并重写 npm.cmd / npx.cmd 直接调用 <productName>.exe。
 
 function replaceNodeBinary(platform, targetBase, productName) {
   const runtimeDir = path.join(targetBase, "runtime");
 
   if (platform === "darwin") {
-    // macOS: 使用 Helper binary（LSUIElement=true，不产生 Dock 弹跳图标）
-    // 路径: runtime/ → resources/ → Resources/ → Contents/Frameworks/<name> Helper.app/...
     const nodePath = path.join(runtimeDir, "node");
     if (fs.existsSync(nodePath)) {
       const sizeMB = (fs.statSync(nodePath).size / 1048576).toFixed(1);
@@ -138,7 +173,6 @@ function replaceNodeBinary(platform, targetBase, productName) {
     fs.chmodSync(nodePath, 0o755);
     console.log(`[afterPack] 已写入 macOS node 代理脚本 (-> ${helperRelPath})`);
   } else if (platform === "win32") {
-    // Windows: runtime/ → resources/ → resources/ → <install>/<productName>.exe
     const nodeExePath = path.join(runtimeDir, "node.exe");
     if (fs.existsSync(nodeExePath)) {
       const sizeMB = (fs.statSync(nodeExePath).size / 1048576).toFixed(1);
@@ -146,7 +180,6 @@ function replaceNodeBinary(platform, targetBase, productName) {
       console.log(`[afterPack] 已删除 runtime/node.exe (${sizeMB} MB)`);
     }
 
-    // 重写 npm.cmd — 注入 ELECTRON_RUN_AS_NODE=1，指向 Electron binary
     const npmCmdPath = path.join(runtimeDir, "npm.cmd");
     if (fs.existsSync(npmCmdPath)) {
       const npmScript = buildWindowsElectronProxyScript(productName, "%~dp0node_modules\\npm\\bin\\npm-cli.js");
@@ -154,7 +187,6 @@ function replaceNodeBinary(platform, targetBase, productName) {
       console.log(`[afterPack] 已重写 npm.cmd`);
     }
 
-    // 重写 npx.cmd — 同上
     const npxCmdPath = path.join(runtimeDir, "npx.cmd");
     if (fs.existsSync(npxCmdPath)) {
       const npxScript = buildWindowsElectronProxyScript(productName, "%~dp0node_modules\\npm\\bin\\npx-cli.js");
@@ -164,7 +196,6 @@ function replaceNodeBinary(platform, targetBase, productName) {
   }
 }
 
-// Windows runtime wrapper 优先走 Helper.exe，缺失时再回退主 exe，避免首次启动前 wrapper 失效。
 function buildWindowsElectronProxyScript(productName, cliEntryPath) {
   const mainExe = `%~dp0..\\..\\..\\${productName}.exe`;
   const helperExe = `%~dp0..\\..\\..\\${productName} Helper.exe`;
@@ -181,12 +212,8 @@ function buildWindowsElectronProxyScript(productName, cliEntryPath) {
   ].join("\r\n") + "\r\n";
 }
 
-// ── 裁剪 gateway node_modules 冗余文件 ──
-//
-// 构建产物中包含大量无用文件（跨平台 native binaries、source maps、文档），
-// 清理后可减少数千文件和近百 MB 体积。
+// ── 裁剪 gateway node_modules（仅散文件模式使用） ──
 
-// 平台名映射：Electron 架构名 → koffi 目录名前缀
 const KOFFI_PLATFORM_MAP = {
   "darwin-x64": "darwin_x64",
   "darwin-arm64": "darwin_arm64",
@@ -201,7 +228,7 @@ function pruneGatewayModules(gatewayDir, platform, arch) {
   let removedFiles = 0;
   let removedBytes = 0;
 
-  // 1) koffi: 仅保留目标平台的 native binary，删除其余 17 个平台
+  // koffi: 仅保留目标平台的 native binary，删除其余 17 个平台
   const koffiBuildsDir = path.join(modulesDir, "koffi", "build", "koffi");
   if (fs.existsSync(koffiBuildsDir)) {
     const keepDir = KOFFI_PLATFORM_MAP[`${platform}-${arch}`];
@@ -217,12 +244,12 @@ function pruneGatewayModules(gatewayDir, platform, arch) {
     console.log(`[afterPack] koffi: 保留 ${keepDir}，删除其余平台`);
   }
 
-  // 2) .map 文件（source maps，运行时不需要）
+  // .map 文件
   const mapStats = removeByGlob(modulesDir, /\.map$/);
   removedFiles += mapStats.count;
   removedBytes += mapStats.bytes;
 
-  // 3) 文档文件（README、LICENSE、CHANGELOG 等，仅匹配无扩展名或 .md/.txt/.rst）
+  // 文档文件
   const docStats = removeByGlob(modulesDir, /^(readme|license|licence|changelog|history|authors|contributors)(\.md|\.txt|\.rst)?$/i);
   removedFiles += docStats.count;
   removedBytes += docStats.bytes;
@@ -231,7 +258,6 @@ function pruneGatewayModules(gatewayDir, platform, arch) {
   console.log(`[afterPack] 裁剪完成: 删除 ${removedFiles} 个文件，节省 ${savedMB} MB`);
 }
 
-// 递归统计目录内文件数和总字节
 function countFiles(dir) {
   let count = 0;
   let bytes = 0;
@@ -249,7 +275,6 @@ function countFiles(dir) {
   return { count, bytes };
 }
 
-// 递归删除匹配正则的文件
 function removeByGlob(dir, pattern) {
   let count = 0;
   let bytes = 0;
@@ -265,7 +290,6 @@ function removeByGlob(dir, pattern) {
   return { count, bytes };
 }
 
-// 递归遍历目录
 function walkDir(dir, callback) {
   let entries;
   try { entries = fs.readdirSync(dir, { withFileTypes: true }); } catch { return; }
@@ -291,7 +315,6 @@ function copyDirSync(src, dest) {
     if (entry.isDirectory()) {
       copyDirSync(s, d);
     } else if (entry.isSymbolicLink()) {
-      // 符号链接 → 解引用后复制实际文件
       const real = fs.realpathSync(s);
       fs.copyFileSync(real, d);
       fs.chmodSync(d, fs.statSync(real).mode);

@@ -32,12 +32,13 @@ The main process spawns a gateway subprocess, waits for its health check, then o
 | TTS | sherpa-onnx-node OfflineTts (VITS, run in Node.js child process) |
 | VAD | Silero VAD via sherpa-onnx (optional) |
 | Microphone | naudiodon2 (PortAudio N-API binding) |
+| Version scheme | Calendar-based: `YYYY.MMDD.N` (e.g. `2026.318.0`), auto-derived from git tag |
 
 ## Repository Layout
 
 ```
 oneclaw/
-├── src/                    # 25 TypeScript modules (6571 LOC) + 6 test files
+├── src/                    # 35 TypeScript modules (10032 LOC) + 13 test files
 │   ├── main.ts             # App entry, lifecycle, IPC, Dock toggle, config recovery
 │   ├── constants.ts        # Path resolution (dev vs packaged), health check params
 │   ├── gateway-process.ts  # Child process state machine + diagnostics
@@ -51,18 +52,28 @@ oneclaw/
 │   ├── live2d-preload.ts   # Live2D window contextBridge (voice, chat, model IPC)
 │   ├── speech-engine.ts    # sherpa-onnx ASR (streaming paraformer) + VAD + TTS subprocess
 │   ├── tts-worker.js       # Standalone Node.js script for TTS (avoids Electron external buffer restriction)
+│   ├── preload.ts          # contextBridge IPC whitelist (~66 methods + 5 listeners)
 │   ├── provider-config.ts  # Provider presets, verification, config R/W
 │   ├── setup-manager.ts    # Setup wizard window lifecycle
 │   ├── setup-ipc.ts        # Setup validation + config write + CLI install
 │   ├── setup-completion.ts # Setup wizard completion detection
+│   ├── install-detector.ts # Setup Step 0: installation conflict detection
 │   ├── oneclaw-config.ts   # OneClaw ownership config (deviceId, setupCompletedAt, migration)
 │   ├── settings-ipc.ts     # Settings CRUD, backup/restore, Kimi, CLI, advanced
 │   ├── config-backup.ts    # Rolling backups + last-known-good snapshot + restore
 │   ├── share-copy.ts       # Remote share copy content (CDN fetch + local fallback)
 │   ├── kimi-config.ts      # Kimi robot plugin + Kimi Search configuration
+│   ├── kimi-oauth.ts       # Kimi OAuth device code login + token refresh
+│   ├── skill-store.ts      # Skill marketplace (clawhub CLI integration)
+│   ├── build-config.ts     # Build-time injected config reader (PostHog, registry URL)
 │   ├── cli-integration.ts  # CLI wrapper generation, PATH injection (POSIX + Windows)
 │   ├── launch-at-login.ts  # macOS/Windows launch at login toggle
-│   ├── feishu-pairing-monitor.ts  # Feishu pairing request polling + state
+│   ├── channel-pairing-monitor.ts  # Unified multi-channel pairing polling + state
+│   ├── channel-pairing-store.ts    # Per-channel pairing approval persistence
+│   ├── feishu-pairing-monitor.ts   # Feishu-specific pairing monitor
+│   ├── wecom-config.ts     # WeCom (企业微信) plugin config
+│   ├── dingtalk-config.ts  # DingTalk connector plugin config
+│   ├── qqbot-config.ts     # QQ Bot plugin config
 │   ├── update-banner-state.ts     # Update banner pure state machine
 │   ├── analytics.ts        # Telemetry (PostHog-style, retry + fallback URL)
 │   ├── analytics-events.ts # Event classification + property sanitization
@@ -80,27 +91,33 @@ oneclaw/
 │   ├── sherpa-onnx-streaming-paraformer-bilingual-zh-en/  # Streaming ASR model (encoder + decoder + tokens)
 │   └── vits-zh-hf-theresa/                                # VITS TTS model (theresa.onnx + tokens + lexicon)
 ├── setup/                  # Setup wizard frontend (vanilla HTML/CSS/JS)
-│   ├── index.html          # 3-step wizard with data-i18n attributes
+│   ├── index.html          # Multi-step wizard with data-i18n attributes
 │   ├── setup.css           # Dark/light theme via prefers-color-scheme
-│   └── setup.js            # i18n dict (en/zh) + form logic
+│   ├── setup.js            # i18n dict (en/zh) + form logic
+│   └── lucide-sprite.generated.js  # Icon sprites
 ├── settings/               # Settings page frontend (vanilla HTML/CSS/JS)
 │   ├── index.html          # Provider, Search, Channels, KimiClaw, Appearance, Advanced, Backup tabs
 │   ├── settings.css        # Dark/light theme via prefers-color-scheme
-│   └── settings.js         # Provider CRUD, Feishu, Kimi, Kimi Search, CLI, backup/restore
+│   ├── settings.js         # Provider CRUD, multi-channel, Kimi, CLI, backup/restore
+│   ├── lucide-sprite.generated.js  # Icon sprites
+│   └── share-copy-content.json     # Fallback share copy content
 ├── scripts/
 │   ├── package-resources.js    # Downloads Node.js 22 + installs openclaw from npm
 │   ├── afterPack.js            # electron-builder hook: injects resources post-strip
 │   ├── run-mac-builder.js      # macOS build wrapper (sign + notarize)
 │   ├── run-with-env.js         # .env loader for child processes
 │   ├── merge-release-yml.js    # Merges per-arch latest.yml for auto-updater
+│   ├── generate-settings-icons.js  # Lucide icon sprite generator
+│   ├── installer.nsh           # NSIS custom installer script
+│   ├── lib/                    # Shared script utilities
 │   ├── dist-all-parallel.sh    # Parallel cross-platform build
 │   └── clean.sh
 ├── assets/                 # Icons: .icns, .ico, .png, tray templates
-├── docs/                   # Plans and documentation
+├── docs/                   # Plans, design guidelines, architecture docs
 ├── .github/workflows/      # CI: build-release.yml + publish-release.yml + publish-share-copy.yml
 ├── electron-builder.yml    # Build config (DMG + ZIP for mac, NSIS for win)
 ├── tsconfig.json           # target ES2022, module CommonJS
-└── .env                    # Signing keys + analytics config (gitignored)
+└── .env                    # Signing keys + build config (gitignored)
 ```
 
 **Generated at build time (all gitignored):**
@@ -140,9 +157,10 @@ npm run clean                # Remove all generated files
 
 ## Key Design Decisions
 
-### Gateway Child Process (`gateway-process.ts`)
+> Detailed per-module design documentation: [docs/architecture.md](docs/architecture.md)
+> Full IPC API reference: [docs/ipc-api.md](docs/ipc-api.md)
 
-State machine: `stopped → starting → running → stopping → stopped`
+**Core subsystems at a glance:**
 
 **Generation tracking:** Each `spawn()` call increments a generation counter. The exit handler only processes exits matching the current generation, preventing stale process exits from corrupting the state machine during rapid restart cycles.
 
@@ -402,6 +420,16 @@ Electron 40 defaults to sandbox mode. 42 IPC methods + 4 event listeners are exp
 **Voice events:** `onInterimResult`, `onFinalResult`, `onAIReply`, `onListeningStateChange`
 
 `openExternal` exists because `shell.openExternal` is unavailable in sandboxed preload — must go through IPC to main process.
+- **Gateway process** — State machine (`stopped→starting→running→stopping`) with generation tracking to prevent stale exit events. 3 retries on startup, 90s health check timeout, auto-restart on config change.
+- **Token injection** — Auth token passed to gateway via env var, injected into BrowserWindow via URL fragment (`#token=...`).
+- **Provider config** — Unified module shared by Setup + Settings. All Moonshot sub-platforms (moonshot-cn/ai/kimi-code) write `apiKey`+`baseUrl`+`api`+`models` to `models.providers`.
+- **Kimi OAuth** — Device code flow via `auth.kimi.com`, 60s refresh interval, 300s refresh threshold.
+- **Setup wizard** — Step 0 (conflict detection) → Step 1 (welcome) → Step 2 (provider) → Step 3 (done + CLI + login toggle).
+- **Settings** — 7 tabs: Provider, Search, Channels, KimiClaw, Appearance, Advanced, Backup.
+- **Multi-channel integration** — Unified pairing monitor aggregates Feishu, WeCom, DingTalk, QQ Bot with per-channel state tracking and auto-approval.
+- **Skill store** — clawhub CLI integration, skills at `~/.openclaw/workspace/skills/`, registry config in `~/.openclaw/skill-store.json`.
+- **Config backup** — Rolling 10 backups + last-known-good snapshot + factory reset.
+- **Preload security** — ~66 IPC methods + 5 event listeners via `contextBridge` (sandbox mode).
 
 ## Runtime Paths (on user's machine)
 
@@ -417,8 +445,12 @@ Electron 40 defaults to sandbox mode. 42 IPC methods + 4 event listeners are exp
   │   └── openclaw-YYYYMMDD-HHmmss.json
   ├── credentials/
   │   └── kimi-search-api-key          # Kimi Search dedicated API key (sidecar file)
+  ├── workspace/
+  │   └── skills/                      # Installed skills (via clawhub)
+  ├── skill-store.json                 # Skill store registry config (standalone)
   └── bin/
-      └── openclaw                     # CLI wrapper script (POSIX) or .cmd (Windows)
+      ├── openclaw                     # CLI wrapper script (POSIX) or .cmd (Windows)
+      └── clawhub                      # clawhub CLI wrapper
 ```
 
 ## Design Rules
@@ -442,7 +474,7 @@ For comprehensive design guidelines, please refer to:
 
 2. **Cross-platform build needs re-packaging.** After switching target platform, `npm run package:resources` must run again because the Node.js binary and native modules differ per platform.
 
-3. **All Moonshot sub-platforms use unified config.** All three (moonshot-cn, moonshot-ai, kimi-code) write `apiKey` + `baseUrl` + `api` + `models` to `models.providers`. No special-casing.
+3. **All Kimi sub-platforms use unified config.** All three (moonshot-cn, moonshot-ai, kimi-code) write `apiKey` + `baseUrl` + `api` + `models` to `models.providers`. No special-casing.
 
 4. **Health check timeout is 90 seconds.** This is intentionally long for Windows. Don't reduce it without testing on slow machines.
 
@@ -450,7 +482,7 @@ For comprehensive design guidelines, please refer to:
 
 6. **macOS signing.** By default uses ad-hoc identity (`-`). Set `ONECLAW_MAC_SIGN_AND_NOTARIZE=true` + `CSC_NAME`, `APPLE_API_KEY`, `APPLE_API_KEY_ID`, `APPLE_API_ISSUER` in `.env` for real signing.
 
-7. **Version is calendar-based** (`2026.2.26`). Don't manually edit `package.json` version.
+7. **Version is auto-derived from git tag.** Format: `YYYY.MMDD.N` (e.g. `v2026.318.0`). `package.json` stays `0.0.0-dev`; CI extracts version from tag via `npm version`. Never manually edit `package.json` version.
 
 8. **No local upstream directory needed.** openclaw is installed from npm directly during `package:resources`. The `upstream/` directory is no longer required.
 
@@ -541,3 +573,10 @@ Voice Pipeline:
     → cleanTextForTts() → tts-worker.js(child proc) → WAV file
     → oneclaw-tts:// protocol → Audio element → AnalyserNode → lip sync
 ```
+19. **Skill store config is standalone.** Registry URL stored in `~/.openclaw/skill-store.json`, not in gateway config. Skills installed to `~/.openclaw/workspace/skills/`, not `~/.openclaw/skills/`.
+
+20. **CLI wrapper invokes bundled Node.js.** The wrapper scripts use the real bundled Node.js binary from the app package, not the system node.
+
+21. **Token injection uses URL fragment.** Gateway auth token is passed via `#token=...` in the loaded URL, not query parameter or localStorage.
+
+22. **Build config replaces analytics config.** `build-config.json` (renamed from `analytics-config.json`) is injected at build time and read by `build-config.ts`. Contains PostHog key, clawhub registry, and other build constants.
