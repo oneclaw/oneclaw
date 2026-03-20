@@ -7194,7 +7194,8 @@ img.chat-avatar {
   box-shadow: none !important;
   border-radius: 0 !important;
   padding: 10px 14px 2px !important;
-  min-height: 24px !important;
+  height: auto !important;
+  min-height: 40px !important;
   max-height: 40vh !important;
   resize: none !important;
   background: transparent !important;

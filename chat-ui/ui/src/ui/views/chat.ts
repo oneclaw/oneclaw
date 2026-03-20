@@ -78,9 +78,17 @@ export type ChatProps = {
 
 const COMPACTION_TOAST_DURATION_MS = 5000;
 
-function adjustTextareaHeight(el: HTMLTextAreaElement) {
-  el.style.height = "auto";
-  el.style.height = `${el.scrollHeight}px`;
+// 自适应高度（首次挂载时延迟到下一帧，确保 CSS 已应用）
+function adjustTextareaHeight(el: HTMLTextAreaElement, deferred = false) {
+  const apply = () => {
+    el.style.height = "auto";
+    el.style.height = `${el.scrollHeight}px`;
+  };
+  if (deferred) {
+    requestAnimationFrame(apply);
+  } else {
+    apply();
+  }
 }
 
 function renderCompactionIndicator(status: CompactionIndicatorStatus | null | undefined) {
@@ -406,7 +414,7 @@ export function renderChat(props: ChatProps) {
         <div class="field chat-compose__field">
           <span>${t("chat.messageLabel")}</span>
           <textarea
-            ${ref((el) => el && adjustTextareaHeight(el as HTMLTextAreaElement))}
+            ${ref((el) => el && adjustTextareaHeight(el as HTMLTextAreaElement, true))}
             .value=${props.draft}
             dir=${detectTextDirection(props.draft)}
             ?disabled=${!props.connected}
