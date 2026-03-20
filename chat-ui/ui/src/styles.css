@@ -1355,17 +1355,16 @@ select {
   align-self: center;
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  padding: 6px 14px;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  padding: 0;
   margin: 8px auto;
-  font-size: 13px;
-  font-family: var(--font-body);
   color: var(--text);
   background: var(--panel-strong);
   border: 1px solid var(--border);
-  border-radius: 999px;
+  border-radius: 50%;
   cursor: pointer;
-  white-space: nowrap;
   z-index: 10;
   transition: background .15s ease-out, border-color .15s ease-out
 }
@@ -3616,10 +3615,8 @@ img.chat-avatar {
 .chat-new-messages {
   align-self: center;
   margin: 8px auto 0;
-  border-radius: 999px;
-  padding: 6px 12px;
-  font-size: 12px;
-  line-height: 1
+  width: 32px;
+  height: 32px
 }
 
 .chat-line {

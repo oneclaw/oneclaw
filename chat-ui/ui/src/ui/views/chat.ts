@@ -410,7 +410,7 @@ export function renderChat(props: ChatProps) {
               type="button"
               @click=${props.onScrollToBottom}
             >
-              ${t("chat.newMessages")} ${icons.arrowDown}
+              ${icons.arrowDown}
             </button>
           `
           : nothing

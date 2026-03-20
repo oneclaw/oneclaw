@@ -1122,7 +1122,7 @@ export function renderApp(state: AppViewState) {
                   onAbort: () => void state.handleAbortChat(),
                   onQueueRemove: (id) => state.removeQueuedMessage(id),
                   onNewSession: () => confirmAndCreateNewSession(state),
-                  showNewMessages: state.chatNewMessagesBelow && !state.chatManualRefreshInFlight,
+                  showNewMessages: !state.chatUserNearBottom,
                   onScrollToBottom: () => state.scrollToBottom(),
                   sidebarOpen: state.sidebarOpen,
                   sidebarContent: state.sidebarContent,

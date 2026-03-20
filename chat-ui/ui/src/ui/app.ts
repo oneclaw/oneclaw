@@ -373,6 +373,7 @@ export class OpenClawApp extends LitElement {
     logsLimit: { state: true },
     logsMaxBytes: { state: true },
     logsAtBottom: { state: true },
+    chatUserNearBottom: { state: true },
     chatNewMessagesBelow: { state: true },
     sharePromptVisible: { state: true },
     sharePromptCopied: { state: true },
@@ -636,7 +637,7 @@ export class OpenClawApp extends LitElement {
   private chatScrollFrame: number | null = null;
   private chatScrollTimeout: number | null = null;
   private chatHasAutoScrolled = false;
-  private chatUserNearBottom = true;
+  chatUserNearBottom = true;
   chatNewMessagesBelow = false;
   sharePromptVisible = false;
   sharePromptCopied = false;
