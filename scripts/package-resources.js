@@ -743,24 +743,26 @@ function pruneLlamaPackages(nmDir) {
   }
 }
 
-// 移除 @ffmpeg-installer 预编译二进制（35-68MB），视频缩略图功能降级但不崩溃
+// 移除 @ffmpeg-installer / @ffprobe-installer 预编译二进制（各 35-80MB），视频缩略图功能降级但不崩溃
 function pruneFFmpegBinaries(nmDir) {
-  const ffmpegDir = path.join(nmDir, "@ffmpeg-installer");
-  if (!fs.existsSync(ffmpegDir)) return;
+  for (const scope of ["@ffmpeg-installer", "@ffprobe-installer"]) {
+    const dir = path.join(nmDir, scope);
+    if (!fs.existsSync(dir)) continue;
 
-  const sizeBefore = fs.readdirSync(ffmpegDir, { withFileTypes: true })
-    .filter((e) => e.isDirectory())
-    .reduce((sum, e) => {
-      const dir = path.join(ffmpegDir, e.name);
-      try {
-        const stat = fs.statSync(dir);
-        return sum + (stat.isDirectory() ? getDirSize(dir) : 0);
-      } catch { return sum; }
-    }, 0);
+    const sizeBefore = fs.readdirSync(dir, { withFileTypes: true })
+      .filter((e) => e.isDirectory())
+      .reduce((sum, e) => {
+        const d = path.join(dir, e.name);
+        try {
+          const stat = fs.statSync(d);
+          return sum + (stat.isDirectory() ? getDirSize(d) : 0);
+        } catch { return sum; }
+      }, 0);
 
-  rmDir(ffmpegDir);
-  const savedMB = (sizeBefore / 1048576).toFixed(1);
-  log(`已移除 @ffmpeg-installer 预编译二进制 (${savedMB} MB)`);
+    rmDir(dir);
+    const savedMB = (sizeBefore / 1048576).toFixed(1);
+    log(`已移除 ${scope} 预编译二进制 (${savedMB} MB)`);
+  }
 }
 
 // 递归计算目录大小
@@ -1361,7 +1363,9 @@ async function bundleNpmPackagePlugin(plugin, gatewayDir, targetId, opts) {
   copyDirSync(installedPkgDir, pluginDir);
 
   // 将提升（hoisted）到 tmpDir/node_modules 的传递依赖收集到插件自身的 node_modules
+  // 跳过 gateway 顶层 node_modules 已有的包（去重，避免 openclaw 等巨型依赖被重复拷贝）
   const tmpNm = path.join(tmpDir, "node_modules");
+  const hostNm = path.join(gatewayDir, "node_modules");
   const pluginNm = path.join(pluginDir, "node_modules");
   ensureDir(pluginNm);
 
@@ -1376,6 +1380,8 @@ async function bundleNpmPackagePlugin(plugin, gatewayDir, targetId, opts) {
         const fullName = `${entry.name}/${child.name}`;
         // 跳过插件包自身
         if (fullName === plugin.packageName) continue;
+        // 宿主已有的跳过（运行时会向上查找到 gateway node_modules）
+        if (fs.existsSync(path.join(hostNm, entry.name, child.name))) continue;
         // 插件 node_modules 里已有的跳过（npm 嵌套安装的优先）
         const dest = path.join(pluginNm, entry.name, child.name);
         if (fs.existsSync(dest)) continue;
@@ -1385,6 +1391,8 @@ async function bundleNpmPackagePlugin(plugin, gatewayDir, targetId, opts) {
     } else {
       // 跳过插件包自身
       if (entry.name === plugin.packageName) continue;
+      // 宿主已有的跳过
+      if (fs.existsSync(path.join(hostNm, entry.name))) continue;
       const dest = path.join(pluginNm, entry.name);
       if (fs.existsSync(dest)) continue;
       copyDirSync(path.join(tmpNm, entry.name), dest);
