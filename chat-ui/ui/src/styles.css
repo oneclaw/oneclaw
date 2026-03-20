@@ -6646,7 +6646,7 @@ img.chat-avatar {
   font-size: 20px;
   font-weight: 600;
   margin: 0;
-  color: var(--fg);
+  color: var(--text);
 }
 
 .skill-store__toolbar {
@@ -6668,8 +6668,8 @@ img.chat-avatar {
   padding: 8px 14px;
   border: 1px solid var(--border);
   border-radius: 10px;
-  background: var(--bg-input);
-  color: var(--fg);
+  background: var(--bg-muted);
+  color: var(--text);
   font-size: 14px;
   outline: none;
   transition: border-color 0.15s;
@@ -6681,7 +6681,7 @@ img.chat-avatar {
 }
 
 .skill-store__search-input::placeholder {
-  color: var(--fg-muted);
+  color: var(--muted);
 }
 
 .skill-store__sort {
@@ -6697,7 +6697,7 @@ img.chat-avatar {
   border-radius: 9999px;
   padding: 6px 12px;
   font-size: 13px;
-  color: var(--fg-muted);
+  color: var(--muted);
   cursor: pointer;
   transition: all 0.15s;
 }
@@ -6724,7 +6724,7 @@ img.chat-avatar {
   border: 1px solid var(--border);
   border-radius: 12px;
   padding: 16px;
-  background: var(--bg-card);
+  background: var(--card);
   transition: border-color 0.15s;
 }
 
@@ -6763,7 +6763,7 @@ img.chat-avatar {
 .skill-store__card-name {
   font-size: 15px;
   font-weight: 600;
-  color: var(--fg);
+  color: var(--text);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -6771,7 +6771,7 @@ img.chat-avatar {
 
 .skill-store__card-meta {
   font-size: 12px;
-  color: var(--fg-muted);
+  color: var(--muted);
   margin-top: 2px;
   display: flex;
   gap: 8px;
@@ -6795,7 +6795,7 @@ img.chat-avatar {
 .skill-store__card-desc {
   margin-top: 8px;
   font-size: 13px;
-  color: var(--fg-muted);
+  color: var(--muted);
   line-height: 1.5;
 }
 
@@ -6827,7 +6827,7 @@ img.chat-avatar {
 .skill-store__btn--installed {
   background: none;
   border: 1px solid var(--border);
-  color: var(--fg-muted);
+  color: var(--muted);
 }
 
 .skill-store__btn--installed:hover:not(:disabled) {
@@ -6839,7 +6839,7 @@ img.chat-avatar {
   background: none;
   border: 1px solid var(--border);
   border-radius: 9999px;
-  color: var(--fg-muted);
+  color: var(--muted);
   width: 100%;
   padding: 10px;
 }
@@ -6855,7 +6855,7 @@ img.chat-avatar {
   text-align: center;
   padding: 32px 16px;
   font-size: 14px;
-  color: var(--fg-muted);
+  color: var(--muted);
 }
 
 .skill-store__error {
@@ -6921,7 +6921,7 @@ img.chat-avatar {
   padding: 10px 20px;
   border: none;
   background: none;
-  color: var(--fg-muted);
+  color: var(--muted);
   font-size: 14px;
   font-weight: 500;
   cursor: pointer;
@@ -6930,11 +6930,11 @@ img.chat-avatar {
 }
 
 .skills-tab-btn:hover {
-  color: var(--fg);
+  color: var(--text);
 }
 
 .skills-tab-btn.active {
-  color: var(--fg);
+  color: var(--text);
   border-bottom-color: var(--accent, #c0392b);
 }
 
@@ -6949,7 +6949,7 @@ img.chat-avatar {
   padding: 10px 0;
   font-size: 14px;
   font-weight: 600;
-  color: var(--fg-muted);
+  color: var(--muted);
   cursor: pointer;
   user-select: none;
   list-style: none;
@@ -6963,8 +6963,8 @@ img.chat-avatar {
 .skills-group__count {
   font-size: 12px;
   font-weight: 500;
-  color: var(--fg-muted);
-  background: var(--bg-input, #f0f0f0);
+  color: var(--muted);
+  background: var(--bg-muted);
   padding: 1px 8px;
   border-radius: 10px;
   margin-left: 6px;
@@ -6990,7 +6990,7 @@ img.chat-avatar {
 /* 已安装技能：筛选行 */
 .skills-count {
   font-size: 13px;
-  color: var(--fg-muted);
+  color: var(--muted);
   white-space: nowrap;
 }
 
@@ -7000,25 +7000,25 @@ img.chat-avatar {
   font-size: 11px;
   padding: 1px 6px;
   border-radius: 4px;
-  background: var(--bg-input, #f0f0f0);
-  color: var(--fg-muted);
+  background: var(--bg-muted);
+  color: var(--muted);
 }
 
 .skills-badge--ok {
-  background: #dcfce7;
-  color: #15803d;
+  background: var(--ok-subtle);
+  color: var(--ok);
 }
 
 .skills-badge--warn {
-  background: #fef2f2;
-  color: #dc2626;
+  background: var(--danger-subtle);
+  color: var(--danger);
 }
 
 /* 已安装技能：缺失依赖提示 */
 .skills-missing {
   margin-top: 6px;
   font-size: 12px;
-  color: var(--fg-muted);
+  color: var(--muted);
 }
 
 /* 已安装技能：操作结果消息 */
@@ -7365,14 +7365,14 @@ img.chat-avatar {
   align-items: center;
   justify-content: space-between;
   padding: 8px 24px 12px;
-  border-bottom: 1px solid var(--border-color, #e5e5e5);
+  border-bottom: 1px solid var(--border);
 }
 
 .workspace__title {
   font-size: 18px;
   font-weight: 600;
   margin: 0;
-  color: var(--text-primary, #1a1a1a);
+  color: var(--text);
 }
 
 .workspace__header-actions {
@@ -7390,14 +7390,14 @@ img.chat-avatar {
   border: none;
   border-radius: 6px;
   background: transparent;
-  color: var(--text-secondary, #666);
+  color: var(--muted);
   cursor: pointer;
   transition: background 0.15s, color 0.15s;
 }
 
 .workspace__header-btn:hover {
-  background: var(--bg-hover, rgba(0, 0, 0, 0.06));
-  color: var(--text-primary, #1a1a1a);
+  background: var(--bg-hover);
+  color: var(--text);
 }
 
 .workspace__header-btn:disabled {
@@ -7474,7 +7474,7 @@ img.chat-avatar {
   width: 220px;
   min-width: 180px;
   max-width: 280px;
-  border-right: 1px solid var(--border-color, #e5e5e5);
+  border-right: 1px solid var(--border);
   overflow-y: auto;
   padding: 8px 0;
   flex-shrink: 0;
@@ -7486,7 +7486,7 @@ img.chat-avatar {
   gap: 8px;
   padding: 6px 14px;
   cursor: pointer;
-  color: var(--text-primary, #1a1a1a);
+  color: var(--text);
   font-size: 13px;
   line-height: 1.4;
   transition: background 0.1s;
@@ -7494,15 +7494,15 @@ img.chat-avatar {
 }
 
 .workspace__file-item:hover {
-  background: var(--bg-hover, rgba(0, 0, 0, 0.04));
+  background: var(--bg-hover);
 }
 
 .workspace__file-item.active {
-  background: var(--bg-hover, rgba(0, 0, 0, 0.04));
+  background: var(--bg-hover);
 }
 
 .workspace__file-item--back {
-  color: var(--text-secondary, #666);
+  color: var(--muted);
   font-style: italic;
 }
 
@@ -7512,15 +7512,15 @@ img.chat-avatar {
   flex-shrink: 0;
   width: 18px;
   height: 18px;
-  color: var(--text-tertiary, #999);
+  color: var(--muted);
 }
 
 .workspace__file-item.active .workspace__file-icon {
-  color: var(--text-secondary, #666);
+  color: var(--text);
 }
 
 .workspace__file-item--dir .workspace__file-icon {
-  color: var(--text-secondary, #888);
+  color: var(--muted);
 }
 
 .workspace__file-icon svg {
@@ -7553,7 +7553,7 @@ img.chat-avatar {
   border: none;
   border-radius: 4px;
   background: transparent;
-  color: var(--text-tertiary, #999);
+  color: var(--muted);
   cursor: pointer;
   transition: background 0.1s, color 0.1s;
 }
@@ -7563,8 +7563,8 @@ img.chat-avatar {
 }
 
 .workspace__file-action:hover {
-  background: var(--bg-hover, rgba(0, 0, 0, 0.08));
-  color: var(--text-primary, #1a1a1a);
+  background: var(--bg-hover);
+  color: var(--text);
 }
 
 .workspace__file-action svg {
@@ -7582,7 +7582,7 @@ img.chat-avatar {
 .workspace__empty-list {
   padding: 24px 14px;
   text-align: center;
-  color: var(--text-secondary, #888);
+  color: var(--muted);
   font-size: 13px;
 }
 
@@ -7601,13 +7601,13 @@ img.chat-avatar {
   align-items: center;
   justify-content: space-between;
   padding: 10px 20px;
-  border-bottom: 1px solid var(--border-color, #e5e5e5);
+  border-bottom: 1px solid var(--border);
   gap: 12px;
 }
 
 .workspace__preview-path {
   font-size: 13px;
-  color: var(--text-secondary, #666);
+  color: var(--muted);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -7630,14 +7630,14 @@ img.chat-avatar {
   border: none;
   border-radius: 5px;
   background: transparent;
-  color: var(--text-secondary, #666);
+  color: var(--muted);
   cursor: pointer;
   transition: background 0.15s, color 0.15s;
 }
 
 .workspace__preview-btn:hover {
-  background: var(--bg-hover, rgba(0, 0, 0, 0.06));
-  color: var(--text-primary, #1a1a1a);
+  background: var(--bg-hover);
+  color: var(--text);
 }
 
 .workspace__preview-btn svg {
@@ -7662,7 +7662,7 @@ img.chat-avatar {
   font-family: var(--font-mono, 'SF Mono', 'Fira Code', 'Cascadia Code', monospace);
   font-size: 13px;
   line-height: 1.6;
-  color: var(--text-primary, #1a1a1a);
+  color: var(--text);
   white-space: pre-wrap;
   word-break: break-all;
   tab-size: 2;
@@ -7673,7 +7673,7 @@ img.chat-avatar {
   align-items: center;
   justify-content: center;
   height: 100%;
-  color: var(--text-tertiary, #aaa);
+  color: var(--muted);
   font-size: 14px;
 }
 
@@ -7682,16 +7682,6 @@ img.chat-avatar {
   align-items: center;
   justify-content: center;
   height: 100%;
-  color: var(--text-tertiary, #aaa);
+  color: var(--muted);
   font-size: 14px;
-}
-
-/* 暗色主题覆盖 */
-:root[data-theme="dark"] .workspace__file-item.active {
-  background: rgba(255, 255, 255, 0.06);
-}
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) .workspace__file-item.active {
-    background: rgba(255, 255, 255, 0.06);
-  }
 }
