@@ -20,19 +20,19 @@ export type SidebarProps = {
   updateVersion: string | null;
   updatePercent: number | null;
   updateShowBadge: boolean;
-  refreshDisabled: boolean;
   onToggleSidebar: () => void;
   onSelectSession: (sessionKey: string) => void;
   onNewChat: () => void;
   onRenameSession: (key: string, newLabel: string) => void;
   onDeleteSession: (key: string) => void;
-  onRefresh: () => void;
   onOpenSettings: () => void;
   onOpenSkillStore: () => void;
   onOpenWorkspace: () => void;
   onOpenWebUI: () => void;
   onOpenDocs: () => void;
+  errors: string[];
   onApplyUpdate: () => void;
+  onReconnect: () => void;
 };
 
 // 双击会话名触发内联重命名：创建 input 替换 span，Enter 保存，Escape 取消
@@ -73,8 +73,7 @@ function startInlineRename(
 }
 
 export function renderSidebar(props: SidebarProps) {
-  const statusClass = props.connected ? "ok" : "";
-  const statusText = props.connected ? t("sidebar.connected") : t("sidebar.disconnected");
+  // 刷新图标，断开连接时复用为重连按钮图标
   const refreshIcon = html`
     <svg
       width="18"
@@ -243,32 +242,38 @@ export function renderSidebar(props: SidebarProps) {
           <span class="oneclaw-sidebar__label">${t("sidebar.docs")}</span>
         </button>
 
-        <button
-          class="oneclaw-sidebar__item"
-          type="button"
-          @click=${props.onOpenWebUI}
-          data-tooltip=${t("sidebar.fullUI")}
-        >
-          <span class="oneclaw-sidebar__icon">${icons.externalLink}</span>
-          <span class="oneclaw-sidebar__label">${t("sidebar.fullUI")}</span>
-        </button>
-
-        <div class="oneclaw-sidebar__status-row">
-          <div class="oneclaw-sidebar__status">
-            <span class="statusDot ${statusClass}"></span>
-            <span class="oneclaw-sidebar__status-text">${statusText}</span>
-          </div>
-          <button
-            class="oneclaw-sidebar__refresh ${props.connected ? "" : "disconnected"}"
-            type="button"
-            ?disabled=${props.refreshDisabled}
-            @click=${props.onRefresh}
-            data-tooltip=${t("sidebar.refresh")}
-            aria-label=${t("sidebar.refresh")}
-          >
-            ${refreshIcon}
-          </button>
-        </div>
+        ${props.connected
+          ? html`
+            <button
+              class="oneclaw-sidebar__item"
+              type="button"
+              @click=${props.onOpenWebUI}
+              data-tooltip=${t("sidebar.fullUI")}
+            >
+              <span class="oneclaw-sidebar__icon">${icons.externalLink}</span>
+              <span class="oneclaw-sidebar__label">${t("sidebar.fullUI")}</span>
+            </button>`
+          : html`
+            <div class="oneclaw-sidebar__reconnect-wrap">
+              <button
+                class="oneclaw-sidebar__item oneclaw-sidebar__item--disconnected"
+                type="button"
+                @click=${props.onReconnect}
+              >
+                <span class="oneclaw-sidebar__icon">${refreshIcon}</span>
+                <span class="oneclaw-sidebar__label">${t("sidebar.reconnect")}</span>
+                ${props.errors.length > 0
+                  ? html`<span class="oneclaw-sidebar__error-badge" title=${props.errors.join("\n")}>${props.errors.length}</span>`
+                  : nothing}
+              </button>
+              ${props.errors.length > 0
+                ? html`
+                  <div class="oneclaw-sidebar__error-popup">
+                    ${props.errors.map((msg) => html`<div class="oneclaw-sidebar__error-item">${msg}</div>`)}
+                  </div>`
+                : nothing}
+            </div>`
+        }
       </div>
     </aside>
   `;

@@ -616,16 +616,6 @@ function confirmAndCreateNewSession(state: AppViewState) {
 
 async function handleRefreshChat(state: AppViewState) {
   if (state.chatLoading) return;
-  // 断开连接时立即重连，3 秒后仍失败则弹窗询问是否重启 Gateway
-  if (!state.connected) {
-    (state as any).client?.reconnectNow();
-    setTimeout(() => {
-      if (!state.connected) {
-        state.showRestartGatewayDialog = true;
-      }
-    }, 3000);
-    return;
-  }
   const app = state as any;
   app.chatManualRefreshInFlight = true;
   app.chatNewMessagesBelow = false;
@@ -642,6 +632,16 @@ async function handleRefreshChat(state: AppViewState) {
       app.chatNewMessagesBelow = false;
     });
   }
+}
+
+// 断开连接时尝试重连，3 秒后仍失败则弹窗询问是否重启 Gateway
+function handleReconnect(state: AppViewState) {
+  (state as any).client?.reconnectNow();
+  setTimeout(() => {
+    if (!state.connected) {
+      state.showRestartGatewayDialog = true;
+    }
+  }, 3000);
 }
 
 async function handleOpenWebUI(state: AppViewState) {
@@ -862,7 +862,6 @@ export function renderApp(state: AppViewState) {
             updateVersion: updateBannerState.version,
             updatePercent: updateBannerState.percent,
             updateShowBadge: updateBannerState.showBadge,
-            refreshDisabled: state.chatLoading,
             onSelectSession: (nextSessionKey: string) => handleSessionChange(state, nextSessionKey),
             onNewChat: () => createNewSession(state),
             onRenameSession: (key: string, newLabel: string) => {
@@ -871,7 +870,6 @@ export function renderApp(state: AppViewState) {
             onDeleteSession: (key: string) => {
               void deleteSessionFromSidebar(state, key);
             },
-            onRefresh: () => void handleRefreshChat(state),
             onToggleSidebar: () => {
               state.applySettings({
                 ...state.settings,
@@ -885,6 +883,8 @@ export function renderApp(state: AppViewState) {
             onOpenSkillStore: () => openSkillsView(state),
             onOpenWorkspace: () => openWorkspaceView(state),
             onOpenWebUI: () => void handleOpenWebUI(state),
+            errors: [chatDisabledReason, state.lastError].filter(Boolean) as string[],
+            onReconnect: () => handleReconnect(state),
             onOpenDocs: () => {
               if (window.oneclaw?.openExternal) {
                 window.oneclaw.openExternal("https://oneclaw.cn/docs");
@@ -1101,8 +1101,8 @@ export function renderApp(state: AppViewState) {
                   queue: state.chatQueue,
                   connected: state.connected,
                   canSend: state.connected,
-                  disabledReason: chatDisabledReason,
-                  error: state.lastError,
+                  disabledReason: null,
+                  error: null,
                   sessions: state.sessionsResult,
                   focusMode: false,
                   onRefresh: () => {

@@ -6312,90 +6312,83 @@ img.chat-avatar {
 .oneclaw-sidebar__footer {
   padding: 8px 12px 10px;
   border-top: 1px solid var(--border);
+  overflow: visible;
   -webkit-app-region: no-drag;
   display: flex;
   flex-direction: column;
   gap: 6px;
 }
 
-.oneclaw-sidebar__status-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  padding: 0 10px;
+/* 断开连接按钮容器，撑满宽度 + 支持 hover 弹出错误列表 */
+.oneclaw-sidebar__reconnect-wrap {
+  position: relative;
+  width: 100%;
 }
 
-.oneclaw-sidebar__status {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 12px;
-  color: var(--muted);
+/* 断连按钮：红色文字 + flex 撑满 */
+.oneclaw-sidebar__item--disconnected {
+  color: var(--accent, #c0392b) !important;
+  width: 100%;
 }
 
-.oneclaw-sidebar__status-text {
-  white-space: nowrap;
+.oneclaw-sidebar__item--disconnected:hover {
+  color: var(--accent-hover, #a93226) !important;
 }
 
-.oneclaw-sidebar__refresh {
-  flex-shrink: 0;
-  display: flex;
+.oneclaw-sidebar__item--disconnected svg {
+  stroke: currentColor;
+}
+
+/* 错误数量红点，推到按钮行最右侧 */
+.oneclaw-sidebar__error-badge {
+  margin-left: auto;
+  display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 28px;
-  height: 28px;
-  padding: 0;
-  margin: 0;
-  border: none;
-  background: transparent;
-  color: var(--muted);
-  border-radius: 6px;
-  cursor: pointer;
-  transition: background 0.1s, color 0.1s;
-}
-
-.oneclaw-sidebar__refresh:hover {
-  background: var(--bg-hover);
-  color: var(--text);
-}
-
-.oneclaw-sidebar__refresh:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-/* 断开连接时刷新按钮变红 */
-.oneclaw-sidebar__refresh.disconnected {
-  color: var(--accent, #c0392b);
-}
-
-.oneclaw-sidebar__refresh.disconnected:hover {
-  color: var(--accent-hover, #a93226);
-  background: var(--bg-hover);
-}
-
-.oneclaw-sidebar__refresh svg {
-  width: 14px;
-  height: 14px;
-  stroke: currentColor;
-  fill: none;
-  stroke-width: 1.5;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-}
-
-.statusDot {
-  display: inline-block;
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: var(--muted, #666);
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 9px;
+  background: var(--accent, #c0392b);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 18px;
+  text-align: center;
   flex-shrink: 0;
 }
 
-.statusDot.ok {
-  background: #22c55e;
+/* hover 弹出的错误信息列表，用 fixed 定位逃出 sidebar overflow */
+.oneclaw-sidebar__error-popup {
+  display: none;
+  position: fixed;
+  left: var(--sidebar-width);
+  bottom: 18px;
+  margin-left: 8px;
+  min-width: 240px;
+  max-width: 360px;
+  padding: 4px 0;
+  background: var(--bg-card, #fff);
+  border: 1px solid var(--border, #e5e5e5);
+  border-radius: 8px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+  z-index: 1000;
+}
+
+.oneclaw-sidebar__reconnect-wrap:hover .oneclaw-sidebar__error-popup {
+  display: block;
+}
+
+.oneclaw-sidebar__error-item {
+  padding: 7px 12px;
+  font-size: 12px;
+  line-height: 20px;
+  color: var(--accent, #c0392b);
+  word-break: break-word;
+}
+
+.oneclaw-sidebar__error-item + .oneclaw-sidebar__error-item {
+  border-top: 1px solid var(--border, #e5e5e5);
 }
 
 .oneclaw-titlebar {
