@@ -7286,16 +7286,12 @@ img.chat-avatar {
   font-size: 12px;
   font-weight: 500;
   color: var(--muted);
-  padding: 6px 18px 6px 8px;
+  padding: 6px 8px;
   cursor: pointer;
   font-family: var(--font-body);
   border-radius: 6px;
   transition: color 150ms ease;
   max-width: 180px;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='5'%3E%3Cpath d='M0 0l4 5 4-5z' fill='%23999'/%3E%3C/svg%3E") !important;
-  background-repeat: no-repeat !important;
-  background-position: right 6px center !important;
-  background-size: 8px !important;
 }
 
 .chat-compose__model-select:hover:not(:disabled) {

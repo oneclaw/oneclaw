@@ -3370,21 +3370,56 @@
       }
       div.dataset.modelKey = item.key;
 
+      // 左侧信息区
+      var infoDiv = document.createElement("div");
+      infoDiv.className = "model-list-item__info";
+
       var nameDiv = document.createElement("div");
       nameDiv.className = "model-list-item__name";
       nameDiv.textContent = item.name || item.key;
-      div.appendChild(nameDiv);
+      infoDiv.appendChild(nameDiv);
 
       var metaDiv = document.createElement("div");
       metaDiv.className = "model-list-item__meta";
       metaDiv.textContent = item.provider;
-      if (item.isDefault) {
-        var star = document.createElement("span");
-        star.className = "model-list-item__default";
-        star.textContent = "✓ " + t("settings.setDefault");
-        metaDiv.appendChild(star);
-      }
-      div.appendChild(metaDiv);
+      infoDiv.appendChild(metaDiv);
+      div.appendChild(infoDiv);
+
+      // 右侧操作按钮（hover 显示，默认星常亮）
+      var actions = document.createElement("div");
+      actions.className = "model-list-item__actions";
+
+      // 删除
+      var delBtn = document.createElement("button");
+      delBtn.type = "button";
+      delBtn.className = "model-list-item__action-btn";
+      delBtn.dataset.tooltip = t("settings.deleteModel");
+      delBtn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none"><use href="#icon-trash-2"></use></svg>';
+      if (item.isDefault) delBtn.disabled = true;
+      delBtn.addEventListener("click", function (e) {
+        e.stopPropagation();
+        currentEditingModelKey = item.key;
+        handleDeleteModel();
+      });
+      actions.appendChild(delBtn);
+
+      // 设为默认（默认模型时星星常亮）
+      var starBtn = document.createElement("button");
+      starBtn.type = "button";
+      starBtn.className = "model-list-item__action-btn" + (item.isDefault ? " is-default" : "");
+      starBtn.dataset.tooltip = t("settings.setDefault");
+      starBtn.innerHTML = item.isDefault
+        ? '<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor"><use href="#icon-star"></use></svg>'
+        : '<svg width="14" height="14" viewBox="0 0 24 24" fill="none"><use href="#icon-star"></use></svg>';
+      if (item.isDefault) starBtn.disabled = true;
+      starBtn.addEventListener("click", function (e) {
+        e.stopPropagation();
+        currentEditingModelKey = item.key;
+        handleSetDefault();
+      });
+      actions.appendChild(starBtn);
+
+      div.appendChild(actions);
 
       div.addEventListener("click", function () {
         selectModelInList(item.key);
@@ -3451,16 +3486,6 @@
     els.modelAlias.value = alias;
     toggleEl(els.modelAliasGroup, true);
 
-    // 显示编辑按钮
-    els.deleteModelBtn.style.display = "";
-    els.setDefaultBtn.style.display = "";
-    if (modelEntry && modelEntry.isDefault) {
-      els.setDefaultBtn.disabled = true;
-      els.setDefaultBtn.textContent = "✓ " + t("settings.setDefault");
-    } else {
-      els.setDefaultBtn.disabled = false;
-      els.setDefaultBtn.textContent = t("settings.setDefault");
-    }
     els.btnSaveText.textContent = t("provider.save");
   }
 
@@ -3483,8 +3508,6 @@
     toggleEl(els.modelAliasGroup, true);
 
     // 隐藏编辑按钮
-    els.deleteModelBtn.style.display = "none";
-    els.setDefaultBtn.style.display = "none";
     els.btnSaveText.textContent = t("settings.addModelSave");
 
     // 回填当前 provider 的已保存配置（保留 apiKey）
@@ -4158,14 +4181,6 @@
       els.addModelBtn.addEventListener("click", function () { enterAddMode(); });
     }
     // 模型列表：删除按钮
-    if (els.deleteModelBtn) {
-      els.deleteModelBtn.addEventListener("click", handleDeleteModel);
-    }
-    // 模型列表：设为默认按钮
-    if (els.setDefaultBtn) {
-      els.setDefaultBtn.addEventListener("click", handleSetDefault);
-    }
-
     // 保存
     els.btnSave.addEventListener("click", handleSave);
 
@@ -4602,9 +4617,32 @@
 
   // ── 初始化 ──
 
+  // 全局 fixed tooltip（不受 overflow 裁切）
+  function initFixedTooltip() {
+    var tip = document.createElement("div");
+    tip.className = "fixed-tooltip";
+    document.body.appendChild(tip);
+
+    document.addEventListener("mouseover", function (e) {
+      var btn = e.target.closest("[data-tooltip]");
+      if (!btn || btn.disabled) { tip.style.opacity = "0"; return; }
+      tip.textContent = btn.getAttribute("data-tooltip");
+      tip.style.opacity = "1";
+      var rect = btn.getBoundingClientRect();
+      tip.style.left = rect.left + rect.width / 2 + "px";
+      tip.style.top = rect.top - 6 + "px";
+    });
+
+    document.addEventListener("mouseout", function (e) {
+      var btn = e.target.closest("[data-tooltip]");
+      if (btn) tip.style.opacity = "0";
+    });
+  }
+
   function init() {
     detectLang();
     applyI18n();
+    initFixedTooltip();
 
     bindEvents();
     switchProvider("moonshot");

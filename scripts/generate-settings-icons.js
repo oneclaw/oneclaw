@@ -17,6 +17,8 @@ const {
   AlertTriangle,
   AlertCircle,
   CircleCheck,
+  Star,
+  Trash2,
 } = require("lucide");
 
 const ROOT = path.resolve(__dirname, "..");
@@ -30,6 +32,8 @@ const SETTINGS_ICONS = {
   "icon-sliders-vertical": SlidersVertical,
   "icon-history": History,
   "icon-info": Info,
+  "icon-star": Star,
+  "icon-trash-2": Trash2,
 };
 
 // setup 页面图标集
