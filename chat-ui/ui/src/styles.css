@@ -6457,16 +6457,6 @@ img.chat-avatar {
   stroke-linejoin: round;
 }
 
-/* 全屏页面右上角关闭按钮 */
-.oneclaw-fullpage-close {
-  margin-left: auto;
-  margin-right: 16px;
-  padding-top: 3px;
-  -webkit-app-region: no-drag;
-  position: relative;
-  z-index: 101;
-}
-
 .shell {
   display: contents !important;
 }

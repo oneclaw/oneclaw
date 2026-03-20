@@ -886,7 +886,7 @@ export function renderApp(state: AppViewState) {
           ${
             settingsActive || skillsActive || workspaceActive
               ? html`
-                  <div class="oneclaw-fullpage-close">
+                  <div class="oneclaw-floating-actions">
                     <button
                       class="oneclaw-floating-btn"
                       type="button"
@@ -895,7 +895,7 @@ export function renderApp(state: AppViewState) {
                       data-tooltip-pos="bottom"
                       aria-label=${t("sidebar.backToChat")}
                     >
-                      ${icons.x}
+                      ${icons.arrowLeft}
                     </button>
                   </div>
                 `
