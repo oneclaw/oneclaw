@@ -1,4 +1,4 @@
-import { contextBridge, ipcRenderer } from "electron";
+import { contextBridge, ipcRenderer, webUtils } from "electron";
 
 // 安全桥接 — 向渲染进程暴露有限 API
 contextBridge.exposeInMainWorld("oneclaw", {
@@ -275,4 +275,50 @@ contextBridge.exposeInMainWorld("oneclaw", {
     ipcRenderer.on("app:feishu-pairing-state", listener);
     return () => ipcRenderer.removeListener("app:feishu-pairing-state", listener);
   },
+});
+
+// 拖拽 / 粘贴文件 → 提取真实路径并派发给渲染进程
+// sandbox 模式下 File.path 为空，必须用 webUtils.getPathForFile()
+function extractFilePaths(files: FileList | undefined): string[] {
+  if (!files?.length) return [];
+  const paths: string[] = [];
+  for (let i = 0; i < files.length; i++) {
+    const p = webUtils.getPathForFile(files[i]);
+    if (p) paths.push(p);
+  }
+  return paths;
+}
+
+function dispatchFilePaths(paths: string[]) {
+  if (paths.length > 0) {
+    window.dispatchEvent(new CustomEvent("oneclaw:file-drop", { detail: { paths } }));
+  }
+}
+
+// 拖拽文件
+document.addEventListener("drop", (e) => {
+  const paths = extractFilePaths(e.dataTransfer?.files);
+  if (paths.length > 0) {
+    e.preventDefault();
+    dispatchFilePaths(paths);
+  }
+});
+document.addEventListener("dragover", (e) => {
+  if (e.dataTransfer?.types?.includes("Files")) e.preventDefault();
+});
+
+// 粘贴文件（非图片走路径附件，图片保留原有 dataUrl 逻辑）
+document.addEventListener("paste", (e) => {
+  const files = e.clipboardData?.files;
+  if (!files?.length) return;
+  const nonImagePaths: string[] = [];
+  for (let i = 0; i < files.length; i++) {
+    if (!files[i].type.startsWith("image/")) {
+      const p = webUtils.getPathForFile(files[i]);
+      if (p) nonImagePaths.push(p);
+    }
+  }
+  if (nonImagePaths.length > 0) {
+    dispatchFilePaths(nonImagePaths);
+  }
 });

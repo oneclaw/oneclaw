@@ -116,7 +116,7 @@ const dict: Record<Locale, Record<string, string>> = {
     "settings.backToChat": "返回对话",
 
     // Chat
-    "chat.placeholder": "输入消息或粘贴图片…",
+    "chat.placeholder": "输入消息或上传文件…",
     "chat.placeholder.busy": "继续发送消息将排队等待…",
     "chat.placeholder.image": "添加消息或粘贴更多图片…",
     "chat.placeholder.disconnected": "连接 Gateway 后即可聊天…",

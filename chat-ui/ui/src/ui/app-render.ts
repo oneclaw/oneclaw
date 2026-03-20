@@ -740,6 +740,20 @@ function ensureSettingsEmbedBridge(state: AppViewState) {
     }
   });
 
+  // 监听 preload 派发的文件拖拽/粘贴事件，添加为文件附件
+  window.addEventListener("oneclaw:file-drop", ((e: CustomEvent<{ paths: string[] }>) => {
+    const bridge = (window as unknown as { [bridgeKey]?: { state: AppViewState } })[bridgeKey];
+    if (!bridge) return;
+    const { state } = bridge;
+    const current = state.chatAttachments ?? [];
+    const additions = e.detail.paths.map((p: string) => ({
+      id: `att-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
+      filePath: p,
+      name: p.split(/[/\\]/).pop() || p,
+    }));
+    state.chatAttachments = [...current, ...additions];
+  }) as EventListener);
+
   w[bridgeKey]!.bound = true;
 }
 
