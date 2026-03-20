@@ -154,6 +154,11 @@ function handlePaste(e: ClipboardEvent, props: ChatProps) {
   }
 
   // 文件粘贴：从剪贴板读取文件路径（Cmd+C / Ctrl+C 复制的文件）
+  // IPC 是异步的，但 preventDefault 必须同步调用——先检查剪贴板是否含文件条目
+  const hasFileItems = items && Array.from({ length: items.length }, (_, i) => items[i])
+    .some((item) => item.kind === "file");
+  if (!hasFileItems) return;
+  e.preventDefault();
   const w = window as Record<string, unknown>;
   const oneclaw = w.oneclaw as Record<string, (...args: unknown[]) => Promise<string[]>> | undefined;
   if (!oneclaw?.readClipboardFilePaths) return;
