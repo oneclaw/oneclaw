@@ -44,6 +44,8 @@ import {
   saveKimiSearchConfig,
   isKimiSearchPluginBundled,
   writeKimiSearchDedicatedApiKey,
+  writeKimiApiKey,
+  readKimiApiKey,
 } from "./kimi-config";
 import {
   extractQqbotConfig,
@@ -63,6 +65,7 @@ import {
   verifyWecom,
   WECOM_CHANNEL_ID,
 } from "./wecom-config";
+import { setProxyAccessToken, setProxySearchDedicatedKey, getProxyPort } from "./kimi-auth-proxy";
 import { ensureGatewayAuthTokenInConfig } from "./gateway-auth";
 import { getLaunchAtLoginState, setLaunchAtLoginEnabled } from "./launch-at-login";
 import { installCli, uninstallCli, getCliStatus } from "./cli-integration";
@@ -409,6 +412,15 @@ export function registerSettingsIpc(opts: SettingsIpcOptions = {}): void {
           // add 模式：不切换默认模型，恢复原 primary
           if (setAsDefault === false && prevPrimary) {
             config.agents.defaults.model.primary = prevPrimary;
+          }
+
+          // 代理模式：将真实 key 存 sidecar，config 中写占位符
+          if (subPlatform === "kimi-code" && getProxyPort() > 0) {
+            writeKimiApiKey(apiKey);
+            setProxyAccessToken(apiKey);
+            const provKeyProxy = sub?.providerKey || "kimi-coding";
+            config.models.providers[provKeyProxy].apiKey = "proxy-managed";
+            config.models.providers[provKeyProxy].baseUrl = `http://127.0.0.1:${getProxyPort()}/coding`;
           }
 
           // 合并：保留已有模型，确保选中模型在列表中
@@ -1092,6 +1104,7 @@ export function registerSettingsIpc(opts: SettingsIpcOptions = {}): void {
         // 专属 key 存到 sidecar 文件，不写入 openclaw.json
         if (typeof apiKey === "string") {
           writeKimiSearchDedicatedApiKey(apiKey);
+          setProxySearchDedicatedKey(apiKey);
         }
         const config = readUserConfig();
         saveKimiSearchConfig(config, { enabled, serviceBaseUrl });
@@ -1119,7 +1132,7 @@ export function registerSettingsIpc(opts: SettingsIpcOptions = {}): void {
       const resolveApiKey = (): string => {
         const oauthToken = loadOAuthToken();
         if (oauthToken?.access_token) return oauthToken.access_token;
-        return config?.models?.providers?.["kimi-coding"]?.apiKey || "";
+        return readKimiApiKey() || "";
       };
 
       let apiKey = resolveApiKey();
@@ -2193,7 +2206,15 @@ function extractProviderInfo(config: any): any {
   if (providerKey === "kimi-coding") {
     provider = "moonshot";
     subPlatform = "kimi-code";
-    apiKey = providers["kimi-coding"]?.apiKey ?? "";
+    // 代理模式下 config 中是 "proxy-managed"，从 sidecar / OAuth 读取真实 key
+    const configKey = providers["kimi-coding"]?.apiKey ?? "";
+    if (configKey === "proxy-managed") {
+      const { loadOAuthToken } = require("./kimi-oauth");
+      const oauthToken = loadOAuthToken();
+      apiKey = oauthToken?.access_token || readKimiApiKey() || "";
+    } else {
+      apiKey = configKey;
+    }
     configuredModels = extractModelIds(providers["kimi-coding"]);
   } else if (providerKey === "moonshot") {
     provider = "moonshot";
