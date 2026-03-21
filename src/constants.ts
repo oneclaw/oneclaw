@@ -133,6 +133,26 @@ export function resolveCliNodeBin(): string {
   return resolveNodeBin();
 }
 
+/**
+ * Windows CLI 专用二进制（SUBSYSTEM:CONSOLE，afterPack 阶段由 PE 补丁生成）。
+ * 与主 exe 同目录，文件名为 "<ProductName>-CLI.exe"。
+ * 非 Windows 或 dev 模式返回 null。
+ */
+export function resolveCliExe(): string | null {
+  if (!IS_WIN || !app.isPackaged) return null;
+  const exeDir = path.dirname(process.execPath);
+  const ext = path.extname(process.execPath) || ".exe";
+  const base = path.basename(process.execPath, ext);
+  const cliExe = path.join(exeDir, `${base}-CLI${ext}`);
+  return fs.existsSync(cliExe) ? cliExe : null;
+}
+
+/** 判断当前是否为 ASAR 打包模式（gateway.asar 存在） */
+export function isAsarMode(): boolean {
+  const entry = resolveGatewayEntry();
+  return entry.includes(".asar");
+}
+
 /** packaged 模式需要的额外环境变量（让 Electron binary 作为纯 Node.js 运行） */
 export function resolveNodeExtraEnv(): Record<string, string> {
   return app.isPackaged ? { ELECTRON_RUN_AS_NODE: "1" } : {};

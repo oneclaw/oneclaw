@@ -102,6 +102,11 @@ exports.default = async function afterPack(context) {
   // ── 用 Electron binary 替换独立 Node.js（节省 80-100MB） ──
   const productName = context.packager.appInfo.productFilename;
   replaceNodeBinary(platform, targetBase, productName);
+
+  // ── Windows: 生成 CLI 专用二进制（SUBSYSTEM:CONSOLE，支持交互式 stdin） ──
+  if (platform === "win32") {
+    createWindowsCliBinary(appOutDir, productName);
+  }
 };
 
 // ── asar 模式：注入 gateway.asar + gateway.asar.unpacked/ ──
@@ -139,6 +144,54 @@ function injectGatewayLoose(sourceBase, targetBase, appOutDir, platform, context
   // 散文件模式保留 koffi 平台裁剪（asar 模式已前移到 package-resources）
   const arch = resolveArchName(context.arch);
   pruneGatewayModules(gatewayDest, platform, arch);
+}
+
+// ── Windows CLI 专用二进制：复制主 exe 并补丁 PE SUBSYSTEM 为 CONSOLE ──
+
+function createWindowsCliBinary(appOutDir, productName) {
+  const srcExe = path.join(appOutDir, `${productName}.exe`);
+  const cliExe = path.join(appOutDir, `${productName}-CLI.exe`);
+
+  if (!fs.existsSync(srcExe)) {
+    console.log(`[afterPack] 跳过 CLI binary: ${productName}.exe 不存在`);
+    return;
+  }
+
+  fs.copyFileSync(srcExe, cliExe);
+
+  // 补丁 PE header: SUBSYSTEM 从 GUI(2) 改为 CONSOLE(3)
+  const fd = fs.openSync(cliExe, "r+");
+  try {
+    // 读取 PE header 偏移（文件偏移 0x3C 处的 DWORD）
+    const offsetBuf = Buffer.alloc(4);
+    fs.readSync(fd, offsetBuf, 0, 4, 0x3c);
+    const peOffset = offsetBuf.readUInt32LE(0);
+
+    // 校验 PE 签名 "PE\0\0"
+    const sigBuf = Buffer.alloc(4);
+    fs.readSync(fd, sigBuf, 0, 4, peOffset);
+    if (sigBuf.toString("ascii") !== "PE\0\0") {
+      throw new Error(`PE signature mismatch: expected "PE\\0\\0", got "${sigBuf.toString("hex")}"`);
+    }
+
+    // SUBSYSTEM 位于 PE offset + 0x5C（PE32/PE32+ 通用位置）
+    const subsystemOffset = peOffset + 0x5c;
+    const subBuf = Buffer.alloc(2);
+    fs.readSync(fd, subBuf, 0, 2, subsystemOffset);
+    const current = subBuf.readUInt16LE(0);
+
+    if (current !== 2) {
+      console.log(`[afterPack] SUBSYSTEM=${current} (expected 2=GUI), skipping patch`);
+    } else {
+      const patchBuf = Buffer.alloc(2);
+      patchBuf.writeUInt16LE(3, 0);
+      fs.writeSync(fd, patchBuf, 0, 2, subsystemOffset);
+      const sizeMB = (fs.statSync(cliExe).size / 1048576).toFixed(1);
+      console.log(`[afterPack] created ${productName}-CLI.exe (${sizeMB} MB, SUBSYSTEM=CONSOLE)`);
+    }
+  } finally {
+    fs.closeSync(fd);
+  }
 }
 
 // ── 用 Electron binary 代理替换独立 Node.js ──

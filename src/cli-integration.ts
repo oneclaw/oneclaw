@@ -2,7 +2,7 @@ import * as fs from "fs";
 import * as os from "os";
 import * as path from "path";
 import { execFile } from "child_process";
-import { resolveCliNodeBin, resolveGatewayEntry, resolveUserStateDir, IS_WIN } from "./constants";
+import { resolveCliNodeBin, resolveCliExe, resolveGatewayEntry, resolveUserStateDir, isAsarMode, IS_WIN } from "./constants";
 import { readOneclawConfig, writeOneclawConfig } from "./oneclaw-config";
 import * as log from "./logger";
 
@@ -194,12 +194,13 @@ export function buildWinPathEnvScript(action: "add" | "remove", binDir: string):
 }
 
 // 生成 POSIX wrapper 脚本（可测试纯函数），直接转发到内置 Node + gateway entry。
-// 注意：使用真实 Node.js binary，不需要 ELECTRON_RUN_AS_NODE。
+// ASAR 模式下跳过入口文件检查（shell 无法读取 .asar 虚拟路径）。
 export function buildPosixWrapperForPaths(nodeBin: string, entry: string): string {
   const safeNodeBin = escapeForPosixDoubleQuoted(nodeBin);
   const safeEntry = escapeForPosixDoubleQuoted(entry);
+  const asar = entry.includes(".asar");
 
-  return [
+  const lines = [
     "#!/usr/bin/env bash",
     `# ${CLI_MARKER} - auto-generated, do not edit`,
     `APP_NODE="${safeNodeBin}"`,
@@ -208,14 +209,25 @@ export function buildPosixWrapperForPaths(nodeBin: string, entry: string): strin
     '  echo "Error: OneClaw not found at $APP_NODE" >&2',
     "  exit 127",
     "fi",
-    'if [ ! -f "$APP_ENTRY" ]; then',
-    '  echo "Error: OneClaw entry not found at $APP_ENTRY" >&2',
-    "  exit 127",
-    "fi",
+  ];
+
+  // ASAR 虚拟路径对 shell 的 -f 检测不可见，跳过入口检查
+  if (!asar) {
+    lines.push(
+      'if [ ! -f "$APP_ENTRY" ]; then',
+      '  echo "Error: OneClaw entry not found at $APP_ENTRY" >&2',
+      "  exit 127",
+      "fi",
+    );
+  }
+
+  lines.push(
     "export OPENCLAW_NO_RESPAWN=1",
     'exec "$APP_NODE" "$APP_ENTRY" "$@"',
     "",
-  ].join("\n");
+  );
+
+  return lines.join("\n");
 }
 
 // 读取当前运行时路径并生成 POSIX wrapper，避免调用方重复拼路径。
@@ -223,35 +235,62 @@ function buildPosixWrapper(): string {
   return buildPosixWrapperForPaths(resolveCliNodeBin(), resolveGatewayEntry());
 }
 
-// 生成 Windows wrapper 脚本（可测试纯函数），直接转发到内置 Node + gateway entry。
-// 注意：使用真实 Node.js（SUBSYSTEM:CONSOLE），不需要 ELECTRON_RUN_AS_NODE。
-export function buildWinWrapperForPaths(nodeBin: string, entry: string): string {
+// 生成 Windows wrapper 脚本（可测试纯函数）。
+// ASAR 模式：使用 CLI.exe（SUBSYSTEM:CONSOLE）+ ELECTRON_RUN_AS_NODE，跳过入口检查。
+// 散文件模式：使用真实 Node.js，不需要 ELECTRON_RUN_AS_NODE。
+export function buildWinWrapperForPaths(nodeBin: string, entry: string, opts?: { electronMode?: boolean }): string {
   const safeNodeBin = escapeForCmdSetValue(nodeBin);
   const safeEntry = escapeForCmdSetValue(entry);
+  const asar = entry.includes(".asar");
+  const electronMode = opts?.electronMode ?? false;
 
-  return [
+  const lines = [
     "@echo off",
     `REM ${CLI_MARKER} - auto-generated, do not edit`,
     "setlocal",
+  ];
+
+  // Electron binary 需要 ELECTRON_RUN_AS_NODE 才能当 Node.js 用
+  if (electronMode) {
+    lines.push('set "ELECTRON_RUN_AS_NODE=1"');
+  }
+
+  lines.push(
     `set "APP_NODE=${safeNodeBin}"`,
     `set "APP_ENTRY=${safeEntry}"`,
     'if not exist "%APP_NODE%" (',
     "  echo Error: OneClaw Node runtime not found. 1>&2",
     "  exit /b 127",
     ")",
-    'if not exist "%APP_ENTRY%" (',
-    "  echo Error: OneClaw entry not found. 1>&2",
-    "  exit /b 127",
-    ")",
+  );
+
+  // ASAR 虚拟路径对 cmd.exe 的 exist 检测不可见，跳过入口检查
+  if (!asar) {
+    lines.push(
+      'if not exist "%APP_ENTRY%" (',
+      "  echo Error: OneClaw entry not found. 1>&2",
+      "  exit /b 127",
+      ")",
+    );
+  }
+
+  lines.push(
     'set "OPENCLAW_NO_RESPAWN=1"',
     '"%APP_NODE%" "%APP_ENTRY%" %*',
     "exit /b %errorlevel%",
     "",
-  ].join("\r\n");
+  );
+
+  return lines.join("\r\n");
 }
 
 // 读取当前运行时路径并生成 Windows wrapper，避免调用方重复拼路径。
 function buildWinWrapper(): string {
+  // ASAR 模式优先用 CLI.exe（SUBSYSTEM:CONSOLE，支持交互式 stdin）
+  const cliExe = resolveCliExe();
+  if (cliExe) {
+    return buildWinWrapperForPaths(cliExe, resolveGatewayEntry(), { electronMode: true });
+  }
   return buildWinWrapperForPaths(resolveCliNodeBin(), resolveGatewayEntry());
 }
 
@@ -409,12 +448,21 @@ function winModifyPath(action: "add" | "remove", binDir: string): Promise<void> 
 
 // 校验 CLI 运行时依赖，避免生成必然损坏的 wrapper。
 function validateCliRuntime(): CliResult | null {
-  const nodeBin = resolveCliNodeBin();
+  // Windows ASAR 模式优先检查 CLI.exe
+  const cliExe = resolveCliExe();
+  const nodeBin = cliExe ?? resolveCliNodeBin();
   const entry = resolveGatewayEntry();
-  if (nodeBin === "node" || !fs.existsSync(nodeBin)) {
+  const asar = isAsarMode();
+
+  if (!cliExe && (nodeBin === "node" || !fs.existsSync(nodeBin))) {
     return { success: false, message: `Node runtime not found: ${nodeBin}` };
   }
-  if (!fs.existsSync(entry)) {
+  if (cliExe && !fs.existsSync(cliExe)) {
+    return { success: false, message: `CLI binary not found: ${cliExe}` };
+  }
+  // ASAR 入口在 main process（Electron ASAR patch 生效）里能通过 existsSync，
+  // 但这里显式跳过以避免未来在非 Electron 上下文中调用时失败。
+  if (!asar && !fs.existsSync(entry)) {
     return { success: false, message: `CLI entry not found: ${entry}` };
   }
   return null;
