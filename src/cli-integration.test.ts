@@ -30,6 +30,19 @@ test("Windows PATH 脚本中的 try/catch 不能被分号打断", () => {
   assert.ok(/try\s*{[\s\S]*catch\s*{/.test(script));
 });
 
+test("Windows PATH 脚本应在修改后广播 WM_SETTINGCHANGE", () => {
+  const script = buildWinPathEnvScript("add", "C:\\Users\\admin\\AppData\\Local\\OneClaw\\bin");
+  assert.ok(script.includes("SendMessageTimeout"), "应调用 SendMessageTimeout 广播环境变量变更");
+  assert.ok(script.includes("0xffff"), "应使用 HWND_BROADCAST (0xffff)");
+  assert.ok(script.includes("0x1a"), "应使用 WM_SETTINGCHANGE (0x1a)");
+  assert.ok(script.includes("'Environment'"), "lParam 应为 'Environment'");
+});
+
+test("Windows PATH remove 脚本同样应广播 WM_SETTINGCHANGE", () => {
+  const script = buildWinPathEnvScript("remove", "C:\\Users\\admin\\AppData\\Local\\OneClaw\\bin");
+  assert.ok(script.includes("SendMessageTimeout"), "卸载时也应广播环境变量变更");
+});
+
 test("Windows CLI 目录解析应同时返回当前路径与旧版迁移路径", () => {
   const dirs = resolveWinCliBinDirsForPaths(
     "C:\\Users\\admin\\AppData\\Local",
