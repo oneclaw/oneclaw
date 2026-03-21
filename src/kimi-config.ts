@@ -130,17 +130,23 @@ export function writeKimiSearchDedicatedApiKey(apiKey: string): void {
   fs.writeFileSync(filePath, trimmed, "utf-8");
 }
 
-// 按优先级解析 kimi-search 的 API key：sidecar 专属 key > 复用 kimi-code provider key
-export function resolveKimiSearchApiKey(config: any): string {
+// 按优先级解析 kimi-search API key：专属 key > OAuth token > 手动 key sidecar
+// 注意：不再从 config 的 apiKey 读取（代理模式下为占位符 "proxy-managed"）
+export function resolveKimiSearchApiKey(_config?: any): string {
   // 1. sidecar 文件中的专属 key
   const dedicatedKey = readKimiSearchDedicatedApiKey();
   if (dedicatedKey) return dedicatedKey;
 
-  // 2. 复用 kimi-code provider 的 key
-  const kimiCodingKey = config?.models?.providers?.["kimi-coding"]?.apiKey;
-  if (typeof kimiCodingKey === "string" && kimiCodingKey.trim()) {
-    return kimiCodingKey.trim();
-  }
+  // 2. OAuth token
+  try {
+    const { loadOAuthToken } = require("./kimi-oauth");
+    const oauthToken = loadOAuthToken();
+    if (oauthToken?.access_token) return oauthToken.access_token;
+  } catch {}
+
+  // 3. 手动 key sidecar
+  const manualKey = readKimiApiKey();
+  if (manualKey) return manualKey;
 
   return "";
 }
@@ -208,4 +214,38 @@ export function isKimiSearchPluginBundled(): boolean {
     fs.existsSync(path.join(pluginDir, "index.ts")) ||
     fs.existsSync(path.join(pluginDir, "dist", "index.js"));
   return hasEntry && fs.existsSync(path.join(pluginDir, "openclaw.plugin.json"));
+}
+
+// ── Kimi API Key sidecar（手动输入的 key，与 OAuth token 互斥） ──
+
+const KIMI_API_KEY_FILE = "kimi-api-key";
+
+// sidecar 文件路径
+function resolveKimiApiKeyPath(): string {
+  return path.join(resolveUserStateDir(), "credentials", KIMI_API_KEY_FILE);
+}
+
+// 读取手动 key
+export function readKimiApiKey(): string {
+  try {
+    const filePath = resolveKimiApiKeyPath();
+    if (!fs.existsSync(filePath)) return "";
+    return fs.readFileSync(filePath, "utf-8").trim();
+  } catch {
+    return "";
+  }
+}
+
+// 写入手动 key（空字符串则删除）
+export function writeKimiApiKey(apiKey: string): void {
+  const filePath = resolveKimiApiKeyPath();
+  const trimmed = apiKey.trim();
+  if (!trimmed) {
+    try { fs.unlinkSync(filePath); } catch {}
+    return;
+  }
+  const dir = path.dirname(filePath);
+  fs.mkdirSync(dir, { recursive: true });
+  fs.writeFileSync(filePath, trimmed, "utf-8");
+  try { fs.chmodSync(filePath, 0o600); } catch {}
 }
