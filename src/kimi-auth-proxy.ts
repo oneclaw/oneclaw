@@ -140,11 +140,11 @@ function tryListen(
     const attempt = (): void => {
       if (idx >= candidates.length) {
         // 所有候选端口耗尽，让 OS 动态分配
+        srv.once("error", reject);
         srv.listen(0, "127.0.0.1", () => {
           const addr = srv.address() as net.AddressInfo;
           resolve(addr.port);
         });
-        srv.once("error", reject);
         return;
       }
 

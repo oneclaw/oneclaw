@@ -40,7 +40,7 @@ import {
   restoreLastKnownGoodConfigSnapshot,
 } from "./config-backup";
 import { readUserConfig, writeUserConfig } from "./provider-config";
-import { resolveKimiSearchApiKey, readKimiApiKey, readKimiSearchDedicatedApiKey } from "./kimi-config";
+import { resolveKimiSearchApiKey, readKimiApiKey, readKimiSearchDedicatedApiKey, writeKimiApiKey } from "./kimi-config";
 import { reconcileCliOnAppLaunch } from "./cli-integration";
 import { detectOwnership, migrateFromLegacy, markSetupComplete } from "./oneclaw-config";
 import { startTokenRefresh, stopTokenRefresh, loadOAuthToken } from "./kimi-oauth";
@@ -443,7 +443,6 @@ function ensureProxyConfig(proxyPort: number): void {
 
     // 首次迁移：真实 apiKey 存入 sidecar（非 OAuth 用户 + 有效 key）
     if (provider.apiKey && provider.apiKey !== "proxy-managed" && !loadOAuthToken()) {
-      const { writeKimiApiKey } = require("./kimi-config");
       writeKimiApiKey(provider.apiKey);
     }
 
@@ -594,7 +593,7 @@ registerWorkspaceIpc();
 
 async function quit(): Promise<void> {
   stopTokenRefresh();
-  stopAuthProxy();
+  await stopAuthProxy();
   stopAutoCheckSchedule();
   pairingMonitor?.stop();
   analytics.track("app_closed");
