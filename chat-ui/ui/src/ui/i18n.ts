@@ -61,9 +61,13 @@ const dict: Record<Locale, Record<string, string>> = {
     "cron.prompt": "指令",
     "cron.nextRun": "下次运行",
     "cron.lastRun": "上次运行",
-    "cron.status": "状态",
+
     "cron.history": "运行历史",
     "cron.noRuns": "暂无运行记录",
+    "cron.noJobs": "暂无定时任务",
+    "cron.enabled": "已启用",
+    "cron.disabled": "已禁用",
+    "cron.openChat": "打开对话 →",
 
     // 技能管理
     "sidebar.skillStore": "技能",
@@ -234,9 +238,13 @@ const dict: Record<Locale, Record<string, string>> = {
     "cron.prompt": "Prompt",
     "cron.nextRun": "Next run",
     "cron.lastRun": "Last run",
-    "cron.status": "Status",
+
     "cron.history": "Run history",
     "cron.noRuns": "No runs yet",
+    "cron.noJobs": "No scheduled tasks",
+    "cron.enabled": "Enabled",
+    "cron.disabled": "Disabled",
+    "cron.openChat": "Open chat →",
 
     // Skill Manager
     "sidebar.skillStore": "Skills",

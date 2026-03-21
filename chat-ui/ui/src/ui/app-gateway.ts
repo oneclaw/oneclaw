@@ -170,7 +170,8 @@ export function connectGateway(host: GatewayHost) {
         return;
       }
       host.connected = false;
-      // 断开连接时停止客户端定时器
+      // 断开连接时注销 cron handler 并停止客户端定时器
+      unregisterTickHandler("cron");
       stopTicker();
       // Code 1012 = Service Restart (expected during config saves, don't show as error)
       if (code !== 1012) {

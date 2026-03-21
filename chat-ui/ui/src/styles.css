@@ -6470,9 +6470,9 @@ img.chat-avatar {
   line-height: 18px;
   text-align: center;
   border-radius: 9px;
-  background: var(--accent, #c0392b);
-  color: #fff;
-  font-weight: 600;
+  background: rgba(156, 163, 175, 0.2);
+  color: var(--text-secondary, #888);
+  font-weight: 500;
   flex-shrink: 0;
   padding: 0 5px;
 }
@@ -7834,37 +7834,60 @@ img.chat-avatar {
   padding: 48px 0;
 }
 
-/* 任务卡片：圆角边框 + hover 高亮 */
+/* 任务卡片 */
 .cron-readonly__card {
   border: 1px solid var(--border);
   border-radius: 10px;
   background: var(--card);
   cursor: pointer;
   transition: border-color 0.15s, box-shadow 0.15s;
+  overflow: hidden;
 }
 
 .cron-readonly__card:hover {
   border-color: var(--border-strong);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06);
 }
 
-/* 展开态：accent 边框 + 微弱光晕 */
+/* 展开态 */
 .cron-readonly__card--expanded {
-  border-color: var(--accent, #c0392b);
-  box-shadow: 0 0 0 1px var(--accent-subtle, rgba(192, 57, 43, 0.15));
+  border-color: var(--border-strong);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
 }
 
 /* 卡片头部 */
 .cron-readonly__card-header {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 12px 16px;
+  gap: 8px;
+  padding: 14px 16px 0;
 }
 
 .cron-readonly__card-name {
   font-size: 14px;
   font-weight: 600;
   color: var(--text-strong);
+}
+
+/* 头部弹性占位 */
+.cron-readonly__card-spacer {
+  flex: 1;
+}
+
+/* 展开/折叠箭头 */
+.cron-readonly__chevron {
+  color: var(--muted);
+  flex-shrink: 0;
+  transition: transform 0.2s ease;
+}
+
+.cron-readonly__chevron--open {
+  transform: rotate(90deg);
+}
+
+/* 卡片主体（detail + footer 容器） */
+.cron-readonly__card-body {
+  padding: 0 16px 14px;
 }
 
 /* 状态小药丸（启用/禁用） */
@@ -7878,8 +7901,8 @@ img.chat-avatar {
 }
 
 .cron-readonly__pill--enabled {
-  background: rgba(34, 197, 94, 0.15);
-  color: #22c55e;
+  background: rgba(156, 163, 175, 0.15);
+  color: #6b7280;
 }
 
 .cron-readonly__pill--disabled {
@@ -7892,14 +7915,19 @@ img.chat-avatar {
   display: flex;
   align-items: baseline;
   gap: 8px;
-  padding: 4px 16px;
+  padding: 4px 0;
   font-size: 13px;
+}
+
+.cron-readonly__card-detail:first-child {
+  padding-top: 10px;
 }
 
 .cron-readonly__detail-label {
   color: var(--muted);
-  min-width: 72px;
+  min-width: 56px;
   flex-shrink: 0;
+  font-size: 12px;
 }
 
 .cron-readonly__detail-value {
@@ -7907,14 +7935,41 @@ img.chat-avatar {
   word-break: break-word;
 }
 
+/* 指令文本：完整显示 + 换行 */
+.cron-readonly__prompt {
+  white-space: pre-wrap;
+  line-height: 1.6;
+}
+
 /* 卡片底部元信息行 */
-.cron-readonly__card-meta {
+.cron-readonly__card-footer {
   display: flex;
   flex-wrap: wrap;
-  gap: 12px;
-  padding: 8px 16px 12px;
+  align-items: center;
+  gap: 6px;
+  padding-top: 10px;
+  margin-top: 6px;
+  border-top: 1px solid var(--border);
   font-size: 12px;
   color: var(--muted);
+}
+
+.cron-readonly__meta-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.cron-readonly__meta-label {
+  color: var(--muted);
+  opacity: 0.7;
+}
+
+.cron-readonly__meta-sep {
+  width: 1px;
+  height: 12px;
+  background: var(--border);
+  flex-shrink: 0;
 }
 
 /* 运行状态药丸（4 种状态） */
@@ -7925,24 +7980,25 @@ img.chat-avatar {
   font-weight: 500;
   line-height: 1.4;
   flex-shrink: 0;
+  margin-left: auto;
 }
 
-.cron-readonly__status-pill--ok {
+.cron-readonly__status--ok {
   background: rgba(34, 197, 94, 0.15);
   color: #16a34a;
 }
 
-.cron-readonly__status-pill--error {
+.cron-readonly__status--error {
   background: rgba(239, 68, 68, 0.15);
   color: #dc2626;
 }
 
-.cron-readonly__status-pill--skipped {
+.cron-readonly__status--skipped {
   background: rgba(234, 179, 8, 0.15);
   color: #ca8a04;
 }
 
-.cron-readonly__status-pill--na {
+.cron-readonly__status--na {
   background: rgba(156, 163, 175, 0.15);
   color: #6b7280;
 }
@@ -7950,30 +8006,33 @@ img.chat-avatar {
 /* 历史记录区域 */
 .cron-readonly__history {
   border-top: 1px solid var(--border);
-  padding: 12px 16px;
+  padding: 12px 16px 14px;
+  background: var(--bg-subtle, rgba(0, 0, 0, 0.02));
 }
 
 .cron-readonly__history-title {
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 600;
-  color: var(--text-strong);
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
   margin: 0 0 8px;
 }
 
 /* 单次运行记录 */
 .cron-readonly__run {
-  border-bottom: 1px solid var(--border);
   padding: 8px 0;
 }
 
-.cron-readonly__run:last-child {
-  border-bottom: none;
+.cron-readonly__run + .cron-readonly__run {
+  border-top: 1px solid var(--border);
 }
 
 .cron-readonly__run-main {
   display: flex;
   align-items: center;
   gap: 8px;
+  font-size: 13px;
 }
 
 .cron-readonly__run-status {
@@ -7984,13 +8043,25 @@ img.chat-avatar {
   flex-shrink: 0;
 }
 
+.cron-readonly__run-time {
+  color: var(--text);
+}
+
+.cron-readonly__run-duration {
+  color: var(--muted);
+  font-size: 12px;
+}
+
 .cron-readonly__run-summary {
   font-size: 12px;
   color: var(--muted);
   margin-top: 4px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  word-break: break-word;
 }
 
-/* 错误信息：使用 destructive 语义色 */
+/* 错误信息 */
 .cron-readonly__run-error {
   font-size: 12px;
   color: var(--destructive, #ef4444);
@@ -8004,8 +8075,10 @@ img.chat-avatar {
   color: var(--accent, #c0392b);
   font-size: 12px;
   padding: 0;
+  margin-left: auto;
   cursor: pointer;
   font-family: inherit;
+  flex-shrink: 0;
 }
 
 .cron-readonly__run-link:hover {

@@ -1111,7 +1111,7 @@ export function renderApp(state: AppViewState) {
                       cronExpandedJobId = jobId;
                       cronRunsLoading = true;
                       state.requestUpdate();
-                      void loadCronRuns(state as any, jobId).then(() => {
+                      void loadCronRuns(state as any, jobId).finally(() => {
                         cronRunsLoading = false;
                         state.requestUpdate();
                       });

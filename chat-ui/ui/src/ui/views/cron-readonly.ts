@@ -34,10 +34,18 @@ function statusClass(status: string): string {
   return "cron-readonly__status--na";
 }
 
-// 截断文本
-function truncate(text: string | undefined, max: number): string {
-  if (!text) return "";
-  return text.length > max ? text.slice(0, max) + "…" : text;
+// 展开/折叠 chevron 图标
+function chevronIcon(expanded: boolean) {
+  return html`
+    <svg
+      class="cron-readonly__chevron ${expanded ? "cron-readonly__chevron--open" : ""}"
+      width="16" height="16" viewBox="0 0 24 24"
+      fill="none" stroke="currentColor" stroke-width="2"
+      stroke-linecap="round" stroke-linejoin="round"
+    >
+      <path d="m9 18 6-6-6-6" />
+    </svg>
+  `;
 }
 
 // 渲染单条运行记录
@@ -53,24 +61,23 @@ function renderRun(
     <div class="cron-readonly__run" @click=${(e: Event) => e.stopPropagation()}>
       <div class="cron-readonly__run-main">
         <span class="cron-readonly__run-status ${statusClass(status)}">${status}</span>
-        <span>${formatMs(entry.ts)}</span>
-        ${entry.durationMs != null ? html`<span>${entry.durationMs}ms</span>` : nothing}
-      </div>
-      ${entry.summary ? html`<div class="cron-readonly__run-summary">${entry.summary}</div>` : nothing}
-      ${entry.error ? html`<div class="cron-readonly__run-error">${entry.error}</div>` : nothing}
-      ${
-        hasSession
-          ? html`<a
+        <span class="cron-readonly__run-time">${formatMs(entry.ts)}</span>
+        ${entry.durationMs != null
+          ? html`<span class="cron-readonly__run-duration">${entry.durationMs}ms</span>`
+          : nothing}
+        ${hasSession
+          ? html`<button
               class="cron-readonly__run-link"
-              href="javascript:void(0)"
+              type="button"
               @click=${(e: Event) => {
-                e.preventDefault();
                 e.stopPropagation();
                 onNavigateToSession(entry.sessionKey!);
               }}
-            >Open chat &rarr;</a>`
-          : nothing
-      }
+            >${t("cron.openChat")}</button>`
+          : nothing}
+      </div>
+      ${entry.summary ? html`<div class="cron-readonly__run-summary">${entry.summary}</div>` : nothing}
+      ${entry.error ? html`<div class="cron-readonly__run-error">${entry.error}</div>` : nothing}
     </div>
   `;
 }
@@ -114,24 +121,39 @@ function renderCard(job: CronJob, props: CronReadonlyProps) {
       <div class="cron-readonly__card-header">
         <span class="cron-readonly__card-name">${name}</span>
         <span class="cron-readonly__pill ${enabled ? "cron-readonly__pill--enabled" : "cron-readonly__pill--disabled"}">
-          ${enabled ? "enabled" : "disabled"}
+          ${enabled ? t("cron.enabled") : t("cron.disabled")}
         </span>
+        <span class="cron-readonly__card-spacer"></span>
+        ${chevronIcon(expanded)}
       </div>
 
-      <div class="cron-readonly__card-detail">
-        <span class="cron-readonly__detail-label">${t("cron.schedule")}</span>
-        <span class="cron-readonly__detail-value">${formatCronSchedule(job)}</span>
-      </div>
+      <div class="cron-readonly__card-body">
+        <div class="cron-readonly__card-detail">
+          <span class="cron-readonly__detail-label">${t("cron.schedule")}</span>
+          <span class="cron-readonly__detail-value">${formatCronSchedule(job)}</span>
+        </div>
 
-      <div class="cron-readonly__card-detail">
-        <span class="cron-readonly__detail-label">${t("cron.prompt")}</span>
-        <span class="cron-readonly__detail-value">${truncate(prompt, 80)}</span>
-      </div>
+        ${prompt
+          ? html`
+            <div class="cron-readonly__card-detail">
+              <span class="cron-readonly__detail-label">${t("cron.prompt")}</span>
+              <span class="cron-readonly__detail-value cron-readonly__prompt">${prompt}</span>
+            </div>`
+          : nothing}
 
-      <div class="cron-readonly__card-meta">
-        <span>${t("cron.nextRun")}: ${fmtRelative(job.state?.nextRunAtMs)}</span>
-        <span>${t("cron.lastRun")}: ${fmtRelative(job.state?.lastRunAtMs)}</span>
-        <span class="cron-readonly__status-pill ${statusClass(status)}">${status}</span>
+        <div class="cron-readonly__card-footer">
+          <span class="cron-readonly__meta-item">
+            <span class="cron-readonly__meta-label">${t("cron.nextRun")}</span>
+            ${fmtRelative(job.state?.nextRunAtMs)}
+          </span>
+          <span class="cron-readonly__meta-sep"></span>
+          <span class="cron-readonly__meta-item">
+            <span class="cron-readonly__meta-label">${t("cron.lastRun")}</span>
+            ${fmtRelative(job.state?.lastRunAtMs)}
+          </span>
+          <span class="cron-readonly__meta-sep"></span>
+          <span class="cron-readonly__status-pill ${statusClass(status)}">${status}</span>
+        </div>
       </div>
 
       ${expanded ? renderHistory(props) : nothing}
@@ -153,7 +175,7 @@ export function renderCronReadonly(props: CronReadonlyProps) {
           : props.error
             ? html`<div class="muted">${props.error}</div>`
             : props.jobs.length === 0
-              ? html`<div class="muted">${t("cron.noRuns")}</div>`
+              ? html`<div class="muted">${t("cron.noJobs")}</div>`
               : html`
                   <div class="cron-readonly__list">
                     ${props.jobs.map((job) => renderCard(job, props))}
