@@ -283,23 +283,6 @@ jobs:
       - name: 二次清理 blockmap（release）
         run: find out -type f -name "*.blockmap" -delete
 
-      # 预上传二进制产物到 OSS（不含 latest yml，用户不会收到更新推送）
-      - name: 安装 ossutil
-        continue-on-error: true
-        id: ossutil
-        run: curl -fsSL https://gosspublic.alicdn.com/ossutil/install.sh | sudo bash
-
-      - name: 预上传产物到 OSS（不含 latest yml）
-        if: steps.ossutil.outcome == 'success'
-        continue-on-error: true
-        env:
-          ALIYUN_ACCESS_KEY_ID: ${{ secrets.ALIYUN_ACCESS_KEY_ID }}
-          ALIYUN_ACCESS_KEY_SECRET: ${{ secrets.ALIYUN_ACCESS_KEY_SECRET }}
-        run: |
-          ossutil config -e oss-cn-beijing.aliyuncs.com -i "$ALIYUN_ACCESS_KEY_ID" -k "$ALIYUN_ACCESS_KEY_SECRET"
-          ossutil cp -r out/release/ oss://oneclaw/releases/ --force --exclude "*.yml"
-          echo "产物预上传完成（不含 latest yml）"
-
       # 生成 dev 通道 yml（复用同一批二进制，仅文件名不同）
       # electron-updater channel="dev" 会拉取 dev-mac.yml / dev.yml
       # 客户端切换: ~/.openclaw/oneclaw.config.json 设置 "updateChannel": "dev"
@@ -311,6 +294,23 @@ jobs:
             cp "$src" "$dst"
             echo "[dev] $(basename "$src") → $(basename "$dst")"
           done
+
+      # 预上传到 OSS：二进制 + dev yml（不含 latest yml，生产通道由 publish-release 推送）
+      - name: 安装 ossutil
+        continue-on-error: true
+        id: ossutil
+        run: curl -fsSL https://gosspublic.alicdn.com/ossutil/install.sh | sudo bash
+
+      - name: 预上传产物到 OSS（二进制 + dev yml）
+        if: steps.ossutil.outcome == 'success'
+        continue-on-error: true
+        env:
+          ALIYUN_ACCESS_KEY_ID: ${{ secrets.ALIYUN_ACCESS_KEY_ID }}
+          ALIYUN_ACCESS_KEY_SECRET: ${{ secrets.ALIYUN_ACCESS_KEY_SECRET }}
+        run: |
+          ossutil config -e oss-cn-beijing.aliyuncs.com -i "$ALIYUN_ACCESS_KEY_ID" -k "$ALIYUN_ACCESS_KEY_SECRET"
+          ossutil cp -r out/release/ oss://oneclaw/releases/ --force --exclude "latest*.yml"
+          echo "产物预上传完成（二进制 + dev yml，不含 latest yml）"
 
       # 创建 GitHub Release（草稿模式，手动确认后发布）
       # 发布 Release 后由 publish-release.yml 上传 latest yml + 刷新 CDN
