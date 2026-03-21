@@ -123,9 +123,15 @@ let pairingMonitor: ChannelPairingMonitor | null = null;
 const gateway = new GatewayProcess({
   port: resolveGatewayPort(),
   token: resolveGatewayAuthToken({ persist: false }),
-  onStateChange: () => {
+  onStateChange: (state) => {
     tray.updateMenu();
     pairingMonitor?.triggerNow();
+    // gateway 就绪后立即通知 Chat UI 重连，避免盲等指数退避
+    if (state === "running") {
+      for (const w of BrowserWindow.getAllWindows()) {
+        if (!w.isDestroyed()) w.webContents.send("gateway:ready");
+      }
+    }
   },
 });
 const windowManager = new WindowManager();
@@ -407,12 +413,18 @@ function requestGatewayStart(source: string): void {
   });
 }
 
+// 重启 debounce：多次快速调用只执行最后一次，避免连环重启
+let restartTimer: ReturnType<typeof setTimeout> | null = null;
 function requestGatewayRestart(source: string): void {
-  gateway.setToken(resolveGatewayAuthToken());
-  syncKimiSearchEnv();
-  gateway.restart().catch((err) => {
-    log.error(`Gateway 重启失败(${source}): ${err}`);
-  });
+  if (restartTimer) clearTimeout(restartTimer);
+  restartTimer = setTimeout(() => {
+    restartTimer = null;
+    gateway.setToken(resolveGatewayAuthToken());
+    syncKimiSearchEnv();
+    gateway.restart().catch((err) => {
+      log.error(`Gateway 重启失败(${source}): ${err}`);
+    });
+  }, 800);
 }
 
 // 解析当前最优 token：OAuth > 手动 key
@@ -506,11 +518,9 @@ function ensureOAuthTokenRefresh(): void {
 }
 
 function requestGatewayStop(source: string): void {
-  try {
-    gateway.stop();
-  } catch (err) {
+  gateway.stop().catch((err) => {
     log.error(`Gateway 停止失败(${source}): ${err}`);
-  }
+  });
 }
 
 // ── IPC 注册 ──
@@ -675,7 +685,7 @@ async function quit(): Promise<void> {
   analytics.track("app_closed");
   await analytics.shutdown();
   windowManager.destroy();
-  gateway.stop();
+  await gateway.stop();
   tray.destroy();
   app.quit();
 }
@@ -933,5 +943,5 @@ app.on("before-quit", () => {
   pairingMonitor?.stop();
   windowManager.destroy();
   stopAuthProxy();
-  gateway.stop();
+  gateway.stop().catch(() => {});
 });

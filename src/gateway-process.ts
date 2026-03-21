@@ -97,7 +97,15 @@ export class GatewayProcess {
     // 前一次 stop 还未完成，等待其结束再启动
     if (this.state === "stopping") {
       diagLog("start() 等待前一次 stop 完成");
-      await this.waitForStopped(6000);
+      const deadline = Date.now() + 6000;
+      while (this.state === "stopping" && Date.now() < deadline) {
+        await sleep(100);
+      }
+      if (this.state === "stopping") {
+        diagLog("WARN: start() 等待 stop 超时，强制标记 stopped");
+        this.proc = null;
+        this.setState("stopped");
+      }
     }
 
     // 崩溃冷却期
@@ -232,25 +240,40 @@ export class GatewayProcess {
       }
     } else {
       diagLog("FATAL: health check timeout");
-      this.stop();
+      await this.stop();
     }
   }
 
-  // 停止 Gateway
-  stop(): void {
+  // 停止 Gateway：async，返回时保证进程已终结
+  async stop(): Promise<void> {
     if (!this.proc || this.state === "stopped" || this.state === "stopping") return;
 
+    const pid = this.proc.pid ?? 0;
     this.setState("stopping");
-    this.proc.kill("SIGTERM");
 
-    // 5s 强制终止兜底（用 exitCode 判断进程是否真正退出，而非 killed 标志）
-    const p = this.proc;
-    setTimeout(() => {
-      if (p && p.exitCode == null) {
-        diagLog("WARN: SIGTERM 超时，发送 SIGKILL");
-        p.kill("SIGKILL");
+    // 第一步：发送终止信号（Windows 杀整棵进程树，POSIX 先 SIGTERM）
+    if (IS_WIN && pid > 0) {
+      killProcess(pid);
+    } else {
+      this.proc.kill("SIGTERM");
+    }
+
+    // 第二步：等 exit 事件将状态推到 stopped（exit handler 负责状态转移）
+    const deadline = Date.now() + 5000;
+    while (this.getState() === "stopping" && Date.now() < deadline) {
+      await sleep(100);
+    }
+
+    // 第三步：超时兜底 — POSIX 升级 SIGKILL，Windows 已经是 /F 了
+    if (this.getState() === "stopping") {
+      diagLog("WARN: 停止超时，强制终止");
+      if (this.proc && !IS_WIN) {
+        this.proc.kill("SIGKILL");
+        await sleep(500);
       }
-    }, 5000);
+      this.proc = null;
+      this.setState("stopped");
+    }
   }
 
   // 停止已存在的旧 gateway（端口冲突时自动调用）
@@ -286,10 +309,9 @@ export class GatewayProcess {
     diagLog("WARN: 等待端口释放超时，继续尝试启动");
   }
 
-  // 重启：等旧进程真正退出后再启动
+  // 重启：stop() 返回时进程已死，直接 start()
   async restart(): Promise<void> {
-    this.stop();
-    await this.waitForStopped(6000);
+    await this.stop();
     await this.start();
   }
 
@@ -322,18 +344,6 @@ export class GatewayProcess {
       await sleep(HEALTH_POLL_INTERVAL_MS);
     }
     return false;
-  }
-
-  // 轮询等待状态变为 stopped（用于 restart 和 start 前等待旧进程结束）
-  private async waitForStopped(timeoutMs: number): Promise<void> {
-    const deadline = Date.now() + timeoutMs;
-    while (this.state === "stopping" && Date.now() < deadline) {
-      await sleep(100);
-    }
-    if (this.state === "stopping") {
-      diagLog("WARN: waitForStopped 超时，强制标记 stopped");
-      this.setState("stopped");
-    }
   }
 
   // 仅当同一子进程仍存活时才认为启动检查有效，避免旧端口进程误判

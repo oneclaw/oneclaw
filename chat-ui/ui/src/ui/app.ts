@@ -692,6 +692,7 @@ export class OpenClawApp extends LitElement {
   private appNavigateCleanup: (() => void) | null = null;
   private updateStateCleanup: (() => void) | null = null;
   private pairingStateCleanup: (() => void) | null = null;
+  private gatewayReadyCleanup: (() => void) | null = null;
 
   createRenderRoot() {
     return this;
@@ -703,6 +704,7 @@ export class OpenClawApp extends LitElement {
     this.bindAppNavigation();
     this.bindUpdateState();
     this.bindPairingState();
+    this.bindGatewayReady();
     this.fetchReleaseNotes();
   }
 
@@ -728,6 +730,8 @@ export class OpenClawApp extends LitElement {
     this.updateStateCleanup = null;
     this.pairingStateCleanup?.();
     this.pairingStateCleanup = null;
+    this.gatewayReadyCleanup?.();
+    this.gatewayReadyCleanup = null;
     handleDisconnected(this as unknown as Parameters<typeof handleDisconnected>[0]);
     super.disconnectedCallback();
   }
@@ -890,6 +894,20 @@ export class OpenClawApp extends LitElement {
         .catch(() => {
           // ignore preload bridge fetch errors
         });
+    }
+  }
+
+  // 主进程通知 gateway 已就绪，立即重连（跳过指数退避盲等）
+  private bindGatewayReady() {
+    if (this.gatewayReadyCleanup) return;
+    const bridge = this.getOneClawBridge();
+    if (bridge?.onGatewayReady) {
+      const unsubscribe = bridge.onGatewayReady(() => {
+        if (!this.connected && this.client) {
+          this.client.reconnectNow();
+        }
+      });
+      this.gatewayReadyCleanup = typeof unsubscribe === "function" ? unsubscribe : null;
     }
   }
 

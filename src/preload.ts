@@ -158,6 +158,12 @@ contextBridge.exposeInMainWorld("oneclaw", {
   openSettings: () => ipcRenderer.send("app:open-settings"),
   openWebUI: () => ipcRenderer.send("app:open-webui"),
   getGatewayPort: () => ipcRenderer.invoke("gateway:port"),
+  // 主进程通知 gateway 已就绪，Chat UI 可立即重连（跳过盲等指数退避）
+  onGatewayReady: (cb: () => void) => {
+    const listener = () => cb();
+    ipcRenderer.on("gateway:ready", listener);
+    return () => ipcRenderer.removeListener("gateway:ready", listener);
+  },
   onNavigate: (cb: (payload: { view: "settings" }) => void) => {
     const listener = (_event: Electron.IpcRendererEvent, payload: { view: "settings" }) => {
       cb(payload);
