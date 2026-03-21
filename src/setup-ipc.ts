@@ -20,6 +20,7 @@ import { setProxyAccessToken, getProxyPort } from "./kimi-auth-proxy";
 import {
   detectExistingInstallation,
   killPortProcess,
+  getPortPid,
   uninstallGatewayDaemon,
   uninstallGlobalOpenclaw,
   findAvailablePort,
@@ -285,6 +286,13 @@ export function registerSetupIpc(deps: SetupIpcDeps): void {
   // ── 换随机端口重试启动 Gateway ──
   ipcMain.handle("setup:retry-random-port", async () => {
     try {
+      // 先杀掉旧端口上的进程（避免它继续持有 gateway lock）
+      const oldPid = await getPortPid(DEFAULT_PORT);
+      if (oldPid > 0) {
+        log.info(`[setup] 换端口前先杀旧端口进程 pid=${oldPid}`);
+        await killPortProcess(oldPid);
+      }
+
       const newPort = await findAvailablePort(DEFAULT_PORT + 1);
       if (newPort <= 0) {
         return { success: false, message: "No available port found" };
