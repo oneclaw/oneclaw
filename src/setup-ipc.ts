@@ -15,7 +15,8 @@ import {
 } from "./provider-config";
 import * as log from "./logger";
 import { installCli, uninstallCli } from "./cli-integration";
-import { saveKimiSearchConfig } from "./kimi-config";
+import { saveKimiSearchConfig, writeKimiApiKey } from "./kimi-config";
+import { setProxyAccessToken, getProxyPort } from "./kimi-auth-proxy";
 import {
   detectExistingInstallation,
   killPortProcess,
@@ -225,6 +226,13 @@ export function registerSetupIpc(deps: SetupIpcDeps): void {
           // 配置 kimi-code 时自动启用搜索插件
           if (subPlatform === "kimi-code") {
             saveKimiSearchConfig(config, { enabled: true });
+            // 代理模式：真实 key 存 sidecar，config 写占位符
+            if (getProxyPort() > 0) {
+              writeKimiApiKey(apiKey);
+              setProxyAccessToken(apiKey);
+              config.models.providers["kimi-coding"].apiKey = "proxy-managed";
+              config.models.providers["kimi-coding"].baseUrl = `http://127.0.0.1:${getProxyPort()}/coding`;
+            }
           }
         } else {
           // 内置预设命中时，使用预设的 providerKey 作为配置键
