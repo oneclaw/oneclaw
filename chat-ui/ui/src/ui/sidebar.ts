@@ -158,6 +158,7 @@ export function renderSidebar(props: SidebarProps) {
                       startInlineRename(span, s.key, s.label, props.onRenameSession);
                     }}
                     data-tooltip=${t("sidebar.rename")}
+                    data-tooltip-pos="right"
                     aria-label=${t("sidebar.rename")}
                   >
                     ${icons.edit}
@@ -170,6 +171,7 @@ export function renderSidebar(props: SidebarProps) {
                       props.onDeleteSession(s.key);
                     }}
                     data-tooltip=${t("sidebar.delete")}
+                    data-tooltip-pos="right"
                     aria-label=${t("sidebar.delete")}
                   >
                     ${icons.x}
@@ -190,7 +192,6 @@ export function renderSidebar(props: SidebarProps) {
                   : ""}"
                 type="button"
                 @click=${props.onApplyUpdate}
-                data-tooltip=${props.updateVersion ? `${updateLabel} (${props.updateVersion})` : updateLabel}
                 ?disabled=${props.updateStatus === "downloading"}
               >
                 <span class="oneclaw-sidebar__icon">
@@ -209,7 +210,6 @@ export function renderSidebar(props: SidebarProps) {
                 class="oneclaw-sidebar__item ${props.cronActive ? "active" : ""}"
                 type="button"
                 @click=${props.onOpenCron}
-                data-tooltip=${t("sidebar.cron")}
               >
                 <span class="oneclaw-sidebar__icon">${icons.clock}</span>
                 <span class="oneclaw-sidebar__label">${t("sidebar.cron")}</span>
@@ -223,7 +223,6 @@ export function renderSidebar(props: SidebarProps) {
             : ""}"
           type="button"
           @click=${props.onOpenSettings}
-          data-tooltip=${t("sidebar.settings")}
         >
           <span class="oneclaw-sidebar__icon">${icons.settings}</span>
           <span class="oneclaw-sidebar__label">${t("sidebar.settings")}</span>
@@ -233,7 +232,6 @@ export function renderSidebar(props: SidebarProps) {
           class="oneclaw-sidebar__item ${props.skillsActive ? "active" : ""}"
           type="button"
           @click=${props.onOpenSkillStore}
-          data-tooltip=${t("sidebar.skillStore")}
         >
           <span class="oneclaw-sidebar__icon">${icons.puzzle}</span>
           <span class="oneclaw-sidebar__label">${t("sidebar.skillStore")}</span>
@@ -243,7 +241,6 @@ export function renderSidebar(props: SidebarProps) {
           class="oneclaw-sidebar__item ${props.workspaceActive ? "active" : ""}"
           type="button"
           @click=${props.onOpenWorkspace}
-          title=${t("sidebar.workspace")}
         >
           <span class="oneclaw-sidebar__icon">${icons.folder}</span>
           <span class="oneclaw-sidebar__label">${t("sidebar.workspace")}</span>
@@ -253,7 +250,6 @@ export function renderSidebar(props: SidebarProps) {
           class="oneclaw-sidebar__item"
           type="button"
           @click=${props.onOpenDocs}
-          data-tooltip=${t("sidebar.docs")}
         >
           <span class="oneclaw-sidebar__icon">${icons.book}</span>
           <span class="oneclaw-sidebar__label">${t("sidebar.docs")}</span>
@@ -265,7 +261,6 @@ export function renderSidebar(props: SidebarProps) {
               class="oneclaw-sidebar__item"
               type="button"
               @click=${props.onOpenWebUI}
-              data-tooltip=${t("sidebar.fullUI")}
             >
               <span class="oneclaw-sidebar__icon">${icons.externalLink}</span>
               <span class="oneclaw-sidebar__label">${t("sidebar.fullUI")}</span>
