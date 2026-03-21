@@ -44,6 +44,7 @@ import {
 import { readUserConfig, writeUserConfig } from "./provider-config";
 import { resolveKimiSearchApiKey, readKimiApiKey, readKimiSearchDedicatedApiKey, writeKimiApiKey, ensureMemorySearchProxyConfig } from "./kimi-config";
 import { reconcileCliOnAppLaunch } from "./cli-integration";
+import { uninstallGatewayDaemon, killPortProcess, getPortPid } from "./install-detector";
 import { detectOwnership, migrateFromLegacy, markSetupComplete, readOneclawConfig, writeOneclawConfig } from "./oneclaw-config";
 import { startTokenRefresh, stopTokenRefresh, loadOAuthToken } from "./kimi-oauth";
 import { startAuthProxy, stopAuthProxy, setProxyAccessToken, setProxySearchDedicatedKey, getProxyPort } from "./kimi-auth-proxy";
@@ -359,7 +360,14 @@ async function ensureGatewayRunning(source: string): Promise<boolean> {
 
 // 外部 OpenClaw 接管：进 Setup 向导，Step 0 展示冲突并让用户决定
 async function handleExternalOpenclawTakeover(): Promise<void> {
-  log.info("[startup] external OpenClaw detected, launching setup with conflict check");
+  log.info("[startup] external OpenClaw detected, auto-cleaning daemon before setup");
+  // 先自动清理 daemon + 杀残留进程，不等用户手动操作 Step 0
+  await uninstallGatewayDaemon();
+  const port = resolveGatewayPort();
+  const pid = await getPortPid(port);
+  if (pid > 0) {
+    await killPortProcess(pid);
+  }
   setupManager.showSetup();
 }
 

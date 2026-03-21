@@ -214,7 +214,7 @@ export async function killPortProcess(pid: number): Promise<boolean> {
   log.info(`[install-detector] killing PID ${pid}`);
   try {
     if (IS_WIN) {
-      await execFileAsync("taskkill", ["/pid", String(pid), "/f"]);
+      await execFileAsync("taskkill", ["/pid", String(pid), "/f", "/t"]);
     } else {
       await execFileAsync("kill", ["-9", String(pid)]);
     }
@@ -323,6 +323,14 @@ export async function uninstallGlobalOpenclaw(): Promise<boolean> {
   return allOk;
 }
 
+
+// 获取占用指定端口的进程 PID（跨平台）
+export async function getPortPid(port: number): Promise<number> {
+  if (IS_WIN) {
+    return getPortPidWin(port);
+  }
+  return getPortPidMac(port);
+}
 
 // 从指定端口开始，逐个探测直到找到可用端口
 export async function findAvailablePort(startPort: number = DEFAULT_PORT): Promise<number> {

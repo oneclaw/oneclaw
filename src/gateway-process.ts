@@ -20,6 +20,7 @@ import {
   resolveUserBinDir,
   resolveUserStateDir,
 } from "./constants";
+import { uninstallGatewayDaemon, getPortPid } from "./install-detector";
 
 // 诊断日志（固定写入 ~/.openclaw/gateway.log，便于用户定位）
 const LOG_PATH = resolveGatewayLogPath();
@@ -143,6 +144,9 @@ export class GatewayProcess {
 
     // 清理升级残留的 lockfile（旧 gateway 可能是半死状态：进程活但 HTTP 不响应）
     await this.cleanStaleLockfile();
+
+    // 卸载 OpenClaw 系统守护进程（launchd/schtasks），防止杀进程后被自动重启
+    await uninstallGatewayDaemon();
 
     // 启动前探测端口，若有旧 gateway 则自动停止
     const portBusy = await this.probeHealth();
@@ -306,7 +310,20 @@ export class GatewayProcess {
         return;
       }
     }
-    diagLog("WARN: 等待端口释放超时，继续尝试启动");
+    // 优雅停止超时，按 PID 强杀占用端口的进程
+    diagLog("WARN: 等待端口释放超时，尝试强杀占用进程");
+    const pid = await getPortPid(this.port);
+    if (pid > 0) {
+      killProcess(pid);
+      for (let i = 0; i < 10; i++) {
+        await sleep(500);
+        if (!(await this.probeHealth())) {
+          diagLog(`强杀 pid=${pid} 后端口已释放`);
+          return;
+        }
+      }
+    }
+    diagLog("WARN: 强杀后端口仍被占用，继续尝试启动");
   }
 
   // 重启：stop() 返回时进程已死，直接 start()
