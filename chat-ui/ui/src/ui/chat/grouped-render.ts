@@ -15,6 +15,41 @@ import { isToolResultMessage, normalizeRoleForGrouping } from "./message-normali
 import { linkifyPaths } from "./path-linker.ts";
 import { extractToolCards, renderToolCardSidebar } from "./tool-cards.ts";
 
+// JSON 自动检测最大字符数，防止大 JSON 导致渲染卡顿
+const MAX_JSON_AUTOPARSE_CHARS = 20_000;
+
+// 检测文本是否为 JSON 对象或数组
+function detectJson(text: string): { parsed: unknown; pretty: string } | null {
+  const t = text.trim();
+  if (t.length > MAX_JSON_AUTOPARSE_CHARS) {
+    return null;
+  }
+  if ((t.startsWith("{") && t.endsWith("}")) || (t.startsWith("[") && t.endsWith("]"))) {
+    try {
+      const parsed = JSON.parse(t);
+      return { parsed, pretty: JSON.stringify(parsed, null, 2) };
+    } catch {
+      return null;
+    }
+  }
+  return null;
+}
+
+// 生成 JSON 折叠摘要标签
+function jsonSummaryLabel(parsed: unknown): string {
+  if (Array.isArray(parsed)) {
+    return `Array (${parsed.length} item${parsed.length === 1 ? "" : "s"})`;
+  }
+  if (parsed && typeof parsed === "object") {
+    const keys = Object.keys(parsed as Record<string, unknown>);
+    if (keys.length <= 4) {
+      return `{ ${keys.join(", ")} }`;
+    }
+    return `Object (${keys.length} keys)`;
+  }
+  return "JSON";
+}
+
 type ImageBlock = {
   url: string;
   alt?: string;
@@ -253,6 +288,7 @@ function renderGroupedMessage(
 ) {
   const m = message as Record<string, unknown>;
   const role = typeof m.role === "string" ? m.role : "unknown";
+  const normalizedRole = normalizeRoleForGrouping(role);
   const isToolResult =
     isToolResultMessage(message) ||
     role.toLowerCase() === "toolresult" ||
@@ -273,6 +309,9 @@ function renderGroupedMessage(
   const markdown = markdownBase;
   const canCopyMarkdown = role === "assistant" && Boolean(markdown?.trim());
 
+  // 检测纯 JSON 消息，用折叠块展示
+  const jsonResult = markdown && !opts.isStreaming ? detectJson(markdown) : null;
+
   const bubbleClasses = [
     "chat-bubble",
     canCopyMarkdown ? "has-copy" : "",
@@ -291,23 +330,87 @@ function renderGroupedMessage(
     return nothing;
   }
 
+  // 判断是否为工具消息（需要折叠）
+  const isToolMessage = normalizedRole === "tool" || isToolResult;
+
+  // 工具名摘要标签
+  const toolNames = [...new Set(toolCards.map((c) => c.name))];
+  const toolSummaryLabel =
+    toolNames.length <= 3
+      ? toolNames.join(", ")
+      : `${toolNames.slice(0, 2).join(", ")} +${toolNames.length - 2} more`;
+  const toolPreview =
+    markdown && !toolSummaryLabel ? markdown.trim().replace(/\s+/g, " ").slice(0, 120) : "";
+
   return html`
     <div class="${bubbleClasses}">
       ${canCopyMarkdown ? renderCopyAsMarkdownButton(markdown!) : nothing}
-      ${renderMessageImages(images)}
       ${
-        reasoningMarkdown
-          ? html`<div class="chat-thinking">${unsafeHTML(
-              linkifyPaths(toSanitizedMarkdownHtml(reasoningMarkdown)),
-            )}</div>`
-          : nothing
+        isToolMessage
+          ? html`
+            <details class="chat-tool-msg-collapse">
+              <summary class="chat-tool-msg-summary">
+                <span class="chat-tool-msg-summary__icon">${icons.zap}</span>
+                <span class="chat-tool-msg-summary__label">Tool output</span>
+                ${
+                  toolSummaryLabel
+                    ? html`<span class="chat-tool-msg-summary__names">${toolSummaryLabel}</span>`
+                    : toolPreview
+                      ? html`<span class="chat-tool-msg-summary__preview">${toolPreview}</span>`
+                      : nothing
+                }
+              </summary>
+              <div class="chat-tool-msg-body">
+                ${renderMessageImages(images)}
+                ${
+                  reasoningMarkdown
+                    ? html`<div class="chat-thinking">${unsafeHTML(
+                        linkifyPaths(toSanitizedMarkdownHtml(reasoningMarkdown)),
+                      )}</div>`
+                    : nothing
+                }
+                ${
+                  jsonResult
+                    ? html`<details class="chat-json-collapse">
+                        <summary class="chat-json-summary">
+                          <span class="chat-json-badge">JSON</span>
+                          <span class="chat-json-label">${jsonSummaryLabel(jsonResult.parsed)}</span>
+                        </summary>
+                        <pre class="chat-json-content"><code>${jsonResult.pretty}</code></pre>
+                      </details>`
+                    : markdown
+                      ? html`<div class="chat-text" dir="${detectTextDirection(markdown)}">${unsafeHTML(linkifyPaths(toSanitizedMarkdownHtml(markdown)))}</div>`
+                      : nothing
+                }
+                ${hasToolCards ? renderCollapsedToolCards(toolCards, onOpenSidebar) : nothing}
+              </div>
+            </details>
+          `
+          : html`
+            ${renderMessageImages(images)}
+            ${
+              reasoningMarkdown
+                ? html`<div class="chat-thinking">${unsafeHTML(
+                    linkifyPaths(toSanitizedMarkdownHtml(reasoningMarkdown)),
+                  )}</div>`
+                : nothing
+            }
+            ${
+              jsonResult
+                ? html`<details class="chat-json-collapse">
+                    <summary class="chat-json-summary">
+                      <span class="chat-json-badge">JSON</span>
+                      <span class="chat-json-label">${jsonSummaryLabel(jsonResult.parsed)}</span>
+                    </summary>
+                    <pre class="chat-json-content"><code>${jsonResult.pretty}</code></pre>
+                  </details>`
+                : markdown
+                  ? html`<div class="chat-text" dir="${detectTextDirection(markdown)}">${unsafeHTML(linkifyPaths(toSanitizedMarkdownHtml(markdown)))}</div>`
+                  : nothing
+            }
+            ${hasToolCards ? renderCollapsedToolCards(toolCards, onOpenSidebar) : nothing}
+          `
       }
-      ${
-        markdown
-          ? html`<div class="chat-text" dir="${detectTextDirection(markdown)}">${unsafeHTML(linkifyPaths(toSanitizedMarkdownHtml(markdown)))}</div>`
-          : nothing
-      }
-      ${hasToolCards ? renderCollapsedToolCards(toolCards, onOpenSidebar) : nothing}
     </div>
   `;
 }
