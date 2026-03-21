@@ -451,12 +451,12 @@ function ensureProxyConfig(proxyPort: number): void {
     provider.baseUrl = expectedBase;
     provider.apiKey = "proxy-managed";
 
-    // 同步 kimi-search 插件端点到代理
+    // 同步 kimi-search 插件端点到代理（默认端点在 /coding/v1/ 路径下）
     const searchEntry = config?.plugins?.entries?.["kimi-search"];
     if (searchEntry && typeof searchEntry === "object") {
       searchEntry.config ??= {};
-      searchEntry.config.search = { baseUrl: `http://127.0.0.1:${proxyPort}/search` };
-      searchEntry.config.fetch = { baseUrl: `http://127.0.0.1:${proxyPort}/fetch` };
+      searchEntry.config.search = { baseUrl: `http://127.0.0.1:${proxyPort}/coding/v1/search` };
+      searchEntry.config.fetch = { baseUrl: `http://127.0.0.1:${proxyPort}/coding/v1/fetch` };
     }
 
     writeUserConfig(config);

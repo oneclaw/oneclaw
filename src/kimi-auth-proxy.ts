@@ -31,15 +31,12 @@ interface Route {
 }
 
 // 路由匹配：返回 Route 或 null（404）
+// kimi-search 端点在 /coding/v1/search 和 /coding/v1/fetch 下，统一走 /coding/* 路由
 function matchRoute(path: string): Route | null {
   if (path.startsWith("/coding/") || path === "/coding") {
-    return { upstream: (p) => p, useSearchKey: false };
-  }
-  if (path === "/search" || path.startsWith("/search?")) {
-    return { upstream: (p) => p, useSearchKey: true };
-  }
-  if (path === "/fetch" || path.startsWith("/fetch?")) {
-    return { upstream: (p) => p, useSearchKey: true };
+    // search/fetch 子路径使用专属 key（如有）
+    const isSearchPath = path.includes("/v1/search") || path.includes("/v1/fetch");
+    return { upstream: (p) => p, useSearchKey: isSearchPath };
   }
   return null;
 }
