@@ -21,6 +21,8 @@ import { renderReleaseNotesModal } from "./views/release-notes-modal.ts";
 import { patchSession, loadSessions } from "./controllers/sessions.ts";
 import { renderSkillStoreView, type SkillStoreState } from "./skill-store-view.ts";
 import { renderWorkspaceView, initWorkspace } from "./views/workspace.ts";
+import { renderCronReadonly } from "./views/cron-readonly.ts";
+import { loadCronRuns } from "./controllers/cron.ts";
 import type { SkillStatusEntry } from "./types.ts";
 import {
   loadSkills,
@@ -219,7 +221,7 @@ async function deleteSessionFromSidebar(state: AppViewState, key: string) {
   await loadSessions(s);
 }
 
-function setOneClawView(state: AppViewState, next: "chat" | "settings" | "skills" | "workspace") {
+function setOneClawView(state: AppViewState, next: "chat" | "settings" | "skills" | "workspace" | "cron") {
   if ((state.settings.oneclawView ?? "chat") === next) {
     return;
   }
@@ -236,6 +238,10 @@ function openSettingsView(state: AppViewState, tabHint: "channels" | null = null
 }
 
 // ── 技能页子标签 ──
+
+// ── Cron 只读视图状态 ──
+let cronExpandedJobId: string | null = null;
+let cronRunsLoading = false;
 
 // "installed" = 已安装/内置技能（gateway RPC），"store" = 技能商店（clawhub API）
 let skillsSubTab: "installed" | "store" = "installed";
@@ -844,13 +850,14 @@ export function renderApp(state: AppViewState) {
   const settingsActive = oneclawView === "settings";
   const skillsActive = oneclawView === "skills";
   const workspaceActive = oneclawView === "workspace";
+  const cronActive = oneclawView === "cron";
   const updateBannerState = state.updateBannerState;
 
   return html`
     <div
-      class="oneclaw-shell ${navigator.platform?.includes("Mac") ? "is-mac" : ""} ${chatFocus ? "oneclaw-shell--focus" : ""} ${sidebarCollapsed ? "oneclaw-shell--sidebar-collapsed" : ""} ${settingsActive || skillsActive || workspaceActive ? "oneclaw-shell--fullpage" : ""}"
+      class="oneclaw-shell ${navigator.platform?.includes("Mac") ? "is-mac" : ""} ${chatFocus ? "oneclaw-shell--focus" : ""} ${sidebarCollapsed ? "oneclaw-shell--sidebar-collapsed" : ""} ${settingsActive || skillsActive || workspaceActive || cronActive ? "oneclaw-shell--fullpage" : ""}"
     >
-      ${chatFocus || sidebarCollapsed || settingsActive || skillsActive || workspaceActive
+      ${chatFocus || sidebarCollapsed || settingsActive || skillsActive || workspaceActive || cronActive
         ? nothing
         : renderSidebar({
             connected: state.connected,
@@ -859,6 +866,9 @@ export function renderApp(state: AppViewState) {
             settingsActive,
             skillsActive,
             workspaceActive,
+            cronActive,
+            cronJobCount: state.cronJobs.length,
+            onOpenCron: () => setOneClawView(state, "cron"),
             updateStatus: updateBannerState.status,
             updateVersion: updateBannerState.version,
             updatePercent: updateBannerState.percent,
@@ -899,7 +909,7 @@ export function renderApp(state: AppViewState) {
       <div class="oneclaw-main">
         <div class="oneclaw-titlebar">
           ${
-            settingsActive || skillsActive || workspaceActive
+            settingsActive || skillsActive || workspaceActive || cronActive
               ? html`
                   <div class="oneclaw-floating-actions">
                     <button
@@ -1084,6 +1094,37 @@ export function renderApp(state: AppViewState) {
                 `
               : workspaceActive
                 ? renderWorkspaceView(state, () => setOneClawView(state, "chat"))
+              : cronActive
+                ? renderCronReadonly({
+                    jobs: state.cronJobs,
+                    loading: state.cronLoading,
+                    error: state.cronError,
+                    expandedJobId: cronExpandedJobId,
+                    runs: state.cronRuns,
+                    runsLoading: cronRunsLoading,
+                    onToggleExpand: (jobId: string) => {
+                      if (cronExpandedJobId === jobId) {
+                        cronExpandedJobId = null;
+                        state.requestUpdate();
+                        return;
+                      }
+                      cronExpandedJobId = jobId;
+                      cronRunsLoading = true;
+                      state.requestUpdate();
+                      void loadCronRuns(state as any, jobId).then(() => {
+                        cronRunsLoading = false;
+                        state.requestUpdate();
+                      });
+                    },
+                    onNavigateToSession: (sessionKey: string) => {
+                      setOneClawView(state, "chat");
+                      state.applySettings({
+                        ...state.settings,
+                        sessionKey,
+                        oneclawView: "chat",
+                      });
+                    },
+                  })
                 : html`
                 ${renderChat({
                   sessionKey: state.sessionKey,

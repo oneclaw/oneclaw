@@ -12,6 +12,8 @@ import {
   refreshActiveTab,
   setLastActiveSessionKey,
 } from "./app-settings.ts";
+import { registerTickHandler, startTicker, stopTicker } from "./client-ticker.ts";
+import { loadCronJobs } from "./controllers/cron.ts";
 import { handleAgentEvent, resetToolStream, type AgentEventPayload } from "./app-tool-stream.ts";
 import { loadAgents } from "./controllers/agents.ts";
 import { loadAssistantIdentity } from "./controllers/assistant-identity.ts";
@@ -158,6 +160,9 @@ export function connectGateway(host: GatewayHost) {
       void loadNodes(host as unknown as OpenClawApp, { quiet: true });
       void loadDevices(host as unknown as OpenClawApp, { quiet: true });
       void refreshActiveTab(host as unknown as Parameters<typeof refreshActiveTab>[0]);
+      // 注册 cron 轮询并启动客户端定时器
+      registerTickHandler("cron", () => loadCronJobs(host as unknown as Parameters<typeof loadCronJobs>[0]));
+      startTicker();
     },
     onClose: ({ code, reason }) => {
       console.warn(`[gateway] onClose code=${code} reason=${reason}`);
@@ -165,6 +170,8 @@ export function connectGateway(host: GatewayHost) {
         return;
       }
       host.connected = false;
+      // 断开连接时停止客户端定时器
+      stopTicker();
       // Code 1012 = Service Restart (expected during config saves, don't show as error)
       if (code !== 1012) {
         host.lastError = `disconnected (${code}): ${reason || "no reason"}`;

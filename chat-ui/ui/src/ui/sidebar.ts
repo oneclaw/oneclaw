@@ -16,6 +16,9 @@ export type SidebarProps = {
   settingsActive: boolean;
   skillsActive: boolean;
   workspaceActive: boolean;
+  cronActive: boolean;
+  cronJobCount: number;
+  onOpenCron: () => void;
   updateStatus: "hidden" | "available" | "downloading";
   updateVersion: string | null;
   updatePercent: number | null;
@@ -197,6 +200,20 @@ export function renderSidebar(props: SidebarProps) {
                 ${props.updateShowBadge
                   ? html`<span class="oneclaw-sidebar__update-dot" aria-hidden="true"></span>`
                   : nothing}
+              </button>
+            `
+          : nothing}
+        ${props.cronJobCount > 0
+          ? html`
+              <button
+                class="oneclaw-sidebar__item ${props.cronActive ? "active" : ""}"
+                type="button"
+                @click=${props.onOpenCron}
+                data-tooltip=${t("sidebar.cron")}
+              >
+                <span class="oneclaw-sidebar__icon">${icons.clock}</span>
+                <span class="oneclaw-sidebar__label">${t("sidebar.cron")}</span>
+                <span class="oneclaw-sidebar__badge">${props.cronJobCount}</span>
               </button>
             `
           : nothing}
