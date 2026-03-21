@@ -8,6 +8,7 @@ import { resolveUserStateDir, resolveUserConfigPath } from "./constants";
 export interface OneclawConfig {
   setupCompletedAt?: string;
   cliPreference?: "installed" | "uninstalled";
+  updateChannel?: "stable" | "dev";
   skillStore?: {
     registryUrl?: string;
   };

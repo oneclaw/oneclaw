@@ -1,6 +1,7 @@
 import { autoUpdater } from "electron-updater";
 import { dialog } from "electron";
 import * as log from "./logger";
+import { readOneclawConfig } from "./oneclaw-config";
 import {
   canStartUpdateDownload,
   createInitialUpdateBannerState,
@@ -43,6 +44,20 @@ function publishUpdateBannerState(
 export function setupAutoUpdater(): void {
   autoUpdater.autoDownload = false;
   autoUpdater.autoInstallOnAppQuit = true;
+
+  // 更新通道：环境变量 > oneclaw.config.json > 默认 latest
+  // dev 通道拉取 dev-mac.yml / dev.yml（CI 构建完立即推送），stable 拉取 latest-mac.yml / latest.yml
+  const envUrl = process.env.ONECLAW_UPDATE_URL;
+  if (envUrl) {
+    log.info(`[updater] 使用自定义更新地址: ${envUrl}`);
+    autoUpdater.setFeedURL({ provider: "generic", url: envUrl });
+  } else {
+    const channel = readOneclawConfig()?.updateChannel;
+    if (channel === "dev") {
+      log.info("[updater] 使用 dev 更新通道");
+      autoUpdater.channel = "dev";
+    }
+  }
 
   // 将 electron-updater 内部日志转发到 app.log
   autoUpdater.logger = {
