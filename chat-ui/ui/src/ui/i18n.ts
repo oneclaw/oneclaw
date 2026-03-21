@@ -162,6 +162,11 @@ const dict: Record<Locale, Record<string, string>> = {
     "theme.light": "浅色",
     "theme.dark": "深色",
 
+    // Release Notes
+    "releaseNotes.title": "更新日志",
+    "releaseNotes.currentVersion": "当前版本",
+    "releaseNotes.ok": "知道了",
+
     // Errors
     "error.disconnected": "已断开与 Gateway 的连接。",
   },
@@ -321,6 +326,11 @@ const dict: Record<Locale, Record<string, string>> = {
     "theme.system": "System",
     "theme.light": "Light",
     "theme.dark": "Dark",
+
+    // Release Notes
+    "releaseNotes.title": "What's New",
+    "releaseNotes.currentVersion": "Current version",
+    "releaseNotes.ok": "Got it",
 
     // Errors
     "error.disconnected": "Disconnected from gateway.",

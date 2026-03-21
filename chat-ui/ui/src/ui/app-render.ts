@@ -17,6 +17,7 @@ import { renderExecApprovalPrompt } from "./views/exec-approval.ts";
 import { renderGatewayUrlConfirmation } from "./views/gateway-url-confirmation.ts";
 import { renderRestartGatewayDialog } from "./views/restart-gateway-dialog.ts";
 import { renderSharePrompt } from "./views/share-prompt.ts";
+import { renderReleaseNotesModal } from "./views/release-notes-modal.ts";
 import { patchSession, loadSessions } from "./controllers/sessions.ts";
 import { renderSkillStoreView, type SkillStoreState } from "./skill-store-view.ts";
 import { renderWorkspaceView, initWorkspace } from "./views/workspace.ts";
@@ -1142,6 +1143,7 @@ export function renderApp(state: AppViewState) {
       ${renderGatewayUrlConfirmation(state)}
       ${renderRestartGatewayDialog(state)}
       ${renderSharePrompt(state)}
+      ${renderReleaseNotesModal(state)}
     </div>
   `;
 }

@@ -149,6 +149,12 @@ type OneClawPairingState = {
   channels: Record<string, OneClawPairingChannelState>;
 };
 
+type ReleaseNotesData = {
+  currentVersion: string;
+  entries: Array<{ version: string; notes: { zh?: string; en?: string } }>;
+  locale: string;
+};
+
 type OneClawBridge = {
   onNavigate?: (cb: (payload: { view: "settings" }) => void) => (() => void) | void;
   onUpdateState?: (cb: (payload: OneClawUpdateState) => void) => (() => void) | void;
@@ -158,6 +164,8 @@ type OneClawBridge = {
   ) => (() => void) | void;
   getPairingState?: () => Promise<OneClawPairingState>;
   refreshPairingState?: () => void;
+  getReleaseNotes?: () => Promise<ReleaseNotesData | null>;
+  dismissReleaseNotes?: (version: string) => Promise<void>;
   settingsApproveFeishuPairing?: (
     params: { code: string; id?: string; name?: string },
   ) => Promise<OneClawIpcResult>;
@@ -387,6 +395,8 @@ export class OpenClawApp extends LitElement {
     pairingApproving: { state: true },
     pairingRejecting: { state: true },
     settingsTabHint: { state: true },
+    showReleaseNotesModal: { state: true },
+    releaseNotesData: { state: true },
   };
 
   // 兼容 class field 的 define 语义：回灌实例字段到 Lit accessor，恢复响应式更新。
@@ -661,6 +671,8 @@ export class OpenClawApp extends LitElement {
   pairingApproving = false;
   pairingRejecting = false;
   settingsTabHint: "channels" | null = null;
+  showReleaseNotesModal = false;
+  releaseNotesData: ReleaseNotesData | null = null;
   private sharePromptSendCount = 0;
   private sharePromptShownVersions = new Set<number>();
   private sharePromptCheckInFlight = false;
@@ -691,6 +703,18 @@ export class OpenClawApp extends LitElement {
     this.bindAppNavigation();
     this.bindUpdateState();
     this.bindPairingState();
+    this.fetchReleaseNotes();
+  }
+
+  // 首屏拉取更新日志，有未展示的条目时弹出 modal。
+  private fetchReleaseNotes() {
+    const bridge = this.getOneClawBridge();
+    void bridge?.getReleaseNotes?.().then((data) => {
+      if (data && Array.isArray(data.entries) && data.entries.length > 0) {
+        this.releaseNotesData = data;
+        this.showReleaseNotesModal = true;
+      }
+    }).catch(() => {});
   }
 
   protected firstUpdated() {
@@ -1259,6 +1283,16 @@ export class OpenClawApp extends LitElement {
     this.sharePromptCopied = false;
     this.sharePromptCopyError = null;
     this.sharePromptVersion = null;
+  }
+
+  // 关闭更新日志弹窗，并记录当前版本为已展示。
+  dismissReleaseNotes() {
+    this.showReleaseNotesModal = false;
+    const version = this.releaseNotesData?.currentVersion;
+    if (version) {
+      const bridge = this.getOneClawBridge();
+      void bridge?.dismissReleaseNotes?.(version).catch(() => {});
+    }
   }
 
   async handleSharePromptCopy() {

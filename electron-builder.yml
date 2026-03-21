@@ -12,6 +12,7 @@ files:
   - settings/**/*
   - assets/**/*
   - package.json
+  - release-notes.json
 
 # afterPack 钩子：绕过 node_modules 剥离，直接注入 resources/ 到 app bundle
 afterPack: ./scripts/afterPack.js

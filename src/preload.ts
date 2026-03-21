@@ -150,6 +150,10 @@ contextBridge.exposeInMainWorld("oneclaw", {
   readClipboardFilePaths: () =>
     ipcRenderer.invoke("clipboard:read-file-paths") as Promise<string[]>,
 
+  // Release Notes
+  getReleaseNotes: () => ipcRenderer.invoke("app:get-release-notes"),
+  dismissReleaseNotes: (version: string) => ipcRenderer.invoke("app:dismiss-release-notes", version),
+
   // Chat UI 侧边栏操作
   openSettings: () => ipcRenderer.send("app:open-settings"),
   openWebUI: () => ipcRenderer.send("app:open-webui"),

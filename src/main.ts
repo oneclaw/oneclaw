@@ -1,3 +1,5 @@
+import * as fs from "fs";
+import * as path from "path";
 import { app, clipboard, dialog, ipcMain, shell, Menu, BrowserWindow } from "electron";
 import { GatewayProcess } from "./gateway-process";
 import { WindowManager } from "./window";
@@ -42,7 +44,7 @@ import {
 import { readUserConfig, writeUserConfig } from "./provider-config";
 import { resolveKimiSearchApiKey, readKimiApiKey, readKimiSearchDedicatedApiKey, writeKimiApiKey, ensureMemorySearchProxyConfig } from "./kimi-config";
 import { reconcileCliOnAppLaunch } from "./cli-integration";
-import { detectOwnership, migrateFromLegacy, markSetupComplete } from "./oneclaw-config";
+import { detectOwnership, migrateFromLegacy, markSetupComplete, readOneclawConfig, writeOneclawConfig } from "./oneclaw-config";
 import { startTokenRefresh, stopTokenRefresh, loadOAuthToken } from "./kimi-oauth";
 import { startAuthProxy, stopAuthProxy, setProxyAccessToken, setProxySearchDedicatedKey, getProxyPort } from "./kimi-auth-proxy";
 import * as log from "./logger";
@@ -569,6 +571,75 @@ ipcMain.handle("clipboard:read-file-paths", () => {
     return [];
   } catch {
     return [];
+  }
+});
+
+// ── Release Notes：读取打包的 changelog 并按版本过滤 ──
+
+// 版本号数值化比较（YYYY.MMDD.N 格式不适合字符串比较）
+function compareVersions(a: string, b: string): number {
+  const pa = a.split(".").map((s) => parseInt(s, 10) || 0);
+  const pb = b.split(".").map((s) => parseInt(s, 10) || 0);
+  for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
+    const diff = (pa[i] ?? 0) - (pb[i] ?? 0);
+    if (diff !== 0) return diff;
+  }
+  return 0;
+}
+
+ipcMain.handle("app:get-release-notes", () => {
+  try {
+    const notesPath = path.join(app.getAppPath(), "release-notes.json");
+    const raw = fs.readFileSync(notesPath, "utf-8");
+    const allEntries: Array<{ version: string; notes: { zh?: string; en?: string } }> = JSON.parse(raw);
+    if (!Array.isArray(allEntries)) return null;
+
+    const currentVersion = app.getVersion();
+    const config = readOneclawConfig();
+    const lastShown = config?.lastShownReleaseNotesVersion;
+
+    // 首次安装不弹更新日志，静默标记当前版本
+    if (!lastShown) {
+      if (config) {
+        config.lastShownReleaseNotesVersion = currentVersion;
+        writeOneclawConfig(config);
+      }
+      return { currentVersion, entries: [], locale: app.getLocale() };
+    }
+
+    // 过滤出 lastShown < version <= currentVersion 的条目
+    const entries = allEntries.filter((entry) => {
+      if (!entry?.version) return false;
+      if (lastShown && compareVersions(entry.version, lastShown) <= 0) return false;
+      if (compareVersions(entry.version, currentVersion) > 0) return false;
+      return true;
+    });
+
+    // 按版本降序排列（最新在前）
+    entries.sort((a, b) => compareVersions(b.version, a.version));
+
+    return {
+      currentVersion,
+      entries,
+      locale: app.getLocale(),
+    };
+  } catch (err: any) {
+    log.error(`读取 release-notes.json 失败: ${err?.message ?? err}`);
+    return null;
+  }
+});
+
+ipcMain.handle("app:dismiss-release-notes", (_e, version: string) => {
+  // 参数校验：version 必须是非空字符串
+  if (typeof version !== "string" || !version.trim()) return;
+  try {
+    // 配置不存在时直接跳过，避免用空对象覆盖已有字段
+    const config = readOneclawConfig();
+    if (!config) return;
+    config.lastShownReleaseNotesVersion = version;
+    writeOneclawConfig(config);
+  } catch (err: any) {
+    log.error(`写入 lastShownReleaseNotesVersion 失败: ${err?.message ?? err}`);
   }
 });
 

@@ -1,0 +1,23 @@
+[
+  {
+    "version": "2026.321.0",
+    "notes": {
+      "zh": "新增「更新日志」弹窗，每次升级后自动展示新版本变更内容",
+      "en": "Add \"What's New\" modal to show changelog after each update"
+    }
+  },
+  {
+    "version": "2026.320.0",
+    "notes": {
+      "zh": "支持文件拖拽和剪贴板粘贴，可直接拖入文件或 Cmd+V 粘贴图片到对话",
+      "en": "Support file drag-drop and clipboard paste in compose area"
+    }
+  },
+  {
+    "version": "2026.318.0",
+    "notes": {
+      "zh": "深色模式适配技能商店与工作空间页面",
+      "en": "Fix dark mode for skills and workspace pages"
+    }
+  }
+]
