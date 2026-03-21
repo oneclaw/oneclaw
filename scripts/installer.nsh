@@ -1,5 +1,71 @@
 ; OneClaw NSIS 自定义钩子
-; 功能：安装前杀进程、卸载时提供 CLI 清理和用户数据删除选项
+; 功能：安装前杀进程、更新时跳过多余页面（只显示进度条）、卸载时提供 CLI 清理和用户数据删除选项
+
+; ============================================================
+; 自定义 Welcome 页：更新时自动跳过，首次安装正常显示
+; ============================================================
+
+!macro customWelcomePage
+  !define MUI_PAGE_CUSTOMFUNCTION_PRE onWelcomePagePre
+  !insertmacro MUI_PAGE_WELCOME
+!macroend
+
+; ============================================================
+; 自定义安装模式：更新时沿用已有安装模式，跳过选择页
+; ============================================================
+
+!macro customInstallMode
+  ${if} ${isUpdated}
+    ${if} $hasPerMachineInstallation == "1"
+      StrCpy $isForceMachineInstall "1"
+    ${else}
+      StrCpy $isForceCurrentInstall "1"
+    ${endif}
+  ${endif}
+!macroend
+
+; ============================================================
+; 自定义 Finish 页：更新时自动跳过并启动 app，首次安装显示"运行"勾选框
+; ============================================================
+
+!macro customFinishPage
+  Function StartApp
+    ${if} ${isUpdated}
+      StrCpy $1 "--updated"
+    ${else}
+      StrCpy $1 ""
+    ${endif}
+    ${StdUtils.ExecShellAsUser} $0 "$launchLink" "open" "$1"
+  FunctionEnd
+
+  !define MUI_FINISHPAGE_RUN
+  !define MUI_FINISHPAGE_RUN_FUNCTION "StartApp"
+  !define MUI_PAGE_CUSTOMFUNCTION_PRE onFinishPagePre
+  !insertmacro MUI_PAGE_FINISH
+!macroend
+
+; ============================================================
+; customHeader：定义页面 Pre 回调函数
+; （函数定义可后置，NSIS 编译期统一解析）
+; ============================================================
+
+!macro customHeader
+  ; 更新时跳过 Welcome 页
+  Function onWelcomePagePre
+    ${if} ${isUpdated}
+      Abort
+    ${endif}
+  FunctionEnd
+
+  ; 更新时跳过 Finish 页，直接启动 app
+  ; （首次安装走 customFinishPage 中的 StartApp 函数，由 Finish 页 "Run" 勾选框触发）
+  Function onFinishPagePre
+    ${if} ${isUpdated}
+      ${StdUtils.ExecShellAsUser} $0 "$launchLink" "open" "--updated"
+      Abort
+    ${endif}
+  FunctionEnd
+!macroend
 
 ; ============================================================
 ; 安装钩子
