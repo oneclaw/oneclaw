@@ -145,7 +145,7 @@ export class GatewayProcess {
     // 清理升级残留的 lockfile（旧 gateway 可能是半死状态：进程活但 HTTP 不响应）
     await this.cleanStaleLockfile();
 
-    // 卸载 OpenClaw 系统守护进程（launchd/schtasks），防止杀进程后被自动重启
+    // 卸载 OpenClaw 系统守护进程 + 清理 tmpdir 锁文件，防止杀进程后被自动重启
     await uninstallGatewayDaemon();
 
     // 启动前探测端口，若有旧 gateway 则自动停止

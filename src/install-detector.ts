@@ -1,9 +1,10 @@
 import * as net from "net";
+import * as crypto from "crypto";
 import * as fs from "fs";
 import * as os from "os";
 import * as path from "path";
 import { execFile } from "child_process";
-import { DEFAULT_PORT, resolveUserStateDir, IS_WIN } from "./constants";
+import { DEFAULT_PORT, resolveUserStateDir, resolveUserConfigPath, IS_WIN } from "./constants";
 import * as log from "./logger";
 
 // ── 类型定义 ──
@@ -291,7 +292,7 @@ async function uninstallWindowsTask(): Promise<void> {
   }
 }
 
-// 卸载系统守护进程（macOS LaunchAgent / Windows Scheduled Task）
+// 卸载系统守护进程（macOS LaunchAgent / Windows Scheduled Task）+ 清理残留锁文件
 export async function uninstallGatewayDaemon(): Promise<void> {
   log.info("[install-detector] uninstalling gateway daemon");
   if (IS_WIN) {
@@ -299,6 +300,8 @@ export async function uninstallGatewayDaemon(): Promise<void> {
   } else {
     await uninstallLaunchdAgent();
   }
+  // 清理 tmpdir 下的 gateway lock（与 daemon 进程绑定，一并清除）
+  cleanGatewayLockFiles();
 }
 
 // ── npm 全局卸载 ──
@@ -323,6 +326,45 @@ export async function uninstallGlobalOpenclaw(): Promise<boolean> {
   return allOk;
 }
 
+
+// 清理 OpenClaw 在 tmpdir 下的 gateway 锁文件
+// OpenClaw 锁路径格式：$TMPDIR/openclaw-<uid>/gateway.<hash>.lock
+// hash = SHA256(configPath) 前 8 字符
+export function cleanGatewayLockFiles(): void {
+  const uid = process.getuid?.();
+  const suffix = uid != null ? `openclaw-${uid}` : "openclaw";
+  const lockDir = path.join(os.tmpdir(), suffix);
+
+  // 方式一：精确清理当前 config path 对应的锁
+  try {
+    const configPath = resolveUserConfigPath();
+    const hash = crypto.createHash("sha256").update(configPath).digest("hex").slice(0, 8);
+    const lockPath = path.join(lockDir, `gateway.${hash}.lock`);
+    if (fs.existsSync(lockPath)) {
+      fs.unlinkSync(lockPath);
+      log.info(`[install-detector] deleted gateway lock: ${lockPath}`);
+    }
+  } catch (err) {
+    log.info(`[install-detector] clean gateway lock: ${err instanceof Error ? err.message : String(err)}`);
+  }
+
+  // 方式二：扫描并清理 lockDir 下所有 gateway.*.lock（兜底）
+  try {
+    if (fs.existsSync(lockDir)) {
+      for (const f of fs.readdirSync(lockDir)) {
+        if (f.startsWith("gateway.") && f.endsWith(".lock")) {
+          const p = path.join(lockDir, f);
+          try {
+            fs.unlinkSync(p);
+            log.info(`[install-detector] deleted stale lock: ${p}`);
+          } catch {}
+        }
+      }
+    }
+  } catch (err) {
+    log.info(`[install-detector] scan lock dir: ${err instanceof Error ? err.message : String(err)}`);
+  }
+}
 
 // 获取占用指定端口的进程 PID（跨平台）
 export async function getPortPid(port: number): Promise<number> {
