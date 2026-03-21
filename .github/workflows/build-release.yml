@@ -312,6 +312,30 @@ jobs:
           ossutil cp -r out/release/ oss://oneclaw/releases/ --force --exclude "latest*.yml"
           echo "产物预上传完成（二进制 + dev yml，不含 latest yml）"
 
+      # 刷新 dev 通道 CDN 缓存（dev 用户立即拉到新版本）
+      - name: 刷新 dev 通道 CDN 缓存
+        if: steps.ossutil.outcome == 'success'
+        continue-on-error: true
+        env:
+          ALIYUN_ACCESS_KEY_ID: ${{ secrets.ALIYUN_ACCESS_KEY_ID }}
+          ALIYUN_ACCESS_KEY_SECRET: ${{ secrets.ALIYUN_ACCESS_KEY_SECRET }}
+        run: |
+          curl -fsSL https://aliyuncli.alicdn.com/aliyun-cli-linux-latest-amd64.tgz | tar xz
+          chmod +x aliyun
+          ./aliyun configure set \
+            --access-key-id "$ALIYUN_ACCESS_KEY_ID" \
+            --access-key-secret "$ALIYUN_ACCESS_KEY_SECRET" \
+            --region cn-beijing
+          ./aliyun cdn RefreshObjectCaches \
+            --ObjectType File \
+            --ObjectPath "https://oneclaw.cn/releases/dev-mac.yml
+          https://oneclaw.cn/releases/dev.yml"
+          echo "dev 通道 CDN 缓存刷新已提交"
+
+      # dev yml 已上传 OSS + 刷新 CDN，从 release 目录移除，不打入 GitHub Release asset
+      - name: 移除 dev yml
+        run: rm -f out/release/dev-mac.yml out/release/dev.yml
+
       # 创建 GitHub Release（草稿模式，手动确认后发布）
       # 发布 Release 后由 publish-release.yml 上传 latest yml + 刷新 CDN
       - name: 创建 GitHub Release
