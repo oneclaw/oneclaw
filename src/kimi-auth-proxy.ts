@@ -121,13 +121,14 @@ function handleRequest(
 function tryListen(
   srv: http.Server,
   preferredPort?: number,
+  excludePort?: number,
 ): Promise<number> {
-  // 构建去重的候选列表
+  // 构建去重的候选列表，排除 gateway 端口避免冲突
   const candidates: number[] = [];
-  if (preferredPort != null && preferredPort > 0) {
+  if (preferredPort != null && preferredPort > 0 && preferredPort !== excludePort) {
     candidates.push(preferredPort);
   }
-  if (!candidates.includes(18790)) {
+  if (!candidates.includes(18790) && 18790 !== excludePort) {
     candidates.push(18790);
   }
 
@@ -172,8 +173,8 @@ function tryListen(
 
 // ────────────────────────────── 公开接口 ──────────────────────────────
 
-// 启动代理，返回实际监听端口
-export async function startAuthProxy(preferredPort?: number): Promise<number> {
+// 启动代理，返回实际监听端口（excludePort 用于避让 gateway 端口）
+export async function startAuthProxy(preferredPort?: number, excludePort?: number): Promise<number> {
   if (server) {
     log.warn("[auth-proxy] 代理已在运行，先停止旧实例");
     await stopAuthProxy();
@@ -181,7 +182,7 @@ export async function startAuthProxy(preferredPort?: number): Promise<number> {
 
   const srv = http.createServer(handleRequest);
 
-  const port = await tryListen(srv, preferredPort);
+  const port = await tryListen(srv, preferredPort, excludePort);
   server = srv;
   currentPort = port;
 
