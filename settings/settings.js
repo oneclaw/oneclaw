@@ -404,6 +404,7 @@
       "settings.deleteModel": "Delete",
       "settings.setDefault": "Default",
       "settings.addModelSave": "Add",
+      "settings.newModelPlaceholder": "New Model",
       "settings.confirmDelete": "Delete this model?",
       "settings.cannotDeleteDefault": "Cannot delete the default model",
       "settings.modelDeleted": "Model deleted",
@@ -696,6 +697,7 @@
       "settings.deleteModel": "删除",
       "settings.setDefault": "默认",
       "settings.addModelSave": "新增",
+      "settings.newModelPlaceholder": "新模型",
       "settings.confirmDelete": "确认删除此模型？",
       "settings.cannotDeleteDefault": "不能删除当前默认模型",
       "settings.modelDeleted": "模型已删除",
@@ -906,6 +908,7 @@
 
   let currentProvider = "moonshot";
   let currentEditingModelKey = null; // null = 新增模式, string = 编辑模式
+  let formMode = "edit"; // "add" = 新增模式, "edit" = 编辑模式
   let modelListData = []; // settingsGetConfiguredModels 返回的模型列表缓存
   let saving = false;
   let currentChatPlatform = "feishu";
@@ -1305,7 +1308,13 @@
       els.oauthAdvanced.classList.remove("hidden", "details-advanced--plain");
       els.oauthAdvanced.removeAttribute("open");
       els.platformLink.classList.add("hidden");
-      checkOAuthStatus();
+      // 新增模式下只检查登录状态，不加载用量
+      if (formMode === "add") {
+        toggleEl(els.usagePanel, false);
+        checkOAuthStatusOnly();
+      } else {
+        checkOAuthStatus();
+      }
     } else {
       // 非 OAuth 模式：展开且隐藏折叠外观，字段正常显示
       els.oauthAdvanced.classList.remove("hidden");
@@ -1313,6 +1322,21 @@
       els.oauthAdvanced.setAttribute("open", "");
       toggleEl(els.usagePanel, false);
     }
+  }
+
+  // 仅检查登录状态，切换按钮显隐（不加载用量，用于新增模式）
+  async function checkOAuthStatusOnly() {
+    if (!window.oneclaw?.kimiOAuthStatus) return;
+    try {
+      var status = await window.oneclaw.kimiOAuthStatus();
+      if (status && status.loggedIn) {
+        toggleEl(els.btnOAuth, false);
+        toggleEl(els.btnOAuthLogout, true);
+      } else {
+        toggleEl(els.btnOAuth, true);
+        toggleEl(els.btnOAuthLogout, false);
+      }
+    } catch { }
   }
 
   // 检查当前 OAuth 登录状态，切换登录/退出按钮
@@ -1556,12 +1580,17 @@
     else if (pct >= 70) barEl.classList.add("warn");
   }
 
-  // 加载用量数据
+  // 加载用量数据（仅编辑模式 + kimi-code 子平台展示）
   async function loadUsage() {
     if (!window.oneclaw?.kimiGetUsage) return;
+    if (formMode === "add") return;
+    if (!(currentProvider === "moonshot" && getSubPlatform() === "kimi-code")) return;
     els.btnUsageRefresh.classList.add("spinning");
     try {
       var result = await window.oneclaw.kimiGetUsage();
+      // 异步返回后再次校验：用户可能已切走或进入新增模式
+      if (formMode === "add") return;
+      if (!(currentProvider === "moonshot" && getSubPlatform() === "kimi-code")) return;
       if (!result.success || !result.data) {
         setUsageCard(els.usageWeeklyPercent, els.usageWeeklyReset, els.usageWeeklyBar, 0, 0, 0);
         setUsageCard(els.usageLimitPercent, els.usageLimitReset, els.usageLimitBar, 0, 0, 0);
@@ -3506,9 +3535,10 @@
   // 选中列表中的某个模型，进入编辑模式
   function selectModelInList(modelKey) {
     currentEditingModelKey = modelKey;
+    formMode = "edit";
     hideMsg();
 
-    // 高亮列表项
+    // 高亮列表项（placeholder 保留但取消高亮）
     $$(".model-list-item").forEach(function (el) {
       el.classList.toggle("active", el.dataset.modelKey === modelKey);
     });
@@ -3567,12 +3597,38 @@
   // 进入新增模式
   function enterAddMode() {
     currentEditingModelKey = null;
+    formMode = "add";
     hideMsg();
 
     // 取消列表高亮
     $$(".model-list-item").forEach(function (el) {
       el.classList.remove("active");
     });
+
+    // 移除旧 placeholder（如有）
+    var oldPlaceholder = document.querySelector(".model-list-item--placeholder");
+    if (oldPlaceholder) oldPlaceholder.remove();
+
+    // 在列表末尾插入未保存模型占位项
+    var container = els.modelList;
+    if (container) {
+      var ph = document.createElement("div");
+      ph.className = "model-list-item model-list-item--placeholder active";
+      var phInfo = document.createElement("div");
+      phInfo.className = "model-list-item__info";
+      var phName = document.createElement("div");
+      phName.className = "model-list-item__name";
+      phName.textContent = t("settings.newModelPlaceholder");
+      phInfo.appendChild(phName);
+      var phMeta = document.createElement("div");
+      phMeta.className = "model-list-item__meta";
+      phMeta.textContent = "—";
+      phInfo.appendChild(phMeta);
+      ph.appendChild(phInfo);
+      // 点击 placeholder 重新激活新增模式
+      ph.addEventListener("click", function () { enterAddMode(); });
+      container.appendChild(ph);
+    }
 
     // 解锁 provider tabs
     unlockProviderTabs();
@@ -3581,6 +3637,9 @@
     els.apiKeyInput.value = "";
     els.modelAlias.value = "";
     toggleEl(els.modelAliasGroup, true);
+
+    // 重置 OAuth / 用量面板（formMode=add 时用量不显示，OAuth 登录仍可用）
+    updateOAuthVisibility();
 
     // 隐藏编辑按钮
     els.btnSaveText.textContent = t("settings.addModelSave");

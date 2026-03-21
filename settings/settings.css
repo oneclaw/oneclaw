@@ -494,6 +494,12 @@ button, input, select, label, a {
   pointer-events: none;
 }
 
+/* 新增模型占位项 */
+.model-list-item--placeholder .model-list-item__name {
+  color: var(--text-secondary);
+  font-style: italic;
+}
+
 /* 全局 fixed tooltip */
 .fixed-tooltip {
   position: fixed;
