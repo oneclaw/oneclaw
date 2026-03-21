@@ -36,6 +36,12 @@
           </svg>
           <span data-i18n="nav.search">Search</span>
         </li>
+        <li class="nav-item" data-tab="memory">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+            <use href="#icon-brain"></use>
+          </svg>
+          <span data-i18n="nav.memory">Memory</span>
+        </li>
         <li class="nav-item" data-tab="appearance">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
             <use href="#icon-eye"></use>
@@ -776,6 +782,51 @@
         </div>
       </section>
 
+      <!-- Memory Tab -->
+      <section class="tab-panel" id="tabMemory">
+        <h2 data-i18n="memory.title">Memory</h2>
+
+        <div class="channel-panel">
+          <div class="channel-desc-row">
+            <p class="desc" data-i18n="memory.desc">Memory allows the assistant to remember context across sessions.</p>
+          </div>
+
+          <!-- 会话记忆自动归档 -->
+          <div class="toggle-row">
+            <span class="toggle-label" data-i18n="memory.sessionMemory">Auto-save session memory on /new</span>
+            <label class="toggle-switch">
+              <input type="checkbox" id="memorySessionEnabled" checked>
+              <span class="toggle-slider"></span>
+            </label>
+          </div>
+
+          <!-- 记忆搜索（Embedding） -->
+          <div class="toggle-row">
+            <span class="toggle-label" data-i18n="memory.embeddingSearch">Memory search (semantic recall)</span>
+            <label class="toggle-switch">
+              <input type="checkbox" id="memoryEmbeddingEnabled">
+              <span class="toggle-slider"></span>
+            </label>
+          </div>
+
+          <!-- Embedding 状态信息 -->
+          <div id="memoryEmbeddingInfo" class="hidden">
+            <p class="field-hint" id="memoryEmbeddingStatus"></p>
+          </div>
+
+          <!-- 错误 / 成功信息 -->
+          <div class="msg-box hidden" id="memoryMsgBox"></div>
+
+          <!-- 保存按钮 -->
+          <div class="btn-row bottom-actions">
+            <button class="btn-primary" id="btnMemorySave">
+              <span class="btn-text" data-i18n="memory.save">Save</span>
+              <span class="btn-spinner hidden"></span>
+            </button>
+          </div>
+        </div>
+      </section>
+
       <!-- Advanced Tab -->
       <section class="tab-panel" id="tabAdvanced">
         <h2 data-i18n="advanced.title">Advanced</h2>
@@ -802,15 +853,6 @@
               <span data-i18n="advanced.browserChrome">Chrome extension</span>
             </label>
           </div>
-        </div>
-
-        <!-- Session Memory Hook -->
-        <div class="toggle-row">
-          <span class="toggle-label" data-i18n="advanced.sessionMemory">Auto-save session memory on /new</span>
-          <label class="toggle-switch">
-            <input type="checkbox" id="sessionMemoryEnabled" checked>
-            <span class="toggle-slider"></span>
-          </label>
         </div>
 
         <!-- iMessage 频道 -->

@@ -286,6 +286,7 @@
       "error.connection": "Connection error: ",
       "nav.kimi": "KimiClaw",
       "nav.search": "Search",
+      "nav.memory": "Memory",
       "nav.appearance": "Appearance",
       "nav.backup": "Backup & Restore",
       "kimi.title": "KimiClaw",
@@ -310,10 +311,17 @@
       "search.advancedToggle": "Advanced",
       "search.serviceBaseUrlLabel": "Service Base URL",
       "search.serviceBaseUrlHint": "Leave empty to use the default endpoint. /search and /fetch will be appended automatically",
+      "memory.title": "Memory",
+      "memory.desc": "Memory allows the assistant to remember context across sessions",
+      "memory.sessionMemory": "Auto-save session memory on /new",
+      "memory.embeddingSearch": "Memory search (semantic recall)",
+      "memory.embeddingActive": "Active — using Kimi bge_m3_embed via auth proxy",
+      "memory.embeddingInactive": "Not configured — add a Kimi subscription to enable",
+      "memory.save": "Save",
+      "memory.saving": "Saving…",
       "nav.advanced": "Advanced",
       "advanced.title": "Advanced",
       "advanced.desc": "Browser tool and messaging channel settings",
-      "advanced.sessionMemory": "Auto-save session memory on /new",
       "advanced.browserProfile": "Browser Profile",
       "advanced.browserOpenclaw": "Standalone browser instance",
       "advanced.browserChrome": "Chrome extension",
@@ -404,7 +412,7 @@
     zh: {
       "settings.backToChat": "返回",
       "title": "设置",
-      "nav.provider": "模型配置",
+      "nav.provider": "模型",
       "nav.chat": "远程控制",
       "nav.feishu": "飞书集成",
       "chat.title": "远程控制",
@@ -569,8 +577,9 @@
       "error.verifyFailed": "验证失败 请检查 API 密钥",
       "error.connection": "连接错误：",
       "nav.kimi": "KimiClaw",
-      "nav.search": "搜索配置",
-      "nav.appearance": "外观显示",
+      "nav.search": "搜索",
+      "nav.memory": "记忆",
+      "nav.appearance": "外观",
       "nav.backup": "备份恢复",
       "kimi.title": "KimiClaw",
       "kimi.desc": "通过 Kimi 远程遥控 OneClaw",
@@ -594,10 +603,17 @@
       "search.advancedToggle": "高级配置",
       "search.serviceBaseUrlLabel": "服务地址",
       "search.serviceBaseUrlHint": "留空使用默认地址。系统会自动追加 /search 和 /fetch 路径",
-      "nav.advanced": "高级选项",
+      "memory.title": "记忆",
+      "memory.desc": "记忆功能让助手在跨会话时保留上下文",
+      "memory.sessionMemory": "开新对话时自动保存会话记忆",
+      "memory.embeddingSearch": "记忆搜索（语义召回）",
+      "memory.embeddingActive": "已启用 — 通过认证代理使用 Kimi bge_m3_embed",
+      "memory.embeddingInactive": "未配置 — 添加 Kimi 订阅即可启用",
+      "memory.save": "保存",
+      "memory.saving": "保存中…",
+      "nav.advanced": "高级",
       "advanced.title": "高级选项",
       "advanced.desc": "浏览器工具与消息频道设置",
-      "advanced.sessionMemory": "开新对话时自动保存会话记忆",
       "advanced.browserProfile": "浏览器配置",
       "advanced.browserOpenclaw": "独立浏览器(建议)",
       "advanced.browserChrome": "Chrome 扩展",
@@ -844,9 +860,17 @@
     btnSearchSave: $("#btnSearchSave"),
     btnSearchSaveText: $("#btnSearchSave .btn-text"),
     btnSearchSaveSpinner: $("#btnSearchSave .btn-spinner"),
+    // Memory tab
+    memorySessionEnabled: $("#memorySessionEnabled"),
+    memoryEmbeddingEnabled: $("#memoryEmbeddingEnabled"),
+    memoryEmbeddingInfo: $("#memoryEmbeddingInfo"),
+    memoryEmbeddingStatus: $("#memoryEmbeddingStatus"),
+    memoryMsgBox: $("#memoryMsgBox"),
+    btnMemorySave: $("#btnMemorySave"),
+    btnMemorySaveText: $("#btnMemorySave .btn-text"),
+    btnMemorySaveSpinner: $("#btnMemorySave .btn-spinner"),
     // Advanced tab
     clawHubRegistry: $("#clawHubRegistry"),
-    sessionMemoryEnabled: $("#sessionMemoryEnabled"),
     imessageEnabled: $("#imessageEnabled"),
     launchAtLoginRow: $("#launchAtLoginRow"),
     launchAtLoginEnabled: $("#launchAtLoginEnabled"),
@@ -2849,8 +2873,6 @@
       // 回填 browser profile radio
       var radio = document.querySelector('input[name="browserProfile"][value="' + data.browserProfile + '"]');
       if (radio) radio.checked = true;
-      // 回填 session-memory hook toggle
-      els.sessionMemoryEnabled.checked = data.sessionMemoryEnabled !== false;
       // 回填 iMessage toggle
       els.imessageEnabled.checked = !!data.imessageEnabled;
       // 按平台能力展示并回填开机启动开关
@@ -2953,7 +2975,6 @@
     var browserProfile = document.querySelector('input[name="browserProfile"]:checked').value;
     var imessageEnabled = els.imessageEnabled.checked;
     var launchAtLogin = els.launchAtLoginEnabled ? !!els.launchAtLoginEnabled.checked : false;
-    var sessionMemoryEnabled = !!els.sessionMemoryEnabled.checked;
     var clawHubRegistry = els.clawHubRegistry ? els.clawHubRegistry.value.trim() : "";
 
     try {
@@ -2961,7 +2982,6 @@
         browserProfile: browserProfile,
         imessageEnabled: imessageEnabled,
         launchAtLogin: launchAtLogin,
-        sessionMemoryEnabled: sessionMemoryEnabled,
         clawHubRegistry: clawHubRegistry,
       });
       setAdvSaving(false);
@@ -3342,6 +3362,61 @@
     } catch (err) {
       setSearchSaving(false);
       showSearchMsg(t("error.connection") + (err.message || "Unknown error"), "error");
+    }
+  }
+
+  // ── Memory 配置 ──
+
+  var memorySaving = false;
+
+  function showMemoryMsg(msg, type) { showMsg(els.memoryMsgBox, msg, type); }
+  function hideMemoryMsg() { hideMsg(els.memoryMsgBox); }
+  function setMemorySaving(loading) {
+    memorySaving = loading;
+    els.btnMemorySave.disabled = loading;
+    els.btnMemorySaveText.textContent = loading ? t("memory.saving") : t("memory.save");
+    els.btnMemorySaveSpinner.classList.toggle("hidden", !loading);
+  }
+
+  // 加载记忆配置
+  async function loadMemoryConfig() {
+    try {
+      var result = await window.oneclaw.settingsGetMemoryConfig();
+      if (!result.success || !result.data) return;
+      var data = result.data;
+      els.memorySessionEnabled.checked = data.sessionMemoryEnabled !== false;
+      els.memoryEmbeddingEnabled.checked = !!data.embeddingEnabled;
+
+      // embedding 状态信息：开关开且已配置 kimi-code 才显示"已启用"
+      els.memoryEmbeddingStatus.textContent = (data.embeddingEnabled && data.isKimiCodeConfigured)
+        ? t("memory.embeddingActive")
+        : t("memory.embeddingInactive");
+      els.memoryEmbeddingInfo.classList.remove("hidden");
+    } catch (err) {
+      console.error("[Settings] loadMemoryConfig failed:", err);
+    }
+  }
+
+  // 保存记忆配置
+  async function handleMemorySave() {
+    if (memorySaving) return;
+    setMemorySaving(true);
+    hideMemoryMsg();
+    try {
+      var result = await window.oneclaw.settingsSaveMemoryConfig({
+        sessionMemoryEnabled: !!els.memorySessionEnabled.checked,
+        embeddingEnabled: !!els.memoryEmbeddingEnabled.checked,
+      });
+      setMemorySaving(false);
+      if (result.success) {
+        showToast(t("common.saved"));
+        loadMemoryConfig();
+      } else {
+        showMemoryMsg(result.message || "Save failed", "error");
+      }
+    } catch (err) {
+      setMemorySaving(false);
+      showMemoryMsg(t("error.connection") + (err.message || "Unknown error"), "error");
     }
   }
 
@@ -4470,6 +4545,10 @@
     els.searchEnabled.addEventListener("change", function () { toggleEl(els.searchFields, isSearchEnabled()); });
     els.btnToggleSearchKey.addEventListener("click", togglePasswordVisibility);
     els.btnSearchSave.addEventListener("click", handleSearchSave);
+
+    // Memory tab
+    els.btnMemorySave.addEventListener("click", handleMemorySave);
+
     if (els.searchPlatformLink) {
       els.searchPlatformLink.addEventListener("click", function (e) {
         e.preventDefault();
@@ -4657,6 +4736,7 @@
     loadQqbotConfig();
     loadKimiConfig();
     loadSearchConfig();
+    loadMemoryConfig();
     loadAdvancedConfig();
     loadAppearanceSettings();
     refreshGatewayState();

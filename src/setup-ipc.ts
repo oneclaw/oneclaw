@@ -15,7 +15,7 @@ import {
 } from "./provider-config";
 import * as log from "./logger";
 import { installCli, uninstallCli } from "./cli-integration";
-import { saveKimiSearchConfig, writeKimiApiKey } from "./kimi-config";
+import { saveKimiSearchConfig, writeKimiApiKey, ensureMemorySearchProxyConfig } from "./kimi-config";
 import { setProxyAccessToken, getProxyPort } from "./kimi-auth-proxy";
 import {
   detectExistingInstallation,
@@ -223,9 +223,10 @@ export function registerSetupIpc(deps: SetupIpcDeps): void {
         // Moonshot 子平台需要特殊处理
         if (provider === "moonshot") {
           saveMoonshotConfig(config, apiKey, modelID, subPlatform);
-          // 配置 kimi-code 时自动启用搜索插件
+          // 配置 kimi-code 时自动启用搜索插件 + 记忆搜索 embedding
           if (subPlatform === "kimi-code") {
             saveKimiSearchConfig(config, { enabled: true });
+            ensureMemorySearchProxyConfig(config, getProxyPort());
             // 代理模式：真实 key 存 sidecar，config 写占位符
             if (getProxyPort() > 0) {
               writeKimiApiKey(apiKey);

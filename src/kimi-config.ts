@@ -207,6 +207,41 @@ export function saveKimiSearchConfig(
   config.plugins.entries[KIMI_SEARCH_PLUGIN_ID] = entry;
 }
 
+// ── Memory Search Embedding 配置（通过 auth proxy 透传鉴权） ──
+
+const KIMI_EMBEDDING_MODEL = "bge_m3_embed";
+
+// 将 memorySearch 指向本地 auth proxy（代理注入最新 token，免密钥刷新）
+export function ensureMemorySearchProxyConfig(config: any, proxyPort: number): boolean {
+  if (proxyPort <= 0) return false;
+
+  config.agents ??= {};
+  config.agents.defaults ??= {};
+  config.agents.defaults.memorySearch ??= {};
+
+  const ms = config.agents.defaults.memorySearch;
+  const expectedBase = `http://127.0.0.1:${proxyPort}/coding/v1/`;
+
+  // 配置未变则跳过写入
+  if (
+    ms.enabled === true &&
+    ms.provider === "openai" &&
+    ms.model === KIMI_EMBEDDING_MODEL &&
+    ms.remote?.baseUrl === expectedBase &&
+    ms.remote?.apiKey === "proxy-managed"
+  ) {
+    return false;
+  }
+
+  ms.enabled = true;
+  ms.provider = "openai";
+  ms.model = KIMI_EMBEDDING_MODEL;
+  ms.remote ??= {};
+  ms.remote.baseUrl = expectedBase;
+  ms.remote.apiKey = "proxy-managed";
+  return true;
+}
+
 // 检查 kimi-search 插件是否随应用内置
 export function isKimiSearchPluginBundled(): boolean {
   const pluginDir = path.join(resolveGatewayPackageDir(), "extensions", KIMI_SEARCH_PLUGIN_ID);

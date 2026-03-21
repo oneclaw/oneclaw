@@ -40,7 +40,7 @@ import {
   restoreLastKnownGoodConfigSnapshot,
 } from "./config-backup";
 import { readUserConfig, writeUserConfig } from "./provider-config";
-import { resolveKimiSearchApiKey, readKimiApiKey, readKimiSearchDedicatedApiKey, writeKimiApiKey } from "./kimi-config";
+import { resolveKimiSearchApiKey, readKimiApiKey, readKimiSearchDedicatedApiKey, writeKimiApiKey, ensureMemorySearchProxyConfig } from "./kimi-config";
 import { reconcileCliOnAppLaunch } from "./cli-integration";
 import { detectOwnership, migrateFromLegacy, markSetupComplete } from "./oneclaw-config";
 import { startTokenRefresh, stopTokenRefresh, loadOAuthToken } from "./kimi-oauth";
@@ -441,7 +441,10 @@ function ensureProxyConfig(proxyPort: number): void {
     if (!provider) return;
 
     const expectedBase = `http://127.0.0.1:${proxyPort}/coding`;
-    if (provider.baseUrl === expectedBase && provider.apiKey === "proxy-managed") return;
+    // memorySearch embedding 也走同一个代理
+    const memorySearchChanged = ensureMemorySearchProxyConfig(config, proxyPort);
+
+    if (provider.baseUrl === expectedBase && provider.apiKey === "proxy-managed" && !memorySearchChanged) return;
 
     // 首次迁移：真实 apiKey 存入 sidecar（非 OAuth 用户 + 有效 key）
     if (provider.apiKey && provider.apiKey !== "proxy-managed" && !loadOAuthToken()) {

@@ -19,6 +19,7 @@ const {
   CircleCheck,
   Star,
   Trash2,
+  Brain,
 } = require("lucide");
 
 const ROOT = path.resolve(__dirname, "..");
@@ -34,6 +35,7 @@ const SETTINGS_ICONS = {
   "icon-info": Info,
   "icon-star": Star,
   "icon-trash-2": Trash2,
+  "icon-brain": Brain,
 };
 
 // setup 页面图标集

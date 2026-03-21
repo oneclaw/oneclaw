@@ -46,6 +46,7 @@ import {
   writeKimiSearchDedicatedApiKey,
   writeKimiApiKey,
   readKimiApiKey,
+  ensureMemorySearchProxyConfig,
 } from "./kimi-config";
 import {
   extractQqbotConfig,
@@ -448,9 +449,10 @@ export function registerSettingsIpc(opts: SettingsIpcOptions = {}): void {
           applyModelAlias(config.models.providers[configKey], modelID, modelAlias);
         }
 
-        // 配置 kimi-code 时自动启用搜索插件
+        // 配置 kimi-code 时自动启用搜索插件 + 记忆搜索 embedding
         if (provider === "moonshot" && subPlatform === "kimi-code") {
           saveKimiSearchConfig(config, { enabled: true });
+          ensureMemorySearchProxyConfig(config, getProxyPort());
         }
 
         writeUserConfigAndRestart(config);
@@ -1114,6 +1116,51 @@ export function registerSettingsIpc(opts: SettingsIpcOptions = {}): void {
         return { success: false, message: err.message || String(err) };
       }
     });
+  });
+
+  // ── 读取记忆配置 ──
+  ipcMain.handle("settings:get-memory-config", async () => {
+    try {
+      const config = readUserConfig();
+      // session-memory hook
+      const hookEntry = config?.hooks?.internal?.entries?.["session-memory"];
+      const sessionMemoryEnabled = hookEntry?.enabled !== false;
+      // embedding：有 provider + model 配置即为启用（memorySearch.enabled 控制整个搜索工具，不在此处判断）
+      const ms = config?.agents?.defaults?.memorySearch;
+      const embeddingEnabled = ms?.provider === "openai" && !!ms?.model;
+      // kimi-code 是否已配置
+      const isKimiCodeConfigured = !!(config?.models?.providers?.["kimi-coding"]?.apiKey);
+      return { success: true, data: { sessionMemoryEnabled, embeddingEnabled, isKimiCodeConfigured } };
+    } catch (err: any) {
+      return { success: false, message: err.message };
+    }
+  });
+
+  // ── 保存记忆配置 ──
+  ipcMain.handle("settings:save-memory-config", async (_event, params) => {
+    try {
+      const config = readUserConfig();
+      // session-memory hook
+      config.hooks ??= {};
+      config.hooks.internal ??= {};
+      config.hooks.internal.entries ??= {};
+      config.hooks.internal.entries["session-memory"] = {
+        ...(config.hooks.internal.entries["session-memory"] ?? {}),
+        enabled: params?.sessionMemoryEnabled !== false,
+      };
+      // embedding 开关：只控制 provider/model，不碰 memorySearch.enabled（关键词搜索始终可用）
+      if (params?.embeddingEnabled === true) {
+        ensureMemorySearchProxyConfig(config, getProxyPort());
+      } else if (params?.embeddingEnabled === false && config?.agents?.defaults?.memorySearch) {
+        delete config.agents.defaults.memorySearch.provider;
+        delete config.agents.defaults.memorySearch.model;
+        delete config.agents.defaults.memorySearch.remote;
+      }
+      writeUserConfigAndRestart(config);
+      return { success: true };
+    } catch (err: any) {
+      return { success: false, message: err.message || String(err) };
+    }
   });
 
   // ── 查询 Kimi 会员用量（GET /v1/usages） ──
