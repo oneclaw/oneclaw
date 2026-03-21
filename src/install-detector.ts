@@ -373,17 +373,3 @@ export async function getPortPid(port: number): Promise<number> {
   }
   return getPortPidMac(port);
 }
-
-// 从指定端口开始，逐个探测直到找到可用端口
-export async function findAvailablePort(startPort: number = DEFAULT_PORT): Promise<number> {
-  // 限制搜索范围，避免无限循环
-  const maxAttempts = 100;
-  for (let i = 0; i < maxAttempts; i++) {
-    const port = startPort + i;
-    if (port > 65535) break;
-    const inUse = await isPortInUse(port);
-    if (!inUse) return port;
-  }
-  // 所有端口都被占用的极端情况，让系统分配
-  return 0;
-}

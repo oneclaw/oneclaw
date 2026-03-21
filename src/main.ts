@@ -676,7 +676,7 @@ ipcMain.on("app:open-webui", () => {
 });
 ipcMain.handle("gateway:port", () => gateway.getPort());
 
-registerSetupIpc({ setupManager, gateway, onOAuthLoginSuccess: ensureOAuthTokenRefresh });
+registerSetupIpc({ setupManager, onOAuthLoginSuccess: ensureOAuthTokenRefresh });
 registerSettingsIpc({
   requestGatewayRestart: () => requestGatewayRestart("settings:kimi-search"),
 });

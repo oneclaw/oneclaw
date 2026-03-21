@@ -24,7 +24,6 @@ contextBridge.exposeInMainWorld("oneclaw", {
     ipcRenderer.invoke("setup:save-config", params),
   setupGetLaunchAtLogin: () => ipcRenderer.invoke("setup:get-launch-at-login"),
   completeSetup: (params?: Record<string, unknown>) => ipcRenderer.invoke("setup:complete", params),
-  retryRandomPort: () => ipcRenderer.invoke("setup:retry-random-port"),
   detectInstallation: () => ipcRenderer.invoke("setup:detect-installation"),
   resolveConflict: (params: Record<string, unknown>) =>
     ipcRenderer.invoke("setup:resolve-conflict", params),

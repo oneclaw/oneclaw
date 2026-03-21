@@ -20,15 +20,11 @@ import { setProxyAccessToken, getProxyPort } from "./kimi-auth-proxy";
 import {
   detectExistingInstallation,
   killPortProcess,
-  getPortPid,
   uninstallGatewayDaemon,
   uninstallGlobalOpenclaw,
-  findAvailablePort,
 } from "./install-detector";
-import { DEFAULT_PORT } from "./constants";
 interface SetupIpcDeps {
   setupManager: SetupManager;
-  gateway?: { setPort: (port: number) => void };
   onOAuthLoginSuccess?: () => void;
 }
 
@@ -102,36 +98,21 @@ export function registerSetupIpc(deps: SetupIpcDeps): void {
     }
   });
 
-  // ── 冲突处理：卸载旧版或修改端口 ──
-  ipcMain.handle("setup:resolve-conflict", async (_event, params: { action: "uninstall" | "change-port"; pid?: number }) => {
-    const { action, pid } = params;
+  // ── 冲突处理：卸载旧版 ──
+  ipcMain.handle("setup:resolve-conflict", async (_event, params: { action: "uninstall"; pid?: number }) => {
+    const { pid } = params;
     try {
-      if (action === "uninstall") {
-        // 顺序：① 卸载系统守护进程（停止 launchd/schtasks 的自动重启）
-        //       ② 杀掉残留进程（守护进程卸载后不会再被拉起）
-        //       ③ 卸载 npm 全局包
-        await uninstallGatewayDaemon();
-        if (pid && pid > 0) {
-          await killPortProcess(pid);
-        }
-        await uninstallGlobalOpenclaw();
-        // 保留 ~/.openclaw/：聊天记录、项目数据都在里面
-        log.info("[setup] 旧版 OpenClaw 卸载完成");
-        return { success: true };
+      // 顺序：① 卸载系统守护进程 + 清理锁文件（停止 launchd/schtasks 的自动重启）
+      //       ② 杀掉残留进程（守护进程卸载后不会再被拉起）
+      //       ③ 卸载 npm 全局包
+      await uninstallGatewayDaemon();
+      if (pid && pid > 0) {
+        await killPortProcess(pid);
       }
-
-      if (action === "change-port") {
-        const newPort = await findAvailablePort(DEFAULT_PORT + 1);
-        const config = readUserConfig();
-        config.gateway ??= {};
-        config.gateway.port = newPort;
-        writeUserConfig(config);
-        deps.gateway?.setPort(newPort);
-        log.info(`[setup] 端口冲突已解决，切换到端口 ${newPort}`);
-        return { success: true, port: newPort };
-      }
-
-      return { success: false, message: "未知操作" };
+      await uninstallGlobalOpenclaw();
+      // 保留 ~/.openclaw/：聊天记录、项目数据都在里面
+      log.info("[setup] 旧版 OpenClaw 卸载完成");
+      return { success: true };
     } catch (err: any) {
       log.error(`[setup] 冲突处理失败: ${err?.message ?? err}`);
       return { success: false, message: err?.message ?? String(err) };
@@ -281,33 +262,6 @@ export function registerSetupIpc(deps: SetupIpcDeps): void {
         return { success: false, message: err.message || String(err) };
       }
     });
-  });
-
-  // ── 换随机端口重试启动 Gateway ──
-  ipcMain.handle("setup:retry-random-port", async () => {
-    try {
-      // 先杀掉旧端口上的进程（避免它继续持有 gateway lock）
-      const oldPid = await getPortPid(DEFAULT_PORT);
-      if (oldPid > 0) {
-        log.info(`[setup] 换端口前先杀旧端口进程 pid=${oldPid}`);
-        await killPortProcess(oldPid);
-      }
-
-      const newPort = await findAvailablePort(DEFAULT_PORT + 1);
-      if (newPort <= 0) {
-        return { success: false, message: "No available port found" };
-      }
-      const config = readUserConfig();
-      config.gateway ??= {};
-      config.gateway.port = newPort;
-      writeUserConfig(config);
-      deps.gateway?.setPort(newPort);
-      log.info(`[setup] 端口冲突重试，切换到端口 ${newPort}`);
-      return { success: true, port: newPort };
-    } catch (err: any) {
-      log.error(`[setup] 换端口失败: ${err?.message ?? err}`);
-      return { success: false, message: err?.message ?? String(err) };
-    }
   });
 
   // ── Setup 完成（Gateway 启动 + 窗口切换由 setOnComplete 回调统一处理） ──
