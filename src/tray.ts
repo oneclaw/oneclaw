@@ -1,7 +1,23 @@
 import { Tray, Menu, app, nativeImage } from "electron";
 import * as path from "path";
+import { execSync } from "child_process";
 import { GatewayProcess, GatewayState } from "./gateway-process";
 import { WindowManager } from "./window";
+
+// Dev 模式诊断信息（启动时计算一次）
+const devInfo = (() => {
+  if (app.isPackaged) return null;
+  const startedAt = new Date();
+  let branch = "unknown";
+  try {
+    branch = execSync("git rev-parse --abbrev-ref HEAD", {
+      cwd: app.getAppPath(),
+      encoding: "utf-8",
+      timeout: 3000,
+    }).trim();
+  } catch {}
+  return { branch, startedAt };
+})();
 
 interface TrayOptions {
   windowManager: WindowManager;
@@ -119,7 +135,17 @@ export class TrayManager {
     const showStart = state === "stopped" || state === "stopping";
     const showStop = state === "running" || state === "starting";
 
+    // Dev 模式：菜单顶部显示分支名和启动时间
+    const devItems: Electron.MenuItemConstructorOptions[] = devInfo
+      ? [
+          { label: `🌿 ${devInfo.branch}`, enabled: false },
+          { label: `⏱ ${devInfo.startedAt.toLocaleTimeString()}`, enabled: false },
+          { type: "separator" },
+        ]
+      : [];
+
     const menu = Menu.buildFromTemplate([
+      ...devItems,
       {
         label: t.openDashboard,
         click: () => windowManager.show({ port: gateway.getPort(), token: gateway.getToken() }),
