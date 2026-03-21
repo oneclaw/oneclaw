@@ -307,15 +307,17 @@ function migrateDisableGatewayUpdateCheck(): void {
 }
 
 // 从配置同步 search API key 到 gateway 环境变量
-// 代理模式下 search 请求走代理注入 token，不需要 env var
+// 代理模式下实际请求走代理注入 token，但插件初始化仍需 env var 存在
 function syncKimiSearchEnv(): void {
   try {
-    if (getProxyPort() > 0) return;
-
     const config = readUserConfig();
     const key = resolveKimiSearchApiKey(config);
     if (key) {
       gateway.setExtraEnv({ KIMI_PLUGIN_API_KEY: key });
+    } else if (getProxyPort() > 0) {
+      // 代理模式：插件初始化需要 env var 存在，设占位符让插件通过检查
+      // 实际请求走 proxy baseUrl，由代理注入真实 token
+      gateway.setExtraEnv({ KIMI_PLUGIN_API_KEY: "proxy-managed" });
     }
   } catch {
     // 配置读取失败不阻塞启动
