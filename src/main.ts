@@ -40,10 +40,11 @@ import {
   restoreLastKnownGoodConfigSnapshot,
 } from "./config-backup";
 import { readUserConfig, writeUserConfig } from "./provider-config";
-import { resolveKimiSearchApiKey } from "./kimi-config";
+import { resolveKimiSearchApiKey, readKimiApiKey, readKimiSearchDedicatedApiKey } from "./kimi-config";
 import { reconcileCliOnAppLaunch } from "./cli-integration";
 import { detectOwnership, migrateFromLegacy, markSetupComplete } from "./oneclaw-config";
 import { startTokenRefresh, stopTokenRefresh, loadOAuthToken } from "./kimi-oauth";
+import { startAuthProxy, stopAuthProxy, setProxyAccessToken, setProxySearchDedicatedKey, getProxyPort } from "./kimi-auth-proxy";
 import * as log from "./logger";
 import * as analytics from "./analytics";
 
@@ -306,8 +307,11 @@ function migrateDisableGatewayUpdateCheck(): void {
 }
 
 // 从配置同步 search API key 到 gateway 环境变量
+// 代理模式下 search 请求走代理注入 token，不需要 env var
 function syncKimiSearchEnv(): void {
   try {
+    if (getProxyPort() > 0) return;
+
     const config = readUserConfig();
     const key = resolveKimiSearchApiKey(config);
     if (key) {
@@ -354,6 +358,13 @@ async function startGatewayAndShowMain(source: string, opts: StartMainOptions = 
   const reportFailure = opts.reportFailure ?? true;
 
   log.info(`启动链路开始: ${source}`);
+  await ensureAuthProxy();
+
+  // OAuth token 后台刷新（仅 OAuth 用户需要）
+  if (loadOAuthToken()) {
+    ensureOAuthTokenRefresh();
+  }
+
   const running = await ensureGatewayRunning(source);
   if (!running) {
     if (reportFailure) {
@@ -379,11 +390,6 @@ async function startGatewayAndShowMain(source: string, opts: StartMainOptions = 
     }
     if (!openOnFailure) return false;
   }
-  // OAuth token 后台刷新：gateway 启动后检查是否有 kimi-coding OAuth token
-  if (running && loadOAuthToken()) {
-    ensureOAuthTokenRefresh();
-  }
-
   await showMainWindow();
   return running;
 }
@@ -405,19 +411,91 @@ function requestGatewayRestart(source: string): void {
   });
 }
 
+// 解析当前最优 token：OAuth > 手动 key
+function resolveCurrentToken(): string {
+  const oauthToken = loadOAuthToken();
+  if (oauthToken?.access_token) return oauthToken.access_token;
+  return readKimiApiKey();
+}
+
+// 从 config baseUrl 解析历史代理端口（避免不必要的 config 写入）
+function parseProxyPortFromConfig(): number {
+  try {
+    const config = readUserConfig();
+    const baseUrl = config?.models?.providers?.["kimi-coding"]?.baseUrl;
+    if (typeof baseUrl === "string" && baseUrl.includes("127.0.0.1")) {
+      const m = baseUrl.match(/:(\d+)\//);
+      if (m) return Number.parseInt(m[1], 10);
+    }
+  } catch {}
+  return 0;
+}
+
+// 确保 config 中 kimi-coding 指向代理（仅端口变化时写入）
+function ensureProxyConfig(proxyPort: number): void {
+  try {
+    const config = readUserConfig();
+    const provider = config?.models?.providers?.["kimi-coding"];
+    if (!provider) return;
+
+    const expectedBase = `http://127.0.0.1:${proxyPort}/coding`;
+    if (provider.baseUrl === expectedBase && provider.apiKey === "proxy-managed") return;
+
+    // 首次迁移：真实 apiKey 存入 sidecar（非 OAuth 用户 + 有效 key）
+    if (provider.apiKey && provider.apiKey !== "proxy-managed" && !loadOAuthToken()) {
+      const { writeKimiApiKey } = require("./kimi-config");
+      writeKimiApiKey(provider.apiKey);
+    }
+
+    provider.baseUrl = expectedBase;
+    provider.apiKey = "proxy-managed";
+
+    // 同步 kimi-search 插件端点到代理
+    const searchEntry = config?.plugins?.entries?.["kimi-search"];
+    if (searchEntry && typeof searchEntry === "object") {
+      searchEntry.config ??= {};
+      searchEntry.config.search = { baseUrl: `http://127.0.0.1:${proxyPort}/search` };
+      searchEntry.config.fetch = { baseUrl: `http://127.0.0.1:${proxyPort}/fetch` };
+    }
+
+    writeUserConfig(config);
+    log.info(`[auth-proxy] config updated: baseUrl → 127.0.0.1:${proxyPort}`);
+  } catch (err: any) {
+    log.error(`[auth-proxy] ensureProxyConfig failed: ${err.message}`);
+  }
+}
+
+// 启动 Auth Proxy 并同步 config（gateway 启动前调用）
+async function ensureAuthProxy(): Promise<void> {
+  try {
+    const config = readUserConfig();
+    // 只有配置了 kimi-coding provider 才启动代理
+    if (!config?.models?.providers?.["kimi-coding"]) return;
+
+    // 设置 token
+    const token = resolveCurrentToken();
+    setProxyAccessToken(token);
+
+    // 设置 Kimi Search 专属 key
+    const searchKey = readKimiSearchDedicatedApiKey();
+    if (searchKey) setProxySearchDedicatedKey(searchKey);
+
+    // 启动代理（优先历史端口）
+    const preferredPort = parseProxyPortFromConfig();
+    const actualPort = await startAuthProxy(preferredPort > 0 ? preferredPort : undefined);
+
+    // 同步 config（仅端口变化时写入）
+    ensureProxyConfig(actualPort);
+  } catch (err: any) {
+    log.error(`[auth-proxy] ensureAuthProxy failed: ${err.message}`);
+  }
+}
+
 // 启动 OAuth token 定时刷新（幂等：内部先 stop 再 start）
 function ensureOAuthTokenRefresh(): void {
   startTokenRefresh((refreshedToken) => {
-    try {
-      const cfg = readUserConfig();
-      if (cfg?.models?.providers?.["kimi-coding"]) {
-        cfg.models.providers["kimi-coding"].apiKey = refreshedToken.access_token;
-        writeUserConfig(cfg);
-        // gateway 通过 chokidar 监控配置文件变化，自动热加载 apiKey，无需重启
-      }
-    } catch (err: any) {
-      log.error(`OAuth token 刷新后更新配置失败: ${err.message}`);
-    }
+    // 直接更新代理内存中的 token，不再写 config
+    setProxyAccessToken(refreshedToken.access_token);
   });
 }
 
@@ -516,6 +594,7 @@ registerWorkspaceIpc();
 
 async function quit(): Promise<void> {
   stopTokenRefresh();
+  stopAuthProxy();
   stopAutoCheckSchedule();
   pairingMonitor?.stop();
   analytics.track("app_closed");
@@ -778,5 +857,6 @@ app.on("before-quit", () => {
   windowManager.prepareForAppQuit();
   pairingMonitor?.stop();
   windowManager.destroy();
+  stopAuthProxy();
   gateway.stop();
 });
