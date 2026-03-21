@@ -50,21 +50,25 @@
 ; ============================================================
 
 !macro customHeader
-  ; 更新时跳过 Welcome 页
-  Function onWelcomePagePre
-    ${if} ${isUpdated}
-      Abort
-    ${endif}
-  FunctionEnd
+  ; customHeader 在 installer 和 uninstaller 两个 pass 都会展开，
+  ; 但这些函数和 $launchLink 变量只在 installer pass 中存在
+  !ifndef BUILD_UNINSTALLER
+    ; 更新时跳过 Welcome 页
+    Function onWelcomePagePre
+      ${if} ${isUpdated}
+        Abort
+      ${endif}
+    FunctionEnd
 
-  ; 更新时跳过 Finish 页，直接启动 app
-  ; （首次安装走 customFinishPage 中的 StartApp 函数，由 Finish 页 "Run" 勾选框触发）
-  Function onFinishPagePre
-    ${if} ${isUpdated}
-      ${StdUtils.ExecShellAsUser} $0 "$launchLink" "open" "--updated"
-      Abort
-    ${endif}
-  FunctionEnd
+    ; 更新时跳过 Finish 页，直接启动 app
+    ; （首次安装走 customFinishPage 中的 StartApp 函数，由 Finish 页 "Run" 勾选框触发）
+    Function onFinishPagePre
+      ${if} ${isUpdated}
+        ${StdUtils.ExecShellAsUser} $0 "$launchLink" "open" "--updated"
+        Abort
+      ${endif}
+    FunctionEnd
+  !endif
 !macroend
 
 ; ============================================================
