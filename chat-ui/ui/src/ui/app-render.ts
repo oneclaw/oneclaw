@@ -6,7 +6,7 @@
 import { html, nothing } from "lit";
 import type { AppViewState } from "./app-view-state.ts";
 import { parseAgentSessionKey } from "../../../src/routing/session-key.js";
-import { refreshChat, refreshChatAvatar } from "./app-chat.ts";
+import { refreshChat, refreshChatAvatar, pendingSessionLabels } from "./app-chat.ts";
 import { syncUrlWithSessionKey } from "./app-settings.ts";
 import { loadChatHistory } from "./controllers/chat.ts";
 import { getLocale, t } from "./i18n.ts";
@@ -602,8 +602,8 @@ function createNewSession(state: AppViewState) {
   applySessionKey(state, newKey, true);
   // 新建会话时重置模型选择为默认
   state.resetModelToDefault();
-  // 注意：此时 Gateway 尚无此会话（无消息），sessions.patch 不会生效。
-  // label 持久化在首条消息发送后由 autoRenameOnFirstMessage (app-chat.ts) 完成。
+  // 标记为待自动命名。label 将在首条消息发送 + chat.event final 后持久化到 gateway。
+  pendingSessionLabels.set(newKey, label);
 }
 
 function confirmAndCreateNewSession(state: AppViewState) {

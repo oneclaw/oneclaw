@@ -5,7 +5,7 @@ import type { GatewayEventFrame, GatewayHelloOk } from "./gateway.ts";
 import type { Tab } from "./navigation.ts";
 import type { UiSettings } from "./storage.ts";
 import type { AgentsListResult, PresenceEntry, HealthSnapshot, StatusSummary } from "./types.ts";
-import { flushChatQueueForEvent } from "./app-chat.ts";
+import { flushChatQueueForEvent, flushPendingSessionLabel } from "./app-chat.ts";
 import {
   applySettings,
   loadCron,
@@ -253,6 +253,9 @@ function handleGatewayEventUnsafe(host: GatewayHost, evt: GatewayEventFrame) {
     }
     if (state === "final") {
       void loadChatHistory(host as unknown as OpenClawApp);
+      // agent runtime 已写完 sessions.json，此时 patch pending label 不会被覆盖
+      const sessionKey = payload?.sessionKey ?? host.sessionKey;
+      void flushPendingSessionLabel(host as unknown as OpenClawApp, sessionKey);
     }
     return;
   }

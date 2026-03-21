@@ -104,31 +104,69 @@ function enqueueChatMessage(
   ];
 }
 
-// 首条消息发送后同步 label 到 Gateway（此时会话已存在）
+// 待持久化的会话 label（session key → 期望的 label）。
+// agent runtime 处理消息时会用 { ...store[key], ...entry } 覆盖 sessions.json，
+// 其中 entry.label = undefined 会抹掉先前由 sessions.patch 写入的 label。
+// 因此必须延迟到 chat.event state="final"（agent runtime 写完后）再 patch。
+export const pendingSessionLabels = new Map<string, string>();
+
 const SESSION_NAME_MAX_LEN = 20;
+
+// 从消息文本提取 label（取第一行，截断到最大长度）
+function deriveSessionLabel(message: string): string | null {
+  const firstLine = message.split("\n")[0]?.trim() ?? "";
+  if (!firstLine) {
+    return null;
+  }
+  return firstLine.length > SESSION_NAME_MAX_LEN
+    ? firstLine.slice(0, SESSION_NAME_MAX_LEN) + "…"
+    : firstLine;
+}
+
+// 首条消息发送后，计算 label 并写入内存 + 加入待持久化队列
 function syncSessionLabelAfterSend(host: ChatHost, message: string) {
+  const key = host.sessionKey;
+
+  // 判断是否需要自动命名：pending 队列中的新会话，或 gateway 返回的无 label 会话
   const sessions = host.sessionsResult?.sessions ?? [];
-  const current = sessions.find((s) => s.key === host.sessionKey);
-  if (!current) {
+  const current = sessions.find((s) => s.key === key);
+  const defaultLabel = t("chat.newSession");
+  const needsAutoName =
+    pendingSessionLabels.has(key) ||
+    (current && (!current.label || current.label === defaultLabel));
+  if (!needsAutoName) {
     return;
   }
-  const defaultLabel = t("chat.newSession");
-  // 默认名称 → 用消息第一行前缀替换
-  if (current.label === defaultLabel) {
-    const firstLine = message.split("\n")[0]?.trim() ?? "";
-    if (firstLine) {
-      current.label =
-        firstLine.length > SESSION_NAME_MAX_LEN
-          ? firstLine.slice(0, SESSION_NAME_MAX_LEN) + "…"
-          : firstLine;
-    }
+
+  const label = deriveSessionLabel(message);
+  if (!label) {
+    return;
   }
-  // 只要 label 和 key 不同就持久化（覆盖默认重命名和用户手动重命名两种场景）
-  const label = current.label?.trim();
-  if (label && label !== host.sessionKey) {
-    void patchSession(host as unknown as Parameters<typeof patchSession>[0], host.sessionKey, {
-      label,
-    });
+
+  // 立即更新内存，侧边栏马上可见
+  if (current) {
+    current.label = label;
+  }
+
+  // 记入待持久化队列，等 chat.event final 后再 patch（避免被 agent runtime 覆盖）
+  pendingSessionLabels.set(key, label);
+}
+
+// chat.event state="final" 后调用：agent runtime 已写完 sessions.json，此时 patch 不会被覆盖
+export async function flushPendingSessionLabel(
+  state: Parameters<typeof patchSession>[0],
+  sessionKey: string,
+) {
+  const label = pendingSessionLabels.get(sessionKey);
+  if (!label) {
+    return;
+  }
+  pendingSessionLabels.delete(sessionKey);
+  try {
+    await patchSession(state, sessionKey, { label });
+  } catch {
+    // patch 失败则放回队列，下次 final 事件时重试
+    pendingSessionLabels.set(sessionKey, label);
   }
 }
 
