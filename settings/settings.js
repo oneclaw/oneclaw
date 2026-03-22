@@ -874,6 +874,7 @@
     weixinQrStatus: $("#weixinQrStatus"),
     weixinConnectedInfo: $("#weixinConnectedInfo"),
     weixinAccountId: $("#weixinAccountId"),
+    btnWeixinRemove: $("#btnWeixinRemove"),
     weixinMsgBox: $("#weixinMsgBox"),
     weixinStatusDot: $("#weixinStatusDot"),
     // Kimi tab
@@ -3072,6 +3073,23 @@
     if (els.weixinStatusDot) els.weixinStatusDot.classList.add("active");
   }
 
+  // 清除微信连接（删除账号凭据后重新扫码）
+  async function removeWeixinAccount() {
+    hideWeixinMsg();
+    try {
+      var result = await window.oneclaw.settingsWeixinClearAccounts();
+      if (result.success) {
+        if (els.weixinConnectedInfo) els.weixinConnectedInfo.classList.add("hidden");
+        if (els.weixinStatusDot) els.weixinStatusDot.classList.remove("active");
+        showToast(t("weixin.disconnected"));
+        // 自动重新扫码
+        startWeixinLogin();
+      }
+    } catch (err) {
+      showWeixinMsg(t("error.connection") + (err.message || ""), "error");
+    }
+  }
+
   // 回填微信配置，恢复已连接状态
   async function loadWeixinConfig() {
     try {
@@ -4800,6 +4818,11 @@
     if (els.weixinEnabled) {
       els.weixinEnabled.addEventListener("change", function () {
         handleWeixinSave();
+      });
+    }
+    if (els.btnWeixinRemove) {
+      els.btnWeixinRemove.addEventListener("click", function () {
+        removeWeixinAccount();
       });
     }
     // Kimi tab — 启用/禁用切换 + Token 可见性

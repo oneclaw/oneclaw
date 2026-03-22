@@ -74,6 +74,7 @@ import {
   pollWeixinQrStatus,
   saveWeixinLoginResult,
   listWeixinAccountIds,
+  clearWeixinAccounts,
 } from "./weixin-config";
 import { setProxyAccessToken, setProxySearchDedicatedKey, getProxyPort } from "./kimi-auth-proxy";
 import { ensureGatewayAuthTokenInConfig, resolveGatewayAuthToken } from "./gateway-auth";
@@ -1022,6 +1023,17 @@ export function registerSettingsIpc(opts: SettingsIpcOptions = {}): void {
             "等待扫码…",
         },
       };
+    } catch (err: any) {
+      return { success: false, message: err.message || String(err) };
+    }
+  });
+
+  // ── 清除微信账号（断开连接） ──
+  ipcMain.handle("settings:weixin-clear-accounts", async () => {
+    try {
+      clearWeixinAccounts();
+      opts.requestGatewayRestart?.();
+      return { success: true };
     } catch (err: any) {
       return { success: false, message: err.message || String(err) };
     }
