@@ -6666,6 +6666,12 @@ img.chat-avatar {
   padding: 0 5px;
 }
 
+.oneclaw-sidebar__badge--new {
+  background: var(--accent, #c0392b);
+  color: #fff;
+  font-weight: 600;
+}
+
 /* hover 弹出的错误信息列表，用 fixed 定位逃出 sidebar overflow */
 .oneclaw-sidebar__error-popup {
   display: none;

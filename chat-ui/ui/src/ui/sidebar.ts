@@ -28,6 +28,7 @@ export type SidebarProps = {
   onNewChat: () => void;
   onRenameSession: (key: string, newLabel: string) => void;
   onDeleteSession: (key: string) => void;
+  settingsBadge: boolean;
   onOpenSettings: () => void;
   onOpenSkillStore: () => void;
   onOpenWorkspace: () => void;
@@ -227,6 +228,9 @@ export function renderSidebar(props: SidebarProps) {
         >
           <span class="oneclaw-sidebar__icon">${icons.settings}</span>
           <span class="oneclaw-sidebar__label">${t("sidebar.settings")}</span>
+          ${props.settingsBadge
+            ? html`<span class="oneclaw-sidebar__badge oneclaw-sidebar__badge--new">${t("sidebar.weixinBadge")}</span>`
+            : nothing}
         </button>
 
         <button
