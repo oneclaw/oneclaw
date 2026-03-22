@@ -1770,6 +1770,20 @@ select option {
   color: var(--text-primary);
 }
 
+.weixin-connected-info .weixin-account-id {
+  flex: 1;
+}
+
+.weixin-remove-btn {
+  opacity: 0.4;
+  transition: opacity 0.15s;
+}
+
+.weixin-remove-btn:hover {
+  opacity: 1;
+  color: var(--red, #c0392b);
+}
+
 .weixin-connected-badge {
   color: #22c55e;
   font-weight: 600;

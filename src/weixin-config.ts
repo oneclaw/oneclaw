@@ -307,3 +307,21 @@ export function saveWeixinLoginResult(result: WeixinQrPollResult): string {
 
   return normalizedId;
 }
+
+// 清除所有微信账号凭据（断开连接时调用）。
+export function clearWeixinAccounts(): void {
+  const accountsDir = resolveAccountsDir();
+  const indexPath = resolveAccountIndexPath();
+  // 删除所有账号数据文件
+  try {
+    if (fs.existsSync(accountsDir)) {
+      for (const file of fs.readdirSync(accountsDir)) {
+        fs.unlinkSync(path.join(accountsDir, file));
+      }
+    }
+  } catch {}
+  // 清空账号索引
+  try {
+    fs.writeFileSync(indexPath, "[]", "utf-8");
+  } catch {}
+}

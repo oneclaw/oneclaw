@@ -54,6 +54,8 @@ contextBridge.exposeInMainWorld("oneclaw", {
     ipcRenderer.invoke("settings:weixin-login-start"),
   settingsWeixinLoginWait: (params: Record<string, unknown>) =>
     ipcRenderer.invoke("settings:weixin-login-wait", params),
+  settingsWeixinClearAccounts: () =>
+    ipcRenderer.invoke("settings:weixin-clear-accounts"),
   settingsGetDingtalkConfig: () => ipcRenderer.invoke("settings:get-dingtalk-config"),
   settingsSaveDingtalkConfig: (params: Record<string, unknown>) =>
     ipcRenderer.invoke("settings:save-dingtalk-config", params),
