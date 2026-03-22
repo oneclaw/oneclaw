@@ -1012,7 +1012,7 @@
       currentLang = browserLang.startsWith("zh") ? "zh" : "en";
     }
     const notice = params.get("notice");
-    initialTab = normalizeTabName(rawTab || "provider");
+    initialTab = normalizeTabName(rawTab || "channels");
     initialChatPlatform = inferChatPlatformFromTab(rawTab) || "weixin";
     startupNotice = notice || "";
   }
