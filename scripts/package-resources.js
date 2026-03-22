@@ -29,6 +29,7 @@ const KIMI_SEARCH_CACHE_FILE = "openclaw-kimi-search-0.1.2.tgz";
 const QQBOT_PACKAGE_NAME = "@sliverp/qqbot";
 const DINGTALK_CONNECTOR_PACKAGE_NAME = "@dingtalk-real-ai/dingtalk-connector";
 const WECOM_PLUGIN_PACKAGE_NAME = "@wecom/wecom-openclaw-plugin";
+const WEIXIN_PLUGIN_PACKAGE_NAME = "@tencent-weixin/openclaw-weixin";
 
 // 计算目标产物的唯一标识
 function getTargetId(platform, arch) {
@@ -639,6 +640,37 @@ function getWecomPluginPackageSource() {
   };
 }
 
+// 确定微信插件安装来源：查询 npm latest stable
+function getWeixinPluginPackageSource() {
+  // 显式覆盖（调试 / 私有 tgz / 本地 file: 逃生舱）
+  const explicitSource = readEnvText("ONECLAW_WEIXIN_PLUGIN_PACKAGE_SOURCE");
+  if (explicitSource) {
+    log(`使用 ONECLAW_WEIXIN_PLUGIN_PACKAGE_SOURCE 指定来源: ${explicitSource}`);
+    return {
+      source: explicitSource,
+      stampSource: `explicit:${WEIXIN_PLUGIN_PACKAGE_NAME}@${explicitSource}`,
+    };
+  }
+
+  const latestVersion = readRemoteLatestVersion(WEIXIN_PLUGIN_PACKAGE_NAME, {
+    cwd: ROOT,
+    env: process.env,
+    logError(message) {
+      log(message);
+    },
+  });
+
+  if (!latestVersion) {
+    die(`无法从 npm 获取 ${WEIXIN_PLUGIN_PACKAGE_NAME} 最新版本（检查网络或设置 ONECLAW_WEIXIN_PLUGIN_PACKAGE_SOURCE 手动指定）`);
+  }
+
+  log(`使用 ${WEIXIN_PLUGIN_PACKAGE_NAME}@${latestVersion}（来源: npm latest）`);
+  return {
+    source: latestVersion,
+    stampSource: `remote:${WEIXIN_PLUGIN_PACKAGE_NAME}@${latestVersion}`,
+  };
+}
+
 // 读取 gateway 依赖平台戳
 function readGatewayStamp(stampPath) {
   try {
@@ -1181,6 +1213,12 @@ const BUNDLED_PLUGINS = [
     requiredFiles: ["package.json", "openclaw.plugin.json"],
     getSource: getWecomPluginPackageSource,
   },
+  {
+    id: "openclaw-weixin",
+    packageName: WEIXIN_PLUGIN_PACKAGE_NAME,
+    requiredFiles: ["package.json", "openclaw.plugin.json"],
+    getSource: getWeixinPluginPackageSource,
+  },
 ];
 
 // openclaw/skills 只保留 OneClaw 产品需要的内置技能，上游新增 skill 不会自动打入。
@@ -1222,6 +1260,7 @@ const OPENCLAW_EXTENSION_ALLOWLIST = new Set([
   "qqbot",
   "dingtalk-connector",
   "wecom-openclaw-plugin",
+  "openclaw-weixin",
 ]);
 
 // 构建产物校验需要覆盖白名单中的关键扩展，避免悄悄打出残缺包。
@@ -1236,6 +1275,7 @@ const REQUIRED_OPENCLAW_EXTENSION_OUTPUTS = [
   path.join("qqbot", "openclaw.plugin.json"),
   path.join("dingtalk-connector", "openclaw.plugin.json"),
   path.join("wecom-openclaw-plugin", "openclaw.plugin.json"),
+  path.join("openclaw-weixin", "openclaw.plugin.json"),
 ];
 
 // 解析插件包来源（优先本地 tgz，其次远程 URL）
