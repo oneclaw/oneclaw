@@ -98,6 +98,15 @@
 | `settingsGetDingtalkConfig()` | `settings:get-dingtalk-config` | invoke |
 | `settingsSaveDingtalkConfig(params)` | `settings:save-dingtalk-config` | invoke |
 
+## Settings — Channels (WeChat 微信)
+
+| 方法 | IPC 通道 | 方向 |
+|---|---|---|
+| `settingsGetWeixinConfig()` | `settings:get-weixin-config` | invoke |
+| `settingsSaveWeixinConfig(params)` | `settings:save-weixin-config` | invoke |
+| `settingsWeixinLoginStart()` | `settings:weixin-login-start` | invoke |
+| `settingsWeixinLoginWait(params)` | `settings:weixin-login-wait` | invoke |
+
 ## Settings — Kimi
 
 | 方法 | IPC 通道 | 方向 |

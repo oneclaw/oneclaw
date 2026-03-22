@@ -59,6 +59,7 @@ oneclaw/
 │   ├── channel-pairing-store.ts    # Per-channel pairing approval persistence
 │   ├── feishu-pairing-monitor.ts   # Feishu-specific pairing monitor
 │   ├── wecom-config.ts     # WeCom (企业微信) plugin config
+│   ├── weixin-config.ts    # WeChat (微信) plugin config
 │   ├── dingtalk-config.ts  # DingTalk connector plugin config
 │   ├── qqbot-config.ts     # QQ Bot plugin config
 │   ├── update-banner-state.ts     # Update banner pure state machine
