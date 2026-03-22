@@ -54,6 +54,7 @@ const dict: Record<Locale, Record<string, string>> = {
     "pairing.rejectFailed": "配对拒绝失败",
     "pairing.channel.feishu": "飞书",
     "pairing.channel.wecom": "企业微信",
+    "pairing.channel.openclaw-weixin": "微信",
 
     "sidebar.cron": "定时任务",
     "cron.title": "定时任务",
@@ -231,6 +232,7 @@ const dict: Record<Locale, Record<string, string>> = {
     "pairing.rejectFailed": "Failed to reject pairing",
     "pairing.channel.feishu": "Feishu",
     "pairing.channel.wecom": "WeCom",
+    "pairing.channel.openclaw-weixin": "WeChat",
 
     "sidebar.cron": "Scheduled Tasks",
     "cron.title": "Scheduled Tasks",

@@ -124,7 +124,7 @@
       "nav.chat": "Remote Control",
       "nav.feishu": "Feishu Integration",
       "chat.title": "Remote Control",
-      "chat.desc": "Connect Feishu, WeCom, DingTalk, Kimi, or QQ to control OneClaw remotely from your messaging app",
+      "chat.desc": "Connect WeChat, Feishu, WeCom, DingTalk, Kimi, or QQ to control OneClaw remotely from your messaging app",
       "chat.platformFeishu": "Feishu",
       "chat.platformFeishuMeta": "Lark / Feishu bot",
       "chat.platformWecom": "WeCom",
@@ -262,6 +262,20 @@
       "qq.markdownSupportHint": "Turn this off if the current bot account does not have markdown message permission",
       "qq.save": "Save",
       "qq.saving": "Saving…",
+      "chat.platformWeixin": "WeChat",
+      "chat.platformWeixinMeta": "WeChat QR login",
+      "weixin.desc": "Scan a QR code with WeChat to connect OneClaw and chat directly in WeChat",
+      "weixin.login": "Connect WeChat",
+      "weixin.cancel": "Cancel",
+      "weixin.waitingScan": "Waiting for scan…",
+      "weixin.scanned": "Scanned! Please confirm in WeChat…",
+      "weixin.connected": "Connected",
+      "weixin.loginFailed": "Login failed",
+      "weixin.disconnect": "Disconnect",
+      "weixin.disconnected": "Disconnected",
+      "weixin.notBundled": "WeChat plugin not found. Please reinstall OneClaw.",
+      "weixin.gatewayNotRunning": "Gateway is not running. Please start it first.",
+      "error.weixinNotBundled": "WeChat plugin not found. Please reinstall OneClaw.",
       "error.noPairingCode": "Invalid pairing code",
       "error.loadPairingFailed": "Failed to load pairing requests",
       "error.loadApprovedFailed": "Failed to load approved accounts",
@@ -417,7 +431,7 @@
       "nav.chat": "远程控制",
       "nav.feishu": "飞书集成",
       "chat.title": "远程控制",
-      "chat.desc": "连接飞书、企业微信、钉钉、Kimi 或 QQ，从聊天软件远程控制 OneClaw",
+      "chat.desc": "连接微信、飞书、企业微信、钉钉、Kimi 或 QQ，从聊天软件远程控制 OneClaw",
       "chat.platformFeishu": "飞书",
       "chat.platformFeishuMeta": "Lark / 飞书机器人",
       "chat.platformWecom": "企业微信",
@@ -555,6 +569,20 @@
       "qq.markdownSupportHint": "如果当前机器人还没有开通 Markdown 消息权限 请先关闭这个开关",
       "qq.save": "保存",
       "qq.saving": "保存中…",
+      "chat.platformWeixin": "微信",
+      "chat.platformWeixinMeta": "微信扫码连接",
+      "weixin.desc": "使用微信扫码连接 OneClaw，在微信中直接对话",
+      "weixin.login": "连接微信",
+      "weixin.cancel": "取消",
+      "weixin.waitingScan": "等待扫码…",
+      "weixin.scanned": "已扫码，请在微信中确认…",
+      "weixin.connected": "已连接",
+      "weixin.loginFailed": "登录失败",
+      "weixin.disconnect": "断开连接",
+      "weixin.disconnected": "已断开",
+      "weixin.notBundled": "微信插件组件缺失，请重新安装 OneClaw",
+      "weixin.gatewayNotRunning": "Gateway 未运行，请先启动",
+      "error.weixinNotBundled": "微信插件组件缺失，请重新安装 OneClaw",
       "error.noPairingCode": "配对码无效",
       "error.loadPairingFailed": "读取待审批请求失败",
       "error.loadApprovedFailed": "读取已授权列表失败",
@@ -837,6 +865,17 @@
     btnQqSave: $("#btnQqSave"),
     btnQqSaveText: $("#btnQqSave .btn-text"),
     btnQqSaveSpinner: $("#btnQqSave .btn-spinner"),
+    // Weixin tab
+    weixinEnabled: $("#weixinEnabled"),
+    weixinFields: $("#weixinFields"),
+    weixinNotBundledHint: $("#weixinNotBundledHint"),
+    weixinQrContainer: $("#weixinQrContainer"),
+    weixinQrImage: $("#weixinQrImage"),
+    weixinQrStatus: $("#weixinQrStatus"),
+    weixinConnectedInfo: $("#weixinConnectedInfo"),
+    weixinAccountId: $("#weixinAccountId"),
+    weixinMsgBox: $("#weixinMsgBox"),
+    weixinStatusDot: $("#weixinStatusDot"),
     // Kimi tab
     kimiEnabled: $("#kimiEnabled"),
     kimiFields: $("#kimiFields"),
@@ -937,11 +976,12 @@
   let gatewayOperating = false;
   let gatewayStateTimer = null;
   let currentLang = "en";
-  let initialTab = "provider";
-  let initialChatPlatform = "feishu";
+  let initialTab = "channels";
+  let initialChatPlatform = "weixin";
   let startupNotice = "";
   const CHAT_PLATFORM_PANEL_IDS = {
     feishu: "chatPlatformFeishu",
+    weixin: "chatPlatformWeixin",
     wecom: "chatPlatformWecom",
     dingtalk: "chatPlatformDingtalk",
     kimi: "chatPlatformKimi",
@@ -973,7 +1013,7 @@
     }
     const notice = params.get("notice");
     initialTab = normalizeTabName(rawTab || "provider");
-    initialChatPlatform = inferChatPlatformFromTab(rawTab) || "feishu";
+    initialChatPlatform = inferChatPlatformFromTab(rawTab) || "weixin";
     startupNotice = notice || "";
   }
 
@@ -1016,6 +1056,7 @@
   // 兼容 feishu / dingtalk / qq / qqbot 这类历史入口，把它们映射到远程控制子平台。
   function normalizeChatPlatformName(platformName) {
     var raw = String(platformName || "").trim().toLowerCase();
+    if (raw === "weixin" || raw === "wechat" || raw === "openclaw-weixin") return "weixin";
     if (raw === "wecom" || raw === "wechat-work" || raw === "wecom-openclaw-plugin") return "wecom";
     if (raw === "dingtalk" || raw === "dingtalk-connector") return "dingtalk";
     if (raw === "qq" || raw === "qqbot") return "qqbot";
@@ -1028,6 +1069,9 @@
     var raw = String(tabName || "").trim().toLowerCase();
     if (
       raw === "feishu" ||
+      raw === "weixin" ||
+      raw === "wechat" ||
+      raw === "openclaw-weixin" ||
       raw === "wecom" ||
       raw === "wecom-openclaw-plugin" ||
       raw === "dingtalk" ||
@@ -2884,6 +2928,175 @@
     }
   }
 
+  // ── 微信状态变量 ──
+  var weixinSaving = false;
+  var weixinLoginPolling = false;
+  var weixinQrcode = null;
+
+  function isWeixinEnabled() {
+    return els.weixinEnabled && els.weixinEnabled.checked;
+  }
+
+  function showWeixinMsg(msg, type) {
+    if (!els.weixinMsgBox) return;
+    els.weixinMsgBox.textContent = msg;
+    els.weixinMsgBox.className = "msg-box msg-" + (type || "info");
+    els.weixinMsgBox.classList.remove("hidden");
+  }
+
+  function hideWeixinMsg() {
+    if (els.weixinMsgBox) els.weixinMsgBox.classList.add("hidden");
+  }
+
+  // 保存微信配置（启用/禁用切换）
+  async function handleWeixinSave() {
+    if (weixinSaving) return;
+    weixinSaving = true;
+    hideWeixinMsg();
+    var enabled = isWeixinEnabled();
+    try {
+      var result = await window.oneclaw.settingsSaveWeixinConfig({
+        enabled: enabled,
+      });
+      if (result.success) {
+        showToast(t("common.saved"));
+        toggleEl(els.weixinFields, enabled);
+        if (enabled) {
+          // 启用时：已连接则显示状态，否则自动发起扫码
+          var cfg = await window.oneclaw.settingsGetWeixinConfig();
+          var accounts = (cfg.success && cfg.data && cfg.data.accounts) || [];
+          if (accounts.length > 0) {
+            showWeixinConnected(accounts[0]);
+          } else {
+            startWeixinLogin();
+          }
+        } else {
+          // 禁用时：取消轮询，重置 UI
+          resetWeixinLoginUI();
+          if (els.weixinConnectedInfo) els.weixinConnectedInfo.classList.add("hidden");
+          if (els.weixinStatusDot) els.weixinStatusDot.classList.remove("active");
+        }
+      } else {
+        showWeixinMsg(result.message || "Save failed", "error");
+      }
+    } catch (err) {
+      showWeixinMsg(t("error.connection") + (err.message || ""), "error");
+    }
+    weixinSaving = false;
+  }
+
+  // 发起微信扫码登录
+  async function startWeixinLogin() {
+    if (weixinLoginPolling) return;
+    hideWeixinMsg();
+    if (els.weixinConnectedInfo) els.weixinConnectedInfo.classList.add("hidden");
+    if (els.weixinQrStatus) els.weixinQrStatus.textContent = t("weixin.waitingScan");
+
+    try {
+      var startResult = await window.oneclaw.settingsWeixinLoginStart();
+      if (!startResult.success || !startResult.data || !startResult.data.qrDataUrl) {
+        showWeixinMsg((startResult.data && startResult.data.message) || startResult.message || t("weixin.loginFailed"), "error");
+        resetWeixinLoginUI();
+        return;
+      }
+      // qrDataUrl 是 main process 生成的 BMP data URL
+      if (els.weixinQrImage && startResult.data.qrDataUrl) {
+        els.weixinQrImage.src = startResult.data.qrDataUrl;
+        if (els.weixinQrContainer) els.weixinQrContainer.classList.remove("hidden");
+      }
+      weixinQrcode = startResult.data.qrcode;
+      weixinLoginPolling = true;
+      pollWeixinLogin();
+    } catch (err) {
+      showWeixinMsg(t("weixin.gatewayNotRunning"), "error");
+      resetWeixinLoginUI();
+    }
+  }
+
+  // 轮询微信登录状态
+  async function pollWeixinLogin() {
+    if (!weixinLoginPolling || !weixinQrcode) return;
+    try {
+      var waitResult = await window.oneclaw.settingsWeixinLoginWait({
+        qrcode: weixinQrcode,
+      });
+      if (!weixinLoginPolling) return;
+      if (waitResult.success && waitResult.data) {
+        if (waitResult.data.connected) {
+          weixinLoginPolling = false;
+          showWeixinConnected(waitResult.data.accountId || "");
+          showToast(t("weixin.connected"));
+          return;
+        }
+        // 根据 status 字段判断状态
+        var status = waitResult.data.status || "";
+        if (status === "expired") {
+          weixinLoginPolling = false;
+          weixinQrcode = null;
+          startWeixinLogin();
+          return;
+        }
+        if (status === "scaned") {
+          if (els.weixinQrStatus) els.weixinQrStatus.textContent = t("weixin.scanned");
+        }
+        // 继续轮询（最少间隔 1 秒，避免紧密循环）
+        setTimeout(pollWeixinLogin, 1000);
+      } else {
+        var errMsg = (waitResult.data && waitResult.data.message) || waitResult.message || t("weixin.loginFailed");
+        showWeixinMsg(errMsg, "error");
+        resetWeixinLoginUI();
+      }
+    } catch (err) {
+      if (weixinLoginPolling) {
+        showWeixinMsg(t("weixin.loginFailed"), "error");
+        resetWeixinLoginUI();
+      }
+    }
+  }
+
+  // 重置微信登录 UI 到初始状态
+  function resetWeixinLoginUI() {
+    weixinLoginPolling = false;
+    weixinQrcode = null;
+    if (els.weixinQrContainer) els.weixinQrContainer.classList.add("hidden");
+    if (els.weixinQrImage) els.weixinQrImage.src = "";
+  }
+
+  // 显示微信已连接状态
+  function showWeixinConnected(accountId) {
+    if (els.weixinQrContainer) els.weixinQrContainer.classList.add("hidden");
+    if (els.weixinConnectedInfo) {
+      els.weixinConnectedInfo.classList.remove("hidden");
+      if (els.weixinAccountId) els.weixinAccountId.textContent = accountId;
+    }
+    if (els.weixinStatusDot) els.weixinStatusDot.classList.add("active");
+  }
+
+  // 回填微信配置，恢复已连接状态
+  async function loadWeixinConfig() {
+    try {
+      var result = await window.oneclaw.settingsGetWeixinConfig();
+      if (result.success && result.data) {
+        if (els.weixinEnabled) els.weixinEnabled.checked = result.data.enabled;
+        toggleEl(els.weixinFields, result.data.enabled);
+        if (!result.data.bundled && result.data.enabled) {
+          if (els.weixinNotBundledHint) els.weixinNotBundledHint.classList.remove("hidden");
+        }
+        if (result.data.enabled) {
+          var accounts = result.data.accounts || [];
+          if (accounts.length > 0) {
+            showWeixinConnected(accounts[0]);
+          } else {
+            startWeixinLogin();
+          }
+        }
+      }
+    } catch (err) {
+      // 静默失败
+    }
+  }
+
+
   // ── Advanced ──
 
   // 加载高级配置
@@ -3937,6 +4150,7 @@
       loadWecomConfig(),
       loadDingtalkConfig(),
       loadQqbotConfig(),
+      loadWeixinConfig(),
       loadKimiConfig(),
       loadSearchConfig(),
       loadAdvancedConfig(),
@@ -4329,6 +4543,7 @@
     bindStatusDot(els.dingtalkEnabled, els.dingtalkStatusDot);
     bindStatusDot(els.kimiEnabled, els.kimiStatusDot);
     bindStatusDot(els.qqEnabled, els.qqStatusDot);
+    bindStatusDot(els.weixinEnabled, els.weixinStatusDot);
 
     // 远程控制页二级平台切换
     els.chatPlatformButtons.forEach(function (button) {
@@ -4581,6 +4796,12 @@
       });
     }
 
+    // Weixin tab
+    if (els.weixinEnabled) {
+      els.weixinEnabled.addEventListener("change", function () {
+        handleWeixinSave();
+      });
+    }
     // Kimi tab — 启用/禁用切换 + Token 可见性
     els.kimiEnabled.addEventListener("change", function () { handleKimiSave(); });
     els.btnToggleKimiToken.addEventListener("click", togglePasswordVisibility);
@@ -4793,6 +5014,7 @@
     loadWecomConfig();
     loadDingtalkConfig();
     loadQqbotConfig();
+    loadWeixinConfig();
     loadKimiConfig();
     loadSearchConfig();
     loadMemoryConfig();

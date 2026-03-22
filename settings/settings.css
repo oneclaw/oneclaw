@@ -1725,6 +1725,62 @@ select option {
   border-radius: 3px;
 }
 
+/* ── 微信扫码面板 ── */
+.weixin-qr-section {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 16px 0;
+}
+
+.weixin-qr-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--bg-elevated);
+}
+
+.weixin-qr-image {
+  width: 200px;
+  height: 200px;
+  border-radius: 8px;
+  image-rendering: pixelated;
+}
+
+.weixin-qr-status {
+  font-size: 13px;
+  color: var(--text-secondary);
+  text-align: center;
+}
+
+.weixin-connected-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  border-radius: 8px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  font-size: 13px;
+  color: var(--text-primary);
+}
+
+.weixin-connected-badge {
+  color: #22c55e;
+  font-weight: 600;
+}
+
+.weixin-account-id {
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
 /* ── 小屏布局 ── */
 @media (max-width: 720px) {
   :root {

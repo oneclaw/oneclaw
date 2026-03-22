@@ -18,17 +18,17 @@
     <nav class="sidebar">
       <div class="sidebar-title" data-i18n="title">Settings</div>
       <ul class="nav-list">
-        <li class="nav-item active" data-tab="provider">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
-            <use href="#icon-cpu"></use>
-          </svg>
-          <span data-i18n="nav.provider">Model</span>
-        </li>
-        <li class="nav-item" data-tab="channels">
+        <li class="nav-item active" data-tab="channels">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
             <use href="#icon-message-circle"></use>
           </svg>
           <span data-i18n="nav.chat">Remote Control</span>
+        </li>
+        <li class="nav-item" data-tab="provider">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+            <use href="#icon-cpu"></use>
+          </svg>
+          <span data-i18n="nav.provider">Model</span>
         </li>
         <li class="nav-item" data-tab="search">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
@@ -73,7 +73,7 @@
     <main class="content">
 
       <!-- Provider Tab -->
-      <section class="tab-panel active" id="tabProvider">
+      <section class="tab-panel" id="tabProvider">
         <h2 data-i18n="provider.title">Model Configuration</h2>
         <p class="desc" data-i18n="provider.desc">Change your LLM provider, API key, or model.</p>
 
@@ -291,14 +291,21 @@
       </section>
 
       <!-- Channels Tab -->
-      <section class="tab-panel" id="tabChannels">
+      <section class="tab-panel active" id="tabChannels">
         <h2 data-i18n="chat.title">Remote Control</h2>
-        <p class="desc" data-i18n="chat.desc">Connect Feishu, WeCom, DingTalk, Kimi, or QQ to control OneClaw remotely from your messaging app.</p>
+        <p class="desc" data-i18n="chat.desc">Connect WeChat, Feishu, WeCom, DingTalk, Kimi, or QQ to control OneClaw remotely from your messaging app.</p>
 
         <div class="chat-integration-shell">
           <div class="chat-platform-nav" role="tablist" aria-label="Chat integration platforms">
-            <div class="chat-platform-item active" data-chat-platform="feishu">
-              <button type="button" class="chat-platform-btn active" data-chat-platform="feishu">
+            <div class="chat-platform-item active" data-chat-platform="weixin">
+              <button type="button" class="chat-platform-btn active" data-chat-platform="weixin">
+                <span class="chat-platform-label" data-i18n="chat.platformWeixin">微信</span>
+                <span class="chat-platform-meta" data-i18n="chat.platformWeixinMeta">WeChat QR login</span>
+              </button>
+              <span class="platform-status-dot" id="weixinStatusDot"></span>
+            </div>
+            <div class="chat-platform-item" data-chat-platform="feishu">
+              <button type="button" class="chat-platform-btn" data-chat-platform="feishu">
                 <span class="chat-platform-label" data-i18n="chat.platformFeishu">Feishu</span>
                 <span class="chat-platform-meta" data-i18n="chat.platformFeishuMeta">Lark / Feishu bot</span>
               </button>
@@ -335,7 +342,7 @@
           </div>
 
           <div class="chat-platform-panels">
-            <div id="chatPlatformFeishu" class="channel-panel chat-platform-panel active">
+            <div id="chatPlatformFeishu" class="channel-panel chat-platform-panel">
               <div class="channel-desc-row">
                 <div class="chat-panel-copy">
                   <div class="chat-panel-title" data-i18n="chat.platformFeishu">Feishu</div>
@@ -506,6 +513,41 @@
 
               <div class="msg-box hidden" id="dingtalkMsgBox"></div>
 
+            </div>
+
+            <div id="chatPlatformWeixin" class="channel-panel chat-platform-panel active">
+              <div class="channel-desc-row">
+                <div class="chat-panel-copy">
+                  <div class="chat-panel-title" data-i18n="chat.platformWeixin">微信</div>
+                  <p class="desc" data-i18n="weixin.desc">使用微信扫码连接 OneClaw，在微信中直接对话。</p>
+                </div>
+              </div>
+
+              <div class="toggle-row">
+                <span class="toggle-label" data-i18n="common.enable">Enable</span>
+                <label class="toggle-switch" aria-label="Toggle WeChat">
+                  <input type="checkbox" id="weixinEnabled">
+                  <span class="toggle-slider"></span>
+                </label>
+              </div>
+
+              <div id="weixinFields">
+                <div id="weixinNotBundledHint" class="msg-box msg-warn hidden" data-i18n="weixin.notBundled">
+                  微信插件组件缺失，请重新安装 OneClaw。
+                </div>
+
+                <div id="weixinQrContainer" class="weixin-qr-container hidden">
+                  <img id="weixinQrImage" class="weixin-qr-image" alt="WeChat QR Code">
+                  <p id="weixinQrStatus" class="weixin-qr-status" data-i18n="weixin.waitingScan">等待扫码…</p>
+                </div>
+
+                <div id="weixinConnectedInfo" class="weixin-connected-info hidden">
+                  <span class="weixin-connected-badge">✓</span>
+                  <span id="weixinAccountId" class="weixin-account-id"></span>
+                </div>
+              </div>
+
+              <div class="msg-box hidden" id="weixinMsgBox"></div>
             </div>
 
             <div id="chatPlatformWecom" class="channel-panel chat-platform-panel">
