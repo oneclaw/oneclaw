@@ -134,7 +134,7 @@ export function resolveCliNodeBin(): string {
 }
 
 /**
- * Windows CLI 专用二进制（SUBSYSTEM:CONSOLE，afterPack 阶段由 PE 补丁生成）。
+ * Windows CLI 专用二进制（SUBSYSTEM:CONSOLE，NSIS 安装时由 PE 补丁生成）。
  * 与主 exe 同目录，文件名为 "<ProductName>-CLI.exe"。
  * 非 Windows 或 dev 模式返回 null。
  */

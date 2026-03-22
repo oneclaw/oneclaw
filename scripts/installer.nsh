@@ -81,8 +81,20 @@
   ; 补杀残留的 gateway 子进程（OneClaw Helper.exe 是 Electron 复用二进制跑 Node.js 的）
   ; /T 有时无法级联到 windowsHide 模式创建的子进程，需显式按进程名清理
   nsExec::ExecToLog 'taskkill /IM "OneClaw Helper.exe" /F'
+  ; 补杀 CLI 进程（更新时可能正在运行）
+  nsExec::ExecToLog 'taskkill /IM "OneClaw-CLI.exe" /F'
   ; 等待进程退出和文件句柄释放
   Sleep 2000
+!macroend
+
+; ============================================================
+; 安装后钩子：生成 CLI 专用二进制（SUBSYSTEM:CONSOLE）
+; 复制主 exe 并补丁 PE header，支持交互式 stdin
+; ============================================================
+
+!macro customInstall
+  ; 设置 INST_DIR 环境变量供 PowerShell 脚本读取安装目录
+  nsExec::ExecToLog 'powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "$$env:INST_DIR=\"$INSTDIR\"; & \"$INSTDIR\resources\create-cli-binary.ps1\""'
 !macroend
 
 ; ============================================================
@@ -93,6 +105,7 @@
 !macro customUnInit
   nsExec::ExecToLog 'taskkill /IM "OneClaw.exe" /T /F'
   nsExec::ExecToLog 'taskkill /IM "OneClaw Helper.exe" /F'
+  nsExec::ExecToLog 'taskkill /IM "OneClaw-CLI.exe" /F'
   Sleep 2000
 !macroend
 

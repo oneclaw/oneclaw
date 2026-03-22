@@ -103,9 +103,9 @@ exports.default = async function afterPack(context) {
   const productName = context.packager.appInfo.productFilename;
   replaceNodeBinary(platform, targetBase, productName);
 
-  // ── Windows: 生成 CLI 专用二进制（SUBSYSTEM:CONSOLE，支持交互式 stdin） ──
+  // ── Windows: 写入 CLI 补丁脚本（安装时由 NSIS 执行，复制主 exe 并补丁 PE SUBSYSTEM） ──
   if (platform === "win32") {
-    createWindowsCliBinary(appOutDir, productName);
+    writeCliBinaryPatchScript(appOutDir, productName);
   }
 };
 
@@ -146,52 +146,45 @@ function injectGatewayLoose(sourceBase, targetBase, appOutDir, platform, context
   pruneGatewayModules(gatewayDest, platform, arch);
 }
 
-// ── Windows CLI 专用二进制：复制主 exe 并补丁 PE SUBSYSTEM 为 CONSOLE ──
+// ── Windows CLI 补丁脚本：安装时由 NSIS 调用，复制主 exe 并补丁 PE SUBSYSTEM ──
+// 不在 afterPack 阶段生成 CLI.exe 副本，避免安装器体积膨胀（+58MB）。
+// 改为写入一个 PowerShell 脚本，由 NSIS customInstall 在安装完成后执行。
 
-function createWindowsCliBinary(appOutDir, productName) {
-  const srcExe = path.join(appOutDir, `${productName}.exe`);
-  const cliExe = path.join(appOutDir, `${productName}-CLI.exe`);
+function writeCliBinaryPatchScript(appOutDir, productName) {
+  const resourcesDir = path.join(appOutDir, "resources");
+  fs.mkdirSync(resourcesDir, { recursive: true });
 
-  if (!fs.existsSync(srcExe)) {
-    console.log(`[afterPack] 跳过 CLI binary: ${productName}.exe 不存在`);
-    return;
-  }
+  // PowerShell 脚本：复制主 exe → CLI exe，补丁 PE SUBSYSTEM 从 GUI(2) 到 CONSOLE(3)
+  const ps1 = [
+    "$src = Join-Path $env:INST_DIR '@@EXE@@'",
+    "$dst = Join-Path $env:INST_DIR '@@CLI@@'",
+    "Copy-Item $src $dst -Force",
+    "$f = [System.IO.File]::Open($dst, 'Open', 'ReadWrite')",
+    "try {",
+    "  $br = New-Object System.IO.BinaryReader($f)",
+    "  $bw = New-Object System.IO.BinaryWriter($f)",
+    "  # PE header offset at 0x3C",
+    "  $f.Seek(0x3C, 'Begin') | Out-Null",
+    "  $peOff = $br.ReadInt32()",
+    "  # PE signature check",
+    "  $f.Seek($peOff, 'Begin') | Out-Null",
+    "  $sig = $br.ReadInt32()",
+    "  if ($sig -ne 0x00004550) { throw 'Not a PE file' }",
+    "  # SUBSYSTEM at PE offset + 0x5C",
+    "  $f.Seek($peOff + 0x5C, 'Begin') | Out-Null",
+    "  $sub = $br.ReadInt16()",
+    "  if ($sub -eq 2) {",
+    "    $f.Seek($peOff + 0x5C, 'Begin') | Out-Null",
+    "    $bw.Write([Int16]3)",
+    "  }",
+    "} finally { $f.Close() }",
+  ].join("\r\n")
+    .replace(/@@EXE@@/g, `${productName}.exe`)
+    .replace(/@@CLI@@/g, `${productName}-CLI.exe`);
 
-  fs.copyFileSync(srcExe, cliExe);
-
-  // 补丁 PE header: SUBSYSTEM 从 GUI(2) 改为 CONSOLE(3)
-  const fd = fs.openSync(cliExe, "r+");
-  try {
-    // 读取 PE header 偏移（文件偏移 0x3C 处的 DWORD）
-    const offsetBuf = Buffer.alloc(4);
-    fs.readSync(fd, offsetBuf, 0, 4, 0x3c);
-    const peOffset = offsetBuf.readUInt32LE(0);
-
-    // 校验 PE 签名 "PE\0\0"
-    const sigBuf = Buffer.alloc(4);
-    fs.readSync(fd, sigBuf, 0, 4, peOffset);
-    if (sigBuf.toString("ascii") !== "PE\0\0") {
-      throw new Error(`PE signature mismatch: expected "PE\\0\\0", got "${sigBuf.toString("hex")}"`);
-    }
-
-    // SUBSYSTEM 位于 PE offset + 0x5C（PE32/PE32+ 通用位置）
-    const subsystemOffset = peOffset + 0x5c;
-    const subBuf = Buffer.alloc(2);
-    fs.readSync(fd, subBuf, 0, 2, subsystemOffset);
-    const current = subBuf.readUInt16LE(0);
-
-    if (current !== 2) {
-      console.log(`[afterPack] SUBSYSTEM=${current} (expected 2=GUI), skipping patch`);
-    } else {
-      const patchBuf = Buffer.alloc(2);
-      patchBuf.writeUInt16LE(3, 0);
-      fs.writeSync(fd, patchBuf, 0, 2, subsystemOffset);
-      const sizeMB = (fs.statSync(cliExe).size / 1048576).toFixed(1);
-      console.log(`[afterPack] created ${productName}-CLI.exe (${sizeMB} MB, SUBSYSTEM=CONSOLE)`);
-    }
-  } finally {
-    fs.closeSync(fd);
-  }
+  const scriptPath = path.join(resourcesDir, "create-cli-binary.ps1");
+  fs.writeFileSync(scriptPath, ps1, "utf-8");
+  console.log(`[afterPack] wrote create-cli-binary.ps1 for NSIS install-time CLI patching`);
 }
 
 // ── 用 Electron binary 代理替换独立 Node.js ──
