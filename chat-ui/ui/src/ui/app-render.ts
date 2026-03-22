@@ -887,10 +887,14 @@ export function renderApp(state: AppViewState) {
                 navCollapsed: !state.settings.navCollapsed,
               });
             },
-            onOpenSettings: () => openSettingsView(
-              state,
-              state.pairingState.pendingCount > 0 ? "channels" : null,
-            ),
+            settingsBadge: !localStorage.getItem("oneclaw:weixin-badge-seen"),
+            onOpenSettings: () => {
+              localStorage.setItem("oneclaw:weixin-badge-seen", "1");
+              openSettingsView(
+                state,
+                state.pairingState.pendingCount > 0 ? "channels" : null,
+              );
+            },
             onOpenSkillStore: () => openSkillsView(state),
             onOpenWorkspace: () => openWorkspaceView(state),
             onOpenWebUI: () => void handleOpenWebUI(state),
