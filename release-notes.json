@@ -1,9 +1,9 @@
 [
   {
-    "version": "2026.322.0",
+    "version": "2026.322.4",
     "notes": {
-      "zh": "新增「记忆」设置页，可管理会话记忆和语义搜索；修复长时间使用后偶发的登录失效问题",
-      "en": "Add Memory settings for session memory and semantic search; fix occasional login expiry during long sessions"
+      "zh": "新增微信聊天支持\n新增高级记忆功能和定时任务查看\nUI 交互体验优化\n命令行功能修复\nWindows 升级体验优化",
+      "en": "Add WeChat chat support\nAdd advanced memory and scheduled tasks viewer\nUI interaction improvements\nCLI fixes\nWindows upgrade experience improvements"
     }
   },
   {
