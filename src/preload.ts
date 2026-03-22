@@ -47,6 +47,13 @@ contextBridge.exposeInMainWorld("oneclaw", {
   settingsGetQqbotConfig: () => ipcRenderer.invoke("settings:get-qqbot-config"),
   settingsSaveQqbotConfig: (params: Record<string, unknown>) =>
     ipcRenderer.invoke("settings:save-qqbot-config", params),
+  settingsGetWeixinConfig: () => ipcRenderer.invoke("settings:get-weixin-config"),
+  settingsSaveWeixinConfig: (params: Record<string, unknown>) =>
+    ipcRenderer.invoke("settings:save-weixin-config", params),
+  settingsWeixinLoginStart: () =>
+    ipcRenderer.invoke("settings:weixin-login-start"),
+  settingsWeixinLoginWait: (params: Record<string, unknown>) =>
+    ipcRenderer.invoke("settings:weixin-login-wait", params),
   settingsGetDingtalkConfig: () => ipcRenderer.invoke("settings:get-dingtalk-config"),
   settingsSaveDingtalkConfig: (params: Record<string, unknown>) =>
     ipcRenderer.invoke("settings:save-dingtalk-config", params),

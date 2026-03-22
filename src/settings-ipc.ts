@@ -66,8 +66,18 @@ import {
   verifyWecom,
   WECOM_CHANNEL_ID,
 } from "./wecom-config";
+import {
+  extractWeixinConfig,
+  saveWeixinConfig,
+  isWeixinPluginBundled,
+  startWeixinQrLogin,
+  pollWeixinQrStatus,
+  saveWeixinLoginResult,
+  listWeixinAccountIds,
+} from "./weixin-config";
 import { setProxyAccessToken, setProxySearchDedicatedKey, getProxyPort } from "./kimi-auth-proxy";
-import { ensureGatewayAuthTokenInConfig } from "./gateway-auth";
+import { ensureGatewayAuthTokenInConfig, resolveGatewayAuthToken } from "./gateway-auth";
+import { callGatewayRpc } from "./gateway-rpc";
 import { getLaunchAtLoginState, setLaunchAtLoginEnabled } from "./launch-at-login";
 import { installCli, uninstallCli, getCliStatus } from "./cli-integration";
 import * as analytics from "./analytics";
@@ -188,6 +198,7 @@ async function runTrackedSettingsAction<T extends SettingsActionResult>(
 
 interface SettingsIpcOptions {
   requestGatewayRestart?: () => void;
+  getGatewayToken?: () => string;
 }
 
 // 注册 Settings 相关 IPC
@@ -916,6 +927,101 @@ export function registerSettingsIpc(opts: SettingsIpcOptions = {}): void {
 
       writeUserConfigAndRestart(config);
       return { success: true };
+    } catch (err: any) {
+      return { success: false, message: err.message || String(err) };
+    }
+  });
+
+  // ── 读取微信配置 ──
+  ipcMain.handle("settings:get-weixin-config", async () => {
+    try {
+      const config = readUserConfig();
+      const extracted = extractWeixinConfig(config);
+      const accounts = listWeixinAccountIds();
+      return {
+        success: true,
+        data: {
+          ...extracted,
+          bundled: isWeixinPluginBundled(),
+          accounts,
+        },
+      };
+    } catch (err: any) {
+      return { success: false, message: err.message || String(err) };
+    }
+  });
+
+  // ── 保存微信配置（仅 enabled 开关） ──
+  ipcMain.handle("settings:save-weixin-config", async (_event, params) => {
+    const enabled = params?.enabled === true;
+    return runTrackedSettingsAction(
+      "save_channel",
+      { platform: "weixin", enabled },
+      async () => {
+        try {
+          const config = readUserConfig();
+          saveWeixinConfig(config, { enabled });
+          writeUserConfigAndRestart(config);
+          return { success: true };
+        } catch (err: any) {
+          return { success: false, message: err.message || String(err) };
+        }
+      },
+    );
+  });
+
+  // ── 微信扫码登录 — 启动（直接调用 iLink HTTP API，绕过 Gateway RPC） ──
+  ipcMain.handle("settings:weixin-login-start", async () => {
+    try {
+      const result = await startWeixinQrLogin();
+      return {
+        success: true,
+        data: {
+          qrDataUrl: result.qrcodeUrl,
+          qrcode: result.qrcode,
+          message: result.message,
+        },
+      };
+    } catch (err: any) {
+      console.error("[weixin] login-start error:", err.message);
+      return { success: false, message: err.message || String(err) };
+    }
+  });
+
+  // ── 微信扫码登录 — 轮询扫码结果（直接调用 iLink HTTP API） ──
+  ipcMain.handle("settings:weixin-login-wait", async (_event, params) => {
+    try {
+      const qrcode = typeof params?.qrcode === "string" ? params.qrcode : "";
+      if (!qrcode) {
+        return { success: false, message: "缺少 qrcode。" };
+      }
+      const result = await pollWeixinQrStatus(qrcode);
+
+      // 扫码确认成功 → 保存凭据并重启 Gateway
+      if (result.status === "confirmed" && result.accountId && result.botToken) {
+        const normalizedId = saveWeixinLoginResult(result);
+        opts.requestGatewayRestart?.();
+        return {
+          success: true,
+          data: {
+            connected: true,
+            message: "✅ 与微信连接成功！",
+            accountId: normalizedId,
+          },
+        };
+      }
+
+      return {
+        success: true,
+        data: {
+          connected: false,
+          status: result.status,
+          message:
+            result.status === "scaned" ? "已扫码，请在微信中确认…" :
+            result.status === "expired" ? "二维码已过期，请重新生成。" :
+            "等待扫码…",
+        },
+      };
     } catch (err: any) {
       return { success: false, message: err.message || String(err) };
     }

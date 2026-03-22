@@ -679,6 +679,7 @@ ipcMain.handle("gateway:port", () => gateway.getPort());
 registerSetupIpc({ setupManager, onOAuthLoginSuccess: ensureOAuthTokenRefresh });
 registerSettingsIpc({
   requestGatewayRestart: () => requestGatewayRestart("settings:kimi-search"),
+  getGatewayToken: () => gateway.getToken(),
 });
 registerSkillStoreIpc();
 registerWorkspaceIpc();
