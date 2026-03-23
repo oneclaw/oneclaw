@@ -4,7 +4,7 @@ OneClaw Chat UI 的统一轮询机制。
 
 ## 概述
 
-`client-ticker.ts` 提供一个 60 秒间隔的 `setInterval`，所有客户端需要定期执行的逻辑都应注册到这个定时器中，而不是各自创建独立的 interval。
+`client-ticker.ts` 提供一个 30 秒间隔的 `setInterval`，所有客户端需要定期执行的逻辑都应注册到这个定时器中，而不是各自创建独立的 interval。
 
 ## API
 
@@ -24,6 +24,7 @@ OneClaw Chat UI 的统一轮询机制。
 | Name | 用途 | 注册位置 |
 |---|---|---|
 | `cron` | 轮询 `cron.list`，更新侧边栏 badge | `app-gateway.ts` |
+| `sessions` | 轮询会话列表，保持侧边栏对话列表同步 | `app-gateway.ts` |
 
 ## 添加新的轮询逻辑
 

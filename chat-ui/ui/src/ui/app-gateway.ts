@@ -12,7 +12,7 @@ import {
   refreshActiveTab,
   setLastActiveSessionKey,
 } from "./app-settings.ts";
-import { registerTickHandler, startTicker, stopTicker } from "./client-ticker.ts";
+import { registerTickHandler, unregisterTickHandler, startTicker, stopTicker } from "./client-ticker.ts";
 import { loadCronJobs } from "./controllers/cron.ts";
 import { handleAgentEvent, resetToolStream, type AgentEventPayload } from "./app-tool-stream.ts";
 import { loadAgents } from "./controllers/agents.ts";
@@ -160,8 +160,9 @@ export function connectGateway(host: GatewayHost) {
       void loadNodes(host as unknown as OpenClawApp, { quiet: true });
       void loadDevices(host as unknown as OpenClawApp, { quiet: true });
       void refreshActiveTab(host as unknown as Parameters<typeof refreshActiveTab>[0]);
-      // 注册 cron 轮询并启动客户端定时器
+      // 注册定时轮询并启动客户端定时器
       registerTickHandler("cron", () => loadCronJobs(host as unknown as Parameters<typeof loadCronJobs>[0]));
+      registerTickHandler("sessions", () => loadSessions(host as unknown as OpenClawApp));
       startTicker();
     },
     onClose: ({ code, reason }) => {
@@ -170,8 +171,9 @@ export function connectGateway(host: GatewayHost) {
         return;
       }
       host.connected = false;
-      // 断开连接时注销 cron handler 并停止客户端定时器
+      // 断开连接时注销 tick handler 并停止客户端定时器
       unregisterTickHandler("cron");
+      unregisterTickHandler("sessions");
       stopTicker();
       // Code 1012 = Service Restart (expected during config saves, don't show as error)
       if (code !== 1012) {

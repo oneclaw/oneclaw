@@ -1,11 +1,11 @@
 /**
- * 统一的 60 秒客户端轮询定时器
+ * 统一的 30 秒客户端轮询定时器
  *
  * 所有需要周期性执行的客户端逻辑注册到这里，共享同一个 setInterval，
  * 避免多个独立定时器导致的时序混乱和资源浪费。
  */
 
-const TICK_INTERVAL_MS = 60_000;
+const TICK_INTERVAL_MS = 30_000;
 
 const handlers = new Map<string, () => void | Promise<void>>();
 let timerId: number | null = null;
