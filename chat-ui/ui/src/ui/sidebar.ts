@@ -265,15 +265,26 @@ export function renderSidebar(props: SidebarProps) {
 
         ${props.connected
           ? html`
-            <button
-              class="oneclaw-sidebar__item"
-              type="button"
-              @click=${props.onOpenWebUI}
-              data-tooltip=${t("sidebar.fullUI")}
-            >
-              <span class="oneclaw-sidebar__icon">${icons.externalLink}</span>
-              <span class="oneclaw-sidebar__label">${t("sidebar.fullUI")}</span>
-            </button>`
+            <div class="oneclaw-sidebar__reconnect-wrap">
+              <button
+                class="oneclaw-sidebar__item"
+                type="button"
+                @click=${props.onOpenWebUI}
+                data-tooltip=${t("sidebar.fullUI")}
+              >
+                <span class="oneclaw-sidebar__icon">${icons.externalLink}</span>
+                <span class="oneclaw-sidebar__label">${t("sidebar.fullUI")}</span>
+                ${props.errors.length > 0
+                  ? html`<span class="oneclaw-sidebar__error-badge" title=${props.errors.join("\n")}>${props.errors.length}</span>`
+                  : nothing}
+              </button>
+              ${props.errors.length > 0
+                ? html`
+                  <div class="oneclaw-sidebar__error-popup">
+                    ${props.errors.map((msg) => html`<div class="oneclaw-sidebar__error-item">${msg}</div>`)}
+                  </div>`
+                : nothing}
+            </div>`
           : html`
             <div class="oneclaw-sidebar__reconnect-wrap">
               <button

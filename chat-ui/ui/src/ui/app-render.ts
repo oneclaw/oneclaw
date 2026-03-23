@@ -1148,7 +1148,7 @@ export function renderApp(state: AppViewState) {
                   connected: state.connected,
                   canSend: state.connected,
                   disabledReason: null,
-                  error: null,
+                  error: state.lastError,
                   sessions: state.sessionsResult,
                   focusMode: false,
                   onRefresh: () => {
