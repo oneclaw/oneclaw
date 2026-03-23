@@ -648,10 +648,29 @@ export function isCliInstalled(): boolean {
   return getCliStatus().installed;
 }
 
-// Windows 启动自愈：为已开启 CLI 的用户补回当前 PATH，并迁移旧版目录。
-export async function reconcileCliOnAppLaunch(): Promise<void> {
-  if (!IS_WIN) return;
+// 检查磁盘上的 wrapper 内容是否与当前期望一致，一致则跳过重写。
+function isWrapperUpToDate(): boolean {
+  if (IS_WIN) {
+    const wrapperPath = getWinWrapperPath();
+    if (!fs.existsSync(wrapperPath)) return false;
+    try {
+      return fs.readFileSync(wrapperPath, "utf-8") === buildWinWrapper();
+    } catch {
+      return false;
+    }
+  }
+  const wrapperPath = getPosixWrapperPath();
+  if (!fs.existsSync(wrapperPath)) return false;
+  try {
+    return fs.readFileSync(wrapperPath, "utf-8") === buildPosixWrapper();
+  } catch {
+    return false;
+  }
+}
 
+// 启动自愈：更新后 wrapper 内路径可能已变，重新生成以保持一致。
+// 仅在 wrapper 内容过期或偏好需要迁移时才执行写操作。
+export async function reconcileCliOnAppLaunch(): Promise<void> {
   const footprint = readCliInstallFootprint();
   const savedEnabled = getCliEnabledPreference();
   const inferredEnabled = inferCliEnabledPreference(
@@ -666,8 +685,22 @@ export async function reconcileCliOnAppLaunch(): Promise<void> {
     log.info(`[cli] Migrated CLI enabled preference on launch: ${inferredEnabled}`);
   }
 
-  const result = inferredEnabled ? await installCliWindows() : await uninstallCliWindows();
-  if (!result.success) {
-    throw new Error(result.message);
+  if (inferredEnabled) {
+    // wrapper 内容没变就跳过，避免每次启动都写文件和 rc
+    if (isWrapperUpToDate()) {
+      log.info("[cli] wrapper is up-to-date, skipping reconcile");
+      return;
+    }
+    const result = IS_WIN ? await installCliWindows() : await installCliPosix();
+    if (!result.success) {
+      throw new Error(result.message);
+    }
+    log.info("[cli] wrapper reconciled on launch");
+  } else if (footprint.currentInstalled || footprint.legacyInstalled) {
+    // 有残留 wrapper 才清理，避免每次启动都白跑 uninstall
+    const result = IS_WIN ? await uninstallCliWindows() : await uninstallCliPosix();
+    if (!result.success) {
+      throw new Error(result.message);
+    }
   }
 }
