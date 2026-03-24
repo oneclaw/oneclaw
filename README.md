@@ -26,7 +26,8 @@
 6. 在vscode中新开一个命令行，执行openclaw gateway
 7. 再次启动dev开发环境，oneclaw会提示已安装openclaw，选退出。
 8. 这时电脑右下角的oneclaw已经可以正常连接openclaw了,可以开始本地开发环境创作新插件
-9. <img width="1920" height="1043" alt="1464659e2454a5b8395b151f26476f17" src="https://github.com/user-attachments/assets/8edaab24-aa57-430c-a125-b9a73205a735" />
+9. 如果想在DEV开发环境中完整使用OneClaw,先用打包好的安装程序设置好微信和QQ之类的功能，再启动DEV进行程序开发。
+10. <img width="1920" height="1043" alt="1464659e2454a5b8395b151f26476f17" src="https://github.com/user-attachments/assets/8edaab24-aa57-430c-a125-b9a73205a735" />
 
 
 ---
