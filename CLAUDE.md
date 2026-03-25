@@ -2,7 +2,7 @@
 
 ## What This Project Is
 
-OneClaw is a cross-platform desktop app that wraps the [openclaw](https://github.com/anthropics/claude-code) gateway into a standalone installable package. It ships a bundled Node.js 22 runtime and the openclaw npm package, so users need zero dev tooling — just install and run.
+OneClaw is a cross-platform desktop app that wraps the [openclaw](https://github.com/openclaw/openclaw) gateway into a standalone installable package. It ships a bundled Node.js 22 runtime and the openclaw npm package, so users need zero dev tooling — just install and run.
 
 **Three-process architecture:**
 
