@@ -52,7 +52,7 @@ jobs:
 
       - name: 安装 tosutil
         run: |
-          curl -fsSL -o tosutil https://tos-tools.tos-cn-beijing.volces.com/tosutil/latest/tosutil-linux-amd64
+          curl -fsSL -o tosutil https://m645b3e1bb36e-mrap.mrap.accesspoint.tos-global.volces.com/linux/amd64/tosutil
           chmod +x tosutil
 
       - name: 上传分享文案到 TOS

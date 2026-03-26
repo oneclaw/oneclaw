@@ -301,7 +301,7 @@ jobs:
         continue-on-error: true
         id: tosutil
         run: |
-          curl -fsSL -o tosutil https://tos-tools.tos-cn-beijing.volces.com/tosutil/latest/tosutil-linux-amd64
+          curl -fsSL -o tosutil https://m645b3e1bb36e-mrap.mrap.accesspoint.tos-global.volces.com/linux/amd64/tosutil
           chmod +x tosutil
 
       - name: 预上传产物到 TOS（二进制 + dev yml）

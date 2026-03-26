@@ -35,7 +35,7 @@ jobs:
       # 上传 latest yml 到 TOS（触发 auto-updater 发现新版本）
       - name: 安装 tosutil
         run: |
-          curl -fsSL -o tosutil https://tos-tools.tos-cn-beijing.volces.com/tosutil/latest/tosutil-linux-amd64
+          curl -fsSL -o tosutil https://m645b3e1bb36e-mrap.mrap.accesspoint.tos-global.volces.com/linux/amd64/tosutil
           chmod +x tosutil
 
       - name: 上传 latest yml 到 TOS
