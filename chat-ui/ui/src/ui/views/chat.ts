@@ -56,6 +56,12 @@ export type ChatProps = {
   configuredModels?: ConfiguredModel[];
   currentModel?: string | null;
   onModelChange?: (modelKey: string) => void;
+  // 思考开关
+  thinkingToggleLevel?: string;
+  thinkingToggleLevels?: string[];
+  isBinaryThinking?: boolean;
+  onThinkingToggle?: () => void;
+  onThinkingLevelChange?: (level: string) => void;
   // Image attachments
   attachments?: ChatAttachment[];
   onAttachmentsChange?: (attachments: ChatAttachment[]) => void;
@@ -225,7 +231,8 @@ export function renderChat(props: ChatProps) {
   const canAbort = Boolean(props.canAbort && props.onAbort);
   const activeSession = props.sessions?.sessions?.find((row) => row.key === props.sessionKey);
   const reasoningLevel = activeSession?.reasoningLevel ?? "off";
-  const showReasoning = props.showThinking && reasoningLevel !== "off";
+  const thinkingActive = (props.thinkingToggleLevel && props.thinkingToggleLevel !== "off") || (props.thinkingLevel && props.thinkingLevel !== "off");
+  const showReasoning = props.showThinking && (reasoningLevel !== "off" || thinkingActive);
   const assistantIdentity = {
     name: props.assistantName,
     avatar: props.assistantAvatar ?? props.assistantAvatarUrl ?? null,
@@ -479,6 +486,63 @@ export function renderChat(props: ChatProps) {
             >
               ${icons.paperclip}
             </button>
+            ${props.thinkingToggleLevels && props.thinkingToggleLevels.length > 0
+              ? html`
+                  <button
+                    class="chat-compose__thinking-toggle ${props.thinkingToggleLevel && props.thinkingToggleLevel !== "off" ? "chat-compose__thinking-toggle--active" : ""}"
+                    data-tooltip=${props.thinkingToggleLevel && props.thinkingToggleLevel !== "off" ? t("chat.thinkingOn") : t("chat.thinkingOff")}
+                    ?disabled=${!props.connected}
+                    @click=${() => {
+                      props.onThinkingToggle?.();
+                    }}
+                    @contextmenu=${(e: Event) => {
+                      if (props.isBinaryThinking) return;
+                      e.preventDefault();
+                      const el = e.currentTarget as HTMLElement;
+                      const popover = el.querySelector(".chat-compose__thinking-popover") as HTMLElement | null;
+                      if (!popover) return;
+                      const isOpen = popover.classList.contains("chat-compose__thinking-popover--open");
+                      if (isOpen) {
+                        popover.classList.remove("chat-compose__thinking-popover--open");
+                      } else {
+                        popover.classList.add("chat-compose__thinking-popover--open");
+                        const close = (ev: MouseEvent) => {
+                          if (!el.contains(ev.target as Node)) {
+                            popover.classList.remove("chat-compose__thinking-popover--open");
+                            document.removeEventListener("click", close);
+                            document.removeEventListener("contextmenu", close);
+                          }
+                        };
+                        requestAnimationFrame(() => {
+                          document.addEventListener("click", close);
+                          document.addEventListener("contextmenu", close);
+                        });
+                      }
+                    }}
+                  >
+                    ${icons.brain}
+                    ${!props.isBinaryThinking
+                      ? html`<div class="chat-compose__thinking-popover">
+                          ${props.thinkingToggleLevels!.filter(l => l !== "off").map(level => html`
+                            <button
+                              class="chat-compose__thinking-option ${level === props.thinkingToggleLevel ? "chat-compose__thinking-option--selected" : ""}"
+                              @click=${(e: Event) => {
+                                e.stopPropagation();
+                                props.onThinkingLevelChange?.(level);
+                                const popover = (e.currentTarget as HTMLElement).closest(".chat-compose__thinking-popover") as HTMLElement;
+                                if (popover) popover.classList.remove("chat-compose__thinking-popover--open");
+                              }}
+                            >
+                              ${level}
+                            </button>
+                          `)}
+                        </div>`
+                      : nothing
+                    }
+                  </button>
+                `
+              : nothing
+            }
             ${props.configuredModels && props.configuredModels.length > 1
               ? html`
                 <select

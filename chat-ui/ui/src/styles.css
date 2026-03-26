@@ -7610,6 +7610,102 @@ img.chat-avatar {
   background: var(--bg);
 }
 
+/* 思考开关 — 纯图标 toggle */
+.chat-compose__thinking-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  cursor: pointer;
+  border: none;
+  background: transparent;
+  border-radius: 6px;
+  position: relative;
+  user-select: none;
+  transition: color 150ms ease, background 150ms ease;
+  color: var(--muted);
+}
+
+.chat-compose__thinking-toggle:hover:not(:disabled) {
+  color: var(--text);
+  background: var(--bg-hover, rgba(128, 128, 128, 0.1));
+}
+
+.chat-compose__thinking-toggle:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* ON 状态：图标填充 accent 色 */
+.chat-compose__thinking-toggle--active {
+  color: var(--accent);
+}
+
+.chat-compose__thinking-toggle--active svg {
+  fill: var(--accent);
+  stroke: var(--accent);
+}
+
+.chat-compose__thinking-toggle--active:hover:not(:disabled) {
+  color: var(--accent);
+  background: var(--bg-hover, rgba(128, 128, 128, 0.1));
+}
+
+/* OFF 状态：描边，无填充 */
+.chat-compose__thinking-toggle svg {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.5px;
+  transition: fill 150ms ease, stroke 150ms ease;
+}
+
+/* 思考级别 popover — 默认隐藏，长按打开 */
+.chat-compose__thinking-popover {
+  position: absolute;
+  bottom: calc(100% + 4px);
+  left: 0;
+  background: var(--bg-elevated, var(--bg));
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 4px 0;
+  min-width: 120px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  z-index: 100;
+  display: none;
+}
+
+.chat-compose__thinking-popover--open {
+  display: block;
+}
+
+.chat-compose__thinking-option {
+  display: block;
+  width: 100%;
+  padding: 6px 12px;
+  font-size: 12px;
+  font-family: var(--font-body);
+  color: var(--text);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  text-align: left;
+  transition: background 100ms ease;
+}
+
+.chat-compose__thinking-option:hover {
+  background: var(--bg-hover, rgba(128, 128, 128, 0.1));
+}
+
+.chat-compose__thinking-option--selected {
+  color: var(--accent);
+  font-weight: 600;
+}
+
 /* 发送按钮 — 圆形 */
 .chat-compose__send-btn {
   display: inline-flex;

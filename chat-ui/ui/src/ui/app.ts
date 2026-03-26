@@ -228,6 +228,9 @@ export class OpenClawApp extends LitElement {
     chatAttachments: { state: true },
     configuredModels: { state: true },
     currentModel: { state: true },
+    thinkingLevel: { state: true },
+    thinkingLevels: { state: true },
+    isBinaryThinking: { state: true },
     chatManualRefreshInFlight: { state: true },
     sidebarOpen: { state: true },
     sidebarContent: { state: true },
@@ -454,6 +457,9 @@ export class OpenClawApp extends LitElement {
   chatAttachments: ChatAttachment[] = [];
   configuredModels: ConfiguredModel[] = [];
   currentModel: string | null = null;
+  thinkingLevel: string = "off";
+  thinkingLevels: string[] = [];
+  isBinaryThinking: boolean = false;
   chatManualRefreshInFlight = false;
   // Sidebar state for tool output viewing
   sidebarOpen = false;
@@ -738,6 +744,10 @@ export class OpenClawApp extends LitElement {
 
   protected updated(changed: Map<PropertyKey, unknown>) {
     handleUpdated(this as unknown as Parameters<typeof handleUpdated>[0], changed);
+    // 从 loadChatHistory 同步 session 级别的 thinkingLevel
+    if (changed.has("chatThinkingLevel")) {
+      this.thinkingLevel = this.chatThinkingLevel ?? "off";
+    }
   }
 
   connect() {
@@ -1085,6 +1095,7 @@ export class OpenClawApp extends LitElement {
         const defaultModel = this.configuredModels.find((m) => m.isDefault);
         this.currentModel = defaultModel?.key ?? this.configuredModels[0].key;
       }
+      this.updateThinkingCapabilities();
     } catch {
       this.configuredModels = [];
     }
@@ -1104,6 +1115,7 @@ export class OpenClawApp extends LitElement {
     } catch (err) {
       this.lastError = String(err);
     }
+    this.updateThinkingCapabilities();
   }
 
   // 重置模型选择为默认值（新建 session 时调用）
@@ -1113,6 +1125,75 @@ export class OpenClawApp extends LitElement {
       this.currentModel = defaultModel?.key ?? this.configuredModels[0].key;
     } else {
       this.currentModel = null;
+    }
+    this.thinkingLevel = "off";
+    this.updateThinkingCapabilities();
+  }
+
+  // 根据当前模型的 provider 计算支持的思考级别
+  updateThinkingCapabilities() {
+    const model = this.configuredModels.find(m => m.key === this.currentModel);
+    if (!model) {
+      this.thinkingLevels = [];
+      this.isBinaryThinking = false;
+      return;
+    }
+    const provider = model.provider?.toLowerCase() ?? "";
+    const normalizedProvider = (provider === "z.ai" || provider === "z-ai") ? "zai" : provider;
+    if (normalizedProvider === "zai") {
+      this.thinkingLevels = ["off", "on"];
+      this.isBinaryThinking = true;
+    } else {
+      // 保守默认级别，不包含 xhigh（需要模型明确支持）
+      const levels = ["off", "low", "medium", "high"];
+      const modelId = model.key.split("/").pop() ?? "";
+      if (/claude-(opus|sonnet)-4/.test(modelId)) {
+        levels.push("adaptive");
+      }
+      this.thinkingLevels = levels;
+      this.isBinaryThinking = false;
+    }
+    if (this.thinkingLevel !== "off" && !this.thinkingLevels.includes(this.thinkingLevel)) {
+      this.thinkingLevel = "off";
+      this.patchSessionThinkingLevel("off");
+    }
+  }
+
+  // 解析智能默认思考级别
+  resolveDefaultThinkLevel(): string {
+    const model = this.configuredModels.find(m => m.key === this.currentModel);
+    if (!model) return "medium";
+    const provider = model.provider?.toLowerCase() ?? "";
+    const normalizedProvider = (provider === "z.ai" || provider === "z-ai") ? "zai" : provider;
+    if (normalizedProvider === "zai") return "on";
+    const modelId = model.key.split("/").pop() ?? "";
+    if (/claude-(opus|sonnet)-4/.test(modelId)) return "adaptive";
+    return "medium";
+  }
+
+  // 切换思考开关
+  handleThinkingToggle() {
+    const next = this.thinkingLevel === "off" ? this.resolveDefaultThinkLevel() : "off";
+    this.thinkingLevel = next;
+    this.patchSessionThinkingLevel(next);
+  }
+
+  // 选择具体思考级别
+  handleThinkingLevelChange(level: string) {
+    this.thinkingLevel = level;
+    this.patchSessionThinkingLevel(level);
+  }
+
+  // 通过 sessions.patch RPC 持久化
+  private async patchSessionThinkingLevel(level: string) {
+    if (!this.client || !this.connected) return;
+    try {
+      await this.client.request("sessions.patch", {
+        key: this.sessionKey,
+        thinkingLevel: level,
+      });
+    } catch (err) {
+      this.lastError = String(err);
     }
   }
 

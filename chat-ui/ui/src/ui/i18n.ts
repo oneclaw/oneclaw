@@ -154,6 +154,9 @@ const dict: Record<Locale, Record<string, string>> = {
     "chat.removeQueuedMessage": "移除排队消息",
     "chat.attachmentPreview": "图片预览",
     "chat.attachFile": "添加文件",
+    "chat.thinking": "思考",
+    "chat.thinkingOn": "思考已开启",
+    "chat.thinkingOff": "思考已关闭",
 
     // Share prompt
     "sharePrompt.title": "分享 OneClaw 给朋友",
@@ -334,6 +337,9 @@ const dict: Record<Locale, Record<string, string>> = {
     "chat.removeQueuedMessage": "Remove queued message",
     "chat.attachmentPreview": "Attachment preview",
     "chat.attachFile": "Attach file",
+    "chat.thinking": "Think",
+    "chat.thinkingOn": "Thinking enabled",
+    "chat.thinkingOff": "Thinking disabled",
 
     // Share prompt
     "sharePrompt.title": "Share OneClaw with friends",
