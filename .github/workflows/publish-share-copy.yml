@@ -60,7 +60,7 @@ jobs:
           VOLCENGINE_ACCESS_KEY: ${{ secrets.VOLCENGINE_ACCESS_KEY }}
           VOLCENGINE_SECRET_KEY: ${{ secrets.VOLCENGINE_SECRET_KEY }}
         run: |
-          ./tosutil config -e tos-cn-beijing.volces.com -i "$VOLCENGINE_ACCESS_KEY" -k "$VOLCENGINE_SECRET_KEY"
+          ./tosutil config -i "$VOLCENGINE_ACCESS_KEY" -k "$VOLCENGINE_SECRET_KEY" -e tos-cn-beijing.volces.com -re cn-beijing
           ./tosutil cp settings/share-copy-content.json "tos://oneclaw-cn/${{ env.SHARE_COPY_OBJECT_KEY }}" -f
           echo "share-copy-content.json 上传完成"
 
