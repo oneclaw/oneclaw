@@ -179,6 +179,10 @@ export class GatewayProcess {
         // 禁止 openclaw 入口在子进程内二次 respawn，避免 Windows 闪烁控制台窗口
         OPENCLAW_NO_RESPAWN: "1",
         OPENCLAW_LENIENT_CONFIG: "1",
+        // 统一状态目录：Windows 上 HOME 和 USERPROFILE 可能指向不同路径，
+        // OneClaw 用 USERPROFILE 写配置，openclaw 用 HOME 优先读配置，
+        // 显式传入 OPENCLAW_STATE_DIR 消除歧义。
+        OPENCLAW_STATE_DIR: resolveUserStateDir(),
         // 告诉 openclaw 安装根目录，使 extensions 路径解析不依赖 __dirname（asar 内会失败）
         OPENCLAW_INSTALL_ROOT: resolveResourcesPath(),
         OPENCLAW_GATEWAY_TOKEN: this.token,

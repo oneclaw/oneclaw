@@ -517,7 +517,7 @@ function writeBuildConfig(configPath) {
 
 // 确定 openclaw 安装来源：查询 npm latest stable
 function getPackageSource() {
-  // 显式覆盖（调试/测试用逃生舱）
+  // 优先级 1: 环境变量覆盖（调试/测试用逃生舱）
   const explicitSource = readEnvText("OPENCLAW_PACKAGE_SOURCE");
   if (explicitSource) {
     log(`使用 OPENCLAW_PACKAGE_SOURCE 指定来源: ${explicitSource}`);
@@ -527,7 +527,23 @@ function getPackageSource() {
     };
   }
 
-  // 查询 npm registry 获取 openclaw latest 版本
+  // 优先级 2: package.json oneclaw.openclaw 字段（git-tracked 单一事实来源）
+  try {
+    const pkg = JSON.parse(fs.readFileSync(path.join(ROOT, "package.json"), "utf8"));
+    const pinnedVersion = pkg.oneclaw?.openclaw;
+    if (pinnedVersion) {
+      log(`使用 openclaw@${pinnedVersion}（来源: package.json oneclaw.openclaw）`);
+      return {
+        source: pinnedVersion,
+        stampSource: `pinned:openclaw@${pinnedVersion}`,
+      };
+    }
+  } catch {
+    // package.json 读取失败，继续 fallback
+  }
+
+  // 优先级 3: npm latest（带警告）
+  log("⚠️  未在 package.json oneclaw.openclaw 中锁定版本，将使用 npm latest");
   const latestVersion = readRemoteLatestVersion("openclaw", {
     cwd: ROOT,
     env: process.env,
@@ -537,7 +553,7 @@ function getPackageSource() {
   });
 
   if (!latestVersion) {
-    die("无法从 npm 获取 openclaw 最新版本（检查网络或设置 OPENCLAW_PACKAGE_SOURCE 手动指定）");
+    die("无法从 npm 获取 openclaw 最新版本（检查网络或在 package.json oneclaw.openclaw 中指定版本）");
   }
 
   log(`使用 openclaw@${latestVersion}（来源: npm latest）`);
