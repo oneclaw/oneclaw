@@ -10,7 +10,7 @@ on:
 env:
   CDN_DOMAIN: oneclaw.cn
   SHARE_COPY_OBJECT_KEY: config/share-copy-content.json
-  TOS_ENDPOINT: https://m6d669c9e2a6b-mrap.mrap.accesspoint.tos-s3-global.volces.com
+  TOS_ENDPOINT: https://tos-s3-cn-beijing.volces.com
 
 jobs:
   publish:

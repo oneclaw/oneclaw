@@ -23,7 +23,7 @@ env:
   ONECLAW_ANALYTICS_CAPTURE_URL: ${{ secrets.ONECLAW_ANALYTICS_CAPTURE_URL }}
   ONECLAW_ANALYTICS_CAPTURE_FALLBACK_URL: ${{ secrets.ONECLAW_ANALYTICS_CAPTURE_FALLBACK_URL }}
   # TOS MRAP 全球加速（S3 协议）
-  TOS_ENDPOINT: https://m6d669c9e2a6b-mrap.mrap.accesspoint.tos-s3-global.volces.com
+  TOS_ENDPOINT: https://tos-s3-cn-beijing.volces.com
 
 jobs:
   # ── macOS arm64：签名 + 公证 ──
