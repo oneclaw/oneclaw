@@ -98,6 +98,7 @@ export async function sendChatMessage(
   state: ChatState,
   message: string,
   attachments?: ChatAttachment[],
+  thinkingLevel?: string | null,
 ): Promise<string | null> {
   if (!state.client || !state.connected) {
     return null;
@@ -176,6 +177,7 @@ export async function sendChatMessage(
       deliver: false,
       idempotencyKey: runId,
       attachments: apiAttachments,
+      ...(thinkingLevel && thinkingLevel !== "off" ? { thinking: thinkingLevel } : {}),
     });
     return runId;
   } catch (err) {
