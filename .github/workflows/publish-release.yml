@@ -11,6 +11,12 @@ on:
 env:
   CDN_DOMAIN: oneclaw.cn
   TOS_ENDPOINT: https://tos-s3-accelerate.volces.com
+  TOS_BUCKET: oneclaw-cn
+  AWS_ACCESS_KEY_ID: ${{ secrets.VOLCENGINE_ACCESS_KEY }}
+  AWS_SECRET_ACCESS_KEY: ${{ secrets.VOLCENGINE_SECRET_KEY }}
+  AWS_DEFAULT_REGION: cn-beijing
+  VOLCENGINE_ACCESS_KEY: ${{ secrets.VOLCENGINE_ACCESS_KEY }}
+  VOLCENGINE_SECRET_KEY: ${{ secrets.VOLCENGINE_SECRET_KEY }}
 
 jobs:
   publish:
@@ -35,22 +41,15 @@ jobs:
 
       # 上传 latest yml 到 TOS（触发 auto-updater 发现新版本）
       - name: 上传 latest yml 到 TOS
-        env:
-          AWS_ACCESS_KEY_ID: ${{ secrets.VOLCENGINE_ACCESS_KEY }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.VOLCENGINE_SECRET_KEY }}
-          AWS_DEFAULT_REGION: cn-beijing
         run: |
           aws configure set default.s3.addressing_style virtual
-          aws s3 cp out/release/ s3://oneclaw-cn/releases/ --recursive --endpoint-url "$TOS_ENDPOINT" --include "*.yml"
+          aws s3 cp out/release/ "s3://$TOS_BUCKET/releases/" --recursive --endpoint-url "$TOS_ENDPOINT" --include "*.yml"
           echo "latest yml 上传完成"
 
       # 刷新 CDN 缓存
       - name: 刷新 CDN 缓存
-        env:
-          VOLCENGINE_ACCESS_KEY: ${{ secrets.VOLCENGINE_ACCESS_KEY }}
-          VOLCENGINE_SECRET_KEY: ${{ secrets.VOLCENGINE_SECRET_KEY }}
         run: |
           node scripts/volcengine-cdn-refresh.js \
-            "https://oneclaw.cn/releases/latest-mac.yml" \
-            "https://oneclaw.cn/releases/latest.yml"
+            "https://${{ env.CDN_DOMAIN }}/releases/latest-mac.yml" \
+            "https://${{ env.CDN_DOMAIN }}/releases/latest.yml"
           echo "CDN 缓存刷新已提交"
