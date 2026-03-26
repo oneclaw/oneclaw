@@ -10,7 +10,7 @@ on:
 
 env:
   CDN_DOMAIN: oneclaw.cn
-  TOS_ENDPOINT: https://tos-s3-cn-beijing.volces.com
+  TOS_ENDPOINT: https://tos-s3-accelerate.volces.com
 
 jobs:
   publish:
@@ -40,6 +40,7 @@ jobs:
           AWS_SECRET_ACCESS_KEY: ${{ secrets.VOLCENGINE_SECRET_KEY }}
           AWS_DEFAULT_REGION: cn-beijing
         run: |
+          aws configure set default.s3.addressing_style virtual
           aws s3 cp out/release/ s3://oneclaw-cn/releases/ --recursive --endpoint-url "$TOS_ENDPOINT" --include "*.yml"
           echo "latest yml 上传完成"
 

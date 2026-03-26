@@ -23,7 +23,7 @@ env:
   ONECLAW_ANALYTICS_CAPTURE_URL: ${{ secrets.ONECLAW_ANALYTICS_CAPTURE_URL }}
   ONECLAW_ANALYTICS_CAPTURE_FALLBACK_URL: ${{ secrets.ONECLAW_ANALYTICS_CAPTURE_FALLBACK_URL }}
   # TOS MRAP 全球加速（S3 协议）
-  TOS_ENDPOINT: https://tos-s3-cn-beijing.volces.com
+  TOS_ENDPOINT: https://tos-s3-accelerate.volces.com
 
 jobs:
   # ── macOS arm64：签名 + 公证 ──
@@ -299,16 +299,16 @@ jobs:
           done
 
       # 预上传到 TOS：二进制 + dev yml（不含 latest yml，生产通道由 publish-release 推送）
-      # 使用 aws s3 + MRAP 全球加速节点（GitHub Actions runner 在美国，直连北京 TOS 太慢）
       - name: 预上传产物到 TOS（二进制 + dev yml）
         continue-on-error: true
         id: tos-upload
-        timeout-minutes: 10
+        timeout-minutes: 15
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.VOLCENGINE_ACCESS_KEY }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.VOLCENGINE_SECRET_KEY }}
           AWS_DEFAULT_REGION: cn-beijing
         run: |
+          aws configure set default.s3.addressing_style virtual
           aws s3 cp out/release/ s3://oneclaw-cn/releases/ --recursive --endpoint-url "$TOS_ENDPOINT" --exclude "latest*.yml"
           echo "产物预上传完成（二进制 + dev yml，不含 latest yml）"
 

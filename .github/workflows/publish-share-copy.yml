@@ -10,7 +10,7 @@ on:
 env:
   CDN_DOMAIN: oneclaw.cn
   SHARE_COPY_OBJECT_KEY: config/share-copy-content.json
-  TOS_ENDPOINT: https://tos-s3-cn-beijing.volces.com
+  TOS_ENDPOINT: https://tos-s3-accelerate.volces.com
 
 jobs:
   publish:
@@ -57,6 +57,7 @@ jobs:
           AWS_SECRET_ACCESS_KEY: ${{ secrets.VOLCENGINE_SECRET_KEY }}
           AWS_DEFAULT_REGION: cn-beijing
         run: |
+          aws configure set default.s3.addressing_style virtual
           aws s3 cp settings/share-copy-content.json "s3://oneclaw-cn/${{ env.SHARE_COPY_OBJECT_KEY }}" --endpoint-url "$TOS_ENDPOINT"
           echo "share-copy-content.json 上传完成"
 
