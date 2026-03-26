@@ -47,21 +47,21 @@ export const CUSTOM_PROVIDER_PRESETS: Record<string, CustomProviderPreset> = {
     models: ["MiniMax-M2.5", "MiniMax-M2.5-highspeed"],
   },
   "zai-global": {
-    providerKey: "zai",
+    providerKey: "zai-global",
     baseUrl: "https://api.z.ai/api/paas/v4",
     api: "openai-completions",
     placeholder: "...",
     models: ["glm-5", "glm-4.7", "glm-4.7-flash", "glm-4.7-flashx"],
   },
   "zai-cn": {
-    providerKey: "zai",
+    providerKey: "zai-cn",
     baseUrl: "https://open.bigmodel.cn/api/paas/v4",
     api: "openai-completions",
     placeholder: "...",
     models: ["glm-5", "glm-4.7", "glm-4.7-flash", "glm-4.7-flashx"],
   },
   "zai-cn-coding": {
-    providerKey: "zai",
+    providerKey: "zai-cn-coding",
     baseUrl: "https://open.bigmodel.cn/api/coding/paas/v4",
     api: "openai-completions",
     placeholder: "...",
@@ -75,7 +75,7 @@ export const CUSTOM_PROVIDER_PRESETS: Record<string, CustomProviderPreset> = {
     models: ["doubao-seed-2.0-pro", "doubao-seed-2.0-lite", "doubao-seed-2.0-code", "doubao-seed-code"],
   },
   "volcengine-coding": {
-    providerKey: "volcengine",
+    providerKey: "volcengine-coding",
     baseUrl: "https://ark.cn-beijing.volces.com/api/coding",
     api: "anthropic-messages",
     placeholder: "...",
@@ -89,7 +89,7 @@ export const CUSTOM_PROVIDER_PRESETS: Record<string, CustomProviderPreset> = {
     models: ["qwen-coder-plus-latest", "qwen-plus-latest", "qwen-max-latest", "qwen-turbo-latest"],
   },
   "qwen-coding": {
-    providerKey: "qwen",
+    providerKey: "qwen-coding",
     baseUrl: "https://coding.dashscope.aliyuncs.com/v1",
     api: "openai-completions",
     placeholder: "sk-sp-...",
@@ -103,6 +103,21 @@ export const CUSTOM_PROVIDER_PRESETS: Record<string, CustomProviderPreset> = {
     models: ["deepseek-chat", "deepseek-reasoner"],
   },
 };
+
+// 手动 custom provider：从 baseURL 确定性派生唯一 configKey
+// 同一 URL 永远产生同一 key，不同 URL 产生不同 key
+export function deriveCustomConfigKey(baseURL: string): string {
+  try {
+    const u = new URL(baseURL);
+    const slug = (u.host + u.pathname)
+      .replace(/\/+$/, "")
+      .replace(/[^a-zA-Z0-9]+/g, "-")
+      .replace(/^-|-$/g, "");
+    return slug ? `custom-${slug}` : "custom";
+  } catch {
+    return "custom";
+  }
+}
 
 // ── 构建 Provider 配置对象 ──
 
@@ -225,30 +240,26 @@ export function verifyGoogle(apiKey: string): Promise<void> {
   );
 }
 
-// Moonshot 子平台验证（根据子平台选择不同 URL）
-export function verifyMoonshot(apiKey: string, subPlatform?: string, modelID?: string): Promise<void> {
+// Kimi Code 验证：始终通过本地 auth proxy（proxy 自动注入 OAuth token）
+export function verifyKFC(proxyPort: number, modelID?: string): Promise<void> {
+  return jsonRequest(`http://127.0.0.1:${proxyPort}/coding/v1/messages`, {
+    method: "POST",
+    headers: {
+      "anthropic-version": "2023-06-01",
+      "content-type": "application/json",
+    },
+    body: JSON.stringify({
+      model: modelID || "k2p5",
+      max_tokens: 1,
+      messages: [{ role: "user", content: "hi" }],
+    }),
+  });
+}
+
+// Moonshot 子平台验证（moonshot-cn / moonshot-ai）
+export function verifyMoonshot(apiKey: string, subPlatform?: string): Promise<void> {
   const sub = MOONSHOT_SUB_PLATFORMS[subPlatform || "moonshot-cn"];
-  const baseUrl = sub.baseUrl;
-
-  // Kimi Code 使用 Anthropic Messages 协议验证
-  if (subPlatform === "kimi-code") {
-    return jsonRequest(`${baseUrl}/v1/messages`, {
-      method: "POST",
-      headers: {
-        "x-api-key": apiKey,
-        "anthropic-version": "2023-06-01",
-        "content-type": "application/json",
-      },
-      body: JSON.stringify({
-        model: modelID || "k2p5",
-        max_tokens: 1,
-        messages: [{ role: "user", content: "hi" }],
-      }),
-    });
-  }
-
-  // moonshot-cn / moonshot-ai 使用 OpenAI 兼容 /models 接口
-  return jsonRequest(`${baseUrl}/models`, {
+  return jsonRequest(`${sub.baseUrl}/models`, {
     headers: { Authorization: `Bearer ${apiKey}` },
   });
 }
@@ -435,6 +446,7 @@ export async function verifyProvider(params: {
   appSecret?: string;
   clientSecret?: string;
   customPreset?: string;
+  proxyPort?: number;
 }): Promise<{ success: boolean; message?: string }> {
   const {
     provider,
@@ -448,6 +460,7 @@ export async function verifyProvider(params: {
     appSecret,
     clientSecret,
     customPreset,
+    proxyPort,
   } = params;
   try {
     switch (provider) {
@@ -461,7 +474,12 @@ export async function verifyProvider(params: {
         await verifyGoogle(apiKey!);
         break;
       case "moonshot":
-        await verifyMoonshot(apiKey!, subPlatform, modelID);
+        if (subPlatform === "kimi-code") {
+          if (!proxyPort || proxyPort <= 0) throw new Error("Kimi Code auth proxy not running");
+          await verifyKFC(proxyPort, modelID);
+        } else {
+          await verifyMoonshot(apiKey!, subPlatform);
+        }
         break;
       case "custom": {
         const customPre = customPreset ? CUSTOM_PROVIDER_PRESETS[customPreset] : undefined;

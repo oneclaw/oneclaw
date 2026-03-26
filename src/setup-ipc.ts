@@ -9,6 +9,7 @@ import {
   CUSTOM_PROVIDER_PRESETS,
   verifyProvider,
   buildProviderConfig,
+  deriveCustomConfigKey,
   saveMoonshotConfig,
   readUserConfig,
   writeUserConfig,
@@ -16,7 +17,7 @@ import {
 import * as log from "./logger";
 import { installCli, uninstallCli } from "./cli-integration";
 import { saveKimiSearchConfig, writeKimiApiKey, ensureMemorySearchProxyConfig } from "./kimi-config";
-import { setProxyAccessToken, getProxyPort } from "./kimi-auth-proxy";
+import { startAuthProxy, setProxyAccessToken, getProxyPort } from "./kimi-auth-proxy";
 import {
   detectExistingInstallation,
   killPortProcess,
@@ -166,7 +167,15 @@ export function registerSetupIpc(deps: SetupIpcDeps): void {
   // ── 验证 API Key ──
   ipcMain.handle("setup:verify-key", async (_event, params) => {
     const provider = typeof params?.provider === "string" ? params.provider : "";
-    return runTrackedSetupAction("verify_key", { provider }, async () => verifyProvider(params));
+    // kimi-code 验证前：确保 proxy 已启动并持有最新 token
+    if (params?.subPlatform === "kimi-code" && params?.apiKey) {
+      if (getProxyPort() <= 0) {
+        await startAuthProxy();
+      }
+      setProxyAccessToken(params.apiKey);
+    }
+    return runTrackedSetupAction("verify_key", { provider }, async () =>
+      verifyProvider({ ...params, proxyPort: getProxyPort() }));
   });
 
   // ── 保存配置到 ~/.openclaw/openclaw.json ──
@@ -218,9 +227,11 @@ export function registerSetupIpc(deps: SetupIpcDeps): void {
             }
           }
         } else {
-          // 内置预设命中时，使用预设的 providerKey 作为配置键
+          // 配置键：预设用预设 key，手动 custom 从 baseURL 派生唯一 key
           const customPre = customPreset ? CUSTOM_PROVIDER_PRESETS[customPreset] : undefined;
-          const configKey = customPre ? customPre.providerKey : provider;
+          const configKey = customPre
+            ? customPre.providerKey
+            : (provider === "custom" && baseURL) ? deriveCustomConfigKey(baseURL) : provider;
 
           // 构造 provider 配置
           const providerConfig = buildProviderConfig(provider, apiKey, modelID, baseURL, api, supportImage, customPreset);

@@ -70,17 +70,17 @@
       models: ["MiniMax-M2.5", "MiniMax-M2.5-highspeed"],
     },
     "zai-global": {
-      providerKey: "zai",
+      providerKey: "zai-global",
       placeholder: "...",
       models: ["glm-5", "glm-4.7", "glm-4.7-flash", "glm-4.7-flashx"],
     },
     "zai-cn": {
-      providerKey: "zai",
+      providerKey: "zai-cn",
       placeholder: "...",
       models: ["glm-5", "glm-4.7", "glm-4.7-flash", "glm-4.7-flashx"],
     },
     "zai-cn-coding": {
-      providerKey: "zai",
+      providerKey: "zai-cn-coding",
       placeholder: "...",
       models: ["glm-5", "glm-4.7", "glm-4.7-flash", "glm-4.7-flashx"],
     },
@@ -90,7 +90,7 @@
       models: ["doubao-seed-2.0-pro", "doubao-seed-2.0-lite", "doubao-seed-2.0-code", "doubao-seed-code"],
     },
     "volcengine-coding": {
-      providerKey: "volcengine",
+      providerKey: "volcengine-coding",
       placeholder: "...",
       models: ["doubao-seed-2.0-code", "doubao-seed-2.0-pro", "doubao-seed-2.0-lite", "doubao-seed-code", "minimax-m2.5", "glm-4.7", "deepseek-v3.2", "kimi-k2.5", "ark-code-latest"],
     },
@@ -100,7 +100,7 @@
       models: ["qwen-coder-plus-latest", "qwen-plus-latest", "qwen-max-latest", "qwen-turbo-latest"],
     },
     "qwen-coding": {
-      providerKey: "qwen",
+      providerKey: "qwen-coding",
       placeholder: "sk-sp-...",
       models: ["qwen3.5-plus", "kimi-k2.5", "glm-5", "MiniMax-M2.5",],
     },
@@ -947,10 +947,13 @@
   // ── 状态 ──
 
   let currentProvider = "moonshot";
-  let currentEditingModelKey = null; // null = 新增模式, string = 编辑模式
-  let formMode = "edit"; // "add" = 新增模式, "edit" = 编辑模式
+  // 编辑器状态机（discriminated union）:
+  // { mode: "idle" } | { mode: "add" } | { mode: "edit", modelKey: string, providerKey: string }
+  var editorState = { mode: "idle" };
   let modelListData = []; // settingsGetConfiguredModels 返回的模型列表缓存
   let saving = false;
+  // OAuth 登录后暂存真实 access_token，点击"新增/保存"时才使用
+  var pendingOAuthToken = null;
   let currentChatPlatform = "feishu";
   let chSaving = false;
   let chPairingLoading = false;
@@ -1155,7 +1158,11 @@
   }
 
   // 根据 provider + subPlatform 查找已保存的配置
-  function lookupSavedProvider(provider, subPlatform) {
+  // overrideKey: 编辑已有模型时传入真实 providerKey，跳过推断
+  function lookupSavedProvider(provider, subPlatform, overrideKey) {
+    if (overrideKey && savedProviders[overrideKey]) {
+      return savedProviders[overrideKey];
+    }
     if (provider === "moonshot") {
       var sub = subPlatform || getSubPlatform();
       var provKey = sub === "kimi-code" ? "kimi-coding" : "moonshot";
@@ -1166,7 +1173,7 @@
       var presetKey = els.customPreset.value;
       var preset = presetKey ? CUSTOM_PRESETS[presetKey] : null;
       if (preset) {
-        return savedProviders[preset.providerKey] || savedProviders["custom"] || null;
+        return savedProviders[preset.providerKey] || null;
       }
       return savedProviders["custom"] || null;
     }
@@ -1174,8 +1181,9 @@
   }
 
   // 用已保存的配置回填 UI（apiKey、model、custom 字段）
-  function fillSavedProviderFields(provider, subPlatform) {
-    var saved = lookupSavedProvider(provider, subPlatform);
+  // overrideKey: 编辑模式下传入真实 providerKey
+  function fillSavedProviderFields(provider, subPlatform, overrideKey) {
+    var saved = lookupSavedProvider(provider, subPlatform, overrideKey);
     if (!saved) {
       els.apiKeyInput.value = "";
       return;
@@ -1354,7 +1362,7 @@
       els.oauthAdvanced.removeAttribute("open");
       els.platformLink.classList.add("hidden");
       // 新增模式下只检查登录状态，不加载用量
-      if (formMode === "add") {
+      if (editorState.mode === "add") {
         toggleEl(els.usagePanel, false);
         checkOAuthStatusOnly();
       } else {
@@ -1465,58 +1473,12 @@
         return;
       }
 
-      var modelID = els.modelSelect.value === CUSTOM_MODEL_SENTINEL
-        ? (els.customModelInput.value || "").trim() || "k2p5"
-        : els.modelSelect.value || "k2p5";
-
-      // 先验证 token 是否有会员权限
-      var verifyResult = await window.oneclaw.settingsVerifyKey({
-        provider: "moonshot",
-        apiKey: result.accessToken,
-        modelID: modelID,
-        subPlatform: "kimi-code",
-      });
-
-      if (!verifyResult.success) {
-        if (window.oneclaw.kimiOAuthLogout) {
-          window.oneclaw.kimiOAuthLogout();
-        }
-        showOAuthNoMembership();
-        setOAuthLoading(false);
-        return;
-      }
-
-      var saveResult = await window.oneclaw.settingsSaveProvider({
-        provider: "moonshot",
-        apiKey: result.accessToken,
-        modelID: modelID,
-        baseURL: "",
-        api: "",
-        subPlatform: "kimi-code",
-        supportImage: true,
-        customPreset: "",
-      });
-
+      // 暂存真实 token，点击"新增/保存"时才验证和保存
+      pendingOAuthToken = result.accessToken;
       setOAuthLoading(false);
-
-      if (!saveResult.success) {
-        showMsg(saveResult.message || "Save failed", "error");
-        return;
-      }
-
       showOAuthSuccess();
-      showToast(t("common.saved"));
-      loadUsage();
-
-      // 刷新缓存
-      try {
-        var refreshResult = await window.oneclaw.settingsGetConfig();
-        if (refreshResult.success && refreshResult.data && refreshResult.data.savedProviders) {
-          savedProviders = refreshResult.data.savedProviders;
-        }
-      } catch {}
     } catch (err) {
-      showMsg(t("error.connection") + (err.message || ""), "error");
+      showMsg(t("error.connection") + (err.message || "Unknown error"), "error");
       setOAuthLoading(false);
     }
   }
@@ -1535,6 +1497,7 @@
     if (window.oneclaw?.kimiOAuthLogout) {
       await window.oneclaw.kimiOAuthLogout();
     }
+    pendingOAuthToken = null;
     // 隐藏退出按钮，恢复登录按钮
     toggleEl(els.btnOAuthLogout, false);
     toggleEl(els.btnOAuth, true);
@@ -1628,13 +1591,13 @@
   // 加载用量数据（仅编辑模式 + kimi-code 子平台展示）
   async function loadUsage() {
     if (!window.oneclaw?.kimiGetUsage) return;
-    if (formMode === "add") return;
+    if (editorState.mode === "add") return;
     if (!(currentProvider === "moonshot" && getSubPlatform() === "kimi-code")) return;
     els.btnUsageRefresh.classList.add("spinning");
     try {
       var result = await window.oneclaw.kimiGetUsage();
       // 异步返回后再次校验：用户可能已切走或进入新增模式
-      if (formMode === "add") return;
+      if (editorState.mode === "add") return;
       if (!(currentProvider === "moonshot" && getSubPlatform() === "kimi-code")) return;
       if (!result.success || !result.data) {
         setUsageCard(els.usageWeeklyPercent, els.usageWeeklyReset, els.usageWeeklyBar, 0, 0, 0);
@@ -1709,11 +1672,25 @@
 
   // ── 保存 Provider 配置 ──
 
+  // kimi-code OAuth 已登录：退出按钮可见 + kimi-code 子平台
+  function isKimiCodeOAuthActive() {
+    return currentProvider === "moonshot"
+      && getSubPlatform() === "kimi-code"
+      && els.btnOAuthLogout
+      && !els.btnOAuthLogout.classList.contains("hidden");
+  }
+
   async function handleSave() {
     if (saving) return;
 
+    var kimiOAuth = isKimiCodeOAuthActive();
     var apiKey = els.apiKeyInput.value.trim();
-    if (!apiKey) {
+    // kimi-code OAuth：优先使用暂存的真实 token（登录后首次保存）
+    if (kimiOAuth && pendingOAuthToken) {
+      apiKey = pendingOAuthToken;
+    }
+    // kimi-code OAuth 模式下 apiKey 可能是 "proxy-managed"（已保存过），不需要用户手动输入
+    if (!apiKey && !kimiOAuth) {
       showMsg(t("error.noKey"), "error");
       return;
     }
@@ -1725,22 +1702,39 @@
     hideMsg();
 
     try {
-      // 先验证
-      var verifyResult = await window.oneclaw.settingsVerifyKey(params);
+      // kimi-code OAuth 时通过代理验证，其他走直连验证
+      var verifyParams = kimiOAuth
+        ? Object.assign({}, params, { verifyViaProxy: true })
+        : params;
+      var verifyResult = await window.oneclaw.settingsVerifyKey(verifyParams);
       if (!verifyResult.success) {
+        // kimi-code OAuth 首次保存：区分 401（无会员）和其他错误
+        if (kimiOAuth && pendingOAuthToken) {
+          var is401 = verifyResult.message && /\b401\b/.test(verifyResult.message);
+          if (is401) {
+            pendingOAuthToken = null;
+            if (window.oneclaw.kimiOAuthLogout) window.oneclaw.kimiOAuthLogout();
+            showOAuthNoMembership();
+            setSaving(false);
+            return;
+          }
+        }
         showMsg(verifyResult.message || t("error.verifyFailed"), "error");
         setSaving(false);
         return;
       }
 
-      // 构造保存 payload，注入别名和 add 模式标志
+      // 构造保存 payload，注入 action / modelKey / 别名
       var payload = buildSavePayload(params);
       var alias = (els.modelAlias.value || "").trim();
       if (alias) payload.modelAlias = alias;
-      // add 模式（新增模型）不切换默认模型
-      if (currentEditingModelKey === null) {
-        payload.setAsDefault = false;
+      payload.action = editorState.mode === "edit" ? "update" : "add";
+      if (editorState.mode === "edit") {
+        payload.modelKey = editorState.modelKey;
       }
+      payload.setAsDefault = editorState.mode === "edit";
+      // kimi-code OAuth：有真实 token 时后端正常处理，无真实 token 时保留已有代理配置
+      if (kimiOAuth && !pendingOAuthToken) payload.keepProxyAuth = true;
 
       // 再保存
       var saveResult = await window.oneclaw.settingsSaveProvider(payload);
@@ -1751,6 +1745,7 @@
       }
 
       setSaving(false);
+      pendingOAuthToken = null;
       showToast(t("common.saved"));
 
       // 保存成功后刷新 savedProviders 缓存
@@ -3700,7 +3695,7 @@
     modelListData.forEach(function (item) {
       var div = document.createElement("div");
       div.className = "model-list-item";
-      if (item.key === currentEditingModelKey) {
+      if (item.key === editorState.modelKey) {
         div.classList.add("active");
       }
       div.dataset.modelKey = item.key;
@@ -3733,7 +3728,8 @@
       if (item.isDefault) delBtn.disabled = true;
       delBtn.addEventListener("click", function (e) {
         e.stopPropagation();
-        currentEditingModelKey = item.key;
+        var sk = item.key.indexOf("/");
+        editorState = { mode: "edit", modelKey: item.key, providerKey: sk > 0 ? item.key.slice(0, sk) : item.key };
         handleDeleteModel();
       });
       actions.appendChild(delBtn);
@@ -3749,7 +3745,8 @@
       if (item.isDefault) starBtn.disabled = true;
       starBtn.addEventListener("click", function (e) {
         e.stopPropagation();
-        currentEditingModelKey = item.key;
+        var sk = item.key.indexOf("/");
+        editorState = { mode: "edit", modelKey: item.key, providerKey: sk > 0 ? item.key.slice(0, sk) : item.key };
         handleSetDefault();
       });
       actions.appendChild(starBtn);
@@ -3765,8 +3762,12 @@
 
   // 选中列表中的某个模型，进入编辑模式
   function selectModelInList(modelKey) {
-    currentEditingModelKey = modelKey;
-    formMode = "edit";
+    var slashIdx0 = modelKey.indexOf("/");
+    editorState = {
+      mode: "edit",
+      modelKey: modelKey,
+      providerKey: slashIdx0 > 0 ? modelKey.slice(0, slashIdx0) : modelKey,
+    };
     hideMsg();
 
     // 高亮列表项（placeholder 保留但取消高亮）
@@ -3811,8 +3812,8 @@
     // 锁定 provider tabs
     lockProviderTabs(uiProvider);
 
-    // 从 savedProviders 回填 apiKey
-    fillSavedProviderFields(uiProvider, subPlatform);
+    // 从 savedProviders 回填 apiKey（传入真实 providerKey 避免 lookup 推断失败）
+    fillSavedProviderFields(uiProvider, subPlatform, providerKey);
 
     // 选中模型
     selectOrAppendModel(modelId);
@@ -3827,8 +3828,7 @@
 
   // 进入新增模式
   function enterAddMode() {
-    currentEditingModelKey = null;
-    formMode = "add";
+    editorState = { mode: "add" };
     hideMsg();
 
     // 取消列表高亮
@@ -3869,7 +3869,7 @@
     els.modelAlias.value = "";
     toggleEl(els.modelAliasGroup, true);
 
-    // 重置 OAuth / 用量面板（formMode=add 时用量不显示，OAuth 登录仍可用）
+    // 重置 OAuth / 用量面板（add 模式时用量不显示，OAuth 登录仍可用）
     updateOAuthVisibility();
 
     // 隐藏编辑按钮
@@ -3928,15 +3928,15 @@
 
   // 删除模型
   async function handleDeleteModel() {
-    if (!currentEditingModelKey) return;
-    var entry = modelListData.find(function (m) { return m.key === currentEditingModelKey; });
+    if (!editorState.modelKey) return;
+    var entry = modelListData.find(function (m) { return m.key === editorState.modelKey; });
     if (entry && entry.isDefault) {
       showMsg(t("settings.cannotDeleteDefault"), "error");
       return;
     }
     if (!confirm(t("settings.confirmDelete"))) return;
     try {
-      var result = await window.oneclaw.settingsDeleteModel({ modelKey: currentEditingModelKey });
+      var result = await window.oneclaw.settingsDeleteModel({ modelKey: editorState.modelKey });
       if (!result.success) {
         showMsg(result.message || "Delete failed", "error");
         return;
@@ -3951,9 +3951,9 @@
 
   // 设为默认模型
   async function handleSetDefault() {
-    if (!currentEditingModelKey) return;
+    if (!editorState.modelKey) return;
     try {
-      var result = await window.oneclaw.settingsSetDefaultModel({ modelKey: currentEditingModelKey });
+      var result = await window.oneclaw.settingsSetDefaultModel({ modelKey: editorState.modelKey });
       if (!result.success) {
         showMsg(result.message || "Set default failed", "error");
         return;
@@ -3961,7 +3961,7 @@
       showToast(t("settings.defaultModelSet"));
       await renderModelList();
       // 刷新编辑态按钮
-      selectModelInList(currentEditingModelKey);
+      selectModelInList(editorState.modelKey);
     } catch (err) {
       showMsg(t("error.connection") + (err.message || ""), "error");
     }

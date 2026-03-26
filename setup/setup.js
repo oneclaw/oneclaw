@@ -62,17 +62,17 @@
       models: ["MiniMax-M2.5", "MiniMax-M2.5-highspeed"],
     },
     "zai-global": {
-      providerKey: "zai",
+      providerKey: "zai-global",
       placeholder: "...",
       models: ["glm-5", "glm-4.7", "glm-4.7-flash", "glm-4.7-flashx"],
     },
     "zai-cn": {
-      providerKey: "zai",
+      providerKey: "zai-cn",
       placeholder: "...",
       models: ["glm-5", "glm-4.7", "glm-4.7-flash", "glm-4.7-flashx"],
     },
     "zai-cn-coding": {
-      providerKey: "zai",
+      providerKey: "zai-cn-coding",
       placeholder: "...",
       models: ["glm-5", "glm-4.7", "glm-4.7-flash", "glm-4.7-flashx"],
     },
@@ -82,7 +82,7 @@
       models: ["doubao-seed-2.0-pro", "doubao-seed-2.0-lite", "doubao-seed-2.0-code", "doubao-seed-code"],
     },
     "volcengine-coding": {
-      providerKey: "volcengine",
+      providerKey: "volcengine-coding",
       placeholder: "...",
       models: ["doubao-seed-2.0-code", "doubao-seed-2.0-pro", "doubao-seed-2.0-lite", "doubao-seed-code", "minimax-m2.5", "glm-4.7", "deepseek-v3.2", "kimi-k2.5", "ark-code-latest"],
     },
@@ -92,7 +92,7 @@
       models: ["qwen-coder-plus-latest", "qwen-plus-latest", "qwen-max-latest", "qwen-turbo-latest"],
     },
     "qwen-coding": {
-      providerKey: "qwen",
+      providerKey: "qwen-coding",
       placeholder: "sk-sp-...",
       models: ["qwen3.5-plus", "kimi-k2.5", "glm-5", "MiniMax-M2.5",],
     },

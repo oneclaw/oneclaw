@@ -25,6 +25,7 @@ import {
   verifyQqbot,
   verifyDingtalk,
   buildProviderConfig,
+  deriveCustomConfigKey,
   saveMoonshotConfig,
   readUserConfig,
   writeUserConfig,
@@ -76,7 +77,7 @@ import {
   listWeixinAccountIds,
   clearWeixinAccounts,
 } from "./weixin-config";
-import { setProxyAccessToken, setProxySearchDedicatedKey, getProxyPort } from "./kimi-auth-proxy";
+import { startAuthProxy, setProxyAccessToken, setProxySearchDedicatedKey, getProxyPort } from "./kimi-auth-proxy";
 import { ensureGatewayAuthTokenInConfig, resolveGatewayAuthToken } from "./gateway-auth";
 import { callGatewayRpc } from "./gateway-rpc";
 import { getLaunchAtLoginState, setLaunchAtLoginEnabled } from "./launch-at-login";
@@ -236,10 +237,15 @@ export function registerSettingsIpc(opts: SettingsIpcOptions = {}): void {
           if (!id) continue;
           const modelKey = `${providerKey}/${id}`;
           const name = typeof m === "object" ? (m.name || id) : id;
+          // custom-xxx key 用 baseUrl hostname 做显示名，更可读
+          let displayProvider = providerKey;
+          if (providerKey.startsWith("custom-") && (prov as any).baseUrl) {
+            try { displayProvider = new URL((prov as any).baseUrl).hostname; } catch {}
+          }
           result.push({
             key: modelKey,
             name,
-            provider: providerKey,
+            provider: displayProvider,
             isDefault: modelKey === primary,
           });
         }
@@ -374,7 +380,15 @@ export function registerSettingsIpc(opts: SettingsIpcOptions = {}): void {
   // ── 验证 API Key（复用 provider-config） ──
   ipcMain.handle("settings:verify-key", async (_event, params) => {
     const provider = typeof params?.provider === "string" ? params.provider : "";
-    return runTrackedSettingsAction("verify_key", { provider }, async () => verifyProvider(params));
+    // kimi-code 验证前：确保 proxy 已启动并持有最新 token
+    if (params?.subPlatform === "kimi-code" && params?.apiKey) {
+      if (getProxyPort() <= 0) {
+        await startAuthProxy();
+      }
+      setProxyAccessToken(params.apiKey);
+    }
+    return runTrackedSettingsAction("verify_key", { provider }, async () =>
+      verifyProvider({ ...params, proxyPort: getProxyPort() }));
   });
 
   // ── 读取最新分享文案（服务端维护中英文版本） ──
@@ -394,7 +408,7 @@ export function registerSettingsIpc(opts: SettingsIpcOptions = {}): void {
 
   // ── 保存 provider 配置 ──
   ipcMain.handle("settings:save-provider", async (_event, params) => {
-    const { provider, apiKey, modelID, baseURL, api, subPlatform, supportImage, customPreset, setAsDefault, modelAlias } = params;
+    const { provider, apiKey, modelID, baseURL, api, subPlatform, supportImage, customPreset, setAsDefault, modelAlias, action, modelKey, keepProxyAuth } = params;
     const trackedProps = {
       provider,
       model: modelID,
@@ -412,53 +426,185 @@ export function registerSettingsIpc(opts: SettingsIpcOptions = {}): void {
         config.agents.defaults ??= {};
         config.agents.defaults.model ??= {};
 
-        if (provider === "moonshot") {
-          // 记住现有 models 再写入（saveMoonshotConfig 会覆盖）
-          const sub = MOONSHOT_SUB_PLATFORMS[subPlatform || "moonshot-cn"];
-          const provKey = sub?.providerKey || "moonshot";
-          const prevModels: any[] = config.models.providers[provKey]?.models ?? [];
+        if (action === "update" && modelKey) {
+          // === 精确更新，不覆写 ===
+          const slashIdx = modelKey.indexOf("/");
+          if (slashIdx <= 0) throw new Error(`Invalid modelKey: ${modelKey}`);
+          const providerKey = modelKey.slice(0, slashIdx);
+          const modelId = modelKey.slice(slashIdx + 1);
+          const prov = config.models.providers[providerKey];
+          if (!prov) throw new Error(`Provider not found: ${providerKey}`);
 
-          // saveMoonshotConfig 内部会设置 primary，需先保存原值
-          const prevPrimary = config.agents.defaults.model.primary;
-          saveMoonshotConfig(config, apiKey, modelID, subPlatform);
+          // 只更新变更的 provider 级字段（keepProxyAuth 时不覆写）
+          if (!keepProxyAuth) {
+            if (apiKey && apiKey !== prov.apiKey) prov.apiKey = apiKey;
+            if (baseURL && baseURL !== prov.baseUrl) prov.baseUrl = baseURL;
+            if (api && api !== prov.api) prov.api = api;
 
-          // add 模式：不切换默认模型，恢复原 primary
-          if (setAsDefault === false && prevPrimary) {
-            config.agents.defaults.model.primary = prevPrimary;
+            // 代理模式：将真实 key 存 sidecar，config 中写占位符
+            if (subPlatform === "kimi-code" && getProxyPort() > 0) {
+              writeKimiApiKey(apiKey);
+              setProxyAccessToken(apiKey);
+              prov.apiKey = "proxy-managed";
+              prov.baseUrl = `http://127.0.0.1:${getProxyPort()}/coding`;
+            }
           }
 
-          // 代理模式：将真实 key 存 sidecar，config 中写占位符
-          if (subPlatform === "kimi-code" && getProxyPort() > 0) {
-            writeKimiApiKey(apiKey);
-            setProxyAccessToken(apiKey);
-            const provKeyProxy = sub?.providerKey || "kimi-coding";
-            config.models.providers[provKeyProxy].apiKey = "proxy-managed";
-            config.models.providers[provKeyProxy].baseUrl = `http://127.0.0.1:${getProxyPort()}/coding`;
+          // 原地更新模型 entry
+          if (Array.isArray(prov.models)) {
+            const modelIdx = prov.models.findIndex((m: any) => {
+              const id = typeof m === "string" ? m : m?.id;
+              return id === modelId;
+            });
+            if (modelIdx >= 0) {
+              let entry = prov.models[modelIdx];
+              if (typeof entry === "string") {
+                entry = { id: entry, name: entry, input: ["text"] };
+                prov.models[modelIdx] = entry;
+              }
+              if (supportImage !== undefined) {
+                entry.input = supportImage ? ["text", "image"] : ["text"];
+              }
+            }
           }
 
-          // 合并：保留已有模型，确保选中模型在列表中
-          mergeModels(config.models.providers[provKey], modelID, prevModels);
+          // 应用别名
+          applyModelAlias(prov, modelId, modelAlias);
 
-          // 设置模型别名
-          applyModelAlias(config.models.providers[provKey], modelID, modelAlias);
+          // 编辑模式保持默认
+          if (setAsDefault === true) {
+            config.agents.defaults.model.primary = modelKey;
+          }
+        } else if (action === "add") {
+          // === 新增模型 ===
+          if (provider === "moonshot") {
+            // Moonshot 路径：使用 saveMoonshotConfig 创建/更新 provider
+            const sub = MOONSHOT_SUB_PLATFORMS[subPlatform || "moonshot-cn"];
+            const provKey = sub?.providerKey || "moonshot";
+            const existingProv = config.models.providers[provKey];
+
+            if (existingProv) {
+              // provider 已存在 → 追加模型
+              // keepProxyAuth 时不覆写 apiKey/baseUrl（OAuth 代理已就绪）
+              if (!keepProxyAuth) {
+                existingProv.apiKey = apiKey;
+                if (sub) {
+                  existingProv.baseUrl = sub.baseUrl;
+                  existingProv.api = sub.api;
+                }
+              }
+              // 追加模型（如果不存在）
+              if (!Array.isArray(existingProv.models)) existingProv.models = [];
+              const hasModel = existingProv.models.some((m: any) => {
+                const id = typeof m === "string" ? m : m?.id;
+                return id === modelID;
+              });
+              if (!hasModel) {
+                existingProv.models.push({ id: modelID, name: modelID, input: ["text", "image"] });
+              }
+            } else {
+              // provider 不存在 → 用 saveMoonshotConfig 创建
+              const prevPrimary = config.agents.defaults.model.primary;
+              saveMoonshotConfig(config, apiKey, modelID, subPlatform);
+              // 恢复 primary（add 模式不切换默认）
+              if (prevPrimary) {
+                config.agents.defaults.model.primary = prevPrimary;
+              }
+            }
+
+            // 代理模式：将真实 key 存 sidecar，config 中写占位符
+            // keepProxyAuth 时代理已就绪，不重写 token
+            if (subPlatform === "kimi-code" && getProxyPort() > 0 && !keepProxyAuth) {
+              writeKimiApiKey(apiKey);
+              setProxyAccessToken(apiKey);
+              const provKeyProxy = sub?.providerKey || "kimi-coding";
+              if (config.models.providers[provKeyProxy]) {
+                config.models.providers[provKeyProxy].apiKey = "proxy-managed";
+                config.models.providers[provKeyProxy].baseUrl = `http://127.0.0.1:${getProxyPort()}/coding`;
+              }
+            }
+
+            // 应用别名
+            applyModelAlias(config.models.providers[provKey], modelID, modelAlias);
+
+            // 明确 setAsDefault 时才设默认
+            if (setAsDefault === true) {
+              config.agents.defaults.model.primary = `${provKey}/${modelID}`;
+            }
+          } else {
+            // 非 Moonshot：解析 configKey
+            const customPre = customPreset ? CUSTOM_PROVIDER_PRESETS[customPreset] : undefined;
+            const configKey = customPre
+              ? customPre.providerKey
+              : (provider === "custom" && baseURL) ? deriveCustomConfigKey(baseURL) : provider;
+            const existingProv = config.models.providers[configKey];
+
+            if (existingProv) {
+              // provider 已存在 → 更新 apiKey，追加模型
+              existingProv.apiKey = apiKey;
+              if (!Array.isArray(existingProv.models)) existingProv.models = [];
+              const hasModel = existingProv.models.some((m: any) => {
+                const id = typeof m === "string" ? m : m?.id;
+                return id === modelID;
+              });
+              if (!hasModel) {
+                const input = supportImage !== false ? ["text", "image"] : ["text"];
+                existingProv.models.push({ id: modelID, name: modelID, input });
+              }
+            } else {
+              // provider 不存在 → 创建新 provider entry
+              config.models.providers[configKey] = buildProviderConfig(provider, apiKey, modelID, baseURL, api, supportImage, customPreset);
+            }
+
+            // 应用别名
+            applyModelAlias(config.models.providers[configKey], modelID, modelAlias);
+
+            // 明确 setAsDefault 时才设默认
+            if (setAsDefault === true) {
+              config.agents.defaults.model.primary = `${configKey}/${modelID}`;
+            }
+          }
         } else {
-          // 内置预设命中时，使用预设的 providerKey 作为配置键
-          const customPre = customPreset ? CUSTOM_PROVIDER_PRESETS[customPreset] : undefined;
-          const configKey = customPre ? customPre.providerKey : provider;
-          const prevModels: any[] = config.models.providers[configKey]?.models ?? [];
+          // === 兼容旧调用（无 action 字段）：走旧逻辑 ===
+          if (provider === "moonshot") {
+            const sub = MOONSHOT_SUB_PLATFORMS[subPlatform || "moonshot-cn"];
+            const provKey = sub?.providerKey || "moonshot";
+            const prevModels: any[] = config.models.providers[provKey]?.models ?? [];
 
-          const providerConfig = buildProviderConfig(provider, apiKey, modelID, baseURL, api, supportImage, customPreset);
-          config.models.providers[configKey] = providerConfig;
+            const prevPrimary = config.agents.defaults.model.primary;
+            saveMoonshotConfig(config, apiKey, modelID, subPlatform);
 
-          // add 模式：不切换默认模型
-          if (setAsDefault !== false) {
-            config.agents.defaults.model.primary = `${configKey}/${modelID}`;
+            if (setAsDefault === false && prevPrimary) {
+              config.agents.defaults.model.primary = prevPrimary;
+            }
+
+            if (subPlatform === "kimi-code" && getProxyPort() > 0) {
+              writeKimiApiKey(apiKey);
+              setProxyAccessToken(apiKey);
+              const provKeyProxy = sub?.providerKey || "kimi-coding";
+              config.models.providers[provKeyProxy].apiKey = "proxy-managed";
+              config.models.providers[provKeyProxy].baseUrl = `http://127.0.0.1:${getProxyPort()}/coding`;
+            }
+
+            mergeModels(config.models.providers[provKey], modelID, prevModels);
+            applyModelAlias(config.models.providers[provKey], modelID, modelAlias);
+          } else {
+            const customPre = customPreset ? CUSTOM_PROVIDER_PRESETS[customPreset] : undefined;
+            const configKey = customPre
+              ? customPre.providerKey
+              : (provider === "custom" && baseURL) ? deriveCustomConfigKey(baseURL) : provider;
+            const prevModels: any[] = config.models.providers[configKey]?.models ?? [];
+
+            const providerConfig = buildProviderConfig(provider, apiKey, modelID, baseURL, api, supportImage, customPreset);
+            config.models.providers[configKey] = providerConfig;
+
+            if (setAsDefault !== false) {
+              config.agents.defaults.model.primary = `${configKey}/${modelID}`;
+            }
+
+            mergeModels(config.models.providers[configKey], modelID, prevModels);
+            applyModelAlias(config.models.providers[configKey], modelID, modelAlias);
           }
-
-          mergeModels(config.models.providers[configKey], modelID, prevModels);
-
-          // 设置模型别名
-          applyModelAlias(config.models.providers[configKey], modelID, modelAlias);
         }
 
         // 配置 kimi-code 时自动启用搜索插件 + 记忆搜索 embedding
