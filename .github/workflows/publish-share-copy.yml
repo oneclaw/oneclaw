@@ -17,6 +17,10 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+
       - name: 校验分享文案 JSON
         run: |
           node -e '
@@ -46,30 +50,25 @@ jobs:
             }
           '
 
-      - name: 安装 ossutil
-        run: curl -fsSL https://gosspublic.alicdn.com/ossutil/install.sh | sudo bash
-
-      - name: 上传分享文案到 OSS
-        env:
-          ALIYUN_ACCESS_KEY_ID: ${{ secrets.ALIYUN_ACCESS_KEY_ID }}
-          ALIYUN_ACCESS_KEY_SECRET: ${{ secrets.ALIYUN_ACCESS_KEY_SECRET }}
+      - name: 安装 tosutil
         run: |
-          ossutil config -e oss-cn-beijing.aliyuncs.com -i "$ALIYUN_ACCESS_KEY_ID" -k "$ALIYUN_ACCESS_KEY_SECRET"
-          ossutil cp settings/share-copy-content.json "oss://oneclaw/${{ env.SHARE_COPY_OBJECT_KEY }}" --force
+          curl -fsSL -o tosutil https://tos-tools.tos-cn-beijing.volces.com/tosutil/latest/tosutil-linux-amd64
+          chmod +x tosutil
+
+      - name: 上传分享文案到 TOS
+        env:
+          VOLCENGINE_ACCESS_KEY: ${{ secrets.VOLCENGINE_ACCESS_KEY }}
+          VOLCENGINE_SECRET_KEY: ${{ secrets.VOLCENGINE_SECRET_KEY }}
+        run: |
+          ./tosutil config -e tos-cn-beijing.volces.com -i "$VOLCENGINE_ACCESS_KEY" -k "$VOLCENGINE_SECRET_KEY"
+          ./tosutil cp settings/share-copy-content.json "tos://oneclaw-cn/${{ env.SHARE_COPY_OBJECT_KEY }}" -f
           echo "share-copy-content.json 上传完成"
 
       - name: 刷新 CDN 缓存
         env:
-          ALIYUN_ACCESS_KEY_ID: ${{ secrets.ALIYUN_ACCESS_KEY_ID }}
-          ALIYUN_ACCESS_KEY_SECRET: ${{ secrets.ALIYUN_ACCESS_KEY_SECRET }}
+          VOLCENGINE_ACCESS_KEY: ${{ secrets.VOLCENGINE_ACCESS_KEY }}
+          VOLCENGINE_SECRET_KEY: ${{ secrets.VOLCENGINE_SECRET_KEY }}
         run: |
-          curl -fsSL https://aliyuncli.alicdn.com/aliyun-cli-linux-latest-amd64.tgz | tar xz
-          chmod +x aliyun
-          ./aliyun configure set \
-            --access-key-id "$ALIYUN_ACCESS_KEY_ID" \
-            --access-key-secret "$ALIYUN_ACCESS_KEY_SECRET" \
-            --region cn-beijing
-          ./aliyun cdn RefreshObjectCaches \
-            --ObjectType File \
-            --ObjectPath "https://${{ env.CDN_DOMAIN }}/${{ env.SHARE_COPY_OBJECT_KEY }}"
+          node scripts/volcengine-cdn-refresh.js \
+            "https://${{ env.CDN_DOMAIN }}/${{ env.SHARE_COPY_OBJECT_KEY }}"
           echo "CDN 刷新已提交"

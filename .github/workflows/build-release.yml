@@ -1,7 +1,7 @@
 # 自动构建 + 发布工作流
 # 触发：推送 v* 标签（如 git tag v2026.318.0 && git push origin v2026.318.0）
 # 版本号格式：YYYY.MMDD.N（年.月日.当天构建序号），从 tag 自动提取
-# 流程：4 并行构建 → 合并 yml → 上传 OSS → 刷新 CDN → 创建 GitHub Release
+# 流程：4 并行构建 → 合并 yml → 上传 TOS → 刷新 CDN → 创建 GitHub Release
 
 name: Build & Release
 
@@ -11,9 +11,10 @@ on:
   pull_request:       # PR 触发构建验证（不发布）
   workflow_dispatch:  # 允许在任意分支上手动触发构建（不发布）
 
-# package-resources.js 使用 OPENCLAW_PACKAGE_SOURCE 固定 openclaw 版本
+# openclaw 版本由 package.json oneclaw.openclaw 字段控制（git-tracked 单一事实来源）
+# 如需 CI 临时覆盖，取消下行注释：
+# OPENCLAW_PACKAGE_SOURCE: "2026.3.13"
 env:
-  OPENCLAW_PACKAGE_SOURCE: "2026.3.13"
   ONECLAW_CLAWHUB_REGISTRY: ${{ vars.ONECLAW_CLAWHUB_REGISTRY }}
   ONECLAW_GATEWAY_ASAR: "1"
   ARTIFACT_RETENTION_DAYS: 3
@@ -238,7 +239,7 @@ jobs:
             out/win32-arm64/*.exe
             out/win32-arm64/latest.yml
 
-  # ── 合并 + 上传 OSS + 刷新 CDN + 创建 GitHub Release ──
+  # ── 合并 + 上传 TOS + 刷新 CDN + 创建 GitHub Release ──
   release:
     if: github.event_name == 'push'  # 仅 tag 推送时发布，手动触发只构建不发布
     needs: [build-mac-arm64, build-mac-x64, build-win-x64, build-win-arm64]
@@ -295,44 +296,39 @@ jobs:
             echo "[dev] $(basename "$src") → $(basename "$dst")"
           done
 
-      # 预上传到 OSS：二进制 + dev yml（不含 latest yml，生产通道由 publish-release 推送）
-      - name: 安装 ossutil
+      # 预上传到 TOS：二进制 + dev yml（不含 latest yml，生产通道由 publish-release 推送）
+      - name: 安装 tosutil
         continue-on-error: true
-        id: ossutil
-        run: curl -fsSL https://gosspublic.alicdn.com/ossutil/install.sh | sudo bash
+        id: tosutil
+        run: |
+          curl -fsSL -o tosutil https://tos-tools.tos-cn-beijing.volces.com/tosutil/latest/tosutil-linux-amd64
+          chmod +x tosutil
 
-      - name: 预上传产物到 OSS（二进制 + dev yml）
-        if: steps.ossutil.outcome == 'success'
+      - name: 预上传产物到 TOS（二进制 + dev yml）
+        if: steps.tosutil.outcome == 'success'
         continue-on-error: true
         env:
-          ALIYUN_ACCESS_KEY_ID: ${{ secrets.ALIYUN_ACCESS_KEY_ID }}
-          ALIYUN_ACCESS_KEY_SECRET: ${{ secrets.ALIYUN_ACCESS_KEY_SECRET }}
+          VOLCENGINE_ACCESS_KEY: ${{ secrets.VOLCENGINE_ACCESS_KEY }}
+          VOLCENGINE_SECRET_KEY: ${{ secrets.VOLCENGINE_SECRET_KEY }}
         run: |
-          ossutil config -e oss-cn-beijing.aliyuncs.com -i "$ALIYUN_ACCESS_KEY_ID" -k "$ALIYUN_ACCESS_KEY_SECRET"
-          ossutil cp -r out/release/ oss://oneclaw/releases/ --force --exclude "latest*.yml"
+          ./tosutil config -e tos-cn-beijing.volces.com -i "$VOLCENGINE_ACCESS_KEY" -k "$VOLCENGINE_SECRET_KEY"
+          ./tosutil cp out/release/ tos://oneclaw-cn/releases/ -r -f --exclude "latest*.yml"
           echo "产物预上传完成（二进制 + dev yml，不含 latest yml）"
 
       # 刷新 dev 通道 CDN 缓存（dev 用户立即拉到新版本）
       - name: 刷新 dev 通道 CDN 缓存
-        if: steps.ossutil.outcome == 'success'
+        if: steps.tosutil.outcome == 'success'
         continue-on-error: true
         env:
-          ALIYUN_ACCESS_KEY_ID: ${{ secrets.ALIYUN_ACCESS_KEY_ID }}
-          ALIYUN_ACCESS_KEY_SECRET: ${{ secrets.ALIYUN_ACCESS_KEY_SECRET }}
+          VOLCENGINE_ACCESS_KEY: ${{ secrets.VOLCENGINE_ACCESS_KEY }}
+          VOLCENGINE_SECRET_KEY: ${{ secrets.VOLCENGINE_SECRET_KEY }}
         run: |
-          curl -fsSL https://aliyuncli.alicdn.com/aliyun-cli-linux-latest-amd64.tgz | tar xz
-          chmod +x aliyun
-          ./aliyun configure set \
-            --access-key-id "$ALIYUN_ACCESS_KEY_ID" \
-            --access-key-secret "$ALIYUN_ACCESS_KEY_SECRET" \
-            --region cn-beijing
-          ./aliyun cdn RefreshObjectCaches \
-            --ObjectType File \
-            --ObjectPath "https://oneclaw.cn/releases/dev-mac.yml
-          https://oneclaw.cn/releases/dev.yml"
+          node scripts/volcengine-cdn-refresh.js \
+            "https://oneclaw.cn/releases/dev-mac.yml" \
+            "https://oneclaw.cn/releases/dev.yml"
           echo "dev 通道 CDN 缓存刷新已提交"
 
-      # dev yml 已上传 OSS + 刷新 CDN，从 release 目录移除，不打入 GitHub Release asset
+      # dev yml 已上传 TOS + 刷新 CDN，从 release 目录移除，不打入 GitHub Release asset
       - name: 移除 dev yml
         run: rm -f out/release/dev-mac.yml out/release/dev.yml
 
