@@ -11,6 +11,12 @@ env:
   CDN_DOMAIN: oneclaw.cn
   SHARE_COPY_OBJECT_KEY: config/share-copy-content.json
   TOS_ENDPOINT: https://tos-s3-accelerate.volces.com
+  TOS_BUCKET: oneclaw-cn
+  AWS_ACCESS_KEY_ID: ${{ secrets.VOLCENGINE_ACCESS_KEY }}
+  AWS_SECRET_ACCESS_KEY: ${{ secrets.VOLCENGINE_SECRET_KEY }}
+  AWS_DEFAULT_REGION: cn-beijing
+  VOLCENGINE_ACCESS_KEY: ${{ secrets.VOLCENGINE_ACCESS_KEY }}
+  VOLCENGINE_SECRET_KEY: ${{ secrets.VOLCENGINE_SECRET_KEY }}
 
 jobs:
   publish:
@@ -52,19 +58,12 @@ jobs:
           '
 
       - name: 上传分享文案到 TOS
-        env:
-          AWS_ACCESS_KEY_ID: ${{ secrets.VOLCENGINE_ACCESS_KEY }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.VOLCENGINE_SECRET_KEY }}
-          AWS_DEFAULT_REGION: cn-beijing
         run: |
           aws configure set default.s3.addressing_style virtual
-          aws s3 cp settings/share-copy-content.json "s3://oneclaw-cn/${{ env.SHARE_COPY_OBJECT_KEY }}" --endpoint-url "$TOS_ENDPOINT"
+          aws s3 cp settings/share-copy-content.json "s3://$TOS_BUCKET/${{ env.SHARE_COPY_OBJECT_KEY }}" --endpoint-url "$TOS_ENDPOINT"
           echo "share-copy-content.json 上传完成"
 
       - name: 刷新 CDN 缓存
-        env:
-          VOLCENGINE_ACCESS_KEY: ${{ secrets.VOLCENGINE_ACCESS_KEY }}
-          VOLCENGINE_SECRET_KEY: ${{ secrets.VOLCENGINE_SECRET_KEY }}
         run: |
           node scripts/volcengine-cdn-refresh.js \
             "https://${{ env.CDN_DOMAIN }}/${{ env.SHARE_COPY_OBJECT_KEY }}"
