@@ -311,7 +311,7 @@ jobs:
           VOLCENGINE_ACCESS_KEY: ${{ secrets.VOLCENGINE_ACCESS_KEY }}
           VOLCENGINE_SECRET_KEY: ${{ secrets.VOLCENGINE_SECRET_KEY }}
         run: |
-          ./tosutil config -e tos-cn-beijing.volces.com -i "$VOLCENGINE_ACCESS_KEY" -k "$VOLCENGINE_SECRET_KEY"
+          ./tosutil config -i "$VOLCENGINE_ACCESS_KEY" -k "$VOLCENGINE_SECRET_KEY" -e tos-cn-beijing.volces.com -re cn-beijing
           ./tosutil cp out/release/ tos://oneclaw-cn/releases/ -r -f --exclude "latest*.yml"
           echo "产物预上传完成（二进制 + dev yml，不含 latest yml）"
 
