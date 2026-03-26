@@ -10,6 +10,7 @@ on:
 
 env:
   CDN_DOMAIN: oneclaw.cn
+  TOS_ENDPOINT: https://m6d669c9e2a6b-mrap.mrap.accesspoint.tos-s3-global.volces.com
 
 jobs:
   publish:
@@ -33,18 +34,13 @@ jobs:
             --dir out/release
 
       # 上传 latest yml 到 TOS（触发 auto-updater 发现新版本）
-      - name: 安装 tosutil
-        run: |
-          curl -fsSL -o tosutil https://m645b3e1bb36e-mrap.mrap.accesspoint.tos-global.volces.com/linux/amd64/tosutil
-          chmod +x tosutil
-
       - name: 上传 latest yml 到 TOS
         env:
-          VOLCENGINE_ACCESS_KEY: ${{ secrets.VOLCENGINE_ACCESS_KEY }}
-          VOLCENGINE_SECRET_KEY: ${{ secrets.VOLCENGINE_SECRET_KEY }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.VOLCENGINE_ACCESS_KEY }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.VOLCENGINE_SECRET_KEY }}
+          AWS_DEFAULT_REGION: cn-beijing
         run: |
-          ./tosutil config -i "$VOLCENGINE_ACCESS_KEY" -k "$VOLCENGINE_SECRET_KEY" -e tos-cn-beijing.volces.com -re cn-beijing
-          ./tosutil cp out/release/ tos://oneclaw-cn/releases/ -r -f --include "*.yml"
+          aws s3 cp out/release/ s3://oneclaw-cn/releases/ --recursive --endpoint-url "$TOS_ENDPOINT" --include "*.yml"
           echo "latest yml 上传完成"
 
       # 刷新 CDN 缓存

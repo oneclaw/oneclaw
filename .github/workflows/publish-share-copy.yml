@@ -10,6 +10,7 @@ on:
 env:
   CDN_DOMAIN: oneclaw.cn
   SHARE_COPY_OBJECT_KEY: config/share-copy-content.json
+  TOS_ENDPOINT: https://m6d669c9e2a6b-mrap.mrap.accesspoint.tos-s3-global.volces.com
 
 jobs:
   publish:
@@ -50,18 +51,13 @@ jobs:
             }
           '
 
-      - name: 安装 tosutil
-        run: |
-          curl -fsSL -o tosutil https://m645b3e1bb36e-mrap.mrap.accesspoint.tos-global.volces.com/linux/amd64/tosutil
-          chmod +x tosutil
-
       - name: 上传分享文案到 TOS
         env:
-          VOLCENGINE_ACCESS_KEY: ${{ secrets.VOLCENGINE_ACCESS_KEY }}
-          VOLCENGINE_SECRET_KEY: ${{ secrets.VOLCENGINE_SECRET_KEY }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.VOLCENGINE_ACCESS_KEY }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.VOLCENGINE_SECRET_KEY }}
+          AWS_DEFAULT_REGION: cn-beijing
         run: |
-          ./tosutil config -i "$VOLCENGINE_ACCESS_KEY" -k "$VOLCENGINE_SECRET_KEY" -e tos-cn-beijing.volces.com -re cn-beijing
-          ./tosutil cp settings/share-copy-content.json "tos://oneclaw-cn/${{ env.SHARE_COPY_OBJECT_KEY }}" -f
+          aws s3 cp settings/share-copy-content.json "s3://oneclaw-cn/${{ env.SHARE_COPY_OBJECT_KEY }}" --endpoint-url "$TOS_ENDPOINT"
           echo "share-copy-content.json 上传完成"
 
       - name: 刷新 CDN 缓存

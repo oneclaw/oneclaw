@@ -22,6 +22,8 @@ env:
   ONECLAW_ANALYTICS_API_KEY: ${{ secrets.ONECLAW_ANALYTICS_API_KEY }}
   ONECLAW_ANALYTICS_CAPTURE_URL: ${{ secrets.ONECLAW_ANALYTICS_CAPTURE_URL }}
   ONECLAW_ANALYTICS_CAPTURE_FALLBACK_URL: ${{ secrets.ONECLAW_ANALYTICS_CAPTURE_FALLBACK_URL }}
+  # TOS MRAP 全球加速（S3 协议）
+  TOS_ENDPOINT: https://m6d669c9e2a6b-mrap.mrap.accesspoint.tos-s3-global.volces.com
 
 jobs:
   # ── macOS arm64：签名 + 公证 ──
@@ -297,27 +299,22 @@ jobs:
           done
 
       # 预上传到 TOS：二进制 + dev yml（不含 latest yml，生产通道由 publish-release 推送）
-      - name: 安装 tosutil
-        continue-on-error: true
-        id: tosutil
-        run: |
-          curl -fsSL -o tosutil https://m645b3e1bb36e-mrap.mrap.accesspoint.tos-global.volces.com/linux/amd64/tosutil
-          chmod +x tosutil
-
+      # 使用 aws s3 + MRAP 全球加速节点（GitHub Actions runner 在美国，直连北京 TOS 太慢）
       - name: 预上传产物到 TOS（二进制 + dev yml）
-        if: steps.tosutil.outcome == 'success'
         continue-on-error: true
+        id: tos-upload
+        timeout-minutes: 10
         env:
-          VOLCENGINE_ACCESS_KEY: ${{ secrets.VOLCENGINE_ACCESS_KEY }}
-          VOLCENGINE_SECRET_KEY: ${{ secrets.VOLCENGINE_SECRET_KEY }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.VOLCENGINE_ACCESS_KEY }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.VOLCENGINE_SECRET_KEY }}
+          AWS_DEFAULT_REGION: cn-beijing
         run: |
-          ./tosutil config -i "$VOLCENGINE_ACCESS_KEY" -k "$VOLCENGINE_SECRET_KEY" -e tos-cn-beijing.volces.com -re cn-beijing
-          ./tosutil cp out/release/ tos://oneclaw-cn/releases/ -r -f --exclude "latest*.yml"
+          aws s3 cp out/release/ s3://oneclaw-cn/releases/ --recursive --endpoint-url "$TOS_ENDPOINT" --exclude "latest*.yml"
           echo "产物预上传完成（二进制 + dev yml，不含 latest yml）"
 
       # 刷新 dev 通道 CDN 缓存（dev 用户立即拉到新版本）
       - name: 刷新 dev 通道 CDN 缓存
-        if: steps.tosutil.outcome == 'success'
+        if: steps.tos-upload.outcome == 'success'
         continue-on-error: true
         env:
           VOLCENGINE_ACCESS_KEY: ${{ secrets.VOLCENGINE_ACCESS_KEY }}
