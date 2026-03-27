@@ -1172,16 +1172,16 @@ export class OpenClawApp extends LitElement {
   }
 
   // 切换思考开关
-  handleThinkingToggle() {
+  async handleThinkingToggle() {
     const next = this.thinkingLevel === "off" ? this.resolveDefaultThinkLevel() : "off";
     this.thinkingLevel = next;
-    this.patchSessionThinkingLevel(next);
+    await this.patchSessionThinkingLevel(next);
   }
 
   // 选择具体思考级别
-  handleThinkingLevelChange(level: string) {
+  async handleThinkingLevelChange(level: string) {
     this.thinkingLevel = level;
-    this.patchSessionThinkingLevel(level);
+    await this.patchSessionThinkingLevel(level);
   }
 
   // 通过 sessions.patch RPC 持久化
