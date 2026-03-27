@@ -360,11 +360,17 @@ async function installSkillFromStore(state: AppViewState, slug: string) {
     const result = await window.oneclaw.skillStoreInstall({ slug });
     if (result?.success) {
       skillStoreState.installedSlugs.add(slug);
+      await refreshInstalledSlugs();
+      showSkillStoreToast(state, t("skillStore.installSuccess"));
     } else {
-      showSkillStoreToast(state, t("skillStore.installFailed"));
+      const msg = result?.message
+        ? `${t("skillStore.installFailed")}: ${result.message}`
+        : t("skillStore.installFailed");
+      showSkillStoreToast(state, msg);
     }
-  } catch {
-    showSkillStoreToast(state, t("skillStore.installFailed"));
+  } catch (err: unknown) {
+    const detail = err instanceof Error ? err.message : String(err);
+    showSkillStoreToast(state, `${t("skillStore.installFailed")}: ${detail}`);
   }
   skillStoreState.installingSlugs.delete(slug);
   state.requestUpdate();
@@ -379,11 +385,17 @@ async function uninstallSkillFromStore(state: AppViewState, slug: string) {
     const result = await window.oneclaw.skillStoreUninstall({ slug });
     if (result?.success) {
       skillStoreState.installedSlugs.delete(slug);
+      await refreshInstalledSlugs();
+      showSkillStoreToast(state, t("skillStore.uninstallSuccess"));
     } else {
-      showSkillStoreToast(state, t("skillStore.uninstallFailed"));
+      const msg = result?.message
+        ? `${t("skillStore.uninstallFailed")}: ${result.message}`
+        : t("skillStore.uninstallFailed");
+      showSkillStoreToast(state, msg);
     }
-  } catch {
-    showSkillStoreToast(state, t("skillStore.uninstallFailed"));
+  } catch (err: unknown) {
+    const detail = err instanceof Error ? err.message : String(err);
+    showSkillStoreToast(state, `${t("skillStore.uninstallFailed")}: ${detail}`);
   }
   skillStoreState.installingSlugs.delete(slug);
   state.requestUpdate();

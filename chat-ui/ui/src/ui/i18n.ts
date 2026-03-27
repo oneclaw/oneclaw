@@ -108,6 +108,8 @@ const dict: Record<Locale, Record<string, string>> = {
     "skillStore.downloads": "下载量",
     "skillStore.installFailed": "安装失败，请稍后重试",
     "skillStore.uninstallFailed": "卸载失败，请稍后重试",
+    "skillStore.installSuccess": "安装成功",
+    "skillStore.uninstallSuccess": "卸载成功",
 
 
     // 工作空间
@@ -290,6 +292,8 @@ const dict: Record<Locale, Record<string, string>> = {
     "skillStore.downloads": "Downloads",
     "skillStore.installFailed": "Install failed. Please try again later.",
     "skillStore.uninstallFailed": "Uninstall failed. Please try again later.",
+    "skillStore.installSuccess": "Installed successfully",
+    "skillStore.uninstallSuccess": "Uninstalled successfully",
 
 
     // Workspace
