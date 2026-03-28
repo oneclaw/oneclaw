@@ -563,128 +563,46 @@ function getPackageSource() {
   };
 }
 
-// 确定 QQ Bot 插件安装来源：查询 npm latest stable
+// 通用插件版本解析：env 覆盖 → package.json oneclaw.{key} pin → npm latest
+function resolveBundledPluginSource({ packageName, envKey, pkgJsonKey }) {
+  const explicitSource = readEnvText(envKey);
+  if (explicitSource) {
+    log(`使用 ${envKey} 指定来源: ${explicitSource}`);
+    return { source: explicitSource, stampSource: `explicit:${packageName}@${explicitSource}` };
+  }
+
+  if (pkgJsonKey) {
+    try {
+      const pkg = JSON.parse(fs.readFileSync(path.join(ROOT, "package.json"), "utf8"));
+      const pinned = pkg.oneclaw?.[pkgJsonKey];
+      if (pinned) {
+        log(`使用 ${packageName}@${pinned}（来源: package.json oneclaw.${pkgJsonKey}）`);
+        return { source: pinned, stampSource: `pinned:${packageName}@${pinned}` };
+      }
+    } catch {}
+  }
+
+  const latestVersion = readRemoteLatestVersion(packageName, {
+    cwd: ROOT, env: process.env, logError(message) { log(message); },
+  });
+  if (!latestVersion) {
+    die(`无法从 npm 获取 ${packageName} 最新版本（检查网络或设置 ${envKey} 手动指定）`);
+  }
+  log(`使用 ${packageName}@${latestVersion}（来源: npm latest）`);
+  return { source: latestVersion, stampSource: `remote:${packageName}@${latestVersion}` };
+}
+
 function getQqbotPackageSource() {
-  // 显式覆盖（调试 / 私有 tgz / 本地 file: 逃生舱）
-  const explicitSource = readEnvText("ONECLAW_QQBOT_PACKAGE_SOURCE");
-  if (explicitSource) {
-    log(`使用 ONECLAW_QQBOT_PACKAGE_SOURCE 指定来源: ${explicitSource}`);
-    return {
-      source: explicitSource,
-      stampSource: `explicit:${QQBOT_PACKAGE_NAME}@${explicitSource}`,
-    };
-  }
-
-  const latestVersion = readRemoteLatestVersion(QQBOT_PACKAGE_NAME, {
-    cwd: ROOT,
-    env: process.env,
-    logError(message) {
-      log(message);
-    },
-  });
-
-  if (!latestVersion) {
-    die(`无法从 npm 获取 ${QQBOT_PACKAGE_NAME} 最新版本（检查网络或设置 ONECLAW_QQBOT_PACKAGE_SOURCE 手动指定）`);
-  }
-
-  log(`使用 ${QQBOT_PACKAGE_NAME}@${latestVersion}（来源: npm latest）`);
-  return {
-    source: latestVersion,
-    stampSource: `remote:${QQBOT_PACKAGE_NAME}@${latestVersion}`,
-  };
+  return resolveBundledPluginSource({ packageName: QQBOT_PACKAGE_NAME, envKey: "ONECLAW_QQBOT_PACKAGE_SOURCE", pkgJsonKey: "qqbot" });
 }
-
-// 确定钉钉连接器安装来源：查询 npm latest stable
 function getDingtalkConnectorPackageSource() {
-  // 显式覆盖（调试 / 私有 tgz / 本地 file: 逃生舱）
-  const explicitSource = readEnvText("ONECLAW_DINGTALK_CONNECTOR_PACKAGE_SOURCE");
-  if (explicitSource) {
-    log(`使用 ONECLAW_DINGTALK_CONNECTOR_PACKAGE_SOURCE 指定来源: ${explicitSource}`);
-    return {
-      source: explicitSource,
-      stampSource: `explicit:${DINGTALK_CONNECTOR_PACKAGE_NAME}@${explicitSource}`,
-    };
-  }
-
-  const latestVersion = readRemoteLatestVersion(DINGTALK_CONNECTOR_PACKAGE_NAME, {
-    cwd: ROOT,
-    env: process.env,
-    logError(message) {
-      log(message);
-    },
-  });
-
-  if (!latestVersion) {
-    die(`无法从 npm 获取 ${DINGTALK_CONNECTOR_PACKAGE_NAME} 最新版本（检查网络或设置 ONECLAW_DINGTALK_CONNECTOR_PACKAGE_SOURCE 手动指定）`);
-  }
-
-  log(`使用 ${DINGTALK_CONNECTOR_PACKAGE_NAME}@${latestVersion}（来源: npm latest）`);
-  return {
-    source: latestVersion,
-    stampSource: `remote:${DINGTALK_CONNECTOR_PACKAGE_NAME}@${latestVersion}`,
-  };
+  return resolveBundledPluginSource({ packageName: DINGTALK_CONNECTOR_PACKAGE_NAME, envKey: "ONECLAW_DINGTALK_CONNECTOR_PACKAGE_SOURCE", pkgJsonKey: "dingtalkConnector" });
 }
-
-// 确定企业微信插件安装来源：查询 npm latest stable
 function getWecomPluginPackageSource() {
-  // 显式覆盖（调试 / 私有 tgz / 本地 file: 逃生舱）
-  const explicitSource = readEnvText("ONECLAW_WECOM_PLUGIN_PACKAGE_SOURCE");
-  if (explicitSource) {
-    log(`使用 ONECLAW_WECOM_PLUGIN_PACKAGE_SOURCE 指定来源: ${explicitSource}`);
-    return {
-      source: explicitSource,
-      stampSource: `explicit:${WECOM_PLUGIN_PACKAGE_NAME}@${explicitSource}`,
-    };
-  }
-
-  const latestVersion = readRemoteLatestVersion(WECOM_PLUGIN_PACKAGE_NAME, {
-    cwd: ROOT,
-    env: process.env,
-    logError(message) {
-      log(message);
-    },
-  });
-
-  if (!latestVersion) {
-    die(`无法从 npm 获取 ${WECOM_PLUGIN_PACKAGE_NAME} 最新版本（检查网络或设置 ONECLAW_WECOM_PLUGIN_PACKAGE_SOURCE 手动指定）`);
-  }
-
-  log(`使用 ${WECOM_PLUGIN_PACKAGE_NAME}@${latestVersion}（来源: npm latest）`);
-  return {
-    source: latestVersion,
-    stampSource: `remote:${WECOM_PLUGIN_PACKAGE_NAME}@${latestVersion}`,
-  };
+  return resolveBundledPluginSource({ packageName: WECOM_PLUGIN_PACKAGE_NAME, envKey: "ONECLAW_WECOM_PLUGIN_PACKAGE_SOURCE", pkgJsonKey: "wecom" });
 }
-
-// 确定微信插件安装来源：查询 npm latest stable
 function getWeixinPluginPackageSource() {
-  // 显式覆盖（调试 / 私有 tgz / 本地 file: 逃生舱）
-  const explicitSource = readEnvText("ONECLAW_WEIXIN_PLUGIN_PACKAGE_SOURCE");
-  if (explicitSource) {
-    log(`使用 ONECLAW_WEIXIN_PLUGIN_PACKAGE_SOURCE 指定来源: ${explicitSource}`);
-    return {
-      source: explicitSource,
-      stampSource: `explicit:${WEIXIN_PLUGIN_PACKAGE_NAME}@${explicitSource}`,
-    };
-  }
-
-  const latestVersion = readRemoteLatestVersion(WEIXIN_PLUGIN_PACKAGE_NAME, {
-    cwd: ROOT,
-    env: process.env,
-    logError(message) {
-      log(message);
-    },
-  });
-
-  if (!latestVersion) {
-    die(`无法从 npm 获取 ${WEIXIN_PLUGIN_PACKAGE_NAME} 最新版本（检查网络或设置 ONECLAW_WEIXIN_PLUGIN_PACKAGE_SOURCE 手动指定）`);
-  }
-
-  log(`使用 ${WEIXIN_PLUGIN_PACKAGE_NAME}@${latestVersion}（来源: npm latest）`);
-  return {
-    source: latestVersion,
-    stampSource: `remote:${WEIXIN_PLUGIN_PACKAGE_NAME}@${latestVersion}`,
-  };
+  return resolveBundledPluginSource({ packageName: WEIXIN_PLUGIN_PACKAGE_NAME, envKey: "ONECLAW_WEIXIN_PLUGIN_PACKAGE_SOURCE", pkgJsonKey: "weixin" });
 }
 
 // 读取 gateway 依赖平台戳
