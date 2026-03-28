@@ -1,0 +1,215 @@
+import { ipcMain, app, BrowserWindow } from "electron";
+import * as fs from "fs";
+import * as path from "path";
+import * as http from "http";
+import * as https from "https";
+import { resolveUserStateDir } from "./constants";
+import type { GatewayState } from "./gateway-process";
+import * as log from "./logger";
+
+// 反馈服务地址（构建时通过环境变量注入，回退到默认值）
+const FEEDBACK_URL =
+  process.env.ONECLAW_FEEDBACK_URL || "https://feedback.oneclaw.cn/api/v1/feedback";
+
+// 反馈提交参数
+interface FeedbackParams {
+  content: string;
+  screenshots: string[]; // base64 编码的图片数据
+  includeLogs: boolean;
+}
+
+// 反馈提交结果
+interface FeedbackResult {
+  ok: boolean;
+  id?: number;
+  error?: string;
+}
+
+// 依赖注入：gateway 状态获取
+interface FeedbackIpcDeps {
+  getGatewayState: () => GatewayState;
+  getGatewayPort: () => number;
+}
+
+// 读取 deviceId（~/.openclaw/.device-id）
+function readDeviceId(): string {
+  const idPath = path.join(resolveUserStateDir(), ".device-id");
+  try {
+    return fs.readFileSync(idPath, "utf-8").trim();
+  } catch {
+    return "unknown";
+  }
+}
+
+// multipart text 字段
+function buildTextField(boundary: string, name: string, value: string): Buffer {
+  return Buffer.from(
+    `--${boundary}\r\nContent-Disposition: form-data; name="${name}"\r\n\r\n${value}\r\n`,
+  );
+}
+
+// multipart file 字段
+function buildFileField(
+  boundary: string,
+  name: string,
+  filename: string,
+  data: Buffer,
+  contentType: string,
+): Buffer {
+  const header = Buffer.from(
+    `--${boundary}\r\nContent-Disposition: form-data; name="${name}"; filename="${filename}"\r\nContent-Type: ${contentType}\r\n\r\n`,
+  );
+  return Buffer.concat([header, data, Buffer.from("\r\n")]);
+}
+
+// 通过 Node.js 原生 http/https 发送 multipart POST
+function postMultipart(url: string, body: Buffer, boundary: string): Promise<FeedbackResult> {
+  return new Promise((resolve) => {
+    const parsed = new URL(url);
+    const mod = parsed.protocol === "https:" ? https : http;
+    const req = mod.request(
+      parsed,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": `multipart/form-data; boundary=${boundary}`,
+          "Content-Length": body.length,
+        },
+        timeout: 30_000,
+      },
+      (res) => {
+        let data = "";
+        res.on("data", (chunk) => (data += chunk));
+        res.on("end", () => {
+          try {
+            const json = JSON.parse(data);
+            if (res.statusCode === 200) {
+              resolve({ ok: true, id: json.id });
+            } else {
+              resolve({ ok: false, error: json.error || `HTTP ${res.statusCode}` });
+            }
+          } catch {
+            resolve({ ok: false, error: `HTTP ${res.statusCode}` });
+          }
+        });
+      },
+    );
+    req.on("error", (err) => {
+      log.error(`反馈提交网络错误: ${err.message}`);
+      resolve({ ok: false, error: err.message });
+    });
+    req.on("timeout", () => {
+      req.destroy();
+      resolve({ ok: false, error: "timeout" });
+    });
+    req.write(body);
+    req.end();
+  });
+}
+
+// 注册反馈相关 IPC handler
+export function registerFeedbackIpc(deps: FeedbackIpcDeps): void {
+  // 截取当前窗口截图，返回 base64 PNG
+  ipcMain.handle("feedback:capture-window", async (event) => {
+    try {
+      const win = BrowserWindow.fromWebContents(event.sender);
+      if (!win) return null;
+      const image = await win.webContents.capturePage();
+      return image.toPNG().toString("base64");
+    } catch (err) {
+      log.error(`截图失败: ${err}`);
+      return null;
+    }
+  });
+
+  ipcMain.handle("feedback:submit", async (_event, params: FeedbackParams): Promise<FeedbackResult> => {
+    const { content, screenshots, includeLogs } = params;
+
+    if (!content.trim()) {
+      return { ok: false, error: "content is required" };
+    }
+
+    // 截图数量上限：最多 5 张
+    if (screenshots.length > 5) {
+      return { ok: false, error: "too many screenshots (max 5)" };
+    }
+
+    // 单张截图大小上限：~5MB 原始数据（base64 膨胀约 1.33x → 阈值 7MB）
+    for (let i = 0; i < screenshots.length; i++) {
+      if (screenshots[i].length > 7_000_000) {
+        return { ok: false, error: `screenshot ${i + 1} exceeds 5MB limit` };
+      }
+    }
+
+    // 采集诊断元数据
+    const metadata = JSON.stringify({
+      appVersion: app.getVersion(),
+      os: process.platform,
+      arch: process.arch,
+      deviceId: readDeviceId(),
+      gatewayState: deps.getGatewayState(),
+      gatewayPort: deps.getGatewayPort(),
+    });
+
+    // 构造 multipart body
+    const boundary = `----FeedbackBoundary${Date.now()}`;
+    const parts: Buffer[] = [];
+
+    // 文本字段
+    parts.push(buildTextField(boundary, "content", content));
+    parts.push(buildTextField(boundary, "metadata", metadata));
+
+    // 截图文件（base64 → Buffer）
+    for (let i = 0; i < screenshots.length; i++) {
+      const buf = Buffer.from(screenshots[i], "base64");
+      parts.push(buildFileField(boundary, "screenshots", `screenshot-${i + 1}.png`, buf, "image/png"));
+    }
+
+    // 日志文件：超过 10MB 只取末尾 10 万行，并脱敏含密钥的行
+    if (includeLogs) {
+      const stateDir = resolveUserStateDir();
+      const sensitiveRe = /key=|token=|secret=|password=|authorization:|"apiKey"|"api_key"|"apikey"|bearer |sk-[a-zA-Z0-9]{8}/i;
+      const MAX_LOG_SIZE = 10 * 1024 * 1024; // 10 MB
+      for (const name of ["app.log", "gateway.log"]) {
+        const logPath = path.join(stateDir, name);
+        try {
+          if (!fs.existsSync(logPath)) continue;
+          const stat = fs.statSync(logPath);
+          let raw: string;
+          if (stat.size <= MAX_LOG_SIZE) {
+            raw = fs.readFileSync(logPath, "utf-8");
+          } else {
+            // 大文件：只读取末尾 10MB
+            const fd = fs.openSync(logPath, "r");
+            const buf = Buffer.alloc(MAX_LOG_SIZE);
+            fs.readSync(fd, buf, 0, MAX_LOG_SIZE, stat.size - MAX_LOG_SIZE);
+            fs.closeSync(fd);
+            raw = buf.toString("utf-8");
+            // 丢弃第一个不完整行
+            const firstNewline = raw.indexOf("\n");
+            if (firstNewline > 0) raw = raw.slice(firstNewline + 1);
+          }
+          const lines = raw.split("\n").filter((l) => !sensitiveRe.test(l));
+          const tailBuf = Buffer.from(lines.join("\n"), "utf-8");
+          parts.push(buildFileField(boundary, "logs", name, tailBuf, "text/plain"));
+        } catch {
+          // 读取日志失败不阻塞提交
+        }
+      }
+    }
+
+    // 结束标记
+    parts.push(Buffer.from(`--${boundary}--\r\n`));
+
+    const body = Buffer.concat(parts);
+    log.info(`反馈提交: content=${content.length}字, screenshots=${screenshots.length}, includeLogs=${includeLogs}`);
+
+    const result = await postMultipart(FEEDBACK_URL, body, boundary);
+    if (result.ok) {
+      log.info(`反馈提交成功: id=${result.id}`);
+    } else {
+      log.error(`反馈提交失败: ${result.error}`);
+    }
+    return result;
+  });
+}

@@ -18,6 +18,12 @@ import { renderGatewayUrlConfirmation } from "./views/gateway-url-confirmation.t
 import { renderRestartGatewayDialog } from "./views/restart-gateway-dialog.ts";
 import { renderSharePrompt } from "./views/share-prompt.ts";
 import { renderReleaseNotesModal } from "./views/release-notes-modal.ts";
+import {
+  renderFeedbackButton,
+  renderFeedbackDialog,
+  createFeedbackDialogState,
+  type FeedbackDialogState,
+} from "./views/feedback-dialog.ts";
 import { patchSession, loadSessions } from "./controllers/sessions.ts";
 import { renderSkillStoreView, type SkillStoreState } from "./skill-store-view.ts";
 import { renderWorkspaceView, initWorkspace } from "./views/workspace.ts";
@@ -53,6 +59,7 @@ declare global {
       workspaceOpenFolder?: (filePath: string) => Promise<any>;
       workspaceListDir?: (dirPath: string) => Promise<any>;
       workspaceReadFile?: (filePath: string) => Promise<any>;
+      submitFeedback?: (params: { content: string; screenshots: string[]; includeLogs: boolean }) => Promise<{ ok: boolean; id?: number; error?: string }>;
     };
   }
 }
@@ -264,17 +271,21 @@ const skillStoreState: SkillStoreState = {
   toastMessage: null,
 };
 
-// toast 定时器句柄
-let skillStoreToastTimer: ReturnType<typeof setTimeout> | null = null;
+// ── 反馈弹窗状态 ──
 
-// 显示 toast 并在 4 秒后自动消失
-function showSkillStoreToast(state: AppViewState, message: string) {
-  if (skillStoreToastTimer) clearTimeout(skillStoreToastTimer);
+let feedbackState: FeedbackDialogState = createFeedbackDialogState();
+
+// toast 定时器句柄
+let toastTimer: ReturnType<typeof setTimeout> | null = null;
+
+// 显示 toast 并在 4 秒后自动消失（通用方法，复用 skillStore toast UI）
+function showToast(state: AppViewState, message: string) {
+  if (toastTimer) clearTimeout(toastTimer);
   skillStoreState.toastMessage = message;
   state.requestUpdate();
-  skillStoreToastTimer = setTimeout(() => {
+  toastTimer = setTimeout(() => {
     skillStoreState.toastMessage = null;
-    skillStoreToastTimer = null;
+    toastTimer = null;
     state.requestUpdate();
   }, 4000);
 }
@@ -361,10 +372,10 @@ async function installSkillFromStore(state: AppViewState, slug: string) {
     if (result?.success) {
       skillStoreState.installedSlugs.add(slug);
     } else {
-      showSkillStoreToast(state, t("skillStore.installFailed"));
+      showToast(state, t("skillStore.installFailed"));
     }
   } catch {
-    showSkillStoreToast(state, t("skillStore.installFailed"));
+    showToast(state, t("skillStore.installFailed"));
   }
   skillStoreState.installingSlugs.delete(slug);
   state.requestUpdate();
@@ -380,10 +391,10 @@ async function uninstallSkillFromStore(state: AppViewState, slug: string) {
     if (result?.success) {
       skillStoreState.installedSlugs.delete(slug);
     } else {
-      showSkillStoreToast(state, t("skillStore.uninstallFailed"));
+      showToast(state, t("skillStore.uninstallFailed"));
     }
   } catch {
-    showSkillStoreToast(state, t("skillStore.uninstallFailed"));
+    showToast(state, t("skillStore.uninstallFailed"));
   }
   skillStoreState.installingSlugs.delete(slug);
   state.requestUpdate();
@@ -401,10 +412,10 @@ async function uninstallLocalSkill(state: AppViewState, slug: string) {
       void loadSkills(state as unknown as SkillsState);
       await refreshInstalledSlugs();
     } else {
-      showSkillStoreToast(state, t("skillStore.uninstallFailed"));
+      showToast(state, t("skillStore.uninstallFailed"));
     }
   } catch {
-    showSkillStoreToast(state, t("skillStore.uninstallFailed"));
+    showToast(state, t("skillStore.uninstallFailed"));
   }
   state.skillsBusyKey = "";
   state.requestUpdate();
@@ -855,7 +866,7 @@ export function renderApp(state: AppViewState) {
 
   return html`
     <div
-      class="oneclaw-shell ${navigator.platform?.includes("Mac") ? "is-mac" : ""} ${chatFocus ? "oneclaw-shell--focus" : ""} ${sidebarCollapsed ? "oneclaw-shell--sidebar-collapsed" : ""} ${settingsActive || skillsActive || workspaceActive || cronActive ? "oneclaw-shell--fullpage" : ""}"
+      class="oneclaw-shell ${navigator.platform?.includes("Mac") ? "is-mac" : ""} ${navigator.platform?.includes("Win") ? "is-win" : ""} ${chatFocus ? "oneclaw-shell--focus" : ""} ${sidebarCollapsed ? "oneclaw-shell--sidebar-collapsed" : ""} ${settingsActive || skillsActive || workspaceActive || cronActive ? "oneclaw-shell--fullpage" : ""}"
     >
       ${chatFocus || sidebarCollapsed || settingsActive || skillsActive || workspaceActive || cronActive
         ? nothing
@@ -960,6 +971,25 @@ export function renderApp(state: AppViewState) {
                   `
                 : nothing
           }
+          <div class="oneclaw-titlebar-right">
+            ${renderFeedbackButton(async () => {
+              // 先截图（弹窗打开前），再打开弹窗
+              let capturedBase64: string | null = null;
+              try {
+                capturedBase64 = await (window as any).oneclaw.captureWindow();
+              } catch { /* 截图失败不阻塞弹窗 */ }
+              feedbackState = { ...feedbackState, open: true };
+              if (capturedBase64) {
+                const dataUrl = `data:image/png;base64,${capturedBase64}`;
+                feedbackState = {
+                  ...feedbackState,
+                  screenshots: [capturedBase64],
+                  screenshotPreviews: [dataUrl],
+                };
+              }
+              state.requestUpdate();
+            })}
+          </div>
         </div>
 
         <main class="oneclaw-content">
@@ -1194,6 +1224,96 @@ export function renderApp(state: AppViewState) {
       ${renderRestartGatewayDialog(state)}
       ${renderSharePrompt(state)}
       ${renderReleaseNotesModal(state)}
+      ${renderFeedbackDialog(feedbackState, {
+        onClose: () => {
+          feedbackState = createFeedbackDialogState();
+          state.requestUpdate();
+        },
+        onSubmit: async () => {
+          feedbackState = { ...feedbackState, submitting: true, error: null };
+          state.requestUpdate();
+          try {
+            const result = await window.oneclaw?.submitFeedback?.({
+              content: feedbackState.content,
+              screenshots: feedbackState.screenshots,
+              includeLogs: feedbackState.includeLogs,
+            });
+            if (result?.ok) {
+              feedbackState = createFeedbackDialogState();
+              // 通用 toast 提示反馈提交成功
+              showToast(state, t("feedback.success"));
+            } else {
+              feedbackState = { ...feedbackState, submitting: false, error: result?.error || t("feedback.error") };
+            }
+          } catch {
+            feedbackState = { ...feedbackState, submitting: false, error: t("feedback.error") };
+          }
+          state.requestUpdate();
+        },
+        onContentChange: (value) => {
+          feedbackState = { ...feedbackState, content: value };
+          state.requestUpdate();
+        },
+        onToggleLogs: (checked) => {
+          feedbackState = { ...feedbackState, includeLogs: checked };
+          state.requestUpdate();
+        },
+        onAddScreenshots: (files) => {
+          // 读取文件为 base64
+          Array.from(files).forEach((file) => {
+            const reader = new FileReader();
+            reader.onload = () => {
+              const dataUrl = reader.result as string;
+              const base64 = dataUrl.split(",")[1];
+              feedbackState = {
+                ...feedbackState,
+                screenshots: [...feedbackState.screenshots, base64],
+                screenshotPreviews: [...feedbackState.screenshotPreviews, dataUrl],
+              };
+              state.requestUpdate();
+            };
+            reader.readAsDataURL(file);
+          });
+        },
+        onRemoveScreenshot: (index) => {
+          feedbackState = {
+            ...feedbackState,
+            screenshots: feedbackState.screenshots.filter((_, i) => i !== index),
+            screenshotPreviews: feedbackState.screenshotPreviews.filter((_, i) => i !== index),
+          };
+          state.requestUpdate();
+        },
+        onPaste: (e) => {
+          const items = e.clipboardData?.items;
+          if (!items) return;
+          for (const item of Array.from(items)) {
+            if (item.type.startsWith("image/")) {
+              e.preventDefault();
+              const file = item.getAsFile();
+              if (!file) continue;
+              const reader = new FileReader();
+              reader.onload = () => {
+                const dataUrl = reader.result as string;
+                const base64 = dataUrl.split(",")[1];
+                feedbackState = {
+                  ...feedbackState,
+                  screenshots: [...feedbackState.screenshots, base64],
+                  screenshotPreviews: [...feedbackState.screenshotPreviews, dataUrl],
+                };
+                state.requestUpdate();
+              };
+              reader.readAsDataURL(file);
+            }
+          }
+        },
+        onPreviewScreenshot: (src) => {
+          feedbackState = { ...feedbackState, previewSrc: src };
+          state.requestUpdate();
+        },
+      })}
+      ${skillStoreState.toastMessage
+        ? html`<div class="global-toast">${skillStoreState.toastMessage}</div>`
+        : nothing}
     </div>
   `;
 }

@@ -172,6 +172,12 @@ contextBridge.exposeInMainWorld("oneclaw", {
     ipcRenderer.on("gateway:ready", listener);
     return () => ipcRenderer.removeListener("gateway:ready", listener);
   },
+
+  // 截取当前窗口截图，返回 base64 PNG
+  captureWindow: () => ipcRenderer.invoke("feedback:capture-window"),
+  // 提交用户反馈
+  submitFeedback: (params: { content: string; screenshots: string[]; includeLogs: boolean }) =>
+    ipcRenderer.invoke("feedback:submit", params),
   onNavigate: (cb: (payload: { view: "settings" }) => void) => {
     const listener = (_event: Electron.IpcRendererEvent, payload: { view: "settings" }) => {
       cb(payload);
