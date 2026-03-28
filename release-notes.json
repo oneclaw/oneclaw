@@ -1,9 +1,9 @@
 [
   {
-    "version": "2026.327.1",
+    "version": "2026.328.4",
     "notes": {
-      "zh": "新增思考模式：发送消息时可开启深度思考，支持多级别切换。修复 Kimi 登录偶发失效问题，优化微信连接体验，API 错误提示更清晰，会话列表自动刷新。",
-      "en": "Add thinking mode: enable deep reasoning when sending messages with multiple thinking levels. Fix occasional Kimi login issues, improve WeChat connection experience, clearer API error messages, and auto-refresh session list."
+      "zh": "新增反馈功能\n新增思考模式：发送消息时可开启深度思考，支持多级别切换\n修复钉钉、微信渠道兼容性问题\n修复 Kimi 登录偶发失效问题\n优化微信连接体验\nAPI 错误提示更清晰\n会话列表自动刷新",
+      "en": "Add feedback feature\nAdd thinking mode: enable deep reasoning when sending messages with multiple thinking levels\nFix DingTalk and WeChat channel compatibility issues\nFix occasional Kimi login issues\nImprove WeChat connection experience\nClearer API error messages\nAuto-refresh session list"
     }
   },
   {
