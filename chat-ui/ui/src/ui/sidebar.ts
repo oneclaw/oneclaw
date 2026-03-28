@@ -204,20 +204,6 @@ export function renderSidebar(props: SidebarProps) {
               </button>
             `
           : nothing}
-        ${props.cronJobCount > 0
-          ? html`
-              <button
-                class="oneclaw-sidebar__item ${props.cronActive ? "active" : ""}"
-                type="button"
-                @click=${props.onOpenCron}
-                data-tooltip=${t("sidebar.cron")}
-              >
-                <span class="oneclaw-sidebar__icon">${icons.clock}</span>
-                <span class="oneclaw-sidebar__label">${t("sidebar.cron")}</span>
-                <span class="oneclaw-sidebar__badge">${props.cronJobCount}</span>
-              </button>
-            `
-          : nothing}
         <button
           class="oneclaw-sidebar__item oneclaw-sidebar__item--settings ${props.settingsActive
             ? "active"
@@ -251,6 +237,19 @@ export function renderSidebar(props: SidebarProps) {
         >
           <span class="oneclaw-sidebar__icon">${icons.folder}</span>
           <span class="oneclaw-sidebar__label">${t("sidebar.workspace")}</span>
+        </button>
+
+        <button
+          class="oneclaw-sidebar__item ${props.cronActive ? "active" : ""}"
+          type="button"
+          @click=${props.onOpenCron}
+          data-tooltip=${t("sidebar.cron")}
+        >
+          <span class="oneclaw-sidebar__icon">${icons.clock}</span>
+          <span class="oneclaw-sidebar__label">${t("sidebar.cron")}</span>
+          ${props.cronJobCount > 0
+            ? html`<span class="oneclaw-sidebar__badge">${props.cronJobCount}</span>`
+            : nothing}
         </button>
 
         <button
