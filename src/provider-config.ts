@@ -179,7 +179,7 @@ export function saveMoonshotConfig(
     apiKey,
     baseUrl: sub.baseUrl,
     api: sub.api,
-    models: [{ id: modelID, name: modelID, input: ["text", "image"] }],
+    models: [{ id: modelID, name: modelID, input: ["text", "image"], reasoning: true }],
   };
 
   config.agents.defaults.model.primary = `${providerKey}/${modelID}`;
