@@ -39,6 +39,7 @@ private_keys/
 .claude/
 
 # Git worktrees
+.worktree/
 .worktrees/
 
 # dev 多实例隔离状态目录
