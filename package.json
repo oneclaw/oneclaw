@@ -41,6 +41,7 @@
   },
   "oneclaw": {
     "openclaw": "2026.3.13",
-    "dingtalkConnector": "0.8.3"
+    "dingtalkConnector": "0.8.3",
+    "weixin": "1.0.3"
   }
 }
