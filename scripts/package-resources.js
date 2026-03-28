@@ -1263,13 +1263,9 @@ const OPENCLAW_SKILLS_DARWIN_ONLY = new Set([
   "peekaboo",
 ]);
 
-// openclaw/extensions 只保留 OneClaw 当前产品面和运行时基础插件。
+// openclaw/extensions 只保留 OneClaw 当前产品面需要的第三方插件。
+// 内置扩展（memory-core、device-pair、feishu、imessage 等）位于 dist/extensions/，不受此白名单影响。
 const OPENCLAW_EXTENSION_ALLOWLIST = new Set([
-  "shared",
-  "memory-core",
-  "device-pair",
-  "feishu",
-  "imessage",
   "telegram",
   "kimi-claw",
   "kimi-search",
@@ -1280,12 +1276,15 @@ const OPENCLAW_EXTENSION_ALLOWLIST = new Set([
 ]);
 
 // 构建产物校验需要覆盖白名单中的关键扩展，避免悄悄打出残缺包。
-const REQUIRED_OPENCLAW_EXTENSION_OUTPUTS = [
-  "shared",
+// 内置扩展（openclaw 包自带）位于 dist/extensions/
+const REQUIRED_OPENCLAW_BUILTIN_EXTENSION_OUTPUTS = [
   path.join("memory-core", "openclaw.plugin.json"),
   path.join("device-pair", "openclaw.plugin.json"),
   path.join("feishu", "openclaw.plugin.json"),
   path.join("imessage", "openclaw.plugin.json"),
+];
+// 第三方插件（package-resources 注入）位于 extensions/
+const REQUIRED_OPENCLAW_PLUGIN_EXTENSION_OUTPUTS = [
   path.join("kimi-claw", "openclaw.plugin.json"),
   path.join("kimi-search", "openclaw.plugin.json"),
   path.join("qqbot", "openclaw.plugin.json"),
@@ -2121,7 +2120,10 @@ function verifyOutput(targetPaths, opts) {
   const crossCompileOptionalExts = new Set(["kimi-claw", "kimi-search"]);
 
   required.push(
-    ...REQUIRED_OPENCLAW_EXTENSION_OUTPUTS.map((relPath) =>
+    ...REQUIRED_OPENCLAW_BUILTIN_EXTENSION_OUTPUTS.map((relPath) =>
+      path.join(targetRel, "gateway", "node_modules", "openclaw", "dist", "extensions", relPath)
+    ),
+    ...REQUIRED_OPENCLAW_PLUGIN_EXTENSION_OUTPUTS.map((relPath) =>
       path.join(targetRel, "gateway", "node_modules", "openclaw", "extensions", relPath)
     )
   );
