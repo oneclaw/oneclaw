@@ -20,6 +20,7 @@ import {
 } from "./settings-ipc";
 import { registerSkillStoreIpc } from "./skill-store";
 import { registerWorkspaceIpc } from "./workspace-ipc";
+import { registerFeedbackIpc } from "./feedback-ipc";
 import { ChannelPairingMonitor } from "./channel-pairing-monitor";
 import {
   setupAutoUpdater,
@@ -683,6 +684,10 @@ registerSettingsIpc({
 });
 registerSkillStoreIpc();
 registerWorkspaceIpc();
+registerFeedbackIpc({
+  getGatewayState: () => gateway.getState(),
+  getGatewayPort: () => gateway.getPort(),
+});
 
 // ── 退出 ──
 

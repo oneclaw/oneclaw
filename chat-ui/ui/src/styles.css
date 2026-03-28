@@ -8375,3 +8375,311 @@ img.chat-avatar {
 .cron-readonly__run-link:hover {
   text-decoration: underline;
 }
+
+/* ── 反馈按钮（titlebar 右侧，始终可见） ── */
+
+.oneclaw-titlebar-right {
+  position: absolute;
+  right: 16px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  align-items: center;
+  -webkit-app-region: no-drag;
+}
+
+/* Windows 窗口控制按钮（最小化/最大化/关闭）在右侧，需额外右移避让 */
+.is-win .oneclaw-titlebar-right {
+  right: 144px;
+}
+
+.feedback-trigger-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 13px;
+  font-family: inherit;
+  transition: background var(--duration-fast) ease, color var(--duration-fast) ease;
+}
+
+.feedback-trigger-btn:hover {
+  background: var(--bg-hover);
+  color: var(--text);
+}
+
+.feedback-trigger-btn svg {
+  width: 16px;
+  height: 16px;
+  stroke: currentColor;
+  fill: none;
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* ── 反馈弹窗 ── */
+
+.feedback-card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 20px;
+  width: min(480px, 90vw);
+  max-height: 80vh;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  box-shadow: var(--shadow-lg);
+}
+
+.feedback-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.feedback-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-strong);
+}
+
+.feedback-close {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--muted);
+  padding: 4px;
+  border-radius: var(--radius-sm);
+  transition: color var(--duration-fast) ease;
+}
+
+.feedback-close:hover {
+  color: var(--text);
+}
+
+.feedback-close svg {
+  width: 18px;
+  height: 18px;
+  stroke: currentColor;
+  fill: none;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.feedback-textarea {
+  width: 100%;
+  min-height: 100px;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--bg);
+  color: var(--text);
+  font-size: 14px;
+  font-family: inherit;
+  resize: vertical;
+  box-sizing: border-box;
+}
+
+.feedback-textarea:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+/* 截图预览区 */
+
+.feedback-screenshots {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.feedback-screenshot-item {
+  position: relative;
+  width: 80px;
+  height: 80px;
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  border: 1px solid var(--border);
+}
+
+.feedback-screenshot-item img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.feedback-screenshot-remove {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.6);
+  border: none;
+  color: white;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+}
+
+.feedback-screenshot-remove svg {
+  width: 12px;
+  height: 12px;
+  stroke: currentColor;
+  fill: none;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.global-toast {
+  position: fixed;
+  top: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 10px 20px;
+  font-size: 13px;
+  font-weight: 500;
+  border-radius: var(--radius-sm, 6px);
+  color: #15803d;
+  background: rgba(21, 128, 61, 0.08);
+  border: 1px solid rgba(21, 128, 61, 0.25);
+  z-index: 10001;
+  pointer-events: none;
+  animation: global-toast-in 0.2s ease forwards;
+}
+
+@keyframes global-toast-in {
+  from { opacity: 0; transform: translateX(-50%) translateY(-8px); }
+  to { opacity: 1; transform: translateX(-50%) translateY(0); }
+}
+
+.feedback-preview-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+  background: rgba(0, 0, 0, 0.8);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.feedback-preview-img {
+  max-width: 90vw;
+  max-height: 90vh;
+  border-radius: 8px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+}
+
+.feedback-screenshot-add {
+  width: 80px;
+  height: 80px;
+  border: 1px dashed var(--border);
+  border-radius: var(--radius-sm);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  cursor: pointer;
+  color: var(--muted);
+  font-size: 11px;
+  transition: border-color var(--duration-fast) ease;
+}
+
+.feedback-screenshot-add:hover {
+  border-color: var(--accent);
+}
+
+.feedback-screenshot-add svg {
+  width: 20px;
+  height: 20px;
+  stroke: currentColor;
+  fill: none;
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* 日志开关（标签左、开关右） */
+
+.feedback-logs-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+/* iOS 风格 toggle switch（反馈弹窗内复用 settings 样式） */
+
+.feedback-card .toggle-switch {
+  position: relative;
+  display: inline-block;
+  width: 42px;
+  height: 24px;
+  flex-shrink: 0;
+  cursor: pointer;
+}
+
+.feedback-card .toggle-switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+  position: absolute;
+}
+
+.feedback-card .toggle-slider {
+  position: absolute;
+  inset: 0;
+  background: var(--border);
+  border-radius: 12px;
+  transition: background 200ms ease;
+}
+
+.feedback-card .toggle-slider::before {
+  content: "";
+  position: absolute;
+  left: 2px;
+  top: 2px;
+  width: 20px;
+  height: 20px;
+  background: #fff;
+  border-radius: 50%;
+  transition: transform 200ms ease;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+}
+
+.feedback-card .toggle-switch input:checked + .toggle-slider {
+  background: var(--accent);
+}
+
+.feedback-card .toggle-switch input:checked + .toggle-slider::before {
+  transform: translateX(18px);
+}
+
+.feedback-error {
+  color: var(--danger);
+  font-size: 13px;
+}
+
+/* 操作按钮 */
+
+.feedback-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}

@@ -127,6 +127,17 @@ const dict: Record<Locale, Record<string, string>> = {
     "workspace.noPreview": "无法预览此文件类型",
     "workspace.selectFile": "选择一个文件来预览",
 
+    // 反馈
+    "feedback.title": "反馈",
+    "feedback.placeholder": "描述你的问题或建议",
+    "feedback.addScreenshot": "添加截图",
+    "feedback.includeLogs": "附带应用日志 (app.log + gateway.log)",
+    "feedback.submit": "提交",
+    "feedback.submitting": "提交中…",
+    "feedback.cancel": "取消",
+    "feedback.success": "已提交，感谢反馈",
+    "feedback.error": "提交失败，请重试",
+
     // OneClaw settings page
     "settings.title": "设置",
     "settings.subtitle": "管理外观显示与聊天展示偏好",
@@ -308,6 +319,17 @@ const dict: Record<Locale, Record<string, string>> = {
     "workspace.fileTooLarge": "File too large to preview",
     "workspace.noPreview": "Cannot preview this file type",
     "workspace.selectFile": "Select a file to preview",
+
+    // Feedback
+    "feedback.title": "Feedback",
+    "feedback.placeholder": "Describe your problem or suggestion",
+    "feedback.addScreenshot": "Add screenshot",
+    "feedback.includeLogs": "Include app logs (app.log + gateway.log)",
+    "feedback.submit": "Submit",
+    "feedback.submitting": "Submitting…",
+    "feedback.cancel": "Cancel",
+    "feedback.success": "Submitted, thank you",
+    "feedback.error": "Failed to submit, please try again",
 
     // OneClaw settings page
     "settings.title": "Settings",
