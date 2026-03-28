@@ -46,4 +46,5 @@ private_keys/
 .dev-state/
 
 docs/plans/
-docs/research/docs/progress/
+docs/research/
+docs/progress/

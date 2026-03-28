@@ -70,6 +70,9 @@ export class GatewayBrowserClient {
   private connectNonce: string | null = null;
   private connectSent = false;
   private connectTimer: number | null = null;
+  private reconnectTimer: number | null = null;
+  private helloReceived = false;
+  private socketGeneration = 0;
   private backoffMs = 800;
 
   constructor(private opts: GatewayBrowserClientOptions) {}
@@ -79,19 +82,20 @@ export class GatewayBrowserClient {
     this.connect();
   }
 
+  // 停止客户端时，必须同时清理握手与重连状态，避免旧回调继续污染新连接。
   stop() {
     this.closed = true;
-    this.connectSent = false;
-    this.connectNonce = null;
+    this.resetHandshakeState();
+    this.clearReconnectTimer();
     this.lastSeq = null;
-    this.pending.clear();
-    this.ws?.close();
+    const ws = this.ws;
     this.ws = null;
     this.flushPending(new Error("gateway client stopped"));
+    ws?.close();
   }
 
   get connected() {
-    return this.ws?.readyState === WebSocket.OPEN;
+    return this.helloReceived && this.ws?.readyState === WebSocket.OPEN;
   }
 
   // 手动立即重连（重置 backoff），用于刷新按钮
@@ -99,31 +103,56 @@ export class GatewayBrowserClient {
     if (this.connected) return;
     this.closed = false;
     this.backoffMs = 800;
-    this.ws?.close();
+    this.clearReconnectTimer();
+    this.resetHandshakeState();
+    const ws = this.ws;
     this.ws = null;
+    this.flushPending(new Error("gateway reconnecting"));
+    ws?.close();
     this.connect();
   }
 
+  // 只允许一个活动 socket；陈旧连接的事件一律忽略。
   private connect() {
     if (this.closed) {
       return;
     }
+    if (
+      this.ws &&
+      (this.ws.readyState === WebSocket.CONNECTING || this.ws.readyState === WebSocket.OPEN)
+    ) {
+      return;
+    }
+    this.clearReconnectTimer();
     console.info(`[gateway] websocket opening ${this.opts.url}`);
-    this.ws = new WebSocket(this.opts.url);
-    this.ws.addEventListener("open", () => {
+    const ws = new WebSocket(this.opts.url);
+    const generation = ++this.socketGeneration;
+    this.ws = ws;
+    this.resetHandshakeState();
+    ws.addEventListener("open", () => {
+      if (!this.isActiveSocket(ws, generation)) {
+        return;
+      }
       console.info("[gateway] websocket opened");
-      this.queueConnect();
+      this.queueConnect(ws, generation);
     });
-    this.ws.addEventListener("message", (ev) => this.handleMessage(String(ev.data ?? "")));
-    this.ws.addEventListener("close", (ev) => {
+    ws.addEventListener("message", (ev) => this.handleMessage(ws, generation, String(ev.data ?? "")));
+    ws.addEventListener("close", (ev) => {
+      if (!this.isActiveSocket(ws, generation)) {
+        return;
+      }
       const reason = String(ev.reason ?? "");
       this.ws = null;
+      this.resetHandshakeState();
       console.warn(`[gateway] websocket closed code=${ev.code} reason=${reason}`);
       this.flushPending(new Error(`gateway closed (${ev.code}): ${reason}`));
       this.opts.onClose?.({ code: ev.code, reason });
       this.scheduleReconnect();
     });
-    this.ws.addEventListener("error", (ev) => {
+    ws.addEventListener("error", (ev) => {
+      if (!this.isActiveSocket(ws, generation)) {
+        return;
+      }
       console.error("[gateway] websocket error", ev);
     });
   }
@@ -134,8 +163,12 @@ export class GatewayBrowserClient {
     }
     const delay = this.backoffMs;
     this.backoffMs = Math.min(this.backoffMs * 1.7, 15_000);
+    this.clearReconnectTimer();
     console.warn(`[gateway] scheduling reconnect in ${delay}ms`);
-    window.setTimeout(() => this.connect(), delay);
+    this.reconnectTimer = window.setTimeout(() => {
+      this.reconnectTimer = null;
+      this.connect();
+    }, delay);
   }
 
   private flushPending(err: Error) {
@@ -145,15 +178,13 @@ export class GatewayBrowserClient {
     this.pending.clear();
   }
 
-  private async sendConnect() {
-    if (this.connectSent) {
+  // connect 请求必须绑定到触发它的那条 socket，不能走全局 this.ws。
+  private async sendConnect(ws: WebSocket, generation: number) {
+    if (!this.isActiveSocket(ws, generation) || this.connectSent) {
       return;
     }
     this.connectSent = true;
-    if (this.connectTimer !== null) {
-      window.clearTimeout(this.connectTimer);
-      this.connectTimer = null;
-    }
+    this.clearConnectTimer();
 
     // crypto.subtle is only available in secure contexts (HTTPS, localhost).
     // Over plain HTTP, we skip device identity and fall back to token-only auth.
@@ -240,8 +271,17 @@ export class GatewayBrowserClient {
       locale: navigator.language,
     };
 
-    void this.request<GatewayHelloOk>("connect", params)
+    if (!this.isActiveSocket(ws, generation)) {
+      return;
+    }
+
+    void this.requestOnSocket<GatewayHelloOk>(ws, generation, "connect", params, {
+      allowBeforeHello: true,
+    })
       .then((hello) => {
+        if (!this.isActiveSocket(ws, generation)) {
+          return;
+        }
         console.info("[gateway] connect response ok");
         if (hello?.auth?.deviceToken && deviceIdentity) {
           storeDeviceAuthToken({
@@ -251,19 +291,26 @@ export class GatewayBrowserClient {
             scopes: hello.auth.scopes ?? [],
           });
         }
+        this.helloReceived = true;
         this.backoffMs = 800;
         this.opts.onHello?.(hello);
       })
       .catch((err) => {
+        if (!this.isActiveSocket(ws, generation)) {
+          return;
+        }
         console.error("[gateway] connect request failed", err);
         if (canFallbackToShared && deviceIdentity) {
           clearDeviceAuthToken({ deviceId: deviceIdentity.deviceId, role });
         }
-        this.ws?.close(CONNECT_FAILED_CLOSE_CODE, "connect failed");
+        ws.close(CONNECT_FAILED_CLOSE_CODE, "connect failed");
       });
   }
 
-  private handleMessage(raw: string) {
+  private handleMessage(ws: WebSocket, generation: number, raw: string) {
+    if (!this.isActiveSocket(ws, generation)) {
+      return;
+    }
     let parsed: unknown;
     try {
       parsed = JSON.parse(raw);
@@ -281,7 +328,7 @@ export class GatewayBrowserClient {
         if (nonce) {
           this.connectNonce = nonce;
           console.debug("[gateway] challenge recv nonce", nonce);
-          void this.sendConnect();
+          void this.sendConnect(ws, generation);
         }
         return;
       }
@@ -316,30 +363,79 @@ export class GatewayBrowserClient {
     }
   }
 
+  // 业务请求只允许走当前且已完成 hello 的连接。
   request<T = unknown>(method: string, params?: unknown): Promise<T> {
     if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
       console.error("[gateway] request with closed socket", method);
       return Promise.reject(new Error("gateway not connected"));
+    }
+    if (!this.helloReceived) {
+      console.error("[gateway] request before hello", method);
+      return Promise.reject(new Error("gateway handshake not complete"));
+    }
+    return this.requestOnSocket<T>(this.ws, this.socketGeneration, method, params);
+  }
+
+  private requestOnSocket<T = unknown>(
+    ws: WebSocket,
+    generation: number,
+    method: string,
+    params?: unknown,
+    options: { allowBeforeHello?: boolean } = {},
+  ): Promise<T> {
+    if (!this.isActiveSocket(ws, generation) || ws.readyState !== WebSocket.OPEN) {
+      console.error("[gateway] request with stale socket", method);
+      return Promise.reject(new Error("gateway not connected"));
+    }
+    if (!options.allowBeforeHello && !this.helloReceived) {
+      console.error("[gateway] request before hello", method);
+      return Promise.reject(new Error("gateway handshake not complete"));
     }
     const id = generateUUID();
     const frame = { type: "req", id, method, params };
     const p = new Promise<T>((resolve, reject) => {
       this.pending.set(id, { resolve: (v) => resolve(v as T), reject });
     });
-    this.ws.send(JSON.stringify(frame));
+    ws.send(JSON.stringify(frame));
     console.debug("[gateway] request sent", method);
     return p;
   }
 
-  private queueConnect() {
+  private queueConnect(ws: WebSocket, generation: number) {
     this.connectNonce = null;
     this.connectSent = false;
+    this.clearConnectTimer();
+    this.connectTimer = window.setTimeout(() => {
+      if (!this.isActiveSocket(ws, generation)) {
+        return;
+      }
+      console.debug("[gateway] queueConnect timeout fire");
+      void this.sendConnect(ws, generation);
+    }, 750);
+  }
+
+  private resetHandshakeState() {
+    this.connectSent = false;
+    this.connectNonce = null;
+    this.helloReceived = false;
+    this.clearConnectTimer();
+  }
+
+  private clearConnectTimer() {
     if (this.connectTimer !== null) {
       window.clearTimeout(this.connectTimer);
+      this.connectTimer = null;
     }
-    this.connectTimer = window.setTimeout(() => {
-      console.debug("[gateway] queueConnect timeout fire");
-      void this.sendConnect();
-    }, 750);
+  }
+
+  private clearReconnectTimer() {
+    if (this.reconnectTimer !== null) {
+      window.clearTimeout(this.reconnectTimer);
+      this.reconnectTimer = null;
+    }
+  }
+
+  private isActiveSocket(ws: WebSocket, generation: number) {
+    return this.ws === ws && this.socketGeneration === generation;
   }
 }
