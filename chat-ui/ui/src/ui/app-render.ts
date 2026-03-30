@@ -259,9 +259,35 @@ function openSettingsView(state: AppViewState, tabHint: "channels" | null = null
 
 // ── 反馈面板逻辑 ──
 
-function openFeedbackView(state: AppViewState) {
+async function openFeedbackView(state: AppViewState) {
+  // 先截图（视图切换前），再打开新建表单
+  let capturedBase64: string | null = null;
+  try {
+    capturedBase64 = await (window as any).oneclaw.captureWindow();
+  } catch { /* 截图失败不阻塞 */ }
+
   setOneClawView(state, "feedback");
-  feedbackPanelState = { ...feedbackPanelState, view: "list" };
+
+  const screenshots: string[] = [];
+  const previews: string[] = [];
+  if (capturedBase64) {
+    screenshots.push(capturedBase64);
+    previews.push(`data:image/png;base64,${capturedBase64}`);
+  }
+
+  feedbackPanelState = {
+    ...feedbackPanelState,
+    view: "new",
+    newContent: "",
+    newEmail: "",
+    newScreenshots: screenshots,
+    newScreenshotPreviews: previews,
+    newPreviewSrc: null,
+    newIncludeLogs: true,
+    newSubmitting: false,
+    newError: null,
+  };
+
   loadFeedbackThreads(state);
 }
 
@@ -271,7 +297,7 @@ async function loadFeedbackThreads(state: AppViewState) {
   try {
     const result = await window.oneclaw?.feedbackThreads?.();
     if (result?.ok && result.data) {
-      const threads = Array.isArray(result.data) ? result.data : (result.data.threads ?? []);
+      const threads = Array.isArray(result.data) ? result.data : (result.data.items ?? result.data.threads ?? []);
       feedbackPanelState = { ...feedbackPanelState, threads, threadsLoading: false };
       feedbackHasReplyGlobal = threads.some((th: any) => th.has_reply);
     } else {
@@ -1180,7 +1206,9 @@ export function renderApp(state: AppViewState) {
                   `
                 : nothing
           }
-          <div class="oneclaw-titlebar-right"></div>
+          <div class="oneclaw-titlebar-right">
+            ${renderFeedbackButton(() => openFeedbackView(state))}
+          </div>
         </div>
 
         <main class="oneclaw-content">
