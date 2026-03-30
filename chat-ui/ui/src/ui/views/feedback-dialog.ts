@@ -113,7 +113,6 @@ export function renderFeedbackDialog(
           <label class="feedback-screenshot-add">
             <input
               type="file"
-              accept="image/*"
               multiple
               @change=${(e: Event) => {
                 const files = (e.target as HTMLInputElement).files;
@@ -124,7 +123,7 @@ export function renderFeedbackDialog(
               style="display: none"
             />
             ${icons.image}
-            <span>${t("feedback.addScreenshot")}</span>
+            <span>${t("feedback.addFile")}</span>
           </label>
         </div>
 
@@ -204,6 +203,7 @@ export interface FeedbackPanelState {
   newEmail: string;
   newScreenshots: string[];
   newScreenshotPreviews: string[];
+  newFileNames: string[];
   newPreviewSrc: string | null;
   newIncludeLogs: boolean;
   newSubmitting: boolean;
@@ -213,6 +213,9 @@ export interface FeedbackPanelState {
   detailMessages: FeedbackMessage[];
   detailLoading: boolean;
   detailReplyContent: string;
+  detailReplyFiles: string[];
+  detailReplyFilePreviews: string[];
+  detailReplyFileNames: string[];
   detailReplySending: boolean;
 }
 
@@ -226,6 +229,7 @@ export function createFeedbackPanelState(): FeedbackPanelState {
     newEmail: "",
     newScreenshots: [],
     newScreenshotPreviews: [],
+    newFileNames: [],
     newPreviewSrc: null,
     newIncludeLogs: true,
     newSubmitting: false,
@@ -234,6 +238,9 @@ export function createFeedbackPanelState(): FeedbackPanelState {
     detailMessages: [],
     detailLoading: false,
     detailReplyContent: "",
+    detailReplyFiles: [],
+    detailReplyFilePreviews: [],
+    detailReplyFileNames: [],
     detailReplySending: false,
   };
 }
@@ -264,12 +271,16 @@ export interface FeedbackPanelCallbacks {
   onNewEmailChange: (value: string) => void;
   onNewToggleLogs: (checked: boolean) => void;
   onNewAddScreenshots: (files: FileList) => void;
+  onNewPickFiles: () => void;
   onNewRemoveScreenshot: (index: number) => void;
   onNewPaste: (e: ClipboardEvent) => void;
   onNewPreviewScreenshot: (src: string | null) => void;
   onNewSubmit: () => void;
   // detail
   onReplyChange: (value: string) => void;
+  onReplyAddFiles: (files: FileList) => void;
+  onReplyPickFiles: () => void;
+  onReplyRemoveFile: (index: number) => void;
   onReplySend: () => void;
   requestUpdate: () => void;
 }
@@ -388,10 +399,15 @@ function renderNewContent(
         ${state.newScreenshotPreviews.map(
           (src, i) => html`
             <div class="feedback-screenshot-item">
-              <img src=${src} alt="screenshot"
-                @click=${() => callbacks.onNewPreviewScreenshot(src)}
-                style="cursor: pointer"
-              />
+              ${src
+                ? html`<img src=${src} alt="screenshot"
+                    @click=${() => callbacks.onNewPreviewScreenshot(src)}
+                    style="cursor: pointer"
+                  />`
+                : html`<div class="feedback-file-icon" title=${state.newFileNames[i] || "file"}>
+                    ${icons.fileText}
+                    <span class="feedback-file-name">${state.newFileNames[i] || "file"}</span>
+                  </div>`}
               <button
                 class="feedback-screenshot-remove"
                 type="button"
@@ -404,7 +420,6 @@ function renderNewContent(
         <label class="feedback-screenshot-add">
           <input
             type="file"
-            accept="image/*"
             multiple
             @change=${(e: Event) => {
               const files = (e.target as HTMLInputElement).files;
@@ -415,8 +430,17 @@ function renderNewContent(
             style="display: none"
           />
           ${icons.image}
-          <span>${t("feedback.addScreenshot")}</span>
+          <span>${t("feedback.addFile")}</span>
         </label>
+        <button
+          class="feedback-screenshot-add"
+          type="button"
+          @click=${callbacks.onNewPickFiles}
+          ?disabled=${state.newSubmitting}
+        >
+          ${icons.folder}
+          <span>${t("feedback.pickFromLogs")}</span>
+        </button>
       </div>
 
       <div class="feedback-logs-toggle">
@@ -492,7 +516,34 @@ function renderDetailContent(
 
       ${isOpen
         ? html`
+            ${state.detailReplyFilePreviews.length > 0 ? html`
+              <div class="feedback-panel__reply-files">
+                ${state.detailReplyFilePreviews.map((src, i) => html`
+                  <div class="feedback-screenshot-item feedback-screenshot-item--small">
+                    ${src
+                      ? html`<img src=${src} alt="file" />`
+                      : html`<div class="feedback-file-icon"><span class="feedback-file-name">${state.detailReplyFileNames[i] || "file"}</span></div>`}
+                    <button class="feedback-screenshot-remove" type="button"
+                      @click=${() => callbacks.onReplyRemoveFile(i)}
+                      ?disabled=${state.detailReplySending}
+                    >${icons.x}</button>
+                  </div>
+                `)}
+              </div>
+            ` : nothing}
             <div class="feedback-panel__reply-bar">
+              <label class="feedback-panel__reply-attach" title=${t("feedback.addFile")}>
+                <input type="file" multiple
+                  @change=${(e: Event) => {
+                    const files = (e.target as HTMLInputElement).files;
+                    if (files) callbacks.onReplyAddFiles(files);
+                    (e.target as HTMLInputElement).value = "";
+                  }}
+                  ?disabled=${state.detailReplySending}
+                  style="display: none"
+                />
+                ${icons.paperclip}
+              </label>
               <input
                 class="feedback-panel__reply-input"
                 type="text"
@@ -500,7 +551,7 @@ function renderDetailContent(
                 .value=${state.detailReplyContent}
                 @input=${(e: Event) => callbacks.onReplyChange((e.target as HTMLInputElement).value)}
                 @keydown=${(e: KeyboardEvent) => {
-                  if (e.key === "Enter" && !e.shiftKey && state.detailReplyContent.trim()) {
+                  if (e.key === "Enter" && !e.shiftKey && (state.detailReplyContent.trim() || state.detailReplyFiles.length > 0)) {
                     e.preventDefault();
                     callbacks.onReplySend();
                   }
@@ -511,7 +562,7 @@ function renderDetailContent(
                 class="btn primary feedback-panel__reply-send"
                 type="button"
                 @click=${callbacks.onReplySend}
-                ?disabled=${state.detailReplySending || !state.detailReplyContent.trim()}
+                ?disabled=${state.detailReplySending || (!state.detailReplyContent.trim() && state.detailReplyFiles.length === 0)}
               >${t("feedback.send")}</button>
             </div>
           `

@@ -1,4 +1,4 @@
-import { ipcMain, app, BrowserWindow } from "electron";
+import { ipcMain, app, BrowserWindow, dialog } from "electron";
 import * as fs from "fs";
 import * as path from "path";
 import * as http from "http";
@@ -14,7 +14,8 @@ const FEEDBACK_URL =
 // 反馈提交参数
 interface FeedbackParams {
   content: string;
-  screenshots: string[]; // base64 编码的图片数据
+  screenshots: string[]; // base64 编码的文件数据
+  fileNames?: string[];  // 原始文件名（与 screenshots 一一对应）
   includeLogs: boolean;
   email?: string;
 }
@@ -30,6 +31,8 @@ interface FeedbackResult {
 interface FeedbackIpcDeps {
   getGatewayState: () => GatewayState;
   getGatewayPort: () => number;
+  getGatewayStartedAt: () => number | null;
+  getAppStartTime: () => number;
 }
 
 // 读取 deviceId（~/.openclaw/.device-id）
@@ -218,6 +221,20 @@ function httpGet(url: string): Promise<{ ok: boolean; data?: any; error?: string
   });
 }
 
+/** 根据文件扩展名猜测 Content-Type */
+function guessContentType(filename: string): string {
+  const ext = path.extname(filename).toLowerCase();
+  const map: Record<string, string> = {
+    ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg",
+    ".gif": "image/gif", ".webp": "image/webp", ".bmp": "image/bmp",
+    ".svg": "image/svg+xml", ".pdf": "application/pdf",
+    ".json": "application/json", ".txt": "text/plain",
+    ".log": "text/plain", ".csv": "text/csv",
+    ".zip": "application/zip",
+  };
+  return map[ext] || "application/octet-stream";
+}
+
 // 注册反馈相关 IPC handler
 export function registerFeedbackIpc(deps: FeedbackIpcDeps): void {
   // feedback:threads — 获取用户的反馈列表
@@ -237,23 +254,53 @@ export function registerFeedbackIpc(deps: FeedbackIpcDeps): void {
     return httpGet(url);
   });
 
-  // feedback:reply — 用户追问
-  ipcMain.handle("feedback:reply", async (_event, id: number, content: string) => {
+  // feedback:reply — 用户追问（支持附件）
+  ipcMain.handle("feedback:reply", async (_event, id: number, content: string, files?: Array<{name: string; base64: string}>) => {
     if (typeof id !== "number" || !Number.isInteger(id) || id <= 0) {
       return { ok: false, error: "invalid thread id" };
     }
-    if (typeof content !== "string" || content.trim().length === 0) {
-      return { ok: false, error: "content is required" };
+    if ((!content || !content.trim()) && (!files || files.length === 0)) {
+      return { ok: false, error: "content or files required" };
     }
     const deviceId = readDeviceId();
     const url = `${resolveUserApiBase()}/${id}/messages`;
     const boundary = `----FeedbackReplyBoundary${Date.now()}`;
     const parts: Buffer[] = [];
     parts.push(buildTextField(boundary, "device_id", deviceId));
-    parts.push(buildTextField(boundary, "content", content));
+    parts.push(buildTextField(boundary, "content", content || ""));
+    if (files) {
+      for (const f of files) {
+        const buf = Buffer.from(f.base64, "base64");
+        const contentType = guessContentType(f.name);
+        parts.push(buildFileField(boundary, "screenshots", f.name, buf, contentType));
+      }
+    }
     parts.push(Buffer.from(`--${boundary}--\r\n`));
     const body = Buffer.concat(parts);
     return postMultipart(url, body, boundary);
+  });
+
+  // feedback:pick-files — 打开文件选择器，默认目录为 .openclaw
+  ipcMain.handle("feedback:pick-files", async () => {
+    const result = await dialog.showOpenDialog({
+      defaultPath: resolveUserStateDir(),
+      properties: ["openFile", "multiSelections"],
+    });
+    if (result.canceled || result.filePaths.length === 0) {
+      return { files: [] };
+    }
+    const files: Array<{name: string; base64: string}> = [];
+    for (const fp of result.filePaths) {
+      try {
+        const data = fs.readFileSync(fp);
+        // 限制单文件 10MB
+        if (data.length > 10 * 1024 * 1024) continue;
+        files.push({ name: path.basename(fp), base64: data.toString("base64") });
+      } catch {
+        // 读取失败跳过
+      }
+    }
+    return { files };
   });
   // 截取当前窗口截图，返回 base64 PNG
   ipcMain.handle("feedback:capture-window", async (event) => {
@@ -269,7 +316,7 @@ export function registerFeedbackIpc(deps: FeedbackIpcDeps): void {
   });
 
   ipcMain.handle("feedback:submit", async (_event, params: FeedbackParams): Promise<FeedbackResult> => {
-    const { content, screenshots, includeLogs, email } = params;
+    const { content, screenshots, fileNames, includeLogs, email } = params;
 
     if (!content.trim()) {
       return { ok: false, error: "content is required" };
@@ -288,6 +335,8 @@ export function registerFeedbackIpc(deps: FeedbackIpcDeps): void {
     }
 
     // 采集诊断元数据
+    const now = Date.now();
+    const gwStartedAt = deps.getGatewayStartedAt();
     const metadataObj: Record<string, unknown> = {
       appVersion: app.getVersion(),
       os: process.platform,
@@ -295,6 +344,8 @@ export function registerFeedbackIpc(deps: FeedbackIpcDeps): void {
       deviceId: readDeviceId(),
       gatewayState: deps.getGatewayState(),
       gatewayPort: deps.getGatewayPort(),
+      gatewayUptime: gwStartedAt ? Math.floor((now - gwStartedAt) / 1000) : 0,
+      oneclawUptime: Math.floor((now - deps.getAppStartTime()) / 1000),
     };
     if (email) metadataObj.email = email;
     const metadata = JSON.stringify(metadataObj);
@@ -307,10 +358,12 @@ export function registerFeedbackIpc(deps: FeedbackIpcDeps): void {
     parts.push(buildTextField(boundary, "content", content));
     parts.push(buildTextField(boundary, "metadata", metadata));
 
-    // 截图文件（base64 → Buffer）
+    // 附件文件（base64 → Buffer）
     for (let i = 0; i < screenshots.length; i++) {
       const buf = Buffer.from(screenshots[i], "base64");
-      parts.push(buildFileField(boundary, "screenshots", `screenshot-${i + 1}.png`, buf, "image/png"));
+      const fileName = fileNames?.[i] || `screenshot-${i + 1}.png`;
+      const contentType = guessContentType(fileName);
+      parts.push(buildFileField(boundary, "screenshots", fileName, buf, contentType));
     }
 
     // 日志文件：超过 10MB 只取末尾 10 万行，并脱敏含密钥的行
