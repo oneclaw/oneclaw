@@ -1,6 +1,7 @@
 import { BrowserWindow, app, globalShortcut } from "electron";
 import * as path from "path";
 import * as log from "./logger";
+import { buildChatUiEntryUrl } from "./chat-ui-entry-url";
 import { shouldHideWindowOnClose } from "./window-close-policy";
 import type { PairingState } from "./channel-pairing-monitor";
 import type { UpdateBannerState } from "./update-banner-state";
@@ -133,30 +134,17 @@ export class WindowManager {
       this.allowAppQuit = false;
     });
 
-    // 加载本地 chat-ui/dist/index.html
-    // 分两步：先加载页面建立 file:// 源，注入 localStorage，再 reload 让 app 读到正确配置。
-    // 窗口此时 show=false，用户看不到中间态。
+    // 首次加载直接带上 gateway 参数，避免双次 loadFile 触发两套 renderer 初始化。
     const chatUiIndex = resolveChatUiPath();
-    log.info(`准备加载 Chat UI 路径: ${chatUiIndex}`);
+    const chatUiEntryUrl = buildChatUiEntryUrl(chatUiIndex, opts);
+    log.info(`准备加载 Chat UI: ${chatUiEntryUrl}`);
     try {
-      await this.win.loadFile(chatUiIndex);
+      await this.win.loadURL(chatUiEntryUrl);
     } catch (err) {
-      log.error(`Chat UI 加载失败: path=${chatUiIndex} err=${err}`);
+      log.error(`Chat UI 加载失败: url=${chatUiEntryUrl} err=${err}`);
       await this.loadChatUiErrorPage();
       this.win.show();
       return;
-    }
-
-    // 注入 gateway 连接信息到 localStorage，然后 reload 让 app 重新初始化
-    if (opts.token) {
-      log.info(`准备注入 Gateway 设置: url=ws://127.0.0.1:${opts.port} token=${maskToken(opts.token)}`);
-      await this.injectGatewaySettings(opts.port, opts.token);
-      try {
-        log.info(`注入后重载 Chat UI: ${chatUiIndex}`);
-        await this.win.loadFile(chatUiIndex);
-      } catch (err) {
-        log.error(`Chat UI reload 失败: ${err}`);
-      }
     }
 
     this.win.show();
@@ -217,29 +205,6 @@ export class WindowManager {
       return;
     }
     this.win.webContents.send("app:navigate", payload);
-  }
-
-  // 注入 gateway URL 和 token 到 localStorage，Chat UI 的 gateway.ts 会读取
-  private async injectGatewaySettings(port: number, token: string): Promise<void> {
-    const escaped = token.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
-    const gatewayUrl = `ws://127.0.0.1:${port}`;
-    try {
-      await this.win!.webContents.executeJavaScript(`
-        (() => {
-          const key = "openclaw.control.settings.v1";
-          const raw = localStorage.getItem(key);
-          const s = raw ? JSON.parse(raw) : {};
-          s.token = "${escaped}";
-          s.gatewayUrl = "${gatewayUrl}";
-          localStorage.setItem(key, JSON.stringify(s));
-        })();
-      `);
-      log.info(
-        `gateway settings 已注入: key=openclaw.control.settings.v1 token=${maskToken(token)} url=${gatewayUrl}`,
-      );
-    } catch (err) {
-      log.error(`gateway settings 注入失败: ${err}`);
-    }
   }
 
   // Chat UI 加载失败时的错误页

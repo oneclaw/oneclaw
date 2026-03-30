@@ -21,14 +21,20 @@ class FakeTimers {
     this.tasks.delete(id);
   }
 
+  // 单步推进一个定时器，便于把握 connect 和 request timeout 的先后顺序。
+  runNext() {
+    const task = [...this.tasks.values()].sort((a, b) => a.id - b.id)[0];
+    if (!task) {
+      return;
+    }
+    this.tasks.delete(task.id);
+    task.fn();
+  }
+
   // 顺序执行当前所有待触发回调，模拟时间推进。
   runAll() {
     while (this.tasks.size > 0) {
-      const tasks = [...this.tasks.values()].sort((a, b) => a.id - b.id);
-      this.tasks.clear();
-      for (const task of tasks) {
-        task.fn();
-      }
+      this.runNext();
     }
   }
 }
@@ -111,6 +117,15 @@ function installBrowserGlobals(timers: FakeTimers) {
     localStorage: storage,
     WebSocket: FakeWebSocket,
   });
+  Object.defineProperty(globalThis, "crypto", {
+    configurable: true,
+    value: {
+      randomUUID: () => "00000000-0000-4000-8000-000000000000",
+      getRandomValues<T extends Uint8Array>(array: T) {
+        return array;
+      },
+    },
+  });
 
   Object.defineProperty(globalThis, "navigator", {
     configurable: true,
@@ -168,12 +183,51 @@ async function testRequestMustWaitForHelloHandshake() {
   assert.match(String(outcome), /^rejected:/, "未完成 hello 握手时，请求应立即被拒绝");
   assert.equal(socket.sent.length, 0, "未完成 hello 握手前，不应向 gateway 发送业务请求");
 
+}
+
+// 已完成 hello 后，业务请求必须有超时兜底，不能无限悬空。
+async function testRequestTimesOutWhenGatewayNeverResponds() {
+  FakeWebSocket.instances = [];
+  const timers = new FakeTimers();
+  installBrowserGlobals(timers);
+
+  const client = new GatewayBrowserClient({ url: "ws://127.0.0.1:18789" });
+  client.start();
+  const socket = FakeWebSocket.instances[0];
+  socket.open();
+
+  timers.runNext();
+  await flushMicrotasks();
+  const connectRequest = socket.sent.find((payload) => JSON.parse(payload).method === "connect");
+  assert.ok(connectRequest, "握手阶段应先发出 connect 请求");
+  const connectId = JSON.parse(connectRequest).id;
+  socket.message(
+    JSON.stringify({
+      type: "res",
+      id: connectId,
+      ok: true,
+      payload: { type: "hello-ok", protocol: 3 },
+    }),
+  );
+  await flushMicrotasks();
+
+  const requestResult = client.request("chat.history").then(
+    () => "resolved",
+    (error) => `rejected:${error instanceof Error ? error.message : String(error)}`,
+  );
+
   timers.runAll();
+  await flushMicrotasks();
+  const outcome = await Promise.race([requestResult, Promise.resolve("pending")]);
+
+  assert.notEqual(outcome, "pending", "gateway 长时间不响应时，请求不应无限悬空");
+  assert.match(String(outcome), /^rejected:/, "gateway 超时后，请求应明确 reject");
 }
 
 async function main() {
   await testReconnectNowCancelsScheduledReconnect();
   await testRequestMustWaitForHelloHandshake();
+  await testRequestTimesOutWhenGatewayNeverResponds();
   console.log("gateway reconnect tests passed");
 }
 

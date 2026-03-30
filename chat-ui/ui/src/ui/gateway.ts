@@ -42,6 +42,7 @@ export type GatewayHelloOk = {
 type Pending = {
   resolve: (value: unknown) => void;
   reject: (err: unknown) => void;
+  timeoutId: number | null;
 };
 
 export type GatewayBrowserClientOptions = {
@@ -61,6 +62,7 @@ export type GatewayBrowserClientOptions = {
 
 // 4008 = application-defined code (browser rejects 1008 "Policy Violation")
 const CONNECT_FAILED_CLOSE_CODE = 4008;
+const REQUEST_TIMEOUT_MS = 30_000;
 
 export class GatewayBrowserClient {
   private ws: WebSocket | null = null;
@@ -173,6 +175,9 @@ export class GatewayBrowserClient {
 
   private flushPending(err: Error) {
     for (const [, p] of this.pending) {
+      if (p.timeoutId !== null) {
+        window.clearTimeout(p.timeoutId);
+      }
       p.reject(err);
     }
     this.pending.clear();
@@ -354,6 +359,9 @@ export class GatewayBrowserClient {
         return;
       }
       this.pending.delete(res.id);
+      if (pending.timeoutId !== null) {
+        window.clearTimeout(pending.timeoutId);
+      }
       if (res.ok) {
         pending.resolve(res.payload);
       } else {
@@ -394,7 +402,19 @@ export class GatewayBrowserClient {
     const id = generateUUID();
     const frame = { type: "req", id, method, params };
     const p = new Promise<T>((resolve, reject) => {
-      this.pending.set(id, { resolve: (v) => resolve(v as T), reject });
+      const timeoutId = window.setTimeout(() => {
+        const pending = this.pending.get(id);
+        if (!pending) {
+          return;
+        }
+        this.pending.delete(id);
+        pending.reject(new Error(`gateway request timeout: ${method}`));
+      }, REQUEST_TIMEOUT_MS);
+      this.pending.set(id, {
+        timeoutId,
+        resolve: (v) => resolve(v as T),
+        reject,
+      });
     });
     ws.send(JSON.stringify(frame));
     console.debug("[gateway] request sent", method);

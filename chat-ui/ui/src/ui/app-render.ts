@@ -91,6 +91,8 @@ function applySessionKey(state: AppViewState, next: string, syncUrl = false) {
   state.chatMessage = "";
   state.chatAttachments = [];
   state.chatStream = null;
+  (state as any).chatPendingStreamText = null;
+  (state as any).chatVisibleMessageCount = 0;
   (state as any).chatStreamStartedAt = null;
   state.chatRunId = null;
   state.chatQueue = [];
@@ -1170,6 +1172,7 @@ export function renderApp(state: AppViewState) {
                   compactionStatus: state.compactionStatus,
                   assistantAvatarUrl: chatAvatarUrl,
                   messages: state.chatMessages,
+                  visibleHistoryCount: (state as any).chatVisibleMessageCount,
                   toolMessages: state.chatToolMessages,
                   stream: state.chatStream,
                   streamStartedAt: (state as any).chatStreamStartedAt,

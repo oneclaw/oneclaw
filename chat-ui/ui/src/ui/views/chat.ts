@@ -32,6 +32,7 @@ export type ChatProps = {
   canAbort?: boolean;
   compactionStatus?: CompactionIndicatorStatus | null;
   messages: unknown[];
+  visibleHistoryCount: number;
   toolMessages: unknown[];
   stream: string | null;
   streamStartedAt: number | null;
@@ -641,14 +642,18 @@ function buildChatItems(props: ChatProps): Array<ChatItem | MessageGroup> {
   const items: ChatItem[] = [];
   const history = Array.isArray(props.messages) ? props.messages : [];
   const tools = Array.isArray(props.toolMessages) ? props.toolMessages : [];
-  const historyStart = Math.max(0, history.length - CHAT_HISTORY_RENDER_LIMIT);
+  const visibleHistoryCount =
+    props.visibleHistoryCount > 0
+      ? Math.min(props.visibleHistoryCount, CHAT_HISTORY_RENDER_LIMIT, history.length)
+      : Math.min(history.length, CHAT_HISTORY_RENDER_LIMIT);
+  const historyStart = Math.max(0, history.length - visibleHistoryCount);
   if (historyStart > 0) {
     items.push({
       kind: "message",
       key: "chat:history:notice",
       message: {
         role: "system",
-        content: `Showing last ${CHAT_HISTORY_RENDER_LIMIT} messages (${historyStart} hidden).`,
+        content: `Showing last ${visibleHistoryCount} messages (${historyStart} hidden).`,
         timestamp: Date.now(),
       },
     });

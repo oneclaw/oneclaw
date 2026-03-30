@@ -25,6 +25,7 @@ type LifecycleHost = {
   chatManualRefreshInFlight: boolean;
   chatLoading: boolean;
   chatMessages: unknown[];
+  chatVisibleMessageCount: number;
   chatToolMessages: unknown[];
   chatStream: string;
   logsAutoFollow: boolean;
@@ -72,6 +73,7 @@ export function handleUpdated(host: LifecycleHost, changed: Map<PropertyKey, unk
   if (
     host.tab === "chat" &&
     (changed.has("chatMessages") ||
+      changed.has("chatVisibleMessageCount") ||
       changed.has("chatToolMessages") ||
       changed.has("chatStream") ||
       changed.has("chatLoading") ||

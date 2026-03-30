@@ -35,6 +35,7 @@ export type ChatState = {
   sessionKey: string;
   chatLoading: boolean;
   chatMessages: unknown[];
+  chatVisibleMessageCount: number;
   chatThinkingLevel: string | null;
   chatSending: boolean;
   chatMessage: string;
@@ -42,6 +43,9 @@ export type ChatState = {
   chatRunId: string | null;
   chatStream: string | null;
   chatStreamStartedAt: number | null;
+  chatHistoryHydrationFrame: number | null;
+  chatPendingStreamText: string | null;
+  chatStreamFrame: number | null;
   lastError: string | null;
 };
 
@@ -53,11 +57,70 @@ export type ChatEventPayload = {
   errorMessage?: string;
 };
 
+const INITIAL_CHAT_HISTORY_RENDER_COUNT = 20;
+const CHAT_HISTORY_RENDER_BATCH = 40;
+
+// 取消历史消息渐进渲染，避免旧帧在 session 切换后继续写状态。
+function cancelChatHistoryHydration(state: ChatState) {
+  if (state.chatHistoryHydrationFrame !== null) {
+    cancelAnimationFrame(state.chatHistoryHydrationFrame);
+    state.chatHistoryHydrationFrame = null;
+  }
+}
+
+// 大历史记录先露出一小批，后续逐帧补齐，避免首屏同步渲染把 renderer 卡死。
+function scheduleChatHistoryHydration(state: ChatState, sessionKey: string, total: number) {
+  cancelChatHistoryHydration(state);
+  if (total <= state.chatVisibleMessageCount) {
+    return;
+  }
+  const hydrate = () => {
+    state.chatHistoryHydrationFrame = null;
+    if (state.sessionKey !== sessionKey) {
+      return;
+    }
+    const next = Math.min(total, state.chatVisibleMessageCount + CHAT_HISTORY_RENDER_BATCH);
+    state.chatVisibleMessageCount = next;
+    if (next < total) {
+      state.chatHistoryHydrationFrame = requestAnimationFrame(hydrate);
+    }
+  };
+  state.chatHistoryHydrationFrame = requestAnimationFrame(hydrate);
+}
+
+// chat delta 一帧只提交一次最新文本，别让每个 token 都触发 Lit 全量重渲染。
+function scheduleChatStreamFlush(state: ChatState) {
+  if (state.chatStreamFrame !== null) {
+    return;
+  }
+  state.chatStreamFrame = requestAnimationFrame(() => {
+    state.chatStreamFrame = null;
+    if (state.chatPendingStreamText === null) {
+      return;
+    }
+    state.chatStream = state.chatPendingStreamText;
+    state.chatPendingStreamText = null;
+  });
+}
+
+// run 结束时要连同挂起的 stream 帧一起清理，避免旧文本回写脏状态。
+function resetChatStreamState(state: ChatState) {
+  if (state.chatStreamFrame !== null) {
+    cancelAnimationFrame(state.chatStreamFrame);
+    state.chatStreamFrame = null;
+  }
+  state.chatPendingStreamText = null;
+  state.chatStream = null;
+  state.chatRunId = null;
+  state.chatStreamStartedAt = null;
+}
+
 export async function loadChatHistory(state: ChatState) {
   if (!state.client || !state.connected) {
     return;
   }
   const requestSessionKey = state.sessionKey;
+  cancelChatHistoryHydration(state);
   state.chatLoading = true;
   state.lastError = null;
   try {
@@ -72,7 +135,13 @@ export async function loadChatHistory(state: ChatState) {
       return;
     }
     const raw = Array.isArray(res.messages) ? res.messages : [];
-    state.chatMessages = deduplicateDeliveryMirrors(raw);
+    const deduplicated = deduplicateDeliveryMirrors(raw);
+    state.chatMessages = deduplicated;
+    state.chatVisibleMessageCount = Math.min(
+      deduplicated.length,
+      INITIAL_CHAT_HISTORY_RENDER_COUNT,
+    );
+    scheduleChatHistoryHydration(state, requestSessionKey, deduplicated.length);
     state.chatThinkingLevel = res.thinkingLevel ?? null;
   } catch (err) {
     if (state.sessionKey !== requestSessionKey) {
@@ -145,6 +214,8 @@ export async function sendChatMessage(
       timestamp: now,
     },
   ];
+  state.chatVisibleMessageCount = state.chatMessages.length;
+  cancelChatHistoryHydration(state);
 
   state.chatSending = true;
   state.lastError = null;
@@ -194,6 +265,7 @@ export async function sendChatMessage(
         timestamp: Date.now(),
       },
     ];
+    state.chatVisibleMessageCount = state.chatMessages.length;
     return null;
   } finally {
     state.chatSending = false;
@@ -237,23 +309,18 @@ export function handleChatEvent(state: ChatState, payload?: ChatEventPayload) {
   if (payload.state === "delta") {
     const next = extractText(payload.message);
     if (typeof next === "string") {
-      const current = state.chatStream ?? "";
+      const current = state.chatPendingStreamText ?? state.chatStream ?? "";
       if (!current || next.length >= current.length) {
-        state.chatStream = next;
+        state.chatPendingStreamText = next;
+        scheduleChatStreamFlush(state);
       }
     }
   } else if (payload.state === "final") {
-    state.chatStream = null;
-    state.chatRunId = null;
-    state.chatStreamStartedAt = null;
+    resetChatStreamState(state);
   } else if (payload.state === "aborted") {
-    state.chatStream = null;
-    state.chatRunId = null;
-    state.chatStreamStartedAt = null;
+    resetChatStreamState(state);
   } else if (payload.state === "error") {
-    state.chatStream = null;
-    state.chatRunId = null;
-    state.chatStreamStartedAt = null;
+    resetChatStreamState(state);
     state.lastError = payload.errorMessage ?? "chat error";
   }
   return payload.state;

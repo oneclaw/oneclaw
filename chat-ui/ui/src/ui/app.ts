@@ -217,6 +217,7 @@ export class OpenClawApp extends LitElement {
     chatSending: { state: true },
     chatMessage: { state: true },
     chatMessages: { state: true },
+    chatVisibleMessageCount: { state: true },
     chatToolMessages: { state: true },
     chatStream: { state: true },
     chatStreamStartedAt: { state: true },
@@ -446,9 +447,13 @@ export class OpenClawApp extends LitElement {
   chatSending = false;
   chatMessage = "";
   chatMessages: unknown[] = [];
+  chatVisibleMessageCount = 0;
   chatToolMessages: unknown[] = [];
   chatStream: string | null = null;
   chatStreamStartedAt: number | null = null;
+  chatHistoryHydrationFrame: number | null = null;
+  chatPendingStreamText: string | null = null;
+  chatStreamFrame: number | null = null;
   chatRunId: string | null = null;
   compactionStatus: CompactionStatus | null = null;
   chatAvatarUrl: string | null = null;
