@@ -240,6 +240,11 @@ function setOneClawView(state: AppViewState, next: "chat" | "settings" | "skills
   if ((state.settings.oneclawView ?? "chat") === next) {
     return;
   }
+  // 离开反馈视图时释放截图数据，避免内存泄漏
+  const prev = state.settings.oneclawView ?? "chat";
+  if (prev === "feedback" && next !== "feedback") {
+    feedbackPanelState = { ...feedbackPanelState, newScreenshots: [], newScreenshotPreviews: [] };
+  }
   state.applySettings({
     ...state.settings,
     oneclawView: next,
