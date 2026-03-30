@@ -178,6 +178,12 @@ contextBridge.exposeInMainWorld("oneclaw", {
   // 提交用户反馈
   submitFeedback: (params: { content: string; screenshots: string[]; includeLogs: boolean; email?: string }) =>
     ipcRenderer.invoke("feedback:submit", params),
+  // 获取反馈 thread 列表
+  feedbackThreads: () => ipcRenderer.invoke("feedback:threads"),
+  // 获取单个反馈 thread 详情
+  feedbackThread: (id: number) => ipcRenderer.invoke("feedback:thread", id),
+  // 用户追问
+  feedbackReply: (id: number, content: string) => ipcRenderer.invoke("feedback:reply", id, content),
   onNavigate: (cb: (payload: { view: "settings" }) => void) => {
     const listener = (_event: Electron.IpcRendererEvent, payload: { view: "settings" }) => {
       cb(payload);

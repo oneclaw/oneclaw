@@ -184,8 +184,76 @@ function buildWorkspaceTree(): string {
   return lines.join("\n") || "(empty)";
 }
 
+// 从 feedbackUrl 推导 user API 基础路径
+// feedbackUrl = "https://feedback.oneclaw.cn/api/v1/feedback"
+// userApiBase = "https://feedback.oneclaw.cn/api/v1/user/threads"
+function resolveUserApiBase(): string {
+  const base = FEEDBACK_URL.replace(/\/feedback\/?$/, "");
+  return `${base}/user/threads`;
+}
+
+// 通过 Node.js 原生 http/https 发送 GET 请求
+function httpGet(url: string): Promise<{ ok: boolean; data?: any; error?: string }> {
+  return new Promise((resolve) => {
+    const parsed = new URL(url);
+    const mod = parsed.protocol === "https:" ? https : http;
+    const req = mod.request(
+      parsed,
+      { method: "GET", timeout: 15_000 },
+      (res) => {
+        let data = "";
+        res.on("data", (chunk) => (data += chunk));
+        res.on("end", () => {
+          try {
+            const json = JSON.parse(data);
+            if (res.statusCode === 200) {
+              resolve({ ok: true, data: json });
+            } else {
+              resolve({ ok: false, error: json.error || `HTTP ${res.statusCode}` });
+            }
+          } catch {
+            resolve({ ok: false, error: `HTTP ${res.statusCode}` });
+          }
+        });
+      },
+    );
+    req.on("error", (err) => resolve({ ok: false, error: err.message }));
+    req.on("timeout", () => {
+      req.destroy();
+      resolve({ ok: false, error: "timeout" });
+    });
+    req.end();
+  });
+}
+
 // 注册反馈相关 IPC handler
 export function registerFeedbackIpc(deps: FeedbackIpcDeps): void {
+  // feedback:threads — 获取用户的反馈列表
+  ipcMain.handle("feedback:threads", async () => {
+    const deviceId = readDeviceId();
+    const url = `${resolveUserApiBase()}?device_id=${encodeURIComponent(deviceId)}`;
+    return httpGet(url);
+  });
+
+  // feedback:thread — 获取单个反馈详情 + 消息列表
+  ipcMain.handle("feedback:thread", async (_event, id: number) => {
+    const deviceId = readDeviceId();
+    const url = `${resolveUserApiBase()}/${id}?device_id=${encodeURIComponent(deviceId)}`;
+    return httpGet(url);
+  });
+
+  // feedback:reply — 用户追问
+  ipcMain.handle("feedback:reply", async (_event, id: number, content: string) => {
+    const deviceId = readDeviceId();
+    const url = `${resolveUserApiBase()}/${id}/messages`;
+    const boundary = `----FeedbackReplyBoundary${Date.now()}`;
+    const parts: Buffer[] = [];
+    parts.push(buildTextField(boundary, "device_id", deviceId));
+    parts.push(buildTextField(boundary, "content", content));
+    parts.push(Buffer.from(`--${boundary}--\r\n`));
+    const body = Buffer.concat(parts);
+    return postMultipart(url, body, boundary);
+  });
   // 截取当前窗口截图，返回 base64 PNG
   ipcMain.handle("feedback:capture-window", async (event) => {
     try {
