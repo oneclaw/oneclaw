@@ -8618,10 +8618,20 @@ img.chat-avatar {
 
 .feedback-logs-toggle {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
   font-size: 13px;
   color: var(--muted);
+  gap: 12px;
+}
+.feedback-logs-toggle__text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.feedback-logs-toggle__hint {
+  font-size: 11px;
+  opacity: 0.7;
 }
 
 /* iOS 风格 toggle switch（反馈弹窗内复用 settings 样式） */

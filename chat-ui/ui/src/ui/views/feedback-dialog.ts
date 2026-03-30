@@ -420,7 +420,10 @@ function renderNewContent(
       </div>
 
       <div class="feedback-logs-toggle">
-        <span>${t("feedback.includeLogs")}</span>
+        <div class="feedback-logs-toggle__text">
+          <span>${t("feedback.includeLogs")}</span>
+          <span class="feedback-logs-toggle__hint">${t("feedback.includeLogsHint")}</span>
+        </div>
         <label class="toggle-switch">
           <input
             type="checkbox"
