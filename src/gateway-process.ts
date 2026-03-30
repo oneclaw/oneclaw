@@ -50,6 +50,7 @@ export class GatewayProcess {
   private extraEnv: Record<string, string> = {};
   private lastCrashTime = 0;
   private onStateChange?: (state: GatewayState) => void;
+  private startedAt: number | null = null;
 
   // 世代计数器：每次 spawn 递增，exit handler 只处理同代进程的退出
   private generation = 0;
@@ -66,6 +67,10 @@ export class GatewayProcess {
 
   getPort(): number {
     return this.port;
+  }
+
+  getStartedAt(): number | null {
+    return this.startedAt;
   }
 
   // 更新端口（在 start 前调用，用于冲突解决场景）
@@ -416,6 +421,11 @@ export class GatewayProcess {
   private setState(s: GatewayState): void {
     const prev = this.state;
     this.state = s;
+    if (s === "running") {
+      this.startedAt = Date.now();
+    } else if (s === "stopped") {
+      this.startedAt = null;
+    }
     diagLog(`state: ${prev} → ${s}`);
     this.onStateChange?.(s);
   }
