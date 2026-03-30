@@ -39,9 +39,19 @@ export interface FeedbackCallbacks {
   onPreviewScreenshot: (src: string | null) => void;
 }
 
-// renderFeedbackButton removed — entry moved to sidebar
-export function renderFeedbackButton(_onClick: () => void) {
-  return nothing;
+export function renderFeedbackButton(onClick: () => void) {
+  return html`
+    <button
+      class="feedback-trigger-btn"
+      type="button"
+      @click=${onClick}
+      title=${t("feedback.title")}
+      aria-label=${t("feedback.title")}
+    >
+      ${icons.bug}
+      <span class="feedback-trigger-label">${t("feedback.title")}</span>
+    </button>
+  `;
 }
 
 export function renderFeedbackDialog(
@@ -268,186 +278,179 @@ export function renderFeedbackPanel(
   state: FeedbackPanelState,
   callbacks: FeedbackPanelCallbacks,
 ) {
-  if (state.view === "detail") {
-    return renderDetailView(state, callbacks);
-  }
-  if (state.view === "new") {
-    return renderNewView(state, callbacks);
-  }
-  return renderListView(state, callbacks);
+  const selectedId = state.detailThread?.id ?? null;
+  return html`
+    <div class="feedback-layout">
+      ${renderSidebarNav(state, callbacks, selectedId)}
+      <div class="feedback-layout__content">
+        ${state.view === "detail"
+          ? renderDetailContent(state, callbacks)
+          : state.view === "new"
+            ? renderNewContent(state, callbacks)
+            : renderEmptyContent()}
+      </div>
+    </div>
+    ${state.newPreviewSrc ? html`
+      <div class="feedback-preview-overlay" @click=${() => callbacks.onNewPreviewScreenshot(null)}>
+        <img src=${state.newPreviewSrc} alt="preview" class="feedback-preview-img" />
+      </div>
+    ` : nothing}
+  `;
 }
 
-// ── List View ──
+// ── Sidebar Nav (always visible) ──
 
-function renderListView(
+function renderSidebarNav(
+  state: FeedbackPanelState,
+  callbacks: FeedbackPanelCallbacks,
+  selectedId: number | null,
+) {
+  return html`
+    <nav class="feedback-layout__sidebar">
+      <div class="feedback-layout__sidebar-header">
+        <span class="feedback-layout__sidebar-title">${t("feedback.tab")}</span>
+      </div>
+
+      <button
+        class="feedback-layout__nav-item feedback-layout__nav-new ${state.view === "new" ? "active" : ""}"
+        type="button"
+        @click=${callbacks.onOpenNew}
+      >
+        ${icons.messagePlus}
+        <span>${t("feedback.newThread")}</span>
+      </button>
+
+      <div class="feedback-layout__nav-list">
+        ${state.threadsLoading
+          ? html`<div class="feedback-layout__nav-loading">${icons.loader}</div>`
+          : state.threads.length === 0
+            ? html`<div class="feedback-layout__nav-empty">${t("feedback.noThreads")}</div>`
+            : state.threads.map((thread) => html`
+                <button
+                  class="feedback-layout__nav-item ${selectedId === thread.id && state.view === "detail" ? "active" : ""}"
+                  type="button"
+                  @click=${() => callbacks.onOpenDetail(thread.id)}
+                >
+                  <div class="feedback-layout__nav-item-text">${thread.content}</div>
+                  <div class="feedback-layout__nav-item-meta">
+                    <span class="feedback-layout__nav-time">${timeAgo(thread.updated_at || thread.created_at)}</span>
+                    ${thread.has_reply
+                      ? html`<span class="feedback-layout__nav-dot" aria-label="${t("feedback.hasReply")}"></span>`
+                      : nothing}
+                  </div>
+                </button>
+              `)}
+      </div>
+    </nav>
+  `;
+}
+
+// ── Empty Content (initial state) ──
+
+function renderEmptyContent() {
+  return html`
+    <div class="feedback-layout__empty">
+      <p>${t("feedback.noThreads")}</p>
+    </div>
+  `;
+}
+
+// ── New Feedback Content ──
+
+function renderNewContent(
   state: FeedbackPanelState,
   callbacks: FeedbackPanelCallbacks,
 ) {
   return html`
-    <section class="feedback-panel">
-      <div class="feedback-panel__header">
-        <h2 class="feedback-panel__title">${t("feedback.tab")}</h2>
+    <div class="feedback-layout__content-inner">
+      <h2 class="feedback-layout__content-title">${t("feedback.newThread")}</h2>
+
+      <textarea
+        class="feedback-textarea"
+        placeholder=${t("feedback.placeholder")}
+        .value=${state.newContent}
+        @input=${(e: Event) => callbacks.onNewContentChange((e.target as HTMLTextAreaElement).value)}
+        @paste=${callbacks.onNewPaste}
+        ?disabled=${state.newSubmitting}
+        rows="5"
+      ></textarea>
+
+      <input
+        class="feedback-email-input"
+        type="email"
+        placeholder=${t("feedback.emailPlaceholder")}
+        .value=${state.newEmail}
+        @input=${(e: Event) => callbacks.onNewEmailChange((e.target as HTMLInputElement).value)}
+        ?disabled=${state.newSubmitting}
+      />
+
+      <div class="feedback-screenshots">
+        ${state.newScreenshotPreviews.map(
+          (src, i) => html`
+            <div class="feedback-screenshot-item">
+              <img src=${src} alt="screenshot"
+                @click=${() => callbacks.onNewPreviewScreenshot(src)}
+                style="cursor: pointer"
+              />
+              <button
+                class="feedback-screenshot-remove"
+                type="button"
+                @click=${() => callbacks.onNewRemoveScreenshot(i)}
+                ?disabled=${state.newSubmitting}
+              >${icons.x}</button>
+            </div>
+          `,
+        )}
+        <label class="feedback-screenshot-add">
+          <input
+            type="file"
+            accept="image/*"
+            multiple
+            @change=${(e: Event) => {
+              const files = (e.target as HTMLInputElement).files;
+              if (files) callbacks.onNewAddScreenshots(files);
+              (e.target as HTMLInputElement).value = "";
+            }}
+            ?disabled=${state.newSubmitting}
+            style="display: none"
+          />
+          ${icons.image}
+          <span>${t("feedback.addScreenshot")}</span>
+        </label>
+      </div>
+
+      <div class="feedback-logs-toggle">
+        <span>${t("feedback.includeLogs")}</span>
+        <label class="toggle-switch">
+          <input
+            type="checkbox"
+            .checked=${state.newIncludeLogs}
+            @change=${(e: Event) => callbacks.onNewToggleLogs((e.target as HTMLInputElement).checked)}
+            ?disabled=${state.newSubmitting}
+          />
+          <span class="toggle-slider"></span>
+        </label>
+      </div>
+
+      ${state.newError ? html`<div class="feedback-error">${state.newError}</div>` : nothing}
+
+      <div class="feedback-actions">
         <button
           class="btn primary"
           type="button"
-          @click=${callbacks.onOpenNew}
-        >${t("feedback.newThread")}</button>
-      </div>
-
-      <div class="feedback-panel__body">
-        ${state.threadsLoading
-          ? html`<div class="feedback-panel__loading">${icons.loader}</div>`
-          : state.threadsError
-            ? html`<div class="feedback-panel__empty">${state.threadsError}</div>`
-            : state.threads.length === 0
-              ? html`<div class="feedback-panel__empty">${t("feedback.noThreads")}</div>`
-              : html`
-                  <div class="feedback-panel__list">
-                    ${state.threads.map((thread) => html`
-                      <button
-                        class="feedback-panel__thread-item"
-                        type="button"
-                        @click=${() => callbacks.onOpenDetail(thread.id)}
-                      >
-                        <div class="feedback-panel__thread-content">${thread.content}</div>
-                        <div class="feedback-panel__thread-meta">
-                          <span class="feedback-panel__thread-status ${thread.status === "open" ? "feedback-panel__thread-status--open" : "feedback-panel__thread-status--closed"}">
-                            ${thread.status === "open" ? t("feedback.open") : t("feedback.closed")}
-                          </span>
-                          ${thread.has_reply
-                            ? html`<span class="feedback-panel__thread-reply-dot">${t("feedback.hasReply")}</span>`
-                            : nothing}
-                          <span class="feedback-panel__thread-time">${timeAgo(thread.updated_at || thread.created_at)}</span>
-                        </div>
-                      </button>
-                    `)}
-                  </div>
-                `}
-      </div>
-    </section>
-  `;
-}
-
-// ── New View ──
-
-function renderNewView(
-  state: FeedbackPanelState,
-  callbacks: FeedbackPanelCallbacks,
-) {
-  return html`
-    <section class="feedback-panel">
-      <div class="feedback-panel__header">
-        <button
-          class="feedback-panel__back"
-          type="button"
-          @click=${callbacks.onBackToList}
-        >${icons.arrowLeft} ${t("feedback.back")}</button>
-        <h2 class="feedback-panel__title">${t("feedback.newThread")}</h2>
-      </div>
-
-      <div class="feedback-panel__body feedback-panel__form">
-        <textarea
-          class="feedback-textarea"
-          placeholder=${t("feedback.placeholder")}
-          .value=${state.newContent}
-          @input=${(e: Event) => callbacks.onNewContentChange((e.target as HTMLTextAreaElement).value)}
-          @paste=${callbacks.onNewPaste}
-          ?disabled=${state.newSubmitting}
-          rows="5"
-        ></textarea>
-
-        <input
-          class="feedback-email-input"
-          type="email"
-          placeholder=${t("feedback.emailPlaceholder")}
-          .value=${state.newEmail}
-          @input=${(e: Event) => callbacks.onNewEmailChange((e.target as HTMLInputElement).value)}
-          ?disabled=${state.newSubmitting}
-        />
-
-        <div class="feedback-screenshots">
-          ${state.newScreenshotPreviews.map(
-            (src, i) => html`
-              <div class="feedback-screenshot-item">
-                <img src=${src} alt="screenshot"
-                  @click=${() => callbacks.onNewPreviewScreenshot(src)}
-                  style="cursor: pointer"
-                />
-                <button
-                  class="feedback-screenshot-remove"
-                  type="button"
-                  @click=${() => callbacks.onNewRemoveScreenshot(i)}
-                  ?disabled=${state.newSubmitting}
-                >${icons.x}</button>
-              </div>
-            `,
-          )}
-          <label class="feedback-screenshot-add">
-            <input
-              type="file"
-              accept="image/*"
-              multiple
-              @change=${(e: Event) => {
-                const files = (e.target as HTMLInputElement).files;
-                if (files) callbacks.onNewAddScreenshots(files);
-                (e.target as HTMLInputElement).value = "";
-              }}
-              ?disabled=${state.newSubmitting}
-              style="display: none"
-            />
-            ${icons.image}
-            <span>${t("feedback.addScreenshot")}</span>
-          </label>
-        </div>
-
-        <div class="feedback-logs-toggle">
-          <span>${t("feedback.includeLogs")}</span>
-          <label class="toggle-switch">
-            <input
-              type="checkbox"
-              .checked=${state.newIncludeLogs}
-              @change=${(e: Event) => callbacks.onNewToggleLogs((e.target as HTMLInputElement).checked)}
-              ?disabled=${state.newSubmitting}
-            />
-            <span class="toggle-slider"></span>
-          </label>
-        </div>
-
-        ${state.newError ? html`<div class="feedback-error">${state.newError}</div>` : nothing}
-
-        <div class="feedback-actions">
-          <button
-            class="btn"
-            type="button"
-            @click=${callbacks.onBackToList}
-            ?disabled=${state.newSubmitting}
-          >${t("feedback.cancel")}</button>
-          <button
-            class="btn primary"
-            type="button"
-            @click=${callbacks.onNewSubmit}
-            ?disabled=${state.newSubmitting || !state.newContent.trim()}
-          >
-            ${state.newSubmitting ? t("feedback.submitting") : t("feedback.submit")}
-          </button>
-        </div>
-      </div>
-
-      ${state.newPreviewSrc ? html`
-        <div
-          class="feedback-preview-overlay"
-          @click=${() => callbacks.onNewPreviewScreenshot(null)}
+          @click=${callbacks.onNewSubmit}
+          ?disabled=${state.newSubmitting || !state.newContent.trim()}
         >
-          <img src=${state.newPreviewSrc} alt="preview" class="feedback-preview-img" />
-        </div>
-      ` : nothing}
-    </section>
+          ${state.newSubmitting ? t("feedback.submitting") : t("feedback.submit")}
+        </button>
+      </div>
+    </div>
   `;
 }
 
-// ── Detail View ──
+// ── Detail Content ──
 
-function renderDetailView(
+function renderDetailContent(
   state: FeedbackPanelState,
   callbacks: FeedbackPanelCallbacks,
 ) {
@@ -457,13 +460,8 @@ function renderDetailView(
   const isOpen = thread.status === "open";
 
   return html`
-    <section class="feedback-panel feedback-panel--detail">
-      <div class="feedback-panel__header">
-        <button
-          class="feedback-panel__back"
-          type="button"
-          @click=${callbacks.onBackToList}
-        >${icons.arrowLeft} ${t("feedback.back")}</button>
+    <div class="feedback-layout__content-inner feedback-layout__content-inner--detail">
+      <div class="feedback-layout__content-header">
         <span class="feedback-panel__thread-status ${isOpen ? "feedback-panel__thread-status--open" : "feedback-panel__thread-status--closed"}">
           ${isOpen ? t("feedback.open") : t("feedback.closed")}
         </span>
@@ -473,7 +471,6 @@ function renderDetailView(
         ${state.detailLoading
           ? html`<div class="feedback-panel__loading">${icons.loader}</div>`
           : html`
-              <!-- initial feedback as first user message -->
               <div class="feedback-msg feedback-msg--user">
                 <div class="feedback-msg__bubble">${thread.content}</div>
                 <div class="feedback-msg__time">${timeAgo(thread.created_at)}</div>
@@ -516,6 +513,6 @@ function renderDetailView(
             </div>
           `
         : nothing}
-    </section>
+    </div>
   `;
 }
