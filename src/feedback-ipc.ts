@@ -115,7 +115,6 @@ function maskAlphanumericRuns(value: string): string {
 
 function maskConfigValues(obj: unknown): unknown {
   if (typeof obj === "string") {
-    if (/^(https?|file|wss?):\/\//i.test(obj)) return obj;
     return maskAlphanumericRuns(obj);
   }
   if (Array.isArray(obj)) return obj.map(maskConfigValues);
@@ -237,6 +236,9 @@ export function registerFeedbackIpc(deps: FeedbackIpcDeps): void {
 
   // feedback:thread — 获取单个反馈详情 + 消息列表
   ipcMain.handle("feedback:thread", async (_event, id: number) => {
+    if (typeof id !== "number" || !Number.isInteger(id) || id <= 0) {
+      return { ok: false, error: "invalid thread id" };
+    }
     const deviceId = readDeviceId();
     const url = `${resolveUserApiBase()}/${id}?device_id=${encodeURIComponent(deviceId)}`;
     return httpGet(url);
@@ -244,6 +246,12 @@ export function registerFeedbackIpc(deps: FeedbackIpcDeps): void {
 
   // feedback:reply — 用户追问
   ipcMain.handle("feedback:reply", async (_event, id: number, content: string) => {
+    if (typeof id !== "number" || !Number.isInteger(id) || id <= 0) {
+      return { ok: false, error: "invalid thread id" };
+    }
+    if (typeof content !== "string" || content.trim().length === 0) {
+      return { ok: false, error: "content is required" };
+    }
     const deviceId = readDeviceId();
     const url = `${resolveUserApiBase()}/${id}/messages`;
     const boundary = `----FeedbackReplyBoundary${Date.now()}`;
