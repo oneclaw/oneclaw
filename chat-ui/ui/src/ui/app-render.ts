@@ -23,6 +23,9 @@ import {
   renderFeedbackDialog,
   createFeedbackDialogState,
   type FeedbackDialogState,
+  renderFeedbackPanel,
+  createFeedbackPanelState,
+  type FeedbackPanelState,
 } from "./views/feedback-dialog.ts";
 import { patchSession, loadSessions } from "./controllers/sessions.ts";
 import { renderSkillStoreView, type SkillStoreState } from "./skill-store-view.ts";
@@ -59,7 +62,10 @@ declare global {
       workspaceOpenFolder?: (filePath: string) => Promise<any>;
       workspaceListDir?: (dirPath: string) => Promise<any>;
       workspaceReadFile?: (filePath: string) => Promise<any>;
-      submitFeedback?: (params: { content: string; screenshots: string[]; includeLogs: boolean }) => Promise<{ ok: boolean; id?: number; error?: string }>;
+      submitFeedback?: (params: { content: string; screenshots: string[]; includeLogs: boolean; email?: string }) => Promise<{ ok: boolean; id?: number; error?: string }>;
+      feedbackThreads?: () => Promise<{ ok: boolean; data?: any; error?: string }>;
+      feedbackThread?: (id: number) => Promise<{ ok: boolean; data?: any; error?: string }>;
+      feedbackReply?: (id: number, content: string) => Promise<{ ok: boolean; id?: number; error?: string }>;
     };
   }
 }
@@ -230,7 +236,7 @@ async function deleteSessionFromSidebar(state: AppViewState, key: string) {
   await loadSessions(s);
 }
 
-function setOneClawView(state: AppViewState, next: "chat" | "settings" | "skills" | "workspace" | "cron") {
+function setOneClawView(state: AppViewState, next: "chat" | "settings" | "skills" | "workspace" | "cron" | "feedback") {
   if ((state.settings.oneclawView ?? "chat") === next) {
     return;
   }
@@ -244,6 +250,193 @@ function setOneClawView(state: AppViewState, next: "chat" | "settings" | "skills
 function openSettingsView(state: AppViewState, tabHint: "channels" | null = null) {
   state.settingsTabHint = tabHint;
   setOneClawView(state, "settings");
+}
+
+// ── 反馈面板逻辑 ──
+
+function openFeedbackView(state: AppViewState) {
+  setOneClawView(state, "feedback");
+  feedbackPanelState = { ...feedbackPanelState, view: "list" };
+  loadFeedbackThreads(state);
+}
+
+async function loadFeedbackThreads(state: AppViewState) {
+  feedbackPanelState = { ...feedbackPanelState, threadsLoading: true, threadsError: null };
+  state.requestUpdate();
+  try {
+    const result = await window.oneclaw?.feedbackThreads?.();
+    if (result?.ok && result.data) {
+      const threads = Array.isArray(result.data) ? result.data : (result.data.threads ?? []);
+      feedbackPanelState = { ...feedbackPanelState, threads, threadsLoading: false };
+      feedbackHasReplyGlobal = threads.some((th: any) => th.has_reply);
+    } else {
+      feedbackPanelState = { ...feedbackPanelState, threadsLoading: false, threadsError: result?.error || "Failed to load" };
+    }
+  } catch {
+    feedbackPanelState = { ...feedbackPanelState, threadsLoading: false, threadsError: "Failed to load" };
+  }
+  state.requestUpdate();
+}
+
+async function loadFeedbackThreadDetail(state: AppViewState, id: number) {
+  feedbackPanelState = { ...feedbackPanelState, view: "detail", detailLoading: true, detailThread: null, detailMessages: [], detailReplyContent: "" };
+  state.requestUpdate();
+  try {
+    const result = await window.oneclaw?.feedbackThread?.(id);
+    if (result?.ok && result.data) {
+      feedbackPanelState = {
+        ...feedbackPanelState,
+        detailThread: result.data.feedback ?? result.data,
+        detailMessages: result.data.messages ?? [],
+        detailLoading: false,
+      };
+    } else {
+      feedbackPanelState = { ...feedbackPanelState, detailLoading: false };
+    }
+  } catch {
+    feedbackPanelState = { ...feedbackPanelState, detailLoading: false };
+  }
+  state.requestUpdate();
+}
+
+function buildFeedbackPanelCallbacks(state: AppViewState) {
+  return {
+    onLoadThreads: () => loadFeedbackThreads(state),
+    onOpenNew: () => {
+      feedbackPanelState = {
+        ...feedbackPanelState,
+        view: "new",
+        newContent: "",
+        newEmail: "",
+        newScreenshots: [],
+        newScreenshotPreviews: [],
+        newPreviewSrc: null,
+        newIncludeLogs: true,
+        newSubmitting: false,
+        newError: null,
+      };
+      state.requestUpdate();
+    },
+    onOpenDetail: (id: number) => {
+      void loadFeedbackThreadDetail(state, id);
+    },
+    onBackToList: () => {
+      feedbackPanelState = { ...feedbackPanelState, view: "list" };
+      loadFeedbackThreads(state);
+    },
+    onNewContentChange: (value: string) => {
+      feedbackPanelState = { ...feedbackPanelState, newContent: value };
+      state.requestUpdate();
+    },
+    onNewEmailChange: (value: string) => {
+      feedbackPanelState = { ...feedbackPanelState, newEmail: value };
+      state.requestUpdate();
+    },
+    onNewToggleLogs: (checked: boolean) => {
+      feedbackPanelState = { ...feedbackPanelState, newIncludeLogs: checked };
+      state.requestUpdate();
+    },
+    onNewAddScreenshots: (files: FileList) => {
+      Array.from(files).forEach((file) => {
+        const reader = new FileReader();
+        reader.onload = () => {
+          const dataUrl = reader.result as string;
+          const base64 = dataUrl.split(",")[1];
+          feedbackPanelState = {
+            ...feedbackPanelState,
+            newScreenshots: [...feedbackPanelState.newScreenshots, base64],
+            newScreenshotPreviews: [...feedbackPanelState.newScreenshotPreviews, dataUrl],
+          };
+          state.requestUpdate();
+        };
+        reader.readAsDataURL(file);
+      });
+    },
+    onNewRemoveScreenshot: (index: number) => {
+      feedbackPanelState = {
+        ...feedbackPanelState,
+        newScreenshots: feedbackPanelState.newScreenshots.filter((_, i) => i !== index),
+        newScreenshotPreviews: feedbackPanelState.newScreenshotPreviews.filter((_, i) => i !== index),
+      };
+      state.requestUpdate();
+    },
+    onNewPaste: (e: ClipboardEvent) => {
+      const items = e.clipboardData?.items;
+      if (!items) return;
+      for (const item of Array.from(items)) {
+        if (item.type.startsWith("image/")) {
+          e.preventDefault();
+          const file = item.getAsFile();
+          if (!file) continue;
+          const reader = new FileReader();
+          reader.onload = () => {
+            const dataUrl = reader.result as string;
+            const base64 = dataUrl.split(",")[1];
+            feedbackPanelState = {
+              ...feedbackPanelState,
+              newScreenshots: [...feedbackPanelState.newScreenshots, base64],
+              newScreenshotPreviews: [...feedbackPanelState.newScreenshotPreviews, dataUrl],
+            };
+            state.requestUpdate();
+          };
+          reader.readAsDataURL(file);
+        }
+      }
+    },
+    onNewPreviewScreenshot: (src: string | null) => {
+      feedbackPanelState = { ...feedbackPanelState, newPreviewSrc: src };
+      state.requestUpdate();
+    },
+    onNewSubmit: async () => {
+      feedbackPanelState = { ...feedbackPanelState, newSubmitting: true, newError: null };
+      state.requestUpdate();
+      try {
+        const result = await window.oneclaw?.submitFeedback?.({
+          content: feedbackPanelState.newContent,
+          screenshots: feedbackPanelState.newScreenshots,
+          includeLogs: feedbackPanelState.newIncludeLogs,
+          email: feedbackPanelState.newEmail || undefined,
+        });
+        if (result?.ok) {
+          feedbackPanelState = { ...feedbackPanelState, view: "list", newSubmitting: false };
+          showToast(state, t("feedback.success"));
+          loadFeedbackThreads(state);
+        } else {
+          feedbackPanelState = { ...feedbackPanelState, newSubmitting: false, newError: result?.error || t("feedback.error") };
+        }
+      } catch {
+        feedbackPanelState = { ...feedbackPanelState, newSubmitting: false, newError: t("feedback.error") };
+      }
+      state.requestUpdate();
+    },
+    onReplyChange: (value: string) => {
+      feedbackPanelState = { ...feedbackPanelState, detailReplyContent: value };
+      state.requestUpdate();
+    },
+    onReplySend: async () => {
+      if (!feedbackPanelState.detailThread || !feedbackPanelState.detailReplyContent.trim()) return;
+      feedbackPanelState = { ...feedbackPanelState, detailReplySending: true };
+      state.requestUpdate();
+      try {
+        const result = await window.oneclaw?.feedbackReply?.(
+          feedbackPanelState.detailThread.id,
+          feedbackPanelState.detailReplyContent,
+        );
+        if (result?.ok) {
+          // Reload thread detail to get new message
+          const id = feedbackPanelState.detailThread.id;
+          feedbackPanelState = { ...feedbackPanelState, detailReplyContent: "", detailReplySending: false };
+          void loadFeedbackThreadDetail(state, id);
+        } else {
+          feedbackPanelState = { ...feedbackPanelState, detailReplySending: false };
+        }
+      } catch {
+        feedbackPanelState = { ...feedbackPanelState, detailReplySending: false };
+      }
+      state.requestUpdate();
+    },
+    requestUpdate: () => state.requestUpdate(),
+  };
 }
 
 // ── 技能页子标签 ──
@@ -276,6 +469,11 @@ const skillStoreState: SkillStoreState = {
 // ── 反馈弹窗状态 ──
 
 let feedbackState: FeedbackDialogState = createFeedbackDialogState();
+
+// ── 反馈面板状态 ──
+
+let feedbackPanelState: FeedbackPanelState = createFeedbackPanelState();
+let feedbackHasReplyGlobal = false;
 
 // toast 定时器句柄
 let toastTimer: ReturnType<typeof setTimeout> | null = null;
@@ -864,13 +1062,14 @@ export function renderApp(state: AppViewState) {
   const skillsActive = oneclawView === "skills";
   const workspaceActive = oneclawView === "workspace";
   const cronActive = oneclawView === "cron";
+  const feedbackActive = oneclawView === "feedback";
   const updateBannerState = state.updateBannerState;
 
   return html`
     <div
-      class="oneclaw-shell ${navigator.platform?.includes("Mac") ? "is-mac" : ""} ${navigator.platform?.includes("Win") ? "is-win" : ""} ${chatFocus ? "oneclaw-shell--focus" : ""} ${sidebarCollapsed ? "oneclaw-shell--sidebar-collapsed" : ""} ${settingsActive || skillsActive || workspaceActive || cronActive ? "oneclaw-shell--fullpage" : ""}"
+      class="oneclaw-shell ${navigator.platform?.includes("Mac") ? "is-mac" : ""} ${navigator.platform?.includes("Win") ? "is-win" : ""} ${chatFocus ? "oneclaw-shell--focus" : ""} ${sidebarCollapsed ? "oneclaw-shell--sidebar-collapsed" : ""} ${settingsActive || skillsActive || workspaceActive || cronActive || feedbackActive ? "oneclaw-shell--fullpage" : ""}"
     >
-      ${chatFocus || sidebarCollapsed || settingsActive || skillsActive || workspaceActive || cronActive
+      ${chatFocus || sidebarCollapsed || settingsActive || skillsActive || workspaceActive || cronActive || feedbackActive
         ? nothing
         : renderSidebar({
             connected: state.connected,
@@ -882,6 +1081,9 @@ export function renderApp(state: AppViewState) {
             cronActive,
             cronJobCount: state.cronJobs.length,
             onOpenCron: () => setOneClawView(state, "cron"),
+            feedbackActive,
+            feedbackHasReply: feedbackHasReplyGlobal,
+            onOpenFeedback: () => openFeedbackView(state),
             updateStatus: updateBannerState.status,
             updateVersion: updateBannerState.version,
             updatePercent: updateBannerState.percent,
@@ -926,7 +1128,7 @@ export function renderApp(state: AppViewState) {
       <div class="oneclaw-main">
         <div class="oneclaw-titlebar">
           ${
-            settingsActive || skillsActive || workspaceActive || cronActive
+            settingsActive || skillsActive || workspaceActive || cronActive || feedbackActive
               ? html`
                   <div class="oneclaw-floating-actions">
                     <button
@@ -973,25 +1175,7 @@ export function renderApp(state: AppViewState) {
                   `
                 : nothing
           }
-          <div class="oneclaw-titlebar-right">
-            ${renderFeedbackButton(async () => {
-              // 先截图（弹窗打开前），再打开弹窗
-              let capturedBase64: string | null = null;
-              try {
-                capturedBase64 = await (window as any).oneclaw.captureWindow();
-              } catch { /* 截图失败不阻塞弹窗 */ }
-              feedbackState = { ...feedbackState, open: true };
-              if (capturedBase64) {
-                const dataUrl = `data:image/png;base64,${capturedBase64}`;
-                feedbackState = {
-                  ...feedbackState,
-                  screenshots: [capturedBase64],
-                  screenshotPreviews: [dataUrl],
-                };
-              }
-              state.requestUpdate();
-            })}
-          </div>
+          <div class="oneclaw-titlebar-right"></div>
         </div>
 
         <main class="oneclaw-content">
@@ -1161,6 +1345,8 @@ export function renderApp(state: AppViewState) {
                       });
                     },
                   })
+                : feedbackActive
+                  ? renderFeedbackPanel(feedbackPanelState, buildFeedbackPanelCallbacks(state))
                 : html`
                 ${renderChat({
                   sessionKey: state.sessionKey,

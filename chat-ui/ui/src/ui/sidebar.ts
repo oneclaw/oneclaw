@@ -19,6 +19,9 @@ export type SidebarProps = {
   cronActive: boolean;
   cronJobCount: number;
   onOpenCron: () => void;
+  feedbackActive: boolean;
+  feedbackHasReply: boolean;
+  onOpenFeedback: () => void;
   updateStatus: "hidden" | "available" | "downloading";
   updateVersion: string | null;
   updatePercent: number | null;
@@ -249,6 +252,19 @@ export function renderSidebar(props: SidebarProps) {
           <span class="oneclaw-sidebar__label">${t("sidebar.cron")}</span>
           ${props.cronJobCount > 0
             ? html`<span class="oneclaw-sidebar__badge">${props.cronJobCount}</span>`
+            : nothing}
+        </button>
+
+        <button
+          class="oneclaw-sidebar__item ${props.feedbackActive ? "active" : ""}"
+          type="button"
+          @click=${props.onOpenFeedback}
+          data-tooltip=${t("feedback.tab")}
+        >
+          <span class="oneclaw-sidebar__icon">${icons.messageSquare}</span>
+          <span class="oneclaw-sidebar__label">${t("feedback.tab")}</span>
+          ${props.feedbackHasReply
+            ? html`<span class="oneclaw-sidebar__update-dot" aria-hidden="true"></span>`
             : nothing}
         </button>
 
