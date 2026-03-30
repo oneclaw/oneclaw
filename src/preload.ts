@@ -176,14 +176,17 @@ contextBridge.exposeInMainWorld("oneclaw", {
   // 截取当前窗口截图，返回 base64 PNG
   captureWindow: () => ipcRenderer.invoke("feedback:capture-window"),
   // 提交用户反馈
-  submitFeedback: (params: { content: string; screenshots: string[]; includeLogs: boolean; email?: string }) =>
+  submitFeedback: (params: { content: string; screenshots: string[]; fileNames?: string[]; includeLogs: boolean; email?: string }) =>
     ipcRenderer.invoke("feedback:submit", params),
   // 获取反馈 thread 列表
   feedbackThreads: () => ipcRenderer.invoke("feedback:threads"),
   // 获取单个反馈 thread 详情
   feedbackThread: (id: number) => ipcRenderer.invoke("feedback:thread", id),
-  // 用户追问
-  feedbackReply: (id: number, content: string) => ipcRenderer.invoke("feedback:reply", id, content),
+  // 用户追问（支持附件）
+  feedbackReply: (id: number, content: string, files?: Array<{name: string; base64: string}>) =>
+    ipcRenderer.invoke("feedback:reply", id, content, files),
+  // 从 .openclaw 目录选择文件
+  feedbackPickFiles: () => ipcRenderer.invoke("feedback:pick-files"),
   onNavigate: (cb: (payload: { view: "settings" }) => void) => {
     const listener = (_event: Electron.IpcRendererEvent, payload: { view: "settings" }) => {
       cb(payload);
