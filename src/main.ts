@@ -121,6 +121,7 @@ process.on("unhandledRejection", (reason) => {
 
 // ── 核心组件 ──
 
+const appStartTime = Date.now();
 let pairingMonitor: ChannelPairingMonitor | null = null;
 const gateway = new GatewayProcess({
   port: resolveGatewayPort(),
@@ -687,6 +688,8 @@ registerWorkspaceIpc();
 registerFeedbackIpc({
   getGatewayState: () => gateway.getState(),
   getGatewayPort: () => gateway.getPort(),
+  getGatewayStartedAt: () => gateway.getStartedAt(),
+  getAppStartTime: () => appStartTime,
 });
 
 // ── 退出 ──

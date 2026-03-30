@@ -62,10 +62,11 @@ declare global {
       workspaceOpenFolder?: (filePath: string) => Promise<any>;
       workspaceListDir?: (dirPath: string) => Promise<any>;
       workspaceReadFile?: (filePath: string) => Promise<any>;
-      submitFeedback?: (params: { content: string; screenshots: string[]; includeLogs: boolean; email?: string }) => Promise<{ ok: boolean; id?: number; error?: string }>;
+      submitFeedback?: (params: { content: string; screenshots: string[]; fileNames?: string[]; includeLogs: boolean; email?: string }) => Promise<{ ok: boolean; id?: number; error?: string }>;
       feedbackThreads?: () => Promise<{ ok: boolean; data?: any; error?: string }>;
       feedbackThread?: (id: number) => Promise<{ ok: boolean; data?: any; error?: string }>;
-      feedbackReply?: (id: number, content: string) => Promise<{ ok: boolean; id?: number; error?: string }>;
+      feedbackReply?: (id: number, content: string, files?: Array<{name: string; base64: string}>) => Promise<{ ok: boolean; id?: number; error?: string }>;
+      feedbackPickFiles?: () => Promise<{ files: Array<{name: string; base64: string}> } | null>;
     };
   }
 }
@@ -243,7 +244,7 @@ function setOneClawView(state: AppViewState, next: "chat" | "settings" | "skills
   // 离开反馈视图时释放截图数据，避免内存泄漏
   const prev = state.settings.oneclawView ?? "chat";
   if (prev === "feedback" && next !== "feedback") {
-    feedbackPanelState = { ...feedbackPanelState, newScreenshots: [], newScreenshotPreviews: [] };
+    feedbackPanelState = { ...feedbackPanelState, newScreenshots: [], newScreenshotPreviews: [], newFileNames: [] };
   }
   state.applySettings({
     ...state.settings,
@@ -270,9 +271,11 @@ async function openFeedbackView(state: AppViewState) {
 
   const screenshots: string[] = [];
   const previews: string[] = [];
+  const fileNames: string[] = [];
   if (capturedBase64) {
     screenshots.push(capturedBase64);
     previews.push(`data:image/png;base64,${capturedBase64}`);
+    fileNames.push("screenshot.png");
   }
 
   feedbackPanelState = {
@@ -282,6 +285,7 @@ async function openFeedbackView(state: AppViewState) {
     newEmail: "",
     newScreenshots: screenshots,
     newScreenshotPreviews: previews,
+    newFileNames: fileNames,
     newPreviewSrc: null,
     newIncludeLogs: true,
     newSubmitting: false,
@@ -310,7 +314,7 @@ async function loadFeedbackThreads(state: AppViewState) {
 }
 
 async function loadFeedbackThreadDetail(state: AppViewState, id: number) {
-  feedbackPanelState = { ...feedbackPanelState, view: "detail", detailLoading: true, detailThread: null, detailMessages: [], detailReplyContent: "" };
+  feedbackPanelState = { ...feedbackPanelState, view: "detail", detailLoading: true, detailThread: null, detailMessages: [], detailReplyContent: "", detailReplyFiles: [], detailReplyFilePreviews: [], detailReplyFileNames: [] };
   state.requestUpdate();
   try {
     const result = await window.oneclaw?.feedbackThread?.(id);
@@ -341,6 +345,7 @@ function buildFeedbackPanelCallbacks(state: AppViewState) {
         newEmail: "",
         newScreenshots: [],
         newScreenshotPreviews: [],
+        newFileNames: [],
         newPreviewSrc: null,
         newIncludeLogs: true,
         newSubmitting: false,
@@ -369,6 +374,7 @@ function buildFeedbackPanelCallbacks(state: AppViewState) {
     },
     onNewAddScreenshots: (files: FileList) => {
       Array.from(files).forEach((file) => {
+        const isImage = file.type.startsWith("image/");
         const reader = new FileReader();
         reader.onload = () => {
           const dataUrl = reader.result as string;
@@ -376,18 +382,34 @@ function buildFeedbackPanelCallbacks(state: AppViewState) {
           feedbackPanelState = {
             ...feedbackPanelState,
             newScreenshots: [...feedbackPanelState.newScreenshots, base64],
-            newScreenshotPreviews: [...feedbackPanelState.newScreenshotPreviews, dataUrl],
+            newScreenshotPreviews: [...feedbackPanelState.newScreenshotPreviews, isImage ? dataUrl : ""],
+            newFileNames: [...feedbackPanelState.newFileNames, file.name],
           };
           state.requestUpdate();
         };
         reader.readAsDataURL(file);
       });
     },
+    onNewPickFiles: async () => {
+      const result = await window.oneclaw?.feedbackPickFiles?.();
+      if (!result?.files?.length) return;
+      for (const f of result.files) {
+        const isImage = /\.(png|jpe?g|gif|webp|bmp)$/i.test(f.name);
+        feedbackPanelState = {
+          ...feedbackPanelState,
+          newScreenshots: [...feedbackPanelState.newScreenshots, f.base64],
+          newScreenshotPreviews: [...feedbackPanelState.newScreenshotPreviews, isImage ? `data:image/png;base64,${f.base64}` : ""],
+          newFileNames: [...feedbackPanelState.newFileNames, f.name],
+        };
+      }
+      state.requestUpdate();
+    },
     onNewRemoveScreenshot: (index: number) => {
       feedbackPanelState = {
         ...feedbackPanelState,
         newScreenshots: feedbackPanelState.newScreenshots.filter((_, i) => i !== index),
         newScreenshotPreviews: feedbackPanelState.newScreenshotPreviews.filter((_, i) => i !== index),
+        newFileNames: feedbackPanelState.newFileNames.filter((_, i) => i !== index),
       };
       state.requestUpdate();
     },
@@ -425,6 +447,7 @@ function buildFeedbackPanelCallbacks(state: AppViewState) {
         const result = await window.oneclaw?.submitFeedback?.({
           content: feedbackPanelState.newContent,
           screenshots: feedbackPanelState.newScreenshots,
+          fileNames: feedbackPanelState.newFileNames,
           includeLogs: feedbackPanelState.newIncludeLogs,
           email: feedbackPanelState.newEmail || undefined,
         });
@@ -444,19 +467,63 @@ function buildFeedbackPanelCallbacks(state: AppViewState) {
       feedbackPanelState = { ...feedbackPanelState, detailReplyContent: value };
       state.requestUpdate();
     },
+    onReplyAddFiles: (files: FileList) => {
+      Array.from(files).forEach((file) => {
+        const isImage = file.type.startsWith("image/");
+        const reader = new FileReader();
+        reader.onload = () => {
+          const dataUrl = reader.result as string;
+          const base64 = dataUrl.split(",")[1];
+          feedbackPanelState = {
+            ...feedbackPanelState,
+            detailReplyFiles: [...feedbackPanelState.detailReplyFiles, base64],
+            detailReplyFilePreviews: [...feedbackPanelState.detailReplyFilePreviews, isImage ? dataUrl : ""],
+            detailReplyFileNames: [...feedbackPanelState.detailReplyFileNames, file.name],
+          };
+          state.requestUpdate();
+        };
+        reader.readAsDataURL(file);
+      });
+    },
+    onReplyPickFiles: async () => {
+      const result = await window.oneclaw?.feedbackPickFiles?.();
+      if (!result?.files?.length) return;
+      for (const f of result.files) {
+        const isImage = /\.(png|jpe?g|gif|webp|bmp)$/i.test(f.name);
+        feedbackPanelState = {
+          ...feedbackPanelState,
+          detailReplyFiles: [...feedbackPanelState.detailReplyFiles, f.base64],
+          detailReplyFilePreviews: [...feedbackPanelState.detailReplyFilePreviews, isImage ? `data:image/png;base64,${f.base64}` : ""],
+          detailReplyFileNames: [...feedbackPanelState.detailReplyFileNames, f.name],
+        };
+      }
+      state.requestUpdate();
+    },
+    onReplyRemoveFile: (index: number) => {
+      feedbackPanelState = {
+        ...feedbackPanelState,
+        detailReplyFiles: feedbackPanelState.detailReplyFiles.filter((_, i) => i !== index),
+        detailReplyFilePreviews: feedbackPanelState.detailReplyFilePreviews.filter((_, i) => i !== index),
+        detailReplyFileNames: feedbackPanelState.detailReplyFileNames.filter((_, i) => i !== index),
+      };
+      state.requestUpdate();
+    },
     onReplySend: async () => {
-      if (!feedbackPanelState.detailThread || !feedbackPanelState.detailReplyContent.trim()) return;
+      if (!feedbackPanelState.detailThread || (!feedbackPanelState.detailReplyContent.trim() && feedbackPanelState.detailReplyFiles.length === 0)) return;
       feedbackPanelState = { ...feedbackPanelState, detailReplySending: true };
       state.requestUpdate();
       try {
+        const files = feedbackPanelState.detailReplyFiles.length > 0
+          ? feedbackPanelState.detailReplyFiles.map((base64, i) => ({ name: feedbackPanelState.detailReplyFileNames[i] || `file-${i + 1}`, base64 }))
+          : undefined;
         const result = await window.oneclaw?.feedbackReply?.(
           feedbackPanelState.detailThread.id,
           feedbackPanelState.detailReplyContent,
+          files,
         );
         if (result?.ok) {
-          // Reload thread detail to get new message
           const id = feedbackPanelState.detailThread.id;
-          feedbackPanelState = { ...feedbackPanelState, detailReplyContent: "", detailReplySending: false };
+          feedbackPanelState = { ...feedbackPanelState, detailReplyContent: "", detailReplyFiles: [], detailReplyFilePreviews: [], detailReplyFileNames: [], detailReplySending: false };
           void loadFeedbackThreadDetail(state, id);
         } else {
           feedbackPanelState = { ...feedbackPanelState, detailReplySending: false };

@@ -8614,6 +8614,78 @@ img.chat-avatar {
   stroke-linejoin: round;
 }
 
+/* 非图片文件项 */
+.feedback-file-icon {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  background: var(--card-bg);
+  padding: 4px;
+}
+
+.feedback-file-icon svg {
+  width: 20px;
+  height: 20px;
+  stroke: var(--muted);
+  fill: none;
+  stroke-width: 1.5;
+}
+
+.feedback-file-name {
+  font-size: 9px;
+  color: var(--muted);
+  text-align: center;
+  word-break: break-all;
+  line-height: 1.2;
+  max-height: 36px;
+  overflow: hidden;
+}
+
+/* 小尺寸文件项（回复栏用） */
+.feedback-screenshot-item--small {
+  width: 48px;
+  height: 48px;
+}
+
+/* 回复栏附件预览区 */
+.feedback-panel__reply-files {
+  display: flex;
+  gap: 6px;
+  padding: 8px 12px 0;
+  flex-wrap: wrap;
+  border-top: 1px solid var(--border);
+}
+
+/* 回复栏附件按钮 */
+.feedback-panel__reply-attach {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  color: var(--muted);
+  padding: 4px;
+  border-radius: var(--radius-sm);
+  transition: color var(--duration-fast) ease;
+}
+
+.feedback-panel__reply-attach:hover {
+  color: var(--fg);
+}
+
+.feedback-panel__reply-attach svg {
+  width: 18px;
+  height: 18px;
+  stroke: currentColor;
+  fill: none;
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
 /* 日志开关（标签左、开关右） */
 
 .feedback-logs-toggle {
