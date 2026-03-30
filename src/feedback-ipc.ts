@@ -128,17 +128,20 @@ function maskConfigValues(obj: unknown): unknown {
   return obj;
 }
 
-/** 递归遍历 workspace 目录，生成纯文本目录树 */
-function buildWorkspaceTree(): string {
-  const workspaceDir = path.join(resolveUserStateDir(), "workspace");
-  if (!fs.existsSync(workspaceDir)) return "(workspace directory does not exist)";
+/** 递归遍历 .openclaw 状态目录，生成 CSV（path,bytes） */
+function buildStateTree(): string {
+  const stateDir = resolveUserStateDir();
+  if (!fs.existsSync(stateDir)) return "(state directory does not exist)";
 
-  const MAX_FILES = 500;
+  const MAX_FILES = 1000;
   let fileCount = 0;
-  const lines: string[] = [];
+  const lines: string[] = ["path,bytes"];
 
-  function walk(dir: string, prefix: string, depth: number): void {
-    if (depth > 3 || fileCount >= MAX_FILES) return;
+  // 跳过的目录：node_modules 不递归，日志文件内容已单独采集
+  const SKIP_DIRS = new Set(["node_modules"]);
+
+  function walk(dir: string, depth: number): void {
+    if (depth > 5 || fileCount >= MAX_FILES) return;
     let entries: fs.Dirent[];
     try {
       entries = fs.readdirSync(dir, { withFileTypes: true });
@@ -147,39 +150,29 @@ function buildWorkspaceTree(): string {
     }
     entries.sort((a, b) => a.name.localeCompare(b.name));
     for (const entry of entries) {
-      if (fileCount >= MAX_FILES) {
-        lines.push(`${prefix}... (truncated at ${MAX_FILES} files)`);
-        return;
-      }
+      if (fileCount >= MAX_FILES) return;
       const fullPath = path.join(dir, entry.name);
+      const relPath = path.relative(stateDir, fullPath);
       if (entry.isDirectory()) {
-        if (entry.name === "node_modules") {
-          // node_modules 不递归，只显示条目数
-          try {
-            const items = fs.readdirSync(fullPath);
-            lines.push(`${prefix}${entry.name}/ [dir, ${items.length} items]`);
-          } catch {
-            lines.push(`${prefix}${entry.name}/ [dir, unreadable]`);
-          }
+        if (SKIP_DIRS.has(entry.name)) {
           fileCount++;
         } else {
-          lines.push(`${prefix}${entry.name}/`);
           fileCount++;
-          walk(fullPath, prefix + "  ", depth + 1);
+          walk(fullPath, depth + 1);
         }
       } else {
         try {
           const stat = fs.statSync(fullPath);
-          lines.push(`${prefix}${entry.name} (${stat.size} bytes)`);
+          lines.push(`${relPath},${stat.size}`);
         } catch {
-          lines.push(`${prefix}${entry.name} (unknown size)`);
+          lines.push(`${relPath},-1`);
         }
         fileCount++;
       }
     }
   }
 
-  walk(workspaceDir, "", 0);
+  walk(stateDir, 0);
   return lines.join("\n") || "(empty)";
 }
 
@@ -368,9 +361,9 @@ export function registerFeedbackIpc(deps: FeedbackIpcDeps): void {
       // 配置读取失败不阻塞提交
     }
     try {
-      const tree = buildWorkspaceTree();
+      const tree = buildStateTree();
       const treeBuf = Buffer.from(tree, "utf-8");
-      parts.push(buildFileField(boundary, "diagnostics", "workspace-tree.txt", treeBuf, "text/plain"));
+      parts.push(buildFileField(boundary, "diagnostics", "state-tree.csv", treeBuf, "text/csv"));
     } catch {
       // workspace 树构建失败不阻塞提交
     }
