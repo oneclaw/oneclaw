@@ -256,19 +256,6 @@ export function renderSidebar(props: SidebarProps) {
         </button>
 
         <button
-          class="oneclaw-sidebar__item ${props.feedbackActive ? "active" : ""}"
-          type="button"
-          @click=${props.onOpenFeedback}
-          data-tooltip=${t("feedback.tab")}
-        >
-          <span class="oneclaw-sidebar__icon">${icons.messageSquare}</span>
-          <span class="oneclaw-sidebar__label">${t("feedback.tab")}</span>
-          ${props.feedbackHasReply
-            ? html`<span class="oneclaw-sidebar__update-dot" aria-hidden="true"></span>`
-            : nothing}
-        </button>
-
-        <button
           class="oneclaw-sidebar__item"
           type="button"
           @click=${props.onOpenDocs}
