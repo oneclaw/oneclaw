@@ -16,6 +16,7 @@ interface FeedbackParams {
   content: string;
   screenshots: string[]; // base64 编码的图片数据
   includeLogs: boolean;
+  email?: string;
 }
 
 // 反馈提交结果
@@ -107,6 +108,82 @@ function postMultipart(url: string, body: Buffer, boundary: string): Promise<Fee
   });
 }
 
+/** 对连续 15+ 个字母数字的片段打码：保留前 7 字符 + *** */
+function maskAlphanumericRuns(value: string): string {
+  return value.replace(/[a-zA-Z0-9]{15,}/g, (match) => match.slice(0, 7) + "***");
+}
+
+function maskConfigValues(obj: unknown): unknown {
+  if (typeof obj === "string") {
+    if (/^(https?|file|wss?):\/\//i.test(obj)) return obj;
+    return maskAlphanumericRuns(obj);
+  }
+  if (Array.isArray(obj)) return obj.map(maskConfigValues);
+  if (obj && typeof obj === "object") {
+    const result: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(obj)) {
+      result[k] = maskConfigValues(v);
+    }
+    return result;
+  }
+  return obj;
+}
+
+/** 递归遍历 workspace 目录，生成纯文本目录树 */
+function buildWorkspaceTree(): string {
+  const workspaceDir = path.join(resolveUserStateDir(), "workspace");
+  if (!fs.existsSync(workspaceDir)) return "(workspace directory does not exist)";
+
+  const MAX_FILES = 500;
+  let fileCount = 0;
+  const lines: string[] = [];
+
+  function walk(dir: string, prefix: string, depth: number): void {
+    if (depth > 3 || fileCount >= MAX_FILES) return;
+    let entries: fs.Dirent[];
+    try {
+      entries = fs.readdirSync(dir, { withFileTypes: true });
+    } catch {
+      return;
+    }
+    entries.sort((a, b) => a.name.localeCompare(b.name));
+    for (const entry of entries) {
+      if (fileCount >= MAX_FILES) {
+        lines.push(`${prefix}... (truncated at ${MAX_FILES} files)`);
+        return;
+      }
+      const fullPath = path.join(dir, entry.name);
+      if (entry.isDirectory()) {
+        if (entry.name === "node_modules") {
+          // node_modules 不递归，只显示条目数
+          try {
+            const items = fs.readdirSync(fullPath);
+            lines.push(`${prefix}${entry.name}/ [dir, ${items.length} items]`);
+          } catch {
+            lines.push(`${prefix}${entry.name}/ [dir, unreadable]`);
+          }
+          fileCount++;
+        } else {
+          lines.push(`${prefix}${entry.name}/`);
+          fileCount++;
+          walk(fullPath, prefix + "  ", depth + 1);
+        }
+      } else {
+        try {
+          const stat = fs.statSync(fullPath);
+          lines.push(`${prefix}${entry.name} (${stat.size} bytes)`);
+        } catch {
+          lines.push(`${prefix}${entry.name} (unknown size)`);
+        }
+        fileCount++;
+      }
+    }
+  }
+
+  walk(workspaceDir, "", 0);
+  return lines.join("\n") || "(empty)";
+}
+
 // 注册反馈相关 IPC handler
 export function registerFeedbackIpc(deps: FeedbackIpcDeps): void {
   // 截取当前窗口截图，返回 base64 PNG
@@ -123,7 +200,7 @@ export function registerFeedbackIpc(deps: FeedbackIpcDeps): void {
   });
 
   ipcMain.handle("feedback:submit", async (_event, params: FeedbackParams): Promise<FeedbackResult> => {
-    const { content, screenshots, includeLogs } = params;
+    const { content, screenshots, includeLogs, email } = params;
 
     if (!content.trim()) {
       return { ok: false, error: "content is required" };
@@ -142,14 +219,16 @@ export function registerFeedbackIpc(deps: FeedbackIpcDeps): void {
     }
 
     // 采集诊断元数据
-    const metadata = JSON.stringify({
+    const metadataObj: Record<string, unknown> = {
       appVersion: app.getVersion(),
       os: process.platform,
       arch: process.arch,
       deviceId: readDeviceId(),
       gatewayState: deps.getGatewayState(),
       gatewayPort: deps.getGatewayPort(),
-    });
+    };
+    if (email) metadataObj.email = email;
+    const metadata = JSON.stringify(metadataObj);
 
     // 构造 multipart body
     const boundary = `----FeedbackBoundary${Date.now()}`;
@@ -196,6 +275,28 @@ export function registerFeedbackIpc(deps: FeedbackIpcDeps): void {
           // 读取日志失败不阻塞提交
         }
       }
+    }
+
+    // 诊断文件：打码后的配置 + workspace 目录树
+    const stateDir2 = resolveUserStateDir();
+    try {
+      const configPath = path.join(stateDir2, "openclaw.json");
+      if (fs.existsSync(configPath)) {
+        const raw = fs.readFileSync(configPath, "utf-8");
+        const parsed = JSON.parse(raw);
+        const masked = maskConfigValues(parsed);
+        const maskedBuf = Buffer.from(JSON.stringify(masked, null, 2), "utf-8");
+        parts.push(buildFileField(boundary, "diagnostics", "openclaw.masked.json", maskedBuf, "application/json"));
+      }
+    } catch {
+      // 配置读取失败不阻塞提交
+    }
+    try {
+      const tree = buildWorkspaceTree();
+      const treeBuf = Buffer.from(tree, "utf-8");
+      parts.push(buildFileField(boundary, "diagnostics", "workspace-tree.txt", treeBuf, "text/plain"));
+    } catch {
+      // workspace 树构建失败不阻塞提交
     }
 
     // 结束标记

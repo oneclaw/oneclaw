@@ -176,7 +176,7 @@ contextBridge.exposeInMainWorld("oneclaw", {
   // 截取当前窗口截图，返回 base64 PNG
   captureWindow: () => ipcRenderer.invoke("feedback:capture-window"),
   // 提交用户反馈
-  submitFeedback: (params: { content: string; screenshots: string[]; includeLogs: boolean }) =>
+  submitFeedback: (params: { content: string; screenshots: string[]; includeLogs: boolean; email?: string }) =>
     ipcRenderer.invoke("feedback:submit", params),
   onNavigate: (cb: (payload: { view: "settings" }) => void) => {
     const listener = (_event: Electron.IpcRendererEvent, payload: { view: "settings" }) => {
