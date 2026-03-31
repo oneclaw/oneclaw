@@ -189,6 +189,7 @@ interface FeedbackMessage {
   thread_id: number;
   role: "user" | "admin";
   content: string;
+  file_keys: string[];
   created_at: string;
 }
 
@@ -346,7 +347,7 @@ function renderSidebarNav(
                   <div class="feedback-layout__nav-item-meta">
                     <span class="feedback-layout__nav-time">${timeAgo(thread.updated_at || thread.created_at)}</span>
                     ${thread.has_reply
-                      ? html`<span class="feedback-layout__nav-dot" aria-label="${t("feedback.hasReply")}"></span>`
+                      ? html`<span class="feedback-layout__nav-badge">${t("feedback.hasReply")}</span>`
                       : nothing}
                   </div>
                 </button>
@@ -417,29 +418,14 @@ function renderNewContent(
             </div>
           `,
         )}
-        <label class="feedback-screenshot-add">
-          <input
-            type="file"
-            multiple
-            @change=${(e: Event) => {
-              const files = (e.target as HTMLInputElement).files;
-              if (files) callbacks.onNewAddScreenshots(files);
-              (e.target as HTMLInputElement).value = "";
-            }}
-            ?disabled=${state.newSubmitting}
-            style="display: none"
-          />
-          ${icons.image}
-          <span>${t("feedback.addFile")}</span>
-        </label>
         <button
           class="feedback-screenshot-add"
           type="button"
           @click=${callbacks.onNewPickFiles}
           ?disabled=${state.newSubmitting}
         >
-          ${icons.folder}
-          <span>${t("feedback.pickFromLogs")}</span>
+          ${icons.paperclip}
+          <span>${t("feedback.addFile")}</span>
         </button>
       </div>
 
@@ -508,6 +494,15 @@ function renderDetailContent(
                     ? html`<div class="feedback-msg__label">${t("feedback.official")}</div>`
                     : nothing}
                   <div class="feedback-msg__bubble">${msg.content}</div>
+                  ${msg.file_keys?.length ? html`
+                    <div class="feedback-msg__attachments">
+                      ${msg.file_keys.map((key) => {
+                        const isImg = /\.(png|jpe?g|gif|webp|bmp)$/i.test(key);
+                        const name = key.split("_").slice(2).join("_") || key;
+                        return html`<span class="feedback-msg__attach-item">${isImg ? "[图片]" : `[${name}]`}</span>`;
+                      })}
+                    </div>
+                  ` : nothing}
                   <div class="feedback-msg__time">${timeAgo(msg.created_at)}</div>
                 </div>
               `)}

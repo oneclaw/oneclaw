@@ -348,6 +348,27 @@ export function registerFeedbackIpc(deps: FeedbackIpcDeps): void {
       oneclawUptime: Math.floor((now - deps.getAppStartTime()) / 1000),
     };
     if (email) metadataObj.email = email;
+
+    // 读取用户默认模型和 baseUrl
+    try {
+      const cfgPath = path.join(resolveUserStateDir(), "openclaw.json");
+      if (fs.existsSync(cfgPath)) {
+        const cfg = JSON.parse(fs.readFileSync(cfgPath, "utf-8"));
+        const primary: string = cfg?.agents?.defaults?.model?.primary || "";
+        if (primary) {
+          // primary 格式: "providerKey/modelId"
+          const slashIdx = primary.indexOf("/");
+          const provKey = slashIdx > 0 ? primary.slice(0, slashIdx) : primary;
+          const modelId = slashIdx > 0 ? primary.slice(slashIdx + 1) : primary;
+          metadataObj.model = modelId;
+          const baseUrl: string = cfg?.models?.providers?.[provKey]?.baseUrl || "";
+          if (baseUrl) metadataObj.baseUrl = baseUrl;
+        }
+      }
+    } catch {
+      // 配置读取失败不阻塞提交
+    }
+
     const metadata = JSON.stringify(metadataObj);
 
     // 构造 multipart body
