@@ -148,6 +148,7 @@ export function renderMessageGroup(
     showReasoning: boolean;
     assistantName?: string;
     assistantAvatar?: string | null;
+    isHydrating?: boolean;
   },
 ) {
   const normalizedRole = normalizeRoleForGrouping(group.role);
@@ -178,6 +179,7 @@ export function renderMessageGroup(
             {
               isStreaming: group.isStreaming && index === group.messages.length - 1,
               showReasoning: opts.showReasoning,
+              isHydrating: opts.isHydrating,
             },
             opts.onOpenSidebar,
           ),
@@ -283,7 +285,7 @@ function renderCollapsedToolCards(
 
 function renderGroupedMessage(
   message: unknown,
-  opts: { isStreaming: boolean; showReasoning: boolean },
+  opts: { isStreaming: boolean; showReasoning: boolean; isHydrating?: boolean },
   onOpenSidebar?: (content: string) => void,
 ) {
   const m = message as Record<string, unknown>;
@@ -316,7 +318,7 @@ function renderGroupedMessage(
     "chat-bubble",
     canCopyMarkdown ? "has-copy" : "",
     opts.isStreaming ? "streaming" : "",
-    "fade-in",
+    opts.isHydrating ? "" : "fade-in",
   ]
     .filter(Boolean)
     .join(" ");

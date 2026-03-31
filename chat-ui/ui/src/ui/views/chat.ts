@@ -239,6 +239,9 @@ export function renderChat(props: ChatProps) {
     avatar: props.assistantAvatar ?? props.assistantAvatarUrl ?? null,
   };
 
+  const totalHistory = Array.isArray(props.messages) ? props.messages.length : 0;
+  const isHydrating = props.visibleHistoryCount > 0 && props.visibleHistoryCount < totalHistory;
+
   const hasAttachments = (props.attachments?.length ?? 0) > 0;
   const composePlaceholder = !props.connected
     ? t("chat.placeholder.disconnected")
@@ -310,6 +313,7 @@ export function renderChat(props: ChatProps) {
               showReasoning,
               assistantName: props.assistantName,
               assistantAvatar: assistantIdentity.avatar,
+              isHydrating,
             });
           }
 
