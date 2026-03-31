@@ -58,12 +58,12 @@ export type ChatEventPayload = {
 };
 
 const INITIAL_CHAT_HISTORY_RENDER_COUNT = 20;
-const CHAT_HISTORY_RENDER_BATCH = 40;
+const CHAT_HISTORY_RENDER_BATCH = 10;
 
 // 取消历史消息渐进渲染，避免旧帧在 session 切换后继续写状态。
 function cancelChatHistoryHydration(state: ChatState) {
   if (state.chatHistoryHydrationFrame !== null) {
-    cancelAnimationFrame(state.chatHistoryHydrationFrame);
+    clearTimeout(state.chatHistoryHydrationFrame);
     state.chatHistoryHydrationFrame = null;
   }
 }
@@ -82,10 +82,10 @@ function scheduleChatHistoryHydration(state: ChatState, sessionKey: string, tota
     const next = Math.min(total, state.chatVisibleMessageCount + CHAT_HISTORY_RENDER_BATCH);
     state.chatVisibleMessageCount = next;
     if (next < total) {
-      state.chatHistoryHydrationFrame = requestAnimationFrame(hydrate);
+      state.chatHistoryHydrationFrame = setTimeout(hydrate, 32) as unknown as number;
     }
   };
-  state.chatHistoryHydrationFrame = requestAnimationFrame(hydrate);
+  state.chatHistoryHydrationFrame = setTimeout(hydrate, 32) as unknown as number;
 }
 
 // chat delta 一帧只提交一次最新文本，别让每个 token 都触发 Lit 全量重渲染。
