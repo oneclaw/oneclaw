@@ -8886,12 +8886,15 @@ img.chat-avatar {
   color: var(--muted);
 }
 
-.feedback-layout__nav-dot {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: var(--accent);
+.feedback-layout__nav-badge {
+  font-size: 10px;
+  line-height: 1;
+  padding: 2px 5px;
+  border-radius: 8px;
+  background: #e53e3e;
+  color: #fff;
   flex-shrink: 0;
+  font-weight: 500;
 }
 
 .feedback-layout__nav-loading {
@@ -9145,6 +9148,21 @@ img.chat-avatar {
   background: var(--card);
   border: 1px solid var(--border);
   color: var(--text);
+}
+
+.feedback-msg__attachments {
+  font-size: 11px;
+  color: var(--muted);
+  border-top: 1px solid var(--border);
+  margin-top: 2px;
+  padding-top: 4px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+}
+
+.feedback-msg__attach-item {
+  white-space: nowrap;
 }
 
 .feedback-msg__time {
