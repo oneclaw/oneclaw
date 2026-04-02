@@ -92,6 +92,6 @@ function createCopyButton(options: CopyButtonOptions): TemplateResult {
   `;
 }
 
-export function renderCopyAsMarkdownButton(markdown: string): TemplateResult {
-  return createCopyButton({ text: () => markdown, label: COPY_LABEL });
+export function renderCopyAsMarkdownButton(markdown: string, label?: string): TemplateResult {
+  return createCopyButton({ text: () => markdown, label: label ?? COPY_LABEL });
 }
