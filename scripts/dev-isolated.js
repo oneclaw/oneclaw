@@ -86,9 +86,18 @@ console.log(`[dev-isolated] Gateway 端口: ${port}`);
 console.log(`[dev-isolated] PID: ${process.pid}`);
 console.log(`[dev-isolated] 启动 electron ...\n`);
 
-// 先 build 再启动 electron（复用 predev 逻辑）
+// 先确保资源 + build 再启动 electron
 const isWin = process.platform === "win32";
 const npmCmd = isWin ? "npm.cmd" : "npm";
+
+// ensure-dev-resources 需要 OPENCLAW_STATE_DIR 来初始化 isolated 状态
+const ensure = spawn(process.execPath, ["scripts/ensure-dev-resources.js"], { cwd, stdio: "inherit", env });
+
+ensure.on("close", (ensureCode) => {
+  if (ensureCode !== 0) {
+    console.error(`[dev-isolated] ensure-dev-resources 失败，退出码 ${ensureCode}`);
+    process.exit(ensureCode ?? 1);
+  }
 
 const build = spawn(npmCmd, ["run", "build"], { cwd, stdio: "inherit", env });
 
@@ -106,3 +115,4 @@ build.on("close", (code) => {
 
   child.on("close", (c) => process.exit(c ?? 0));
 });
+}); // ensure.on("close")
