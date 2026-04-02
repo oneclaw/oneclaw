@@ -1,5 +1,7 @@
 import { autoUpdater } from "electron-updater";
-import { dialog } from "electron";
+import { app, dialog } from "electron";
+import * as https from "https";
+import * as http from "http";
 import * as log from "./logger";
 import { readOneclawConfig } from "./oneclaw-config";
 import {
@@ -22,6 +24,7 @@ let intervalTimer: ReturnType<typeof setInterval> | null = null;
 let progressCallback: ((percent: number | null) => void) | null = null;
 let beforeQuitForInstallCallback: (() => void) | null = null;
 let updateBannerStateCallback: ((state: UpdateBannerState) => void) | null = null;
+let updatePushCallback: ((version: string) => void) | null = null;
 let updateBannerState = createInitialUpdateBannerState();
 let downloadInFlight: Promise<boolean> | null = null;
 
@@ -77,6 +80,7 @@ export function setupAutoUpdater(): void {
       type: "update-available",
       version: info.version,
     });
+    updatePushCallback?.(info.version);
     isManualCheck = false;
   });
 
@@ -149,6 +153,12 @@ export function checkForUpdates(manual = false): void {
   isManualCheck = manual;
   void autoUpdater.checkForUpdates().catch((err) => {
     log.error(`[updater] 检查更新调用失败: ${formatUpdaterError(err)}`);
+    // 当 app-update.yml 不存在（如 unpacked 开发版）时，走 HTTP fallback
+    // 直接从更新服务器拉取 manifest，对比版本后触发 push 通知
+    if (formatUpdaterError(err).includes("ENOENT") && formatUpdaterError(err).includes("app-update.yml")) {
+      log.info("[updater] app-update.yml 不存在，走 fallback 检查");
+      void fallbackUpdateCheck();
+    }
     if (manual) {
       void dialog.showMessageBox({
         type: "error",
@@ -158,6 +168,64 @@ export function checkForUpdates(manual = false): void {
       });
     }
     isManualCheck = false;
+  });
+}
+
+// Fallback: 当 electron-updater 无法工作时（如缺少 app-update.yml），
+// 直接 HTTP 请求更新 manifest 获取最新版本号，比较后触发推送。
+const FALLBACK_UPDATE_URL = "https://oneclaw.cn/releases/";
+
+async function fallbackUpdateCheck(): Promise<void> {
+  try {
+    const channel = readOneclawConfig()?.updateChannel === "dev" ? "dev" : "latest";
+    const manifestUrl = `${FALLBACK_UPDATE_URL}${channel}.yml`;
+    log.info(`[updater:fallback] 请求 ${manifestUrl}`);
+
+    const body = await httpGet(manifestUrl);
+    // 简单解析 YAML 中的 version 字段（格式: "version: x.y.z"）
+    const match = body.match(/^version:\s*(.+)$/m);
+    if (!match) {
+      log.warn("[updater:fallback] manifest 中未找到 version 字段");
+      return;
+    }
+    const remoteVersion = match[1].trim();
+    const currentVersion = app.getVersion();
+
+    log.info(`[updater:fallback] 远端版本 ${remoteVersion}, 当前版本 ${currentVersion}`);
+
+    if (remoteVersion === currentVersion) {
+      log.info("[updater:fallback] 已是最新版本");
+      return;
+    }
+
+    // 版本不同 → 视为有更新（对 0.0.0 开发版来说，任何正式版本都算更新）
+    log.info(`[updater:fallback] 发现新版本 ${remoteVersion}，触发通知`);
+    publishUpdateBannerState({
+      type: "update-available",
+      version: remoteVersion,
+    });
+    updatePushCallback?.(remoteVersion);
+  } catch (err) {
+    log.error(`[updater:fallback] 检查失败: ${formatUpdaterError(err)}`);
+  }
+}
+
+function httpGet(url: string): Promise<string> {
+  const mod = url.startsWith("https") ? https : http;
+  return new Promise((resolve, reject) => {
+    mod.get(url, (res) => {
+      // Follow redirects
+      if (res.statusCode && res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
+        return resolve(httpGet(res.headers.location));
+      }
+      if (res.statusCode && res.statusCode >= 400) {
+        return reject(new Error(`HTTP ${res.statusCode}`));
+      }
+      let data = "";
+      res.on("data", (chunk: Buffer) => { data += chunk.toString(); });
+      res.on("end", () => resolve(data));
+      res.on("error", reject);
+    }).on("error", reject);
   });
 }
 
@@ -218,4 +286,9 @@ export function setUpdateBannerStateCallback(cb: (state: UpdateBannerState) => v
 // 获取当前侧栏更新状态（供渲染层首屏同步）。
 export function getUpdateBannerState(): UpdateBannerState {
   return { ...updateBannerState };
+}
+
+// 注入更新推送回调（供主进程通过远程通道推送新版本通知）。
+export function setUpdatePushCallback(cb: (version: string) => void): void {
+  updatePushCallback = cb;
 }

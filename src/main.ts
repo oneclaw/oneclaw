@@ -1,5 +1,6 @@
 import * as fs from "fs";
 import * as path from "path";
+import { spawn } from "child_process";
 import { app, clipboard, dialog, ipcMain, shell, Menu, BrowserWindow } from "electron";
 import { GatewayProcess } from "./gateway-process";
 import { WindowManager } from "./window";
@@ -32,9 +33,11 @@ import {
   setBeforeQuitForInstallCallback,
   setProgressCallback,
   setUpdateBannerStateCallback,
+  setUpdatePushCallback,
 } from "./auto-updater";
-import { isSetupComplete, resolveGatewayPort, resolveGatewayLogPath } from "./constants";
+import { isSetupComplete, resolveGatewayPort, resolveGatewayLogPath, resolveNodeBin, resolveNodeExtraEnv, resolveGatewayEntry, resolveGatewayCwd, resolveResourcesPath } from "./constants";
 import { resolveGatewayAuthToken } from "./gateway-auth";
+import { callGatewayRpc } from "./gateway-rpc";
 import {
   getConfigRecoveryData,
   inspectUserConfigHealth,
@@ -350,7 +353,7 @@ async function ensureGatewayRunning(source: string): Promise<boolean> {
     }
 
     if (gateway.getState() === "running") {
-      // 仅在真正启动成功后刷新“最近可用快照”，保证一键回退目标可启动。
+      // 仅在真正启动成功后刷新"最近可用快照"，保证一键回退目标可启动。
       recordLastKnownGoodConfigSnapshot();
       log.info(`Gateway 启动成功（第 ${attempt} 次尝试）: ${source}`);
       return true;
@@ -549,7 +552,7 @@ ipcMain.on("app:refresh-feishu-pairing-state", () => pairingMonitor?.triggerNow(
 ipcMain.handle("app:open-external", (_e, url: string) => shell.openExternal(url));
 ipcMain.handle("app:open-path", (_e, filePath: string) => shell.openPath(filePath));
 
-// 文件选择对话框 — 返回文件绝对路径数组
+// 文件选择对话框 - 返回文件绝对路径数组
 ipcMain.handle("dialog:select-files", async (_e, options?: { filters?: Electron.FileFilter[] }) => {
   const win = BrowserWindow.getFocusedWindow();
   const result = await dialog.showOpenDialog(win ?? {
@@ -751,7 +754,7 @@ function updateDockVisibility(): void {
 
 let hasAppFocus = false;
 
-// 仅在“失焦 -> 聚焦”状态跃迁时上报一次，避免窗口切换导致重复埋点。
+// 仅在"失焦 -> 聚焦"状态跃迁时上报一次，避免窗口切换导致重复埋点。
 function syncAppFocusState(trigger: string): void {
   const focused = BrowserWindow.getAllWindows().some(
     (w) => !w.isDestroyed() && w.isFocused(),
@@ -821,13 +824,65 @@ app.whenReady().then(async () => {
   analytics.init();
   analytics.track("app_launched");
   setupAutoUpdater();
-  // 自动更新状态变化后推送给当前主窗口，驱动侧栏“重启更新”按钮。
+  // 自动更新状态变化后推送给当前主窗口，驱动侧栏"重启更新"按钮。
   setUpdateBannerStateCallback((state) => {
     windowManager.pushUpdateBannerState(state);
   });
+
+  // 检测到新版本后，通过用户选定的远程通道推送通知。
+  // 同一版本只推送一次（内存 + 持久化双重去重）。
+  let lastPushedVersion: string | null = null;
+  setUpdatePushCallback(async (version) => {
+    try {
+      // In-memory dedup: don't push same version twice in one session
+      if (lastPushedVersion === version) return;
+
+      const oneclawConfig = readOneclawConfig();
+      if (!oneclawConfig?.updatePush?.enabled) return;
+
+      // Persistent dedup: don't push if already pushed in a previous session
+      if (oneclawConfig.updatePush.lastPushedVersion === version) return;
+
+      const targets = Array.isArray(oneclawConfig.updatePush.targets)
+        ? oneclawConfig.updatePush.targets
+        : [];
+      if (targets.length === 0) return;
+
+      const message = `🔄 OneClaw v${version} is available! Reply "update" to install.`;
+      let anySent = false;
+      for (const t of targets) {
+        if (!t?.channel || !t?.target) continue;
+        try {
+          const result = await runUpdatePushCli(t.channel, t.target, message);
+          if (result.code === 0) {
+            log.info(`[update-push] Notification sent to ${t.channel}→${t.target}`);
+            anySent = true;
+          } else {
+            log.warn(`[update-push] Failed to send to ${t.channel}→${t.target}: ${result.stderr.trim().split(/\r?\n/)[0] || "unknown"}`);
+          }
+        } catch (err: any) {
+          log.warn(`[update-push] Error sending to ${t.channel}→${t.target}: ${err?.message ?? err}`);
+        }
+      }
+
+      // Persist last pushed version so we don't re-notify across app restarts
+      if (anySent) {
+        lastPushedVersion = version;
+        try {
+          const cfg = readOneclawConfig() ?? {};
+          if (!cfg.updatePush) cfg.updatePush = { enabled: true, targets: [] };
+          cfg.updatePush.lastPushedVersion = version;
+          writeOneclawConfig(cfg);
+        } catch { /* best-effort persist */ }
+      }
+    } catch (err: any) {
+      log.error(`[update-push] Unexpected error: ${err?.message ?? err}`);
+    }
+  });
+
   startAutoCheckSchedule();
 
-  // 更新安装前先放行窗口关闭，避免托盘“隐藏而不退出”拦截 quitAndInstall。
+  // 更新安装前先放行窗口关闭，避免托盘"隐藏而不退出"拦截 quitAndInstall。
   setBeforeQuitForInstallCallback(() => {
     stopAutoCheckSchedule();
     windowManager.prepareForAppQuit();
@@ -835,7 +890,7 @@ app.whenReady().then(async () => {
 
   // 下载进度 → 更新托盘 tooltip
   setProgressCallback((pct) => {
-    tray.setTooltip(pct != null ? `OneClaw — 下载更新 ${pct.toFixed(0)}%` : "OneClaw");
+    tray.setTooltip(pct != null ? `OneClaw - 下载更新 ${pct.toFixed(0)}%` : "OneClaw");
   });
 
   tray.create({
@@ -949,8 +1004,42 @@ app.on("activate", () => {
 // ── 托盘应用：所有窗口关闭不退出 ──
 
 app.on("window-all-closed", () => {
-  // 不退出 — 后台保持运行
+  // 不退出 - 后台保持运行
 });
+
+// ── 更新推送通知：通过 openclaw CLI 发送消息到指定通道 ──
+
+function runUpdatePushCli(channel: string, target: string, message: string): Promise<{ code: number; stdout: string; stderr: string }> {
+  const nodeBin = resolveNodeBin();
+  const entry = resolveGatewayEntry();
+  const cwd = resolveGatewayCwd();
+  const runtimeDir = path.join(resolveResourcesPath(), "runtime");
+  const envPath = runtimeDir + path.delimiter + (process.env.PATH ?? "");
+
+  return new Promise((resolve, reject) => {
+    const child = spawn(nodeBin, [entry, "message", "send", "--channel", channel, "--target", target, "--message", message, "--json"], {
+      cwd,
+      env: {
+        ...process.env,
+        ...resolveNodeExtraEnv(),
+        OPENCLAW_NO_RESPAWN: "1",
+        PATH: envPath,
+        FORCE_COLOR: "0",
+      },
+      stdio: ["ignore", "pipe", "pipe"],
+      windowsHide: true,
+    });
+
+    let stdout = "";
+    let stderr = "";
+    child.stdout?.on("data", (chunk: Buffer) => { stdout += chunk.toString(); });
+    child.stderr?.on("data", (chunk: Buffer) => { stderr += chunk.toString(); });
+    child.on("error", reject);
+    child.on("close", (code) => {
+      resolve({ code: typeof code === "number" ? code : -1, stdout, stderr });
+    });
+  });
+}
 
 // ── 退出前清理 ──
 

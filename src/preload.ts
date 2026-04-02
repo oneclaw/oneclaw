@@ -106,6 +106,10 @@ contextBridge.exposeInMainWorld("oneclaw", {
   settingsRestoreLastKnownGood: () => ipcRenderer.invoke("settings:restore-last-known-good"),
   settingsResetConfigAndRelaunch: () => ipcRenderer.invoke("settings:reset-config-and-relaunch"),
   settingsGetShareCopy: () => ipcRenderer.invoke("settings:get-share-copy"),
+  settingsGetUpdatePushConfig: () => ipcRenderer.invoke("settings:get-update-push-config"),
+  settingsSaveUpdatePushConfig: (params: Record<string, unknown>) =>
+    ipcRenderer.invoke("settings:save-update-push-config", params),
+  settingsTestUpdatePush: () => ipcRenderer.invoke("settings:test-update-push"),
 
   // 多模型管理
   settingsGetConfiguredModels: () => ipcRenderer.invoke("settings:get-configured-models"),
