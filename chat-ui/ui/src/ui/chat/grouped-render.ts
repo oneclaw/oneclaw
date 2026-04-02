@@ -309,7 +309,7 @@ function renderGroupedMessage(
   const markdownBase = extractedText?.trim() ? extractedText : null;
   const reasoningMarkdown = extractedThinking ? formatReasoningMarkdown(extractedThinking) : null;
   const markdown = markdownBase;
-  const canCopyMarkdown = role === "assistant" && Boolean(markdown?.trim());
+  const canCopyMarkdown = Boolean(markdown?.trim());
 
   // 检测纯 JSON 消息，用折叠块展示
   const jsonResult = markdown && !opts.isStreaming ? detectJson(markdown) : null;
@@ -346,7 +346,7 @@ function renderGroupedMessage(
 
   return html`
     <div class="${bubbleClasses}">
-      ${canCopyMarkdown ? renderCopyAsMarkdownButton(markdown!) : nothing}
+      ${canCopyMarkdown ? renderCopyAsMarkdownButton(markdown!, normalizedRole === "user" ? "Copy" : undefined) : nothing}
       ${
         isToolMessage
           ? html`
