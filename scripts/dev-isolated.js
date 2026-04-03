@@ -84,35 +84,47 @@ const env = {
 console.log(`[dev-isolated] 状态目录: ${stateDir}`);
 console.log(`[dev-isolated] Gateway 端口: ${port}`);
 console.log(`[dev-isolated] PID: ${process.pid}`);
+
+// ── isolated 状态目录初始化：从 ~/.openclaw/ 复制配置，避免进入 Setup Wizard ──
+const isolatedConfig = path.join(stateDir, "oneclaw.config.json");
+if (!fs.existsSync(isolatedConfig)) {
+  const home = process.platform === "win32" ? process.env.USERPROFILE : process.env.HOME;
+  const mainStateDir = path.join(home || "", ".openclaw");
+  const mainConfig = path.join(mainStateDir, "oneclaw.config.json");
+  const mainOpenclaw = path.join(mainStateDir, "openclaw.json");
+
+  // oneclaw.config.json
+  if (fs.existsSync(mainConfig)) {
+    fs.copyFileSync(mainConfig, isolatedConfig);
+    console.log(`[dev-isolated] 已复制 ~/.openclaw/oneclaw.config.json`);
+  } else {
+    fs.writeFileSync(isolatedConfig, JSON.stringify({ setupCompletedAt: new Date().toISOString() }, null, 2) + "\n");
+    console.log(`[dev-isolated] 已创建最小 oneclaw.config.json（跳过 setup）`);
+  }
+
+  // openclaw.json（provider 配置）
+  const isolatedOpenclaw = path.join(stateDir, "openclaw.json");
+  if (!fs.existsSync(isolatedOpenclaw) && fs.existsSync(mainOpenclaw)) {
+    fs.copyFileSync(mainOpenclaw, isolatedOpenclaw);
+  }
+
+  // credentials/（Kimi Search API key 等）
+  const mainCreds = path.join(mainStateDir, "credentials");
+  const isolatedCreds = path.join(stateDir, "credentials");
+  if (!fs.existsSync(isolatedCreds) && fs.existsSync(mainCreds)) {
+    fs.mkdirSync(isolatedCreds, { recursive: true });
+    for (const f of fs.readdirSync(mainCreds)) {
+      const src = path.join(mainCreds, f);
+      if (fs.statSync(src).isFile()) fs.copyFileSync(src, path.join(isolatedCreds, f));
+    }
+  }
+}
+
 console.log(`[dev-isolated] 启动 electron ...\n`);
 
-// 先确保资源 + build 再启动 electron
+// npm run dev → predev（package:resources + build）→ electron .
 const isWin = process.platform === "win32";
 const npmCmd = isWin ? "npm.cmd" : "npm";
 
-// ensure-dev-resources 需要 OPENCLAW_STATE_DIR 来初始化 isolated 状态
-const ensure = spawn(process.execPath, ["scripts/ensure-dev-resources.js"], { cwd, stdio: "inherit", env });
-
-ensure.on("close", (ensureCode) => {
-  if (ensureCode !== 0) {
-    console.error(`[dev-isolated] ensure-dev-resources 失败，退出码 ${ensureCode}`);
-    process.exit(ensureCode ?? 1);
-  }
-
-const build = spawn(npmCmd, ["run", "build"], { cwd, stdio: "inherit", env });
-
-build.on("close", (code) => {
-  if (code !== 0) {
-    console.error(`[dev-isolated] build 失败，退出码 ${code}`);
-    process.exit(code ?? 1);
-  }
-
-  // build 成功后启动 electron
-  const electron = require("electron");
-  const electronBin = typeof electron === "string" ? electron : electron.toString();
-
-  const child = spawn(electronBin, ["."], { cwd, stdio: "inherit", env });
-
-  child.on("close", (c) => process.exit(c ?? 0));
-});
-}); // ensure.on("close")
+const child = spawn(npmCmd, ["run", "dev"], { cwd, stdio: "inherit", env });
+child.on("close", (c) => process.exit(c ?? 0));
