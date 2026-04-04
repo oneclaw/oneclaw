@@ -891,11 +891,7 @@ select option {
   display: none !important;
 }
 
-/* 滚动条：使用标准属性保持细窄样式，保留系统原生 overlay 行为 */
-* {
-  scrollbar-width: thin;
-  scrollbar-color: var(--border) transparent;
-}
+/* 滚动条：不声明任何样式，让系统完全接管 → macOS overlay 自动隐藏 */
 
 /* 分段选择器激活态：红底强制白字 */
 @media (prefers-color-scheme: light) {
