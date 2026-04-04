@@ -2,7 +2,8 @@
 // dev 多实例隔离启动器
 // 从 cwd 路径 hash 出唯一端口，状态目录指向 worktree 内部，跳过单实例锁。
 // 通过 pidfile 保证同一 .dev-state/ 只能启动一个实例。
-// 用法: npm run dev:isolated  （在任意 worktree 目录下执行）
+// 用法: npm run dev:isolated                   （自动复制主配置，跳过 setup）
+//       npm run dev:isolated -- --with-setup   （强制进入 Setup Wizard）
 
 "use strict";
 
@@ -86,20 +87,19 @@ console.log(`[dev-isolated] Gateway 端口: ${port}`);
 console.log(`[dev-isolated] PID: ${process.pid}`);
 
 // ── isolated 状态目录初始化：从 ~/.openclaw/ 复制配置，避免进入 Setup Wizard ──
+// --with-setup 跳过复制，强制走 Setup Wizard（用于调试 setup 流程）
+const withSetup = process.argv.includes("--with-setup");
 const isolatedConfig = path.join(stateDir, "oneclaw.config.json");
-if (!fs.existsSync(isolatedConfig)) {
+if (!withSetup && !fs.existsSync(isolatedConfig)) {
   const home = process.platform === "win32" ? process.env.USERPROFILE : process.env.HOME;
   const mainStateDir = path.join(home || "", ".openclaw");
   const mainConfig = path.join(mainStateDir, "oneclaw.config.json");
   const mainOpenclaw = path.join(mainStateDir, "openclaw.json");
 
-  // oneclaw.config.json
+  // oneclaw.config.json — 仅在源配置存在时复制，否则自然进入 Setup Wizard
   if (fs.existsSync(mainConfig)) {
     fs.copyFileSync(mainConfig, isolatedConfig);
     console.log(`[dev-isolated] 已复制 ~/.openclaw/oneclaw.config.json`);
-  } else {
-    fs.writeFileSync(isolatedConfig, JSON.stringify({ setupCompletedAt: new Date().toISOString() }, null, 2) + "\n");
-    console.log(`[dev-isolated] 已创建最小 oneclaw.config.json（跳过 setup）`);
   }
 
   // openclaw.json（provider 配置）
@@ -118,6 +118,9 @@ if (!fs.existsSync(isolatedConfig)) {
       if (fs.statSync(src).isFile()) fs.copyFileSync(src, path.join(isolatedCreds, f));
     }
   }
+}
+if (withSetup) {
+  console.log(`[dev-isolated] --with-setup: 跳过配置复制，将进入 Setup Wizard`);
 }
 
 console.log(`[dev-isolated] 启动 electron ...\n`);
