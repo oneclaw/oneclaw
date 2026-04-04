@@ -819,7 +819,7 @@ select option {
   top: 2px;
   width: 20px;
   height: 20px;
-  background: var(--bg-elevated);
+  background: #fff;
   border-radius: 50%;
   transition: transform 200ms ease;
   box-shadow: var(--shadow-sm);
@@ -891,18 +891,10 @@ select option {
   display: none !important;
 }
 
-/* ---- 滚动条（如有溢出） ---- */
-::-webkit-scrollbar {
-  width: 6px;
-}
-
-::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-::-webkit-scrollbar-thumb {
-  background: var(--border);
-  border-radius: 3px;
+/* 滚动条：使用标准属性保持细窄样式，保留系统原生 overlay 行为 */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) transparent;
 }
 
 /* 分段选择器激活态：红底强制白字 */

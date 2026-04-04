@@ -1323,7 +1323,7 @@ select option {
   top: 2px;
   width: 20px;
   height: 20px;
-  background: var(--bg-elevated);
+  background: #fff;
   border-radius: 50%;
   transition: transform 200ms ease;
   box-shadow: var(--shadow-sm);
@@ -1395,7 +1395,7 @@ select option {
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  border: 1px solid var(--glass-md);
+  border: 1px solid var(--glass-border);
   border-radius: var(--radius-sm);
   padding: 6px 10px;
   background: var(--glass-xs);
@@ -1691,7 +1691,11 @@ select option {
   display: none !important;
 }
 
-/* 滚动条：依赖系统原生 overlay 行为（macOS 自动隐藏，Windows 系统默认） */
+/* 滚动条：使用标准属性保持细窄样式，保留系统原生 overlay 行为 */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) transparent;
+}
 
 /* ── 微信扫码面板 ── */
 .weixin-qr-section {
@@ -1735,7 +1739,7 @@ select option {
   background: var(--bg-elevated);
   border: 1px solid var(--border);
   font-size: 13px;
-  color: var(--text-primary);
+  color: var(--text);
 }
 
 .weixin-connected-info .weixin-account-id {

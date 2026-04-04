@@ -163,7 +163,11 @@ select {
   color: var(--text-strong)
 }
 
-/* 滚动条：依赖系统原生 overlay 行为（macOS 自动隐藏，Windows 系统默认） */
+/* 滚动条：使用标准属性保持细窄样式，保留系统原生 overlay 行为 */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) transparent;
+}
 
 @keyframes rise {
   0% {
