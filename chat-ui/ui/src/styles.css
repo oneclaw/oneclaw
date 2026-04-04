@@ -1,147 +1,84 @@
-/* 移除远程字体加载，使用系统原生字体栈（优先中文用户体验） */
+@import "../../../shared/design-tokens.css";
 
+/* Chat UI 扩展变量 — 基于 design tokens */
 :root {
-  --bg: #12141a;
-  --bg-accent: #14161d;
-  --bg-elevated: #1a1d25;
-  --bg-hover: #262a35;
-  --bg-muted: #262a35;
-  --card: #181b22;
-  --card-foreground: #f4f4f5;
-  --card-highlight: rgba(255, 255, 255, .05);
-  --popover: #181b22;
-  --popover-foreground: #f4f4f5;
-  --panel: #12141a;
-  --panel-strong: #1a1d25;
-  --panel-hover: #262a35;
-  --chrome: rgba(18, 20, 26, .95);
-  --chrome-strong: rgba(18, 20, 26, .98);
-  --text: #e4e4e7;
-  --text-strong: #fafafa;
-  --chat-text: #e4e4e7;
-  --muted: #71717a;
+  --bg-accent: var(--bg-secondary);
+  --card: var(--bg-elevated);
+  --card-foreground: var(--text-strong);
+  --card-highlight: rgba(255, 255, 255, 0.05);
+  --popover: var(--bg-elevated);
+  --popover-foreground: var(--text-strong);
+  --panel: var(--bg-secondary);
+  --panel-strong: var(--bg-elevated);
+  --panel-hover: var(--bg-hover);
+  --chrome: rgba(26, 26, 26, 0.95);
+  --chrome-strong: rgba(26, 26, 26, 0.98);
+  --chat-text: var(--text);
+  --muted: var(--text-secondary);
   --muted-strong: #52525b;
-  --muted-foreground: #71717a;
-  --border: #27272a;
-  --border-strong: #3f3f46;
-  --border-hover: #52525b;
-  --input: #27272a;
-  --ring: #c0392b;
-  --accent: #c0392b;
-  --accent-hover: #a93226;
+  --muted-foreground: var(--text-secondary);
+  --input: var(--border);
+  --ring: var(--accent);
   --accent-muted: #ff5c5c;
-  --accent-subtle: rgba(192, 57, 43, .15);
-  --accent-foreground: #fafafa;
-  --accent-glow: rgba(192, 57, 43, .25);
-  --primary: #c0392b;
-  --primary-foreground: #ffffff;
+  --accent-foreground: var(--text-on-accent);
+  --primary: var(--accent);
+  --primary-foreground: var(--text-on-accent);
   --secondary: #1e2028;
-  --secondary-foreground: #f4f4f5;
+  --secondary-foreground: var(--text-strong);
   --accent-2: #14b8a6;
-  --accent-2-muted: rgba(20, 184, 166, .7);
-  --accent-2-subtle: rgba(20, 184, 166, .15);
-  --ok: #22c55e;
-  --ok-muted: rgba(34, 197, 94, .75);
-  --ok-subtle: rgba(34, 197, 94, .12);
-  --destructive: #ef4444;
-  --destructive-foreground: #fafafa;
-  --warn: #f59e0b;
-  --warn-muted: rgba(245, 158, 11, .75);
-  --warn-subtle: rgba(245, 158, 11, .12);
-  --danger: #ef4444;
-  --danger-muted: rgba(239, 68, 68, .75);
-  --danger-subtle: rgba(239, 68, 68, .12);
-  --info: #3b82f6;
-  --focus: rgba(192, 57, 43, .25);
+  --accent-2-muted: rgba(20, 184, 166, 0.7);
+  --accent-2-subtle: rgba(20, 184, 166, 0.15);
+  --destructive-foreground: var(--text-strong);
+  --danger: var(--destructive);
+  --danger-muted: rgba(239, 68, 68, 0.75);
+  --danger-subtle: rgba(239, 68, 68, 0.12);
+  --focus: var(--accent-glow);
   --focus-ring: 0 0 0 2px var(--bg), 0 0 0 4px var(--ring);
   --focus-glow: 0 0 0 2px var(--bg), 0 0 0 4px var(--ring), 0 0 20px var(--accent-glow);
-  --grid-line: rgba(255, 255, 255, .04);
+  --grid-line: rgba(255, 255, 255, 0.04);
   --theme-switch-x: 50%;
   --theme-switch-y: 50%;
-  --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Monaco, Consolas, "Courier New", monospace;
-  --font-body: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", "PingFang SC", "Microsoft YaHei", "Hiragino Sans GB", sans-serif;
-  --font-display: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", "PingFang SC", "Microsoft YaHei", "Hiragino Sans GB", sans-serif;
-  --shadow-sm: 0 1px 2px rgba(0, 0, 0, .2);
-  --shadow-md: 0 4px 12px rgba(0, 0, 0, .25), 0 0 0 1px rgba(255, 255, 255, .03);
-  --shadow-lg: 0 12px 28px rgba(0, 0, 0, .35), 0 0 0 1px rgba(255, 255, 255, .03);
-  --shadow-xl: 0 24px 48px rgba(0, 0, 0, .4), 0 0 0 1px rgba(255, 255, 255, .03);
   --shadow-glow: 0 0 30px var(--accent-glow);
-  --radius-sm: 6px;
-  --radius-md: 8px;
-  --radius-lg: 12px;
-  --radius-xl: 16px;
-  --radius-full: 9999px;
-  --radius: 8px;
-  --ease-out: cubic-bezier(.16, 1, .3, 1);
-  --ease-in-out: cubic-bezier(.4, 0, .2, 1);
-  --ease-spring: cubic-bezier(.34, 1.56, .64, 1);
-  --duration-fast: .12s;
-  --duration-normal: .2s;
-  --duration-slow: .35s;
-  color-scheme: dark
+  --radius: var(--radius-sm);
+  --radius-full: var(--radius-pill);
+  --sidebar-width: 280px;
 }
 
+/* Chat UI 扩展变量 — 浅色覆盖 */
 :root[data-theme=light] {
-  --bg: #fafafa;
   --bg-accent: #f5f5f5;
-  --bg-elevated: #ffffff;
-  --bg-hover: #f0f0f0;
-  --bg-muted: #f0f0f0;
   --bg-content: #f5f5f5;
-  --card: #ffffff;
-  --card-foreground: #18181b;
-  --card-highlight: rgba(0, 0, 0, .03);
-  --popover: #ffffff;
-  --popover-foreground: #18181b;
-  --panel: #fafafa;
+  --card: var(--bg-elevated);
+  --card-foreground: var(--text-strong);
+  --card-highlight: rgba(0, 0, 0, 0.03);
+  --popover: var(--bg-elevated);
+  --popover-foreground: var(--text-strong);
+  --panel: var(--bg);
   --panel-strong: #f5f5f5;
-  --panel-hover: #ebebeb;
-  --chrome: rgba(250, 250, 250, .95);
-  --chrome-strong: rgba(250, 250, 250, .98);
-  --text: #3f3f46;
-  --text-strong: #18181b;
-  --chat-text: #3f3f46;
-  --muted: #71717a;
+  --panel-hover: var(--bg-hover);
+  --chrome: rgba(255, 255, 255, 0.95);
+  --chrome-strong: rgba(255, 255, 255, 0.98);
+  --chat-text: var(--text);
   --muted-strong: #52525b;
-  --muted-foreground: #71717a;
-  --border: #e4e4e7;
-  --border-strong: #d4d4d8;
-  --border-hover: #a1a1aa;
-  --input: #e4e4e7;
-  --accent: #dc2626;
-  --accent-hover: #ef4444;
-  --accent-muted: #dc2626;
-  --accent-subtle: rgba(220, 38, 38, .12);
-  --accent-foreground: #ffffff;
-  --accent-glow: rgba(220, 38, 38, .15);
-  --primary: #dc2626;
-  --primary-foreground: #ffffff;
+  --muted-foreground: var(--text-muted);
+  --input: var(--border);
+  --accent-muted: var(--accent);
+  --accent-foreground: var(--text-on-accent);
+  --primary: var(--accent);
+  --primary-foreground: var(--text-on-accent);
   --secondary: #f4f4f5;
-  --secondary-foreground: #3f3f46;
+  --secondary-foreground: var(--text);
   --accent-2: #0d9488;
-  --accent-2-muted: rgba(13, 148, 136, .75);
-  --accent-2-subtle: rgba(13, 148, 136, .12);
-  --ok: #16a34a;
-  --ok-muted: rgba(22, 163, 74, .75);
-  --ok-subtle: rgba(22, 163, 74, .1);
-  --destructive: #dc2626;
-  --destructive-foreground: #fafafa;
-  --warn: #d97706;
-  --warn-muted: rgba(217, 119, 6, .75);
-  --warn-subtle: rgba(217, 119, 6, .1);
-  --danger: #dc2626;
-  --danger-muted: rgba(220, 38, 38, .75);
-  --danger-subtle: rgba(220, 38, 38, .1);
-  --info: #2563eb;
-  --focus: rgba(220, 38, 38, .2);
+  --accent-2-muted: rgba(13, 148, 136, 0.75);
+  --accent-2-subtle: rgba(13, 148, 136, 0.12);
+  --destructive-foreground: var(--text-strong);
+  --danger: var(--destructive);
+  --danger-muted: rgba(220, 38, 38, 0.75);
+  --danger-subtle: rgba(220, 38, 38, 0.1);
+  --focus: rgba(220, 38, 38, 0.2);
   --focus-glow: 0 0 0 2px var(--bg), 0 0 0 4px var(--ring), 0 0 16px var(--accent-glow);
-  --grid-line: rgba(0, 0, 0, .05);
-  --shadow-sm: 0 1px 2px rgba(0, 0, 0, .06);
-  --shadow-md: 0 4px 12px rgba(0, 0, 0, .08), 0 0 0 1px rgba(0, 0, 0, .04);
-  --shadow-lg: 0 12px 28px rgba(0, 0, 0, .12), 0 0 0 1px rgba(0, 0, 0, .04);
-  --shadow-xl: 0 24px 48px rgba(0, 0, 0, .15), 0 0 0 1px rgba(0, 0, 0, .04);
+  --grid-line: rgba(0, 0, 0, 0.05);
   --shadow-glow: 0 0 24px var(--accent-glow);
-  color-scheme: light
 }
 
 * {
@@ -226,23 +163,7 @@ select {
   color: var(--text-strong)
 }
 
-::-webkit-scrollbar {
-  width: 8px;
-  height: 8px
-}
-
-::-webkit-scrollbar-track {
-  background: transparent
-}
-
-::-webkit-scrollbar-thumb {
-  background: var(--border);
-  border-radius: var(--radius-full)
-}
-
-::-webkit-scrollbar-thumb:hover {
-  background: var(--border-strong)
-}
+/* 滚动条：依赖系统原生 overlay 行为（macOS 自动隐藏，Windows 系统默认） */
 
 @keyframes rise {
   0% {
@@ -1332,7 +1253,7 @@ select {
   align-items: center;
   justify-content: center;
   transition: background .15s ease-out, color .15s ease-out, border-color .15s ease-out;
-  box-shadow: 0 4px 12px #0003
+  box-shadow: var(--shadow-md)
 }
 
 .chat-focus-exit:hover {
@@ -1435,8 +1356,8 @@ select {
   height: 20px;
   border-radius: 50%;
   border: none;
-  background: #000000b3;
-  color: #fff;
+  background: var(--overlay);
+  color: var(--text-on-accent);
   font-size: 12px;
   line-height: 1;
   cursor: pointer;
@@ -1474,7 +1395,7 @@ select {
 }
 
 :root[data-theme=light] .chat-attachment__remove {
-  background: #0009
+  background: var(--overlay)
 }
 
 /* 文件附件（非图片） */
@@ -1629,7 +1550,7 @@ select {
   align-items: center;
   justify-content: center;
   border: 1px solid var(--border);
-  background: #ffffff0f
+  background: var(--glass-md)
 }
 
 .chat-controls__separator {
@@ -1644,14 +1565,14 @@ select {
 }
 
 .btn--icon:hover {
-  background: #ffffff1f;
+  background: var(--glass-lg);
   border-color: #fff3
 }
 
 :root[data-theme=light] .btn--icon {
-  background: #fff;
+  background: var(--bg-elevated);
   border-color: var(--border);
-  box-shadow: 0 1px 2px #1018280d;
+  box-shadow: var(--shadow-sm);
   color: var(--muted)
 }
 
@@ -1686,7 +1607,7 @@ select {
   gap: 4px;
   font-size: 12px;
   padding: 4px 10px;
-  background: #ffffff0a;
+  background: var(--glass-sm);
   border-radius: 6px;
   border: 1px solid var(--border)
 }
@@ -1720,7 +1641,7 @@ select {
   padding: 10px 12px;
   border-radius: 10px;
   border: 1px dashed rgba(255, 255, 255, .18);
-  background: #ffffff0a;
+  background: var(--glass-sm);
   color: var(--muted);
   font-size: 12px;
   line-height: 1.4
@@ -1778,7 +1699,7 @@ select {
   border-left: 3px solid var(--border-strong);
   margin-left: 0;
   color: var(--muted);
-  background: #ffffff05;
+  background: var(--glass-xs);
   padding: 8px 12px;
   border-radius: 0 var(--radius-sm) var(--radius-sm) 0
 }
@@ -1791,7 +1712,7 @@ select {
 
 .chat-text :where(blockquote blockquote blockquote) {
   border-left-color: var(--muted-strong);
-  background: #ffffff0a
+  background: var(--glass-sm)
 }
 
 :root[data-theme=light] .chat-text :where(blockquote) {
@@ -1912,7 +1833,7 @@ select {
   padding: 2px 10px;
   border: 1px solid var(--border);
   border-radius: 999px;
-  background: #ffffff05
+  background: var(--glass-xs)
 }
 
 .chat-avatar {
@@ -2292,11 +2213,11 @@ img.chat-avatar {
 
 .chat-tools-summary:hover {
   color: var(--text);
-  background: rgba(255, 255, 255, .04)
+  background: var(--glass-sm)
 }
 
 :root[data-theme=light] .chat-tools-summary:hover {
-  background: rgba(0, 0, 0, .04)
+  background: var(--glass-sm)
 }
 
 .chat-tools-summary__icon {
@@ -2379,11 +2300,11 @@ img.chat-avatar {
 
 .chat-tool-msg-summary:hover {
   color: var(--text);
-  background: rgba(255, 255, 255, .04)
+  background: var(--glass-sm)
 }
 
 :root[data-theme=light] .chat-tool-msg-summary:hover {
-  background: rgba(0, 0, 0, .04)
+  background: var(--glass-sm)
 }
 
 .chat-tool-msg-summary__icon {
@@ -2444,12 +2365,12 @@ img.chat-avatar {
   margin-top: 4px;
   border: 1px solid rgba(128, 128, 128, .2);
   border-radius: var(--radius-md);
-  background: rgba(255, 255, 255, .02);
+  background: var(--glass-xs);
   overflow: hidden
 }
 
 :root[data-theme=light] .chat-json-collapse {
-  background: rgba(0, 0, 0, .02);
+  background: var(--glass-xs);
   border-color: rgba(0, 0, 0, .1)
 }
 
@@ -2483,11 +2404,11 @@ img.chat-avatar {
 
 .chat-json-summary:hover {
   color: var(--text);
-  background: rgba(255, 255, 255, .04)
+  background: var(--glass-sm)
 }
 
 :root[data-theme=light] .chat-json-summary:hover {
-  background: rgba(0, 0, 0, .04)
+  background: var(--glass-sm)
 }
 
 .chat-json-badge {
@@ -3009,7 +2930,7 @@ img.chat-avatar {
   border-color: var(--accent);
   background: var(--accent);
   color: var(--primary-foreground);
-  box-shadow: 0 1px 2px #0003
+  box-shadow: var(--shadow-sm)
 }
 
 .btn.primary:hover {
@@ -4206,7 +4127,7 @@ img.chat-avatar {
 .exec-approval-overlay {
   position: fixed;
   inset: 0;
-  background: #000c;
+  background: var(--overlay-heavy);
   -webkit-backdrop-filter: blur(4px);
   backdrop-filter: blur(4px);
   display: flex;
@@ -6158,34 +6079,6 @@ img.chat-avatar {
    Sidebar + Chat two-column layout
    ============================================ */
 
-/* -- Theme overrides -- */
-:root {
-  --accent: #c0392b;
-  --accent-hover: #a93226;
-  --accent-muted: rgba(192, 57, 43, 0.15);
-  --sidebar-width: 280px;
-
-  /* Match settings page colors (Dark) */
-  --bg: #1a1a1a;
-  --panel: #151515;
-  --card: #222222;
-  --bg-elevated: #222222;
-  --bg-hover: #2a2a2a;
-  --border: #303030;
-  --border-strong: #404040;
-}
-
-:root[data-theme=light] {
-  /* Match settings page colors (Light) */
-  --bg: #ffffff;
-  --panel: #fbfbfb;
-  --card: #ffffff;
-  --bg-elevated: #ffffff;
-  --bg-hover: #ebebeb;
-  --border: #e4e4e7;
-  --border-strong: #d4d4d8;
-}
-
 .btn {
   border-radius: 9999px !important;
 }
@@ -6292,7 +6185,7 @@ img.chat-avatar {
   width: 32px;
   height: 32px;
   border: none;
-  border-radius: 8px;
+  border-radius: var(--radius-sm);
   background: transparent;
   color: var(--muted);
   cursor: pointer;
@@ -6383,7 +6276,7 @@ img.chat-avatar {
   width: 22px;
   height: 22px;
   border: none;
-  border-radius: 4px;
+  border-radius: var(--radius-xs);
   background: transparent;
   color: var(--muted);
   cursor: pointer;
@@ -6424,7 +6317,7 @@ img.chat-avatar {
   align-items: center;
   gap: 4px;
   padding: 8px 12px;
-  border-radius: 10px;
+  border-radius: var(--radius-sm);
   cursor: pointer;
   font-size: 13px;
   color: var(--muted);
@@ -6459,7 +6352,7 @@ img.chat-avatar {
   flex: 1;
   min-width: 0;
   border: 1px solid var(--accent);
-  border-radius: 4px;
+  border-radius: var(--radius-xs);
   background: var(--bg-elevated);
   color: var(--text);
   padding: 2px 6px;
@@ -6476,7 +6369,7 @@ img.chat-avatar {
   width: 18px;
   height: 18px;
   border: none;
-  border-radius: 3px;
+  border-radius: var(--radius-xs);
   background: transparent;
   color: var(--muted);
   cursor: pointer;
@@ -6509,7 +6402,7 @@ img.chat-avatar {
   align-items: center;
   gap: 8px;
   padding: 8px 12px;
-  border-radius: 10px;
+  border-radius: var(--radius-sm);
   border: none;
   background: transparent;
   color: var(--muted);
@@ -6644,7 +6537,7 @@ img.chat-avatar {
   padding: 0 5px;
   border-radius: 9px;
   background: var(--accent, #c0392b);
-  color: #fff;
+  color: var(--text-on-accent);
   font-size: 10px;
   font-weight: 600;
   line-height: 18px;
@@ -6684,10 +6577,10 @@ img.chat-avatar {
   min-width: 240px;
   max-width: 360px;
   padding: 4px 0;
-  background: var(--bg-card, #fff);
-  border: 1px solid var(--border, #e5e5e5);
-  border-radius: 8px;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-md);
   z-index: 1000;
 }
 
@@ -6738,7 +6631,7 @@ img.chat-avatar {
   width: 32px;
   height: 32px;
   border: none;
-  border-radius: 8px;
+  border-radius: var(--radius-sm);
   background: transparent;
   color: var(--muted);
   display: inline-flex;
@@ -6833,10 +6726,10 @@ img.chat-avatar {
   align-items: stretch;
   gap: 12px;
   padding: 16px;
-  border: 1px solid rgba(15, 23, 42, 0.08);
-  border-radius: 12px;
-  background: #ffffff;
-  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05), 0 0 0 1px rgba(0, 0, 0, 0.05);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--card);
+  box-shadow: var(--shadow-lg);
 }
 
 .oneclaw-pairing-notice__main {
@@ -6848,14 +6741,14 @@ img.chat-avatar {
 .oneclaw-pairing-notice__title {
   font-size: 15px;
   line-height: 1.4;
-  color: #111827;
+  color: var(--text-strong);
   font-weight: 600;
 }
 
 .oneclaw-pairing-notice__desc {
   font-size: 13px;
   line-height: 1.5;
-  color: #4b5563;
+  color: var(--text-secondary);
   display: -webkit-box;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 3;
@@ -6873,16 +6766,16 @@ img.chat-avatar {
 .oneclaw-pairing-notice__icon-btn {
   width: 32px;
   height: 32px;
-  border: 1px solid #e5e7eb;
-  border-radius: 8px;
-  background: #ffffff;
-  color: #6b7280;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--card);
+  color: var(--text-secondary);
   display: inline-flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
   padding: 0;
-  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: background 0.2s var(--ease-in-out), color 0.2s var(--ease-in-out), border-color 0.2s var(--ease-in-out);
 }
 
 .oneclaw-pairing-notice__icon-btn svg {
@@ -6896,32 +6789,32 @@ img.chat-avatar {
 }
 
 .oneclaw-pairing-notice__icon-btn:hover:not(:disabled) {
-  background: #f9fafb;
-  border-color: #d1d5db;
-  color: #374151;
+  background: var(--bg-hover);
+  border-color: var(--border-strong);
+  color: var(--text);
 }
 
 .oneclaw-pairing-notice__icon-btn:active:not(:disabled) {
-  background: #f3f4f6;
+  background: var(--bg-hover);
   transform: translateY(1px);
 }
 
 .oneclaw-pairing-notice__icon-btn:disabled {
   opacity: 0.5;
   cursor: not-allowed;
-  background: #f9fafb;
+  background: var(--bg-hover);
 }
 
 .oneclaw-pairing-notice__icon-btn.is-approve:hover:not(:disabled) {
-  color: #16a34a;
-  border-color: #86efac;
-  background: #f0fdf4;
+  color: var(--ok);
+  border-color: var(--ok);
+  background: var(--ok-subtle);
 }
 
 .oneclaw-pairing-notice__icon-btn.is-reject:hover:not(:disabled) {
-  color: #dc2626;
-  border-color: #fca5a5;
-  background: #fef2f2;
+  color: var(--accent);
+  border-color: var(--accent-subtle);
+  background: var(--accent-subtle);
 }
 
 @media (max-width: 720px) {
@@ -6973,7 +6866,7 @@ img.chat-avatar {
   width: 100%;
   padding: 8px 14px;
   border: 1px solid var(--border);
-  border-radius: 10px;
+  border-radius: var(--radius-sm);
   background: var(--bg-muted);
   color: var(--text);
   font-size: 14px;
@@ -7005,7 +6898,7 @@ img.chat-avatar {
   font-size: 13px;
   color: var(--muted);
   cursor: pointer;
-  transition: all 0.15s;
+  transition: color 0.15s, background 0.15s, border-color 0.15s;
 }
 
 .skill-store__sort-btn:hover {
@@ -7016,7 +6909,7 @@ img.chat-avatar {
 .skill-store__sort-btn.active {
   background: var(--accent);
   border-color: var(--accent);
-  color: #fff;
+  color: var(--text-on-accent);
 }
 
 .skill-store__list {
@@ -7028,7 +6921,7 @@ img.chat-avatar {
 /* 技能卡片：中大圆角 */
 .skill-store__card {
   border: 1px solid var(--border);
-  border-radius: 12px;
+  border-radius: var(--radius-md);
   padding: 16px;
   background: var(--card);
   transition: border-color 0.15s;
@@ -7051,7 +6944,7 @@ img.chat-avatar {
   display: flex;
   align-items: center;
   justify-content: center;
-  border-radius: 8px;
+  border-radius: var(--radius-sm);
 }
 
 .skill-store__card-letter {
@@ -7112,13 +7005,13 @@ img.chat-avatar {
   padding: 6px 16px;
   font-size: 13px;
   cursor: pointer;
-  transition: all 0.15s;
+  transition: color 0.15s, background 0.15s, border-color 0.15s;
   white-space: nowrap;
 }
 
 .skill-store__btn--install {
   background: var(--accent);
-  color: #fff;
+  color: var(--text-on-accent);
 }
 
 .skill-store__btn--install:hover:not(:disabled) {
@@ -7137,8 +7030,8 @@ img.chat-avatar {
 }
 
 .skill-store__btn--installed:hover:not(:disabled) {
-  border-color: #dc2626;
-  color: #dc2626;
+  border-color: var(--accent);
+  color: var(--accent);
 }
 
 .skill-store__btn--load-more {
@@ -7165,7 +7058,7 @@ img.chat-avatar {
 }
 
 .skill-store__error {
-  color: #dc2626;
+  color: var(--accent);
 }
 
 /* 技能商店操作 toast 提示（与 settings 页 toast 风格一致） */
@@ -7177,8 +7070,8 @@ img.chat-avatar {
   padding: 10px 20px;
   font-size: 13px;
   font-weight: 500;
-  border-radius: var(--radius-sm, 6px);
-  color: #dc2626;
+  border-radius: var(--radius-sm);
+  color: var(--accent);
   background: rgba(220, 38, 38, 0.08);
   border: 1px solid rgba(192, 57, 43, 0.25);
   z-index: 9999;
@@ -7272,7 +7165,7 @@ img.chat-avatar {
   color: var(--muted);
   background: var(--bg-muted);
   padding: 1px 8px;
-  border-radius: 10px;
+  border-radius: var(--radius-sm);
   margin-left: 6px;
 }
 
@@ -7305,7 +7198,7 @@ img.chat-avatar {
   display: inline-block;
   font-size: 11px;
   padding: 1px 6px;
-  border-radius: 4px;
+  border-radius: var(--radius-xs);
   background: var(--bg-muted);
   color: var(--muted);
 }
@@ -7334,11 +7227,11 @@ img.chat-avatar {
 }
 
 .skills-msg--ok {
-  color: #15803d;
+  color: var(--ok);
 }
 
 .skills-msg--error {
-  color: #dc2626;
+  color: var(--accent);
 }
 
 /* 已安装技能：API key 输入行 */
@@ -7719,7 +7612,7 @@ img.chat-avatar {
   border: none;
   border-radius: 50%;
   background: var(--accent);
-  color: #fff;
+  color: var(--text-on-accent);
   cursor: pointer;
   transition: opacity 150ms ease;
   flex-shrink: 0;
@@ -7806,51 +7699,21 @@ img.chat-avatar {
   opacity: 0.4;
   cursor: not-allowed;
 }
-/* CSS tooltip — 替代原生 title（Electron 40 不显示原生 tooltip） */
-[data-tooltip] {
-  position: relative;
-}
-
-[data-tooltip]::after {
-  content: attr(data-tooltip);
-  position: absolute;
-  bottom: calc(100% + 6px);
-  left: 50%;
-  transform: translateX(-50%);
+/* 全局 fixed tooltip — 不受 overflow 裁切（与 Settings 页面同一方案） */
+.fixed-tooltip {
+  position: fixed;
+  transform: translate(-50%, -100%);
   padding: 4px 8px;
   font-size: 12px;
   line-height: 1.3;
-  color: #fff;
+  color: var(--text-on-accent);
   background: rgba(0, 0, 0, 0.78);
-  border-radius: 6px;
+  border-radius: var(--radius-xs);
   white-space: nowrap;
   pointer-events: none;
   opacity: 0;
   transition: opacity 150ms ease;
-  z-index: 100;
-}
-
-[data-tooltip]:hover::after {
-  opacity: 1;
-}
-
-[data-tooltip=""]:hover::after,
-[data-tooltip]:disabled:hover::after {
-  opacity: 0;
-}
-
-/* 顶部按钮的 tooltip 向下弹出 */
-[data-tooltip-pos="bottom"]::after {
-  bottom: auto;
-  top: calc(100% + 6px);
-}
-
-/* 侧栏按钮的 tooltip 向右弹出 */
-[data-tooltip-pos="right"]::after {
-  bottom: auto;
-  top: 50%;
-  left: calc(100% + 6px);
-  transform: translateY(-50%);
+  z-index: 10000;
 }
 
 .workspace__header-btn svg {
@@ -7953,7 +7816,7 @@ img.chat-avatar {
   width: 24px;
   height: 24px;
   border: none;
-  border-radius: 4px;
+  border-radius: var(--radius-xs);
   background: transparent;
   color: var(--muted);
   cursor: pointer;
@@ -8526,9 +8389,9 @@ img.chat-avatar {
   width: 20px;
   height: 20px;
   border-radius: 50%;
-  background: rgba(0, 0, 0, 0.6);
+  background: var(--overlay);
   border: none;
-  color: white;
+  color: var(--text-on-accent);
   cursor: pointer;
   display: flex;
   align-items: center;
@@ -8555,9 +8418,9 @@ img.chat-avatar {
   font-size: 13px;
   font-weight: 500;
   border-radius: var(--radius-sm, 6px);
-  color: #15803d;
-  background: rgba(21, 128, 61, 0.08);
-  border: 1px solid rgba(21, 128, 61, 0.25);
+  color: var(--ok);
+  background: var(--ok-subtle);
+  border: 1px solid color-mix(in srgb, var(--ok) 25%, transparent);
   z-index: 10001;
   pointer-events: none;
   animation: global-toast-in 0.2s ease forwards;
@@ -8572,7 +8435,7 @@ img.chat-avatar {
   position: fixed;
   inset: 0;
   z-index: 10000;
-  background: rgba(0, 0, 0, 0.8);
+  background: var(--overlay-heavy);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -8582,8 +8445,8 @@ img.chat-avatar {
 .feedback-preview-img {
   max-width: 90vw;
   max-height: 90vh;
-  border-radius: 8px;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-xl);
 }
 
 .feedback-screenshot-add {
@@ -8893,8 +8756,8 @@ img.chat-avatar {
   line-height: 1;
   padding: 2px 5px;
   border-radius: 8px;
-  background: #e53e3e;
-  color: #fff;
+  background: var(--destructive);
+  color: var(--text-on-accent);
   flex-shrink: 0;
   font-weight: 500;
 }

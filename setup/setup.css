@@ -1,32 +1,16 @@
+@import "../shared/design-tokens.css";
+
 /* ============================================
    OneClaw Setup — 中性深色主题向导样式
    ============================================ */
 
-/* 基础变量 — 中性黑白灰 + OpenClaw 红色主题 */
+/* Setup 专用变量 */
 :root {
-  --bg-primary: #1a1a1a;
-  --bg-secondary: #151515;
-  --bg-card: #222222;
-  --bg-input: #111111;
-  --border: #303030;
-  --border-focus: #c0392b;
-  --text-primary: #e4e4e7;
-  --text-secondary: #a1a1aa;
-  --text-muted: #71717a;
-  --text-strong: #fafafa;
-  --accent: #c0392b;
-  --accent-hover: #a93226;
-  --accent-dim: rgba(192, 57, 43, 0.12);
   --success: #d4776a;
-  --error: #c0392b;
+  --error: var(--accent);
   --error-bg: rgba(192, 57, 43, 0.1);
   --warning: #e67e22;
   --warning-dim: rgba(230, 126, 34, 0.12);
-  --radius-sm: 8px;
-  --radius-md: 12px;
-  --radius-lg: 16px;
-  --radius-pill: 9999px;
-  --transition: 180ms ease;
 }
 
 /* 全局重置 */
@@ -51,8 +35,8 @@ html, body {
   font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", "PingFang SC", "Microsoft YaHei", "Hiragino Sans GB", sans-serif;
   font-size: 14px;
   line-height: 1.5;
-  color: var(--text-primary);
-  background: var(--bg-primary);
+  color: var(--text);
+  background: var(--bg);
   -webkit-font-smoothing: antialiased;
   -webkit-app-region: drag;
   user-select: none;
@@ -166,7 +150,7 @@ button, input, select, label, a {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: var(--accent-dim);
+  background: var(--accent-subtle);
   border-radius: var(--radius-md);
 }
 
@@ -264,7 +248,7 @@ h2 {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: var(--accent-dim);
+  background: var(--accent-subtle);
   border-radius: var(--radius-sm);
   color: var(--accent);
 }
@@ -282,8 +266,8 @@ h2 {
   align-items: flex-start;
   gap: 12px;
   padding: 14px 16px;
-  background: var(--accent-dim);
-  border: 1px solid rgba(192, 57, 43, 0.2);
+  background: var(--accent-subtle);
+  border: 1px solid var(--accent-subtle);
   border-radius: var(--radius-md);
   width: 100%;
 }
@@ -312,7 +296,7 @@ h2 {
 }
 
 .info-card-text strong {
-  color: var(--text-primary);
+  color: var(--text);
   font-weight: 600;
   font-size: 13px;
 }
@@ -365,7 +349,7 @@ h2 {
 }
 
 .provider-tab.active {
-  color: var(--text-primary);
+  color: var(--text);
   background: var(--accent);
   font-weight: 600;
 }
@@ -418,7 +402,7 @@ select {
   width: 100%;
   padding: 9px 12px;
   font-size: 13.5px;
-  color: var(--text-primary);
+  color: var(--text);
   background: var(--bg-input);
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
@@ -434,7 +418,7 @@ input::placeholder {
 input:focus,
 select:focus {
   border-color: var(--border-focus);
-  box-shadow: 0 0 0 3px var(--accent-dim);
+  box-shadow: 0 0 0 3px var(--accent-subtle);
 }
 
 /* 下拉框箭头 */
@@ -449,7 +433,7 @@ select {
 
 select option {
   background: var(--bg-secondary);
-  color: var(--text-primary);
+  color: var(--text);
 }
 
 /* 密码输入行 */
@@ -565,7 +549,7 @@ select option {
   left: 4px;
   width: 5px;
   height: 9px;
-  border: solid #fff;
+  border: solid var(--text-on-accent);
   border-width: 0 2px 2px 0;
   transform: rotate(45deg);
 }
@@ -576,7 +560,7 @@ select option {
   font-size: 12.5px;
   color: var(--error);
   background: var(--error-bg);
-  border: 1px solid rgba(192, 57, 43, 0.25);
+  border: 1px solid var(--accent-glow);
   border-radius: var(--radius-sm);
   line-height: 1.4;
 }
@@ -591,7 +575,7 @@ select option {
   padding: 10px 28px;
   font-size: 14px;
   font-weight: 600;
-  color: #fff;
+  color: var(--text-on-accent);
   background: var(--accent);
   border: none;
   border-radius: var(--radius-pill);
@@ -633,7 +617,7 @@ select option {
 }
 
 .btn-secondary:hover {
-  color: var(--text-primary);
+  color: var(--text);
   border-color: var(--text-muted);
 }
 
@@ -656,14 +640,14 @@ select option {
   border: 1px solid var(--border);
   border-radius: 8px;
   background: var(--bg-secondary);
-  color: var(--text-primary);
+  color: var(--text);
   font-size: 14px;
   cursor: pointer;
   transition: background 0.15s, border-color 0.15s;
 }
 
 .btn-oauth:hover:not(:disabled) {
-  background: var(--accent-dim);
+  background: var(--accent-subtle);
   border-color: var(--accent);
 }
 
@@ -701,7 +685,7 @@ select option {
 
 .btn-oauth-cancel:hover {
   background: var(--bg-hover);
-  color: var(--text-primary);
+  color: var(--text);
 }
 
 .oauth-status {
@@ -712,7 +696,7 @@ select option {
 }
 
 .oauth-status.success {
-  color: #27ae60;
+  color: var(--ok);
 }
 
 /* ── 通用折叠高级选项（details-advanced）── */
@@ -769,7 +753,7 @@ select option {
   width: 16px;
   height: 16px;
   border: 2px solid rgba(255, 255, 255, 0.3);
-  border-top-color: #fff;
+  border-top-color: var(--text-on-accent);
   border-radius: 50%;
   animation: spin 0.6s linear infinite;
 }
@@ -835,10 +819,10 @@ select option {
   top: 2px;
   width: 20px;
   height: 20px;
-  background: #fff;
+  background: var(--bg-elevated);
   border-radius: 50%;
   transition: transform 200ms ease;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+  box-shadow: var(--shadow-sm);
 }
 
 .toggle-switch input:checked + .toggle-slider {
@@ -868,8 +852,8 @@ select option {
   flex-direction: column;
   gap: 8px;
   padding: 12px 14px;
-  background: rgba(230, 126, 34, 0.08);
-  border: 1px solid rgba(230, 126, 34, 0.2);
+  background: var(--warn-subtle);
+  border: 1px solid color-mix(in srgb, var(--warn) 20%, transparent);
   border-radius: var(--radius-md);
 }
 
@@ -921,29 +905,10 @@ select option {
   border-radius: 3px;
 }
 
-/* ── 浅色主题适配 ── */
+/* 分段选择器激活态：红底强制白字 */
 @media (prefers-color-scheme: light) {
-  :root {
-    --bg-primary: #ffffff;
-    --bg-secondary: #fafafa;
-    --bg-card: #ffffff;
-    --bg-input: #fafafa;
-    --border: #e4e4e7;
-    --text-primary: #3f3f46;
-    --text-secondary: #71717a;
-    --text-muted: #a1a1aa;
-    --text-strong: #18181b;
-    --accent: #dc2626;
-    --accent-hover: #ef4444;
-    --accent-dim: rgba(220, 38, 38, 0.08);
-    --error-bg: rgba(220, 38, 38, 0.06);
-    --warning: #d97706;
-    --warning-dim: rgba(217, 119, 6, 0.08);
-  }
-
-  /* 分段选择器激活态：红底强制白字 */
   .provider-tab.active {
-    color: #fff;
+    color: var(--text-on-accent);
   }
 }
 
@@ -956,6 +921,6 @@ select option {
   margin-left: 6px;
   border-radius: 3px;
   background: var(--accent);
-  color: #fff;
+  color: var(--text-on-accent);
   vertical-align: middle;
 }
