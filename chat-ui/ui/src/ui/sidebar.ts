@@ -5,6 +5,7 @@
 import { html } from "lit";
 import { nothing } from "lit";
 import { repeat } from "lit/directives/repeat.js";
+import { ifDefined } from "lit/directives/if-defined.js";
 import { t } from "./i18n.ts";
 import { icons } from "./icons.ts";
 import oneClawLogo from "../assets/openclaw-favicon.svg";
@@ -141,8 +142,9 @@ export function renderSidebar(props: SidebarProps) {
           ${repeat(
             props.sessionOptions,
             (s) => s.key,
-            (s) => {
+            (s, idx) => {
               const isActive = s.key === props.currentSessionKey;
+              const tooltipPos = idx === 0 ? "bottom" : undefined;
               return html`
                 <div
                   class="oneclaw-sidebar__session-item ${isActive ? "active" : ""}"
@@ -162,6 +164,7 @@ export function renderSidebar(props: SidebarProps) {
                       startInlineRename(span, s.key, s.label, props.onRenameSession);
                     }}
                     data-tooltip=${t("sidebar.rename")}
+                    data-tooltip-pos=${ifDefined(tooltipPos)}
                     aria-label=${t("sidebar.rename")}
                   >
                     ${icons.edit}
@@ -174,6 +177,7 @@ export function renderSidebar(props: SidebarProps) {
                       props.onDeleteSession(s.key);
                     }}
                     data-tooltip=${t("sidebar.delete")}
+                    data-tooltip-pos=${ifDefined(tooltipPos)}
                     aria-label=${t("sidebar.delete")}
                   >
                     ${icons.x}
