@@ -38,3 +38,30 @@ In the CSS variables of the code, it mainly corresponds to the following states 
 
 * **Progressive Feedback**: Hover states are usually accompanied by smooth transition animations (`transition`). For example, when hovering, border colors deepen or turn red, text colors light up synchronously, and a very light color block appears in the background.
 * **Non-draggable Area Details**: Interactive elements explicitly exclude the system drag area (`-webkit-app-region: no-drag`) to ensure precise operation.
+
+## 5. Tooltip: Global Fixed Positioning
+
+**Never use CSS `::after` pseudo-elements for tooltips.** Inside `overflow: auto/hidden` containers (e.g., the sidebar session list), pseudo-elements get clipped regardless of direction.
+
+**Unified approach: global `position: fixed` DOM element**, dynamically positioned via JS event delegation + `getBoundingClientRect()`:
+
+* Chat UI (`main.ts`) and Settings (`settings.js`) each initialize a `.fixed-tooltip` element attached to `document.body`
+* Any element needing a tooltip just adds `data-tooltip="tip text"`
+* Default: pops up above; add `data-tooltip-pos="bottom"` for below
+* `z-index: 10000` ensures it always stays on top
+
+## 6. Tooltip Usage: Icon-Only Buttons Only
+
+**Buttons with visible text labels must NOT have tooltips.** Tooltips are only for icon-only buttons where text is absent and the tooltip provides essential semantic context.
+
+* Icon-only buttons (collapse, delete, rename) → add `data-tooltip`
+* Icon + text label buttons (sidebar menu items like "Settings", "Skills") → no tooltip
+* Text elements with `title` attribute → only when text may be truncated
+
+## 7. Design Tokens: Shared Design Language
+
+All CSS variables (colors, radii, shadows, fonts, motion) are defined in `shared/design-tokens.css`. Chat UI, Settings, and Setup import this file via `@import`. Editing this file takes effect globally.
+
+* **Never hardcode color values in component styles** (e.g., `color: #fff`) — use tokens (e.g., `var(--text-on-accent)`)
+* **Never hardcode `border-radius` values** — use `var(--radius-sm/md/lg)` etc.
+* **Never use `transition: all`** — specify exact properties (e.g., `transition: color 0.15s, background 0.15s`)
