@@ -2,7 +2,7 @@ import { app } from "electron";
 import * as fs from "fs";
 import * as path from "path";
 import { resolveResourcesPath } from "./constants";
-import { ensureDeviceId } from "./oneclaw-config";
+import { ensureDeviceId, getChannelId } from "./oneclaw-config";
 import * as log from "./logger";
 import {
   AnalyticsErrorType,
@@ -62,12 +62,15 @@ function getDeviceId(): string {
 
 // 每个事件附带的公共属性
 function commonProps(): Record<string, string> {
-  return {
+  const props: Record<string, string> = {
     app_version: app.getVersion(),
     platform: process.platform,
     arch: process.arch,
     electron_version: process.versions.electron,
   };
+  const channelId = getChannelId();
+  if (channelId) props.channel_id = channelId;
+  return props;
 }
 
 // 构建 build-config.json 候选路径，兼容打包安装与本地 unpacked 运行。

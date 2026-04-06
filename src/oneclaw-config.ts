@@ -13,6 +13,8 @@ export interface OneclawConfig {
   skillStore?: {
     registryUrl?: string;
   };
+  channelId?: string;
+  channelSource?: string;
 }
 
 // 四种归属状态
@@ -127,6 +129,27 @@ export function markSetupComplete(): void {
   }
   config.setupCompletedAt = new Date().toISOString();
   writeOneclawConfig(config);
+}
+
+export function getChannelId(): string {
+  return readOneclawConfig()?.channelId ?? "";
+}
+
+export function appendChannelUtm(url: string): string {
+  const channelId = getChannelId();
+  if (!channelId) return url;
+  try {
+    const u = new URL(url);
+    const isKimiDomain = u.hostname === "kimi.com" || u.hostname.endsWith(".kimi.com");
+    const hasOneclawUtm = u.searchParams.get("utm_source") === "oneclaw";
+
+    if (isKimiDomain || hasOneclawUtm) {
+      if (!u.searchParams.has("utm_source")) u.searchParams.set("utm_source", "oneclaw");
+      if (!u.searchParams.has("utm_campaign")) u.searchParams.set("utm_campaign", channelId);
+      return u.toString();
+    }
+  } catch {}
+  return url;
 }
 
 // 确保 deviceId 存在，直接读写 .device-id 文件（与官方 CLI 共用）
