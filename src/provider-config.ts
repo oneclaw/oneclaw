@@ -3,6 +3,7 @@ import * as http from "http";
 import * as fs from "fs";
 import { resolveUserConfigPath, resolveUserStateDir } from "./constants";
 import { backupCurrentUserConfig } from "./config-backup";
+import { getModelInput, ensureCatalogLoaded } from "./model-catalog";
 
 // ── Provider 配置预设（与 kimiclaw ProviderSetupView.swift 对齐） ──
 
@@ -119,6 +120,22 @@ export function deriveCustomConfigKey(baseURL: string): string {
   }
 }
 
+/**
+ * 统一解析模型的 input 能力。
+ * 优先级：catalog > explicit signal > 保守默认 ["text"]
+ */
+export function resolveModelInput(
+  providerKey: string,
+  modelId: string,
+  explicitSupportsImage?: boolean,
+): string[] {
+  const catalogInput = getModelInput(providerKey, modelId);
+  if (catalogInput) return catalogInput;
+  if (explicitSupportsImage === true) return ["text", "image"];
+  if (explicitSupportsImage === false) return ["text"];
+  return ["text"];
+}
+
 // ── 构建 Provider 配置对象 ──
 
 export function buildProviderConfig(
@@ -131,30 +148,31 @@ export function buildProviderConfig(
   customPreset?: string
 ): Record<string, unknown> {
   const preset = PROVIDER_PRESETS[provider];
+  const customPre = customPreset ? CUSTOM_PROVIDER_PRESETS[customPreset] : undefined;
+  const configKey = customPre
+    ? customPre.providerKey
+    : preset ? provider : (baseURL ? deriveCustomConfigKey(baseURL) : "custom");
 
-  // 预设 provider（Anthropic/OpenAI/Google）一律声明图片能力
+  const input = resolveModelInput(configKey, modelID, supportImage);
+
   if (preset) {
     return {
       apiKey,
       baseUrl: preset.baseUrl,
       api: preset.api,
-      models: [{ id: modelID, name: modelID, input: ["text", "image"] }],
+      models: [{ id: modelID, name: modelID, input }],
     };
   }
 
-  // Custom 内置预设命中时，使用预设的 baseUrl 和 api（前端传了 baseURL 时优先用前端值）
-  const customPre = customPreset ? CUSTOM_PROVIDER_PRESETS[customPreset] : undefined;
   if (customPre) {
     return {
       apiKey,
       baseUrl: baseURL || customPre.baseUrl,
       api: customPre.api,
-      models: [{ id: modelID, name: modelID, input: ["text", "image"] }],
+      models: [{ id: modelID, name: modelID, input }],
     };
   }
 
-  // Custom provider — 根据用户勾选决定是否声明图片能力
-  const input = supportImage !== false ? ["text", "image"] : ["text"];
   return {
     apiKey,
     baseUrl: baseURL,
@@ -174,12 +192,14 @@ export function saveMoonshotConfig(
   const sub = MOONSHOT_SUB_PLATFORMS[subPlatform] || MOONSHOT_SUB_PLATFORMS["moonshot-cn"];
   const providerKey = sub.providerKey;
 
+  const input = resolveModelInput(providerKey, modelID);
+
   // 所有子平台统一写法：apiKey + baseUrl + api + models 写入 providers
   config.models.providers[providerKey] = {
     apiKey,
     baseUrl: sub.baseUrl,
     api: sub.api,
-    models: [{ id: modelID, name: modelID, input: ["text", "image"], reasoning: true }],
+    models: [{ id: modelID, name: modelID, input, reasoning: true }],
   };
 
   config.agents.defaults.model.primary = `${providerKey}/${modelID}`;
@@ -447,7 +467,7 @@ export async function verifyProvider(params: {
   clientSecret?: string;
   customPreset?: string;
   proxyPort?: number;
-}): Promise<{ success: boolean; message?: string }> {
+}): Promise<{ success: boolean; message?: string; supportsImage?: boolean }> {
   const {
     provider,
     apiKey,
@@ -501,7 +521,18 @@ export async function verifyProvider(params: {
       default:
         return { success: false, message: `未知 Provider: ${provider}` };
     }
-    return { success: true };
+    // 查询模型图片能力
+    await ensureCatalogLoaded();
+    const customPre2 = customPreset ? CUSTOM_PROVIDER_PRESETS[customPreset] : undefined;
+    const configKey = provider === "moonshot"
+      ? (MOONSHOT_SUB_PLATFORMS[subPlatform || "moonshot-cn"]?.providerKey || "moonshot")
+      : customPre2
+        ? customPre2.providerKey
+        : PROVIDER_PRESETS[provider] ? provider
+        : (baseURL ? deriveCustomConfigKey(baseURL) : "custom");
+    const catalogInput = modelID ? getModelInput(configKey, modelID) : undefined;
+    const supportsImage = catalogInput ? catalogInput.includes("image") : undefined;
+    return { success: true, supportsImage };
   } catch (err: any) {
     return { success: false, message: err.message || String(err) };
   }
