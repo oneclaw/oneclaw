@@ -167,14 +167,32 @@ export async function updateCronJob(state: CronState, jobId: string) {
   try {
     const schedule = buildCronSchedule(state.cronForm);
     const payload = buildCronPayload(state.cronForm);
-    const patch: Record<string, unknown> = {
-      name: state.cronForm.name.trim(),
-      schedule,
-      payload,
-    };
-    if (!patch.name) {
+    const name = state.cronForm.name.trim();
+    if (!name) {
       throw new Error("Name required.");
     }
+    const delivery =
+      state.cronForm.sessionTarget === "isolated" &&
+      state.cronForm.payloadKind === "agentTurn" &&
+      state.cronForm.deliveryMode
+        ? {
+            mode: state.cronForm.deliveryMode === "announce" ? "announce" : "none",
+            channel: state.cronForm.deliveryChannel.trim() || "last",
+            to: state.cronForm.deliveryTo.trim() || undefined,
+          }
+        : undefined;
+    const agentId = state.cronForm.agentId.trim();
+    const patch: Record<string, unknown> = {
+      name,
+      description: state.cronForm.description.trim() || undefined,
+      agentId: agentId || undefined,
+      enabled: state.cronForm.enabled,
+      schedule,
+      sessionTarget: state.cronForm.sessionTarget,
+      wakeMode: state.cronForm.wakeMode,
+      payload,
+      delivery,
+    };
     await state.client.request("cron.update", { id: jobId, patch });
     await loadCronJobs(state);
     await loadCronStatus(state);
