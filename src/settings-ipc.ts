@@ -30,6 +30,7 @@ import {
   readUserConfig,
   writeUserConfig,
 } from "./provider-config";
+import { getModelInput } from "./model-catalog";
 import { getLatestShareCopyPayload } from "./share-copy";
 import { readSkillStoreRegistry, writeSkillStoreRegistry } from "./skill-store";
 import {
@@ -500,7 +501,9 @@ export function registerSettingsIpc(opts: SettingsIpcOptions = {}): void {
                 return id === modelID;
               });
               if (!hasModel) {
-                existingProv.models.push({ id: modelID, name: modelID, input: ["text", "image"] });
+                const catalogInput = getModelInput(provKey, modelID);
+                const modelInput = catalogInput ?? ["text", "image"];
+                existingProv.models.push({ id: modelID, name: modelID, input: modelInput });
               }
             } else {
               // provider 不存在 → 用 saveMoonshotConfig 创建
