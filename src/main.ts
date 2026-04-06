@@ -49,6 +49,7 @@ import { uninstallGatewayDaemon, killPortProcess, getPortPid } from "./install-d
 import { detectOwnership, migrateFromLegacy, markSetupComplete, readOneclawConfig, writeOneclawConfig } from "./oneclaw-config";
 import { startTokenRefresh, stopTokenRefresh, loadOAuthToken } from "./kimi-oauth";
 import { startAuthProxy, stopAuthProxy, setProxyAccessToken, setProxySearchDedicatedKey, getProxyPort } from "./kimi-auth-proxy";
+import { loadModelCatalog } from "./model-catalog";
 import * as log from "./logger";
 import * as analytics from "./analytics";
 
@@ -818,6 +819,10 @@ app.whenReady().then(async () => {
   } else {
     Menu.setApplicationMenu(null);
   }
+  // 后台加载 openclaw 模型目录，用于 Setup/Settings 写入精确的 input 能力。
+  // 不阻塞启动——加载失败时 buildProviderConfig 回退到默认值。
+  loadModelCatalog().catch(() => {});
+
   analytics.init();
   analytics.track("app_launched");
   setupAutoUpdater();

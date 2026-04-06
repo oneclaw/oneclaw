@@ -3,6 +3,7 @@ import * as http from "http";
 import * as fs from "fs";
 import { resolveUserConfigPath, resolveUserStateDir } from "./constants";
 import { backupCurrentUserConfig } from "./config-backup";
+import { getModelInput } from "./model-catalog";
 
 // ── Provider 配置预设（与 kimiclaw ProviderSetupView.swift 对齐） ──
 
@@ -132,29 +133,36 @@ export function buildProviderConfig(
 ): Record<string, unknown> {
   const preset = PROVIDER_PRESETS[provider];
 
-  // 预设 provider（Anthropic/OpenAI/Google）一律声明图片能力
+  // 解析 configKey（用于 catalog 查询）
+  const customPre = customPreset ? CUSTOM_PROVIDER_PRESETS[customPreset] : undefined;
+  const configKey = customPre
+    ? customPre.providerKey
+    : preset ? provider : (baseURL ? deriveCustomConfigKey(baseURL) : "custom");
+
+  // 优先查询 openclaw 权威模型目录；未命中时回退到 supportImage 参数
+  const catalogInput = getModelInput(configKey, modelID);
+  const input = catalogInput ?? (supportImage !== false ? ["text", "image"] : ["text"]);
+
   if (preset) {
     return {
       apiKey,
       baseUrl: preset.baseUrl,
       api: preset.api,
-      models: [{ id: modelID, name: modelID, input: ["text", "image"] }],
+      models: [{ id: modelID, name: modelID, input }],
     };
   }
 
   // Custom 内置预设命中时，使用预设的 baseUrl 和 api（前端传了 baseURL 时优先用前端值）
-  const customPre = customPreset ? CUSTOM_PROVIDER_PRESETS[customPreset] : undefined;
   if (customPre) {
     return {
       apiKey,
       baseUrl: baseURL || customPre.baseUrl,
       api: customPre.api,
-      models: [{ id: modelID, name: modelID, input: ["text", "image"] }],
+      models: [{ id: modelID, name: modelID, input }],
     };
   }
 
-  // Custom provider — 根据用户勾选决定是否声明图片能力
-  const input = supportImage !== false ? ["text", "image"] : ["text"];
+  // Custom manual provider
   return {
     apiKey,
     baseUrl: baseURL,
@@ -174,12 +182,16 @@ export function saveMoonshotConfig(
   const sub = MOONSHOT_SUB_PLATFORMS[subPlatform] || MOONSHOT_SUB_PLATFORMS["moonshot-cn"];
   const providerKey = sub.providerKey;
 
+  // 优先查询 openclaw 权威模型目录
+  const catalogInput = getModelInput(providerKey, modelID);
+  const input = catalogInput ?? ["text", "image"];
+
   // 所有子平台统一写法：apiKey + baseUrl + api + models 写入 providers
   config.models.providers[providerKey] = {
     apiKey,
     baseUrl: sub.baseUrl,
     api: sub.api,
-    models: [{ id: modelID, name: modelID, input: ["text", "image"], reasoning: true }],
+    models: [{ id: modelID, name: modelID, input, reasoning: true }],
   };
 
   config.agents.defaults.model.primary = `${providerKey}/${modelID}`;
@@ -432,119 +444,6 @@ export async function verifyCustom(apiKey: string, baseURL?: string, apiType?: s
   }
 }
 
-// ── 图片能力探测 ──
-
-// 1x1 transparent PNG (67 bytes) as base64
-const TINY_PNG_B64 =
-  "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAAC0lEQVQI12NgAAIABQAB" +
-  "Nl7BcQAAAABJRU5ErkJggg==";
-
-// 文本验证成功后，发一次带图片的请求来探测模型是否支持图片输入。
-// 只对有 modelID 且走 chat 接口的 provider 有意义（跳过 feishu/qqbot/dingtalk 等凭证型）。
-async function probeImageSupport(params: {
-  provider: string;
-  apiKey?: string;
-  baseURL?: string;
-  subPlatform?: string;
-  apiType?: string;
-  modelID?: string;
-  customPreset?: string;
-  proxyPort?: number;
-}): Promise<boolean> {
-  const { provider, apiKey, baseURL, subPlatform, apiType, modelID, customPreset, proxyPort } = params;
-
-  // 确定实际的 API 类型和 base URL
-  let effectiveApi: string;
-  let effectiveBase: string;
-
-  if (provider === "anthropic") {
-    effectiveApi = "anthropic-messages";
-    effectiveBase = PROVIDER_PRESETS.anthropic.baseUrl;
-  } else if (provider === "openai") {
-    effectiveApi = "openai-completions";
-    effectiveBase = PROVIDER_PRESETS.openai.baseUrl;
-  } else if (provider === "google") {
-    // Google Generative AI 验证走 /models 端点，不走 chat，且主流模型均支持图片
-    return true;
-  } else if (provider === "moonshot") {
-    if (subPlatform === "kimi-code") {
-      effectiveApi = "anthropic-messages";
-      effectiveBase = `http://127.0.0.1:${proxyPort}/coding`;
-    } else {
-      const sub = MOONSHOT_SUB_PLATFORMS[subPlatform || "moonshot-cn"] || MOONSHOT_SUB_PLATFORMS["moonshot-cn"];
-      effectiveApi = sub.api;
-      effectiveBase = sub.baseUrl;
-    }
-  } else if (provider === "custom") {
-    const customPre = customPreset ? CUSTOM_PROVIDER_PRESETS[customPreset] : undefined;
-    effectiveBase = (baseURL || (customPre ? customPre.baseUrl : ""))!.replace(/\/$/, "");
-    effectiveApi = customPre ? customPre.api : (apiType || "openai-completions");
-  } else {
-    // feishu/qqbot/dingtalk 等无 chat 接口的 provider — 默认不支持
-    return false;
-  }
-
-  if (!effectiveBase || !modelID) return true; // 无法探测时保守返回 true
-
-  try {
-    if (effectiveApi === "anthropic-messages") {
-      const url = effectiveBase.replace(/\/$/, "") + "/v1/messages";
-      const headers: Record<string, string> = {
-        "User-Agent": UA_ANTHROPIC,
-        "anthropic-version": "2023-06-01",
-        "content-type": "application/json",
-      };
-      // kimi-code 走代理无需 x-api-key；其他需要
-      if (apiKey && provider !== "moonshot") headers["x-api-key"] = apiKey;
-      if (provider === "moonshot" && subPlatform !== "kimi-code" && apiKey) headers["x-api-key"] = apiKey;
-
-      await jsonRequest(url, {
-        method: "POST",
-        headers,
-        body: JSON.stringify({
-          model: modelID,
-          max_tokens: 1,
-          messages: [{
-            role: "user",
-            content: [
-              { type: "image", source: { type: "base64", media_type: "image/png", data: TINY_PNG_B64 } },
-              { type: "text", text: "hi" },
-            ],
-          }],
-        }),
-      });
-      return true;
-    } else if (effectiveApi === "openai-completions") {
-      const url = effectiveBase.replace(/\/$/, "") + "/chat/completions";
-      await jsonRequest(url, {
-        method: "POST",
-        headers: {
-          "User-Agent": UA_OPENAI,
-          Authorization: `Bearer ${apiKey}`,
-          "content-type": "application/json",
-        },
-        body: JSON.stringify({
-          model: modelID,
-          max_tokens: 1,
-          messages: [{
-            role: "user",
-            content: [
-              { type: "image_url", image_url: { url: `data:image/png;base64,${TINY_PNG_B64}` } },
-              { type: "text", text: "hi" },
-            ],
-          }],
-        }),
-      });
-      return true;
-    }
-    // openai-responses / google-generative-ai 等不易探测，保守返回 true
-    return true;
-  } catch {
-    // 请求失败说明模型不支持图片
-    return false;
-  }
-}
-
 // ── 统一验证入口（根据 provider 名称分派） ──
 
 export async function verifyProvider(params: {
@@ -560,7 +459,7 @@ export async function verifyProvider(params: {
   clientSecret?: string;
   customPreset?: string;
   proxyPort?: number;
-}): Promise<{ success: boolean; message?: string; supportsImage?: boolean }> {
+}): Promise<{ success: boolean; message?: string }> {
   const {
     provider,
     apiKey,
@@ -615,10 +514,7 @@ export async function verifyProvider(params: {
         return { success: false, message: `未知 Provider: ${provider}` };
     }
 
-    // 文本验证通过后，自动探测图片能力
-    const supportsImage = await probeImageSupport(params);
-
-    return { success: true, supportsImage };
+    return { success: true };
   } catch (err: any) {
     return { success: false, message: err.message || String(err) };
   }
