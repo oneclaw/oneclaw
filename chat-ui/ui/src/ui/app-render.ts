@@ -1483,13 +1483,17 @@ export function renderApp(state: AppViewState) {
                     onAddJob: () => {
                       if (cronEditingJobId) {
                         void updateCronJob(state as any, cronEditingJobId).then(() => {
-                          cronShowForm = false;
-                          cronEditingJobId = null;
+                          if (!state.cronError) {
+                            cronShowForm = false;
+                            cronEditingJobId = null;
+                          }
                           state.requestUpdate();
                         });
                       } else {
                         void addCronJob(state as any).then(() => {
-                          cronShowForm = false;
+                          if (!state.cronError) {
+                            cronShowForm = false;
+                          }
                           state.requestUpdate();
                         });
                       }
