@@ -13,6 +13,11 @@ export interface OneclawConfig {
   skillStore?: {
     registryUrl?: string;
   };
+  updatePush?: {
+    enabled?: boolean;
+    targets?: Array<{ channel: string; target: string; label?: string }>;
+    lastPushedVersion?: string;
+  };
 }
 
 // 四种归属状态

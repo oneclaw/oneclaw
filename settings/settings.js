@@ -411,6 +411,21 @@
       "about.downloading": "Downloading",
       "about.installRestart": "Install & Restart",
       "about.updateFailed": "Check failed, try again later",
+      "about.pushTitle": "Update Notifications",
+      "about.pushEnabled": "Push update notifications via remote channels",
+      "about.pushSaved": "Notification settings saved",
+      "about.pushChannelFeishu": "Feishu",
+      "about.pushChannelQqbot": "QQ",
+      "about.pushChannelDingtalk": "DingTalk",
+      "about.pushChannelWecom": "WeCom",
+      "about.pushChannelWeixin": "WeChat",
+      "about.pushChannelKimiClaw": "KimiClaw",
+      "about.pushNoChannels": "No remote channels enabled. Enable a channel in Remote Control first.",
+      "about.pushTest": "Send Test Notification",
+      "about.pushTesting": "Sending...",
+      "about.pushNoTargets": "No push targets added yet.",
+      "about.pushTargetHint": "Tip: ask your bot \"what is my user ID?\" on Feishu/QQ/WeChat to get the target ID. For Feishu groups use chat:oc_xxx.",
+      "about.pushAdd": "Add",
       "settings.modelList": "Models",
       "settings.addModel": "+ Add Model",
       "settings.modelAlias": "Alias",
@@ -718,6 +733,21 @@
       "about.downloading": "下载中",
       "about.installRestart": "安装并重启",
       "about.updateFailed": "检查失败 请稍后重试",
+      "about.pushTitle": "更新通知",
+      "about.pushEnabled": "通过远程通道推送更新通知",
+      "about.pushSaved": "通知设置已保存",
+      "about.pushChannelFeishu": "飞书",
+      "about.pushChannelQqbot": "QQ",
+      "about.pushChannelDingtalk": "钉钉",
+      "about.pushChannelWecom": "企业微信",
+      "about.pushChannelWeixin": "微信",
+      "about.pushChannelKimiClaw": "KimiClaw",
+      "about.pushNoChannels": "暂无已启用的远程通道，请先在「远程控制」中开启。",
+      "about.pushTest": "发送测试通知",
+      "about.pushTesting": "发送中...",
+      "about.pushNoTargets": "暂无推送目标。",
+      "about.pushTargetHint": "提示：在飞书/QQ/微信上问机器人「我的 user ID 是什么」即可获取目标 ID。飞书群聊用 chat:oc_xxx 格式。",
+      "about.pushAdd": "添加",
       "settings.modelList": "模型列表",
       "settings.addModel": "+ 新增模型",
       "settings.modelAlias": "别名",
@@ -4968,6 +4998,192 @@
     }
   }
 
+  // 通道 ID → i18n key 映射
+  var UPDATE_PUSH_CHANNEL_LABELS = {
+    feishu: "about.pushChannelFeishu",
+    qqbot: "about.pushChannelQqbot",
+    dingtalk: "about.pushChannelDingtalk",
+    wecom: "about.pushChannelWecom",
+    weixin: "about.pushChannelWeixin",
+    "kimi-claw": "about.pushChannelKimiClaw",
+  };
+
+  var _pushTargets = []; // in-memory state for push targets
+
+  // 加载更新推送通知配置
+  async function loadUpdatePushConfig() {
+    try {
+      var result = await window.oneclaw.settingsGetUpdatePushConfig();
+      if (!result || !result.success) return;
+      var data = result.data;
+
+      var toggle = document.getElementById("updatePushEnabled");
+      var targetListEl = document.getElementById("updatePushTargetList");
+      var addRowEl = document.getElementById("updatePushAddRow");
+      var hintEl = document.getElementById("updatePushHint");
+      var testBtn = document.getElementById("updatePushTestBtn");
+      if (!toggle || !targetListEl) return;
+
+      toggle.checked = !!data.pushEnabled;
+      _pushTargets = data.targets || [];
+      var enabledChannels = data.enabledChannels || [];
+
+      // 渲染已添加的 target 列表
+      renderPushTargets(targetListEl);
+
+      // 填充 channel 下拉（只显示已启用的通道）
+      var channelSelect = document.getElementById("updatePushChannelSelect");
+      if (channelSelect) {
+        channelSelect.innerHTML = "";
+        enabledChannels.forEach(function (ch) {
+          var opt = document.createElement("option");
+          opt.value = ch;
+          var labelKey = UPDATE_PUSH_CHANNEL_LABELS[ch] || ch;
+          opt.textContent = t(labelKey);
+          channelSelect.appendChild(opt);
+        });
+        if (enabledChannels.length === 0) {
+          var opt = document.createElement("option");
+          opt.value = "";
+          opt.textContent = t("about.pushNoChannels");
+          opt.disabled = true;
+          channelSelect.appendChild(opt);
+        }
+      }
+
+      // 显示/隐藏
+      var show = !!data.pushEnabled;
+      targetListEl.classList.toggle("hidden", !show);
+      if (addRowEl) {
+        addRowEl.classList.toggle("hidden", !show);
+        if (show) addRowEl.style.display = "flex";
+      }
+      if (hintEl) hintEl.classList.toggle("hidden", !show);
+      if (testBtn) testBtn.classList.toggle("hidden", !show || _pushTargets.length === 0);
+
+      // 主开关事件
+      toggle.onchange = function () {
+        var on = toggle.checked;
+        targetListEl.classList.toggle("hidden", !on);
+        if (addRowEl) {
+          addRowEl.classList.toggle("hidden", !on);
+          if (on) addRowEl.style.display = "flex";
+        }
+        if (hintEl) hintEl.classList.toggle("hidden", !on);
+        if (testBtn) testBtn.classList.toggle("hidden", !on || _pushTargets.length === 0);
+        saveUpdatePushConfig();
+      };
+    } catch (e) {
+      console.error("Failed to load update push config:", e);
+    }
+  }
+
+  function renderPushTargets(container) {
+    container.innerHTML = "";
+    if (_pushTargets.length === 0) {
+      var hint = document.createElement("p");
+      hint.className = "field-hint";
+      hint.textContent = t("about.pushNoTargets");
+      container.appendChild(hint);
+      return;
+    }
+    _pushTargets.forEach(function (t2, idx) {
+      var row = document.createElement("div");
+      row.style.cssText = "display:flex;align-items:center;gap:8px;padding:4px 0;";
+      var labelKey = UPDATE_PUSH_CHANNEL_LABELS[t2.channel] || t2.channel;
+      var text = document.createElement("span");
+      text.style.flex = "1";
+      text.textContent = t(labelKey) + " → " + (t2.label || t2.target);
+      var removeBtn = document.createElement("button");
+      removeBtn.className = "btn btn-secondary";
+      removeBtn.textContent = "✕";
+      removeBtn.style.cssText = "padding:2px 8px;min-width:auto;";
+      removeBtn.onclick = function () {
+        _pushTargets.splice(idx, 1);
+        renderPushTargets(container);
+        saveUpdatePushConfig();
+        var testBtn = document.getElementById("updatePushTestBtn");
+        if (testBtn) testBtn.classList.toggle("hidden", _pushTargets.length === 0);
+      };
+      row.appendChild(text);
+      row.appendChild(removeBtn);
+      container.appendChild(row);
+    });
+  }
+
+  // 添加 target
+  (function () {
+    var addBtn = document.getElementById("updatePushAddBtn");
+    if (addBtn) addBtn.addEventListener("click", function () {
+      var channelSelect = document.getElementById("updatePushChannelSelect");
+      var targetInput = document.getElementById("updatePushTargetInput");
+      if (!channelSelect || !targetInput) return;
+      var ch = channelSelect.value;
+      var tgt = (targetInput.value || "").trim();
+      if (!ch || !tgt) return;
+      // Prevent duplicates
+      if (_pushTargets.some(function (t2) { return t2.channel === ch && t2.target === tgt; })) return;
+      _pushTargets.push({ channel: ch, target: tgt });
+      targetInput.value = "";
+      var targetListEl = document.getElementById("updatePushTargetList");
+      if (targetListEl) renderPushTargets(targetListEl);
+      saveUpdatePushConfig();
+      var testBtn = document.getElementById("updatePushTestBtn");
+      if (testBtn) testBtn.classList.remove("hidden");
+    });
+  })();
+
+  // 保存更新推送通知配置
+  async function saveUpdatePushConfig() {
+    try {
+      var toggle = document.getElementById("updatePushEnabled");
+      if (!toggle) return;
+
+      var result = await window.oneclaw.settingsSaveUpdatePushConfig({
+        pushEnabled: toggle.checked,
+        targets: _pushTargets,
+      });
+
+      if (result && result.success) {
+        var statusEl = document.getElementById("updatePushStatus");
+        if (statusEl) {
+          statusEl.textContent = t("about.pushSaved");
+          statusEl.classList.remove("hidden");
+          setTimeout(function () { statusEl.classList.add("hidden"); }, 2000);
+        }
+      }
+    } catch (e) {
+      console.error("Failed to save update push config:", e);
+    }
+  }
+
+  // 测试更新推送通知
+  async function testUpdatePush() {
+    var testBtn = document.getElementById("updatePushTestBtn");
+    var statusEl = document.getElementById("updatePushStatus");
+    if (testBtn) { testBtn.disabled = true; testBtn.textContent = t("about.pushTesting"); }
+    try {
+      var result = await window.oneclaw.settingsTestUpdatePush();
+      if (statusEl) {
+        statusEl.textContent = result.success ? ("✓ " + (result.message || "Sent")) : ("✗ " + (result.message || "Failed"));
+        statusEl.classList.remove("hidden");
+        setTimeout(function () { statusEl.classList.add("hidden"); }, 5000);
+      }
+    } catch (e) {
+      if (statusEl) {
+        statusEl.textContent = "✗ " + (e.message || "Error");
+        statusEl.classList.remove("hidden");
+      }
+    } finally {
+      if (testBtn) { testBtn.disabled = false; testBtn.textContent = t("about.pushTest"); }
+    }
+  }
+
+  // 绑定测试按钮
+  (function () {
+    var testBtn = document.getElementById("updatePushTestBtn");
+    if (testBtn) testBtn.addEventListener("click", testUpdatePush);
+  })();
   // 加载版本信息和更新状态
   async function loadAboutInfo() {
     try {
@@ -4981,6 +5197,7 @@
       var state = await window.oneclaw.getUpdateState();
       renderUpdateStatus(state);
     } catch (e) {}
+    loadUpdatePushConfig();
   }
 
   // 根据更新状态渲染按钮和提示

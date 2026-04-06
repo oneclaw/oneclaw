@@ -10,7 +10,7 @@ import {
   resolveUserConfigPath,
   resolveUserStateDir,
 } from "./constants";
-import { resolveOneclawConfigPath } from "./oneclaw-config";
+import { resolveOneclawConfigPath, readOneclawConfig, writeOneclawConfig } from "./oneclaw-config";
 import {
   getConfigRecoveryData,
   restoreLastKnownGoodConfigSnapshot,
@@ -79,7 +79,6 @@ import {
 } from "./weixin-config";
 import { startAuthProxy, setProxyAccessToken, setProxySearchDedicatedKey, getProxyPort } from "./kimi-auth-proxy";
 import { ensureGatewayAuthTokenInConfig, resolveGatewayAuthToken } from "./gateway-auth";
-import { callGatewayRpc } from "./gateway-rpc";
 import { getLaunchAtLoginState, setLaunchAtLoginEnabled } from "./launch-at-login";
 import { installCli, uninstallCli, getCliStatus } from "./cli-integration";
 import * as analytics from "./analytics";
@@ -1674,6 +1673,95 @@ export function registerSettingsIpc(opts: SettingsIpcOptions = {}): void {
           preservedStateDir: resolveUserStateDir(),
         },
       };
+    } catch (err: any) {
+      return { success: false, message: err.message || String(err) };
+    }
+  });
+
+  // ── 读取更新推送通知配置 ──
+  ipcMain.handle("settings:get-update-push-config", async () => {
+    try {
+      const oneclawConfig = readOneclawConfig() ?? {};
+      const pushEnabled = oneclawConfig?.updatePush?.enabled === true;
+      const targets: Array<{ channel: string; target: string; label?: string }> = Array.isArray(oneclawConfig?.updatePush?.targets)
+        ? oneclawConfig.updatePush.targets
+        : [];
+
+      // 读取各通道的启用状态（从 openclaw.json）
+      const config = readUserConfig();
+      const channelMap: Record<string, string> = {
+        feishu: "feishu",
+        qqbot: "qqbot",
+        dingtalk: "dingtalk-connector",
+        wecom: "wecom-openclaw-plugin",
+        weixin: "openclaw-weixin",
+        "kimi-claw": "kimi-claw",
+      };
+      const enabledChannels: string[] = [];
+      for (const [channelId, pluginName] of Object.entries(channelMap)) {
+        if (config?.plugins?.entries?.[pluginName]?.enabled === true) {
+          enabledChannels.push(channelId);
+        }
+      }
+
+      return {
+        success: true,
+        data: {
+          pushEnabled,
+          targets,
+          enabledChannels,
+        },
+      };
+    } catch (err: any) {
+      return { success: false, message: err.message || String(err) };
+    }
+  });
+
+  // ── 保存更新推送通知配置（不需要重启 gateway） ──
+  ipcMain.handle("settings:save-update-push-config", async (_event, params) => {
+    try {
+      const oneclawConfig = readOneclawConfig() ?? {};
+      oneclawConfig.updatePush = {
+        enabled: params?.pushEnabled === true,
+        targets: Array.isArray(params?.targets)
+          ? params.targets.filter((t: any) => t?.channel && t?.target)
+          : [],
+      };
+      writeOneclawConfig(oneclawConfig);
+      return { success: true };
+    } catch (err: any) {
+      return { success: false, message: err.message || String(err) };
+    }
+  });
+
+  // ── 测试更新推送通知 ──
+  ipcMain.handle("settings:test-update-push", async () => {
+    try {
+      const oneclawConfig = readOneclawConfig() ?? {};
+      const targets: Array<{ channel: string; target: string }> = Array.isArray(oneclawConfig?.updatePush?.targets)
+        ? oneclawConfig.updatePush.targets
+        : [];
+      if (targets.length === 0) {
+        return { success: false, message: "No push targets configured" };
+      }
+
+      const message = "🔔 This is a test notification from OneClaw Update Push.";
+      const results: string[] = [];
+      for (const t of targets) {
+        try {
+          const run = await runGatewayCli([
+            "message", "send",
+            "--channel", t.channel,
+            "--target", t.target,
+            "--message", message,
+            "--json",
+          ]);
+          results.push(`${t.channel}→${t.target}: ${run.code === 0 ? "✓" : (run.stderr.trim().split(/\r?\n/)[0] || "failed")}`);
+        } catch (err: any) {
+          results.push(`${t.channel}→${t.target}: ${err?.message ?? "error"}`);
+        }
+      }
+      return { success: true, message: results.join("; ") };
     } catch (err: any) {
       return { success: false, message: err.message || String(err) };
     }

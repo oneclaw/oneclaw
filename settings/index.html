@@ -1047,6 +1047,31 @@
           </div>
           <div class="backup-meta hidden" id="aboutUpdateStatus"></div>
         </div>
+
+        <!-- Update Push Notifications -->
+        <div class="backup-card">
+          <div class="backup-card-title" data-i18n="about.pushTitle">Update Notifications</div>
+          <div class="toggle-row">
+            <span class="toggle-label" data-i18n="about.pushEnabled">Push update notifications via remote channels</span>
+            <label class="toggle-switch">
+              <input type="checkbox" id="updatePushEnabled">
+              <span class="toggle-slider"></span>
+            </label>
+          </div>
+          <div id="updatePushTargetList" class="hidden">
+            <!-- JS dynamically renders target list here -->
+          </div>
+          <div id="updatePushAddRow" class="hidden" style="gap:8px;margin-top:8px;align-items:center;">
+            <select id="updatePushChannelSelect" style="width:120px;"></select>
+            <input id="updatePushTargetInput" type="text" placeholder="User or chat ID" style="flex:1;min-width:0;">
+            <button class="btn btn-secondary" id="updatePushAddBtn" data-i18n="about.pushAdd">Add</button>
+          </div>
+          <p class="field-hint hidden" id="updatePushHint" data-i18n="about.pushTargetHint" style="margin-top:4px;"></p>
+          <div style="margin-top:8px;display:flex;gap:8px;">
+            <button class="btn btn-secondary hidden" id="updatePushTestBtn" data-i18n="about.pushTest">Send Test Notification</button>
+          </div>
+          <div class="backup-meta hidden" id="updatePushStatus"></div>
+        </div>
       </section>
 
     </main>
