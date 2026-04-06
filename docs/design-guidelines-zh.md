@@ -38,3 +38,39 @@ OneClaw 的标志性红色主题色号是：**`#c0392b`**
 
 * **渐进式反馈**：Hover 状态通常伴随平滑的过渡动画（`transition`）。例如鼠标悬浮时，边框颜色变深或变为红色，文字颜色同步点亮，背景出现极浅的色块。
 * **无拖拽区的细节**：交互元素明确排除了系统拖拽区域（`-webkit-app-region: no-drag`），保证操作的精准。
+
+## 5. Tooltip：全局 Fixed 定位方案
+
+**禁止使用 CSS `::after` 伪元素做 tooltip**。在 `overflow: auto/hidden` 的容器内（如侧边栏会话列表），伪元素会被裁切，无论向哪个方向弹出都会被遮挡。
+
+**统一方案：全局 `position: fixed` DOM 元素**，通过 JS 事件委托 + `getBoundingClientRect()` 动态定位：
+
+* Chat UI（`main.ts`）和 Settings（`settings.js`）各自初始化一个 `.fixed-tooltip` 元素挂载到 `document.body`
+* 任何需要 tooltip 的元素只需添加 `data-tooltip="提示文字"` 属性
+* 默认向上弹出；添加 `data-tooltip-pos="bottom"` 可向下弹出
+* `z-index: 10000` 保证始终在最上层，不受任何父容器 `overflow` 影响
+
+```css
+.fixed-tooltip {
+  position: fixed;
+  transform: translate(-50%, -100%);
+  z-index: 10000;
+  pointer-events: none;
+}
+```
+
+## 6. Tooltip 使用原则：仅用于纯图标按钮
+
+**有文字标签的按钮/菜单项禁止添加 tooltip。** Tooltip 仅用于纯图标按钮（无可见文字），此时 tooltip 提供必要的语义说明。如果按钮已有可读文字（如侧边栏的"设置"、"技能"、"工作空间"），tooltip 是冗余信息，只会干扰用户。
+
+* 纯图标按钮（如折叠、删除、重命名）→ 添加 `data-tooltip`
+* 图标 + 文字标签按钮（如侧边栏菜单项）→ 不加 tooltip
+* 有 `title` 属性的纯文本元素 → 仅在文本可能被截断时使用
+
+## 7. Design Tokens：共享设计语言
+
+所有 CSS 变量（颜色、圆角、阴影、字体、动效）定义在 `shared/design-tokens.css` 中，Chat UI、Settings、Setup 三个页面通过 `@import` 引用。修改此文件即可全局生效。
+
+* **禁止在组件样式中硬编码颜色值**（如 `color: #fff`），必须使用 token（如 `var(--text-on-accent)`）
+* **禁止在组件样式中硬编码 `border-radius` 值**，必须使用 `var(--radius-sm/md/lg)` 等 token
+* **禁止使用 `transition: all`**，必须指定具体属性（如 `transition: color 0.15s, background 0.15s`）
