@@ -46,7 +46,7 @@ import { readUserConfig, writeUserConfig } from "./provider-config";
 import { resolveKimiSearchApiKey, readKimiApiKey, readKimiSearchDedicatedApiKey, writeKimiApiKey, ensureMemorySearchProxyConfig } from "./kimi-config";
 import { reconcileCliOnAppLaunch } from "./cli-integration";
 import { uninstallGatewayDaemon, killPortProcess, getPortPid } from "./install-detector";
-import { detectOwnership, migrateFromLegacy, markSetupComplete, readOneclawConfig, writeOneclawConfig } from "./oneclaw-config";
+import { detectOwnership, migrateFromLegacy, markSetupComplete, readOneclawConfig, writeOneclawConfig, appendChannelUtm } from "./oneclaw-config";
 import { startTokenRefresh, stopTokenRefresh, loadOAuthToken } from "./kimi-oauth";
 import { startAuthProxy, stopAuthProxy, setProxyAccessToken, setProxySearchDedicatedKey, getProxyPort } from "./kimi-auth-proxy";
 import * as log from "./logger";
@@ -546,7 +546,7 @@ ipcMain.handle("app:get-pairing-state", () => pairingMonitor?.getState());
 ipcMain.on("app:refresh-pairing-state", () => pairingMonitor?.triggerNow());
 ipcMain.handle("app:get-feishu-pairing-state", () => pairingMonitor?.getState().channels.feishu);
 ipcMain.on("app:refresh-feishu-pairing-state", () => pairingMonitor?.triggerNow());
-ipcMain.handle("app:open-external", (_e, url: string) => shell.openExternal(url));
+ipcMain.handle("app:open-external", (_e, url: string) => shell.openExternal(appendChannelUtm(url)));
 ipcMain.handle("app:open-path", (_e, filePath: string) => shell.openPath(filePath));
 
 // 文件选择对话框 — 返回文件绝对路径数组

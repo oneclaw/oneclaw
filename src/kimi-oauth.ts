@@ -3,6 +3,7 @@ import * as fs from "fs";
 import * as path from "path";
 import * as os from "os";
 import { shell } from "electron";
+import { appendChannelUtm } from "./oneclaw-config";
 import { resolveUserStateDir } from "./constants";
 import * as log from "./logger";
 
@@ -238,7 +239,7 @@ export async function kimiOAuthLogin(): Promise<{
     const auth = await requestDeviceAuthorization();
     log.info(`Kimi OAuth: 用户码 ${auth.user_code}，等待浏览器授权`);
 
-    await shell.openExternal(auth.verification_uri_complete);
+    await shell.openExternal(appendChannelUtm(auth.verification_uri_complete));
 
     const token = await pollForToken(auth.device_code, auth.interval);
     saveOAuthToken(token);
