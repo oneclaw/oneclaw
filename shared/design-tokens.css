@@ -1,0 +1,187 @@
+/* ============================================
+   OneClaw Design Tokens — 全局设计语言单一事实来源
+   所有 CSS 文件通过 @import 引用此文件
+   修改此文件 = 全局生效
+   ============================================ */
+
+/* ── 暗色主题（默认） ── */
+:root {
+  /* 背景 */
+  --bg: #1a1a1a;
+  --bg-secondary: #151515;
+  --bg-elevated: #222222;
+  --bg-hover: #2a2a2a;
+  --bg-input: #111111;
+  --bg-muted: #262a35;
+
+  /* 文字 */
+  --text: #e4e4e7;
+  --text-strong: #fafafa;
+  --text-secondary: #a1a1aa;
+  --text-muted: #71717a;
+  --text-on-accent: #ffffff;
+
+  /* 边框 */
+  --border: #303030;
+  --border-strong: #404040;
+  --border-hover: #52525b;
+  --border-focus: var(--accent);
+
+  /* 强调色 */
+  --accent: #c0392b;
+  --accent-hover: #a93226;
+  --accent-subtle: rgba(192, 57, 43, 0.15);
+  --accent-glow: rgba(192, 57, 43, 0.25);
+
+  /* 语义色 */
+  --ok: #22c55e;
+  --ok-muted: rgba(34, 197, 94, 0.75);
+  --ok-subtle: rgba(34, 197, 94, 0.12);
+  --destructive: #ef4444;
+  --warn: #f59e0b;
+  --warn-muted: rgba(245, 158, 11, 0.75);
+  --warn-subtle: rgba(245, 158, 11, 0.12);
+  --info: #3b82f6;
+
+  /* 圆角 */
+  --radius-xs: 4px;
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-xl: 20px;
+  --radius-pill: 9999px;
+
+  /* 遮罩 & 玻璃 */
+  --overlay: rgba(0, 0, 0, 0.5);
+  --overlay-heavy: rgba(0, 0, 0, 0.8);
+  --glass-xs: rgba(255, 255, 255, 0.02);
+  --glass-sm: rgba(255, 255, 255, 0.04);
+  --glass-md: rgba(255, 255, 255, 0.06);
+  --glass-lg: rgba(255, 255, 255, 0.12);
+  --glass-border: rgba(255, 255, 255, 0.08);
+
+  /* 阴影 */
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.2);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.25), 0 0 0 1px rgba(255, 255, 255, 0.03);
+  --shadow-lg: 0 12px 28px rgba(0, 0, 0, 0.35), 0 0 0 1px rgba(255, 255, 255, 0.03);
+  --shadow-xl: 0 24px 48px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.03);
+
+  /* 动效 */
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --duration-fast: 0.12s;
+  --duration-normal: 0.2s;
+  --duration-slow: 0.35s;
+  --transition: 180ms ease;
+
+  /* 字体 */
+  --font-body: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI",
+    "PingFang SC", "Microsoft YaHei", "Hiragino Sans GB", sans-serif;
+  --font-display: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI",
+    "PingFang SC", "Microsoft YaHei", "Hiragino Sans GB", sans-serif;
+  --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Monaco, Consolas,
+    "Courier New", monospace;
+
+  color-scheme: dark;
+}
+
+/* ── 浅色主题 ── */
+
+/* 方式 1：data-theme 属性切换（Chat UI 使用） */
+:root[data-theme=light] {
+  --bg: #ffffff;
+  --bg-secondary: #fbfbfb;
+  --bg-elevated: #ffffff;
+  --bg-hover: #ebebeb;
+  --bg-input: #f5f5f5;
+  --bg-muted: #f0f0f0;
+
+  --text: #3f3f46;
+  --text-strong: #18181b;
+  --text-secondary: #71717a;
+  --text-muted: #a1a1aa;
+
+  --border: #e4e4e7;
+  --border-strong: #d4d4d8;
+  --border-hover: #a1a1aa;
+
+  --accent: #dc2626;
+  --accent-hover: #ef4444;
+  --accent-subtle: rgba(220, 38, 38, 0.12);
+  --accent-glow: rgba(220, 38, 38, 0.15);
+
+  --ok: #16a34a;
+  --ok-muted: rgba(22, 163, 74, 0.75);
+  --ok-subtle: rgba(22, 163, 74, 0.1);
+  --destructive: #dc2626;
+  --warn: #d97706;
+  --warn-muted: rgba(217, 119, 6, 0.75);
+  --warn-subtle: rgba(217, 119, 6, 0.1);
+  --info: #2563eb;
+
+  --overlay: rgba(0, 0, 0, 0.42);
+  --overlay-heavy: rgba(0, 0, 0, 0.7);
+  --glass-xs: rgba(0, 0, 0, 0.02);
+  --glass-sm: rgba(0, 0, 0, 0.04);
+  --glass-md: rgba(0, 0, 0, 0.06);
+  --glass-lg: rgba(0, 0, 0, 0.12);
+  --glass-border: rgba(0, 0, 0, 0.08);
+
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.06);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.08), 0 0 0 1px rgba(0, 0, 0, 0.04);
+  --shadow-lg: 0 12px 28px rgba(0, 0, 0, 0.12), 0 0 0 1px rgba(0, 0, 0, 0.04);
+  --shadow-xl: 0 24px 48px rgba(0, 0, 0, 0.15), 0 0 0 1px rgba(0, 0, 0, 0.04);
+
+  color-scheme: light;
+}
+
+/* 方式 2：OS 系统偏好切换（Settings/Setup iframe 使用） */
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme=dark]) {
+    --bg: #ffffff;
+    --bg-secondary: #fbfbfb;
+    --bg-elevated: #ffffff;
+    --bg-hover: #ebebeb;
+    --bg-input: #f5f5f5;
+    --bg-muted: #f0f0f0;
+
+    --text: #3f3f46;
+    --text-strong: #18181b;
+    --text-secondary: #71717a;
+    --text-muted: #a1a1aa;
+
+    --border: #e4e4e7;
+    --border-strong: #d4d4d8;
+    --border-hover: #a1a1aa;
+
+    --accent: #dc2626;
+    --accent-hover: #ef4444;
+    --accent-subtle: rgba(220, 38, 38, 0.12);
+    --accent-glow: rgba(220, 38, 38, 0.15);
+
+    --ok: #16a34a;
+    --ok-muted: rgba(22, 163, 74, 0.75);
+    --ok-subtle: rgba(22, 163, 74, 0.1);
+    --destructive: #dc2626;
+    --warn: #d97706;
+    --warn-muted: rgba(217, 119, 6, 0.75);
+    --warn-subtle: rgba(217, 119, 6, 0.1);
+    --info: #2563eb;
+
+    --overlay: rgba(0, 0, 0, 0.42);
+    --overlay-heavy: rgba(0, 0, 0, 0.7);
+    --glass-xs: rgba(0, 0, 0, 0.02);
+    --glass-sm: rgba(0, 0, 0, 0.04);
+    --glass-md: rgba(0, 0, 0, 0.06);
+    --glass-lg: rgba(0, 0, 0, 0.12);
+    --glass-border: rgba(0, 0, 0, 0.08);
+
+    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.06);
+    --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.08), 0 0 0 1px rgba(0, 0, 0, 0.04);
+    --shadow-lg: 0 12px 28px rgba(0, 0, 0, 0.12), 0 0 0 1px rgba(0, 0, 0, 0.04);
+    --shadow-xl: 0 24px 48px rgba(0, 0, 0, 0.15), 0 0 0 1px rgba(0, 0, 0, 0.04);
+
+    color-scheme: light;
+  }
+}

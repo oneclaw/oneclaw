@@ -10,6 +10,7 @@ files:
   - chat-ui/dist/**/*
   - setup/**/*
   - settings/**/*
+  - shared/**/*
   - assets/**/*
   - package.json
   - release-notes.json
