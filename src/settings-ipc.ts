@@ -29,6 +29,7 @@ import {
   saveMoonshotConfig,
   readUserConfig,
   writeUserConfig,
+  resolveModelInput,
 } from "./provider-config";
 import { getLatestShareCopyPayload } from "./share-copy";
 import { readSkillStoreRegistry, writeSkillStoreRegistry } from "./skill-store";
@@ -463,7 +464,7 @@ export function registerSettingsIpc(opts: SettingsIpcOptions = {}): void {
                 prov.models[modelIdx] = entry;
               }
               if (supportImage !== undefined) {
-                entry.input = supportImage ? ["text", "image"] : ["text"];
+                entry.input = resolveModelInput(providerKey, modelId, supportImage);
               }
             }
           }
@@ -500,7 +501,7 @@ export function registerSettingsIpc(opts: SettingsIpcOptions = {}): void {
                 return id === modelID;
               });
               if (!hasModel) {
-                existingProv.models.push({ id: modelID, name: modelID, input: ["text", "image"] });
+                existingProv.models.push({ id: modelID, name: modelID, input: resolveModelInput(provKey, modelID) });
               }
             } else {
               // provider 不存在 → 用 saveMoonshotConfig 创建
@@ -548,8 +549,7 @@ export function registerSettingsIpc(opts: SettingsIpcOptions = {}): void {
                 return id === modelID;
               });
               if (!hasModel) {
-                const input = supportImage !== false ? ["text", "image"] : ["text"];
-                existingProv.models.push({ id: modelID, name: modelID, input });
+                existingProv.models.push({ id: modelID, name: modelID, input: resolveModelInput(configKey, modelID, supportImage) });
               }
             } else {
               // provider 不存在 → 创建新 provider entry
