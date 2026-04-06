@@ -50,6 +50,10 @@ export function formatCronState(job: CronJob) {
   return `${status} · next ${next} · last ${last}`;
 }
 
+export function isExpiredOneShot(job: CronJob): boolean {
+  return job.schedule.kind === "at" && typeof job.state?.lastRunAtMs === "number";
+}
+
 export function formatCronSchedule(job: CronJob) {
   const s = job.schedule;
   if (s.kind === "at") {
