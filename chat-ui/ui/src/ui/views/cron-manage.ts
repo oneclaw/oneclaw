@@ -342,8 +342,8 @@ export function renderCronManage(props: CronManageProps) {
   const hasJobs = props.jobs.length > 0;
   const selectedJob = props.expandedJobId ? props.jobs.find((j) => j.id === props.expandedJobId) : null;
 
-  // 无任务且不在创建中 → 全屏空状态
-  if (!hasJobs && !props.showForm && !props.loading) {
+  // 无任务且不在创建中 → 全屏空状态（有错误时显示错误而非空状态）
+  if (!hasJobs && !props.showForm && !props.loading && !props.error) {
     return renderGlobalEmpty(props);
   }
 
@@ -371,11 +371,15 @@ export function renderCronManage(props: CronManageProps) {
 
       <!-- 右侧详情 -->
       <div class="cm-layout__detail">
-        ${props.showForm
-          ? renderForm(props)
-          : selectedJob
-            ? renderDetail(selectedJob, props)
-            : renderDetailEmpty()}
+        ${props.error && !hasJobs
+          ? html`<div class="cm-empty">
+              <p class="cm-empty__title" style="color:var(--error)">${props.error}</p>
+            </div>`
+          : props.showForm
+            ? renderForm(props)
+            : selectedJob
+              ? renderDetail(selectedJob, props)
+              : renderDetailEmpty()}
       </div>
     </div>
   `;
