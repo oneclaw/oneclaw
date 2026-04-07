@@ -180,17 +180,24 @@ function injectStyles() {
 
     /* Shared form styles for all settings tabs */
     .oc-settings__section {
-      margin-bottom: 24px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      min-height: 0;
+      flex: 1;
+    }
+    .oc-settings__section > * {
+      flex-shrink: 0;
     }
     .oc-settings__section-title {
       font-size: 18px;
       font-weight: 600;
       letter-spacing: -0.01em;
-      margin: 0 0 8px;
+      margin: 0;
       color: var(--text-strong, #18181b);
     }
     .oc-settings__form-group {
-      margin-bottom: 16px;
+      margin-bottom: 0;
     }
     .oc-settings__label {
       display: block;
@@ -223,13 +230,15 @@ function injectStyles() {
     .oc-settings__hint {
       font-size: 13px;
       color: var(--text-secondary, #888);
-      margin-bottom: 4px;
+      margin: 0;
     }
     .oc-settings__btn-row {
       display: flex;
       gap: 12px;
       justify-content: flex-end;
-      margin-top: 20px;
+      margin-top: auto;
+      padding-top: 24px;
+      padding-bottom: 32px;
     }
     .oc-settings__btn {
       padding: 8px 20px;
