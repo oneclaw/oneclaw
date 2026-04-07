@@ -27,14 +27,15 @@ customElements.define("oc-message-box", MessageBox);
 const styleSheet = new CSSStyleSheet();
 styleSheet.replaceSync(/* css */`
   .oc-msgbox {
-    padding: 8px 12px;
-    border-radius: var(--radius-s, 6px);
-    font-size: 13px;
+    padding: 10px 14px;
+    border-radius: var(--radius-sm, 8px);
+    font-size: 12.5px;
+    line-height: 1.4;
     margin: 8px 0;
   }
-  .oc-msgbox--error { background: rgba(192,57,43,0.08); color: #c0392b; }
-  .oc-msgbox--success { background: rgba(39,174,96,0.08); color: #27ae60; }
-  .oc-msgbox--info { background: rgba(41,128,185,0.08); color: #2980b9; }
+  .oc-msgbox--error { background: rgba(192,57,43,0.1); color: var(--accent, #c0392b); border: 1px solid var(--accent-subtle, rgba(192,57,43,0.15)); }
+  .oc-msgbox--success { background: rgba(212,119,106,0.1); color: #d4776a; border: 1px solid var(--accent-subtle, rgba(192,57,43,0.15)); }
+  .oc-msgbox--info { background: rgba(41,128,185,0.08); color: #2980b9; border: 1px solid rgba(41,128,185,0.15); }
 `);
 document.adoptedStyleSheets = [...document.adoptedStyleSheets, styleSheet];
 
