@@ -72,11 +72,10 @@ styleSheet.replaceSync(/* css */`
   }
   .oc-provider-seg__pill:hover:not(:disabled) { color: var(--text-secondary, #71717a); }
   .oc-provider-seg__pill--active {
-    color: #fff;
+    color: var(--text-on-accent, #fff);
     background: var(--accent, #c0392b);
     font-weight: 600;
   }
-  .oc-provider-seg__pill--active:hover { opacity: 0.9; }
   .oc-provider-seg__pill--locked { opacity: 0.4; cursor: not-allowed; }
 `);
 document.adoptedStyleSheets = [...document.adoptedStyleSheets, styleSheet];

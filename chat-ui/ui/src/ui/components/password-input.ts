@@ -62,7 +62,7 @@ styleSheet.replaceSync(/* css */`
   }
   .oc-password__input {
     flex: 1;
-    padding-right: 36px !important;
+    padding-right: 40px !important;
   }
   .oc-password-input {
     width: 100%;
@@ -90,16 +90,23 @@ styleSheet.replaceSync(/* css */`
   }
   .oc-password__toggle {
     position: absolute;
-    right: 8px;
-    background: none;
+    right: 4px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 32px;
+    height: 32px;
+    background: transparent;
     border: none;
-    padding: 4px;
+    padding: 0;
     cursor: pointer;
-    color: var(--text-secondary, #888);
+    color: var(--text-muted, #a1a1aa);
     display: flex;
     align-items: center;
+    justify-content: center;
+    border-radius: var(--radius-sm, 8px);
+    transition: color var(--transition, 0.18s ease);
   }
-  .oc-password__toggle:hover { color: var(--text); }
+  .oc-password__toggle:hover { color: var(--text-secondary, #71717a); }
 `);
 document.adoptedStyleSheets = [...document.adoptedStyleSheets, styleSheet];
 
