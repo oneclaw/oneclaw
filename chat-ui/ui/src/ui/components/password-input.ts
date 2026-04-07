@@ -66,17 +66,23 @@ styleSheet.replaceSync(/* css */`
   }
   .oc-password-input {
     width: 100%;
-    padding: 8px 12px;
+    padding: 9px 12px;
     border: 1px solid var(--border, #e0e0e0);
-    border-radius: var(--radius-s, 6px);
-    background: var(--bg, #fff);
+    border-radius: var(--radius-sm, 8px);
+    background: var(--bg-input, #f5f5f5);
     color: var(--text, #333);
-    font-size: 14px;
+    font-size: 13.5px;
     outline: none;
     box-sizing: border-box;
+    font-family: inherit;
+    transition: border-color var(--transition, 0.18s ease), box-shadow var(--transition, 0.18s ease);
+  }
+  .oc-password-input::placeholder {
+    color: var(--text-muted, #a1a1aa);
   }
   .oc-password-input:focus {
-    border-color: var(--accent, #c0392b);
+    border-color: var(--border-focus, var(--accent, #c0392b));
+    box-shadow: 0 0 0 3px var(--accent-subtle, rgba(192,57,43,0.15));
   }
   .oc-password-input:disabled {
     opacity: 0.6;

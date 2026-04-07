@@ -103,8 +103,8 @@ export function renderTabSearch(state: AppViewState) {
         </div>
       `}
 
-      <details>
-        <summary style="font-size:13px;color:var(--text-secondary);cursor:pointer">${t("setup.provider.oauth.advanced")}</summary>
+      <details class="oc-settings__details-advanced">
+        <summary>${t("setup.provider.oauth.advanced")}</summary>
         <div class="oc-settings__form-group" style="margin-top:12px">
           <label class="oc-settings__label">${t("settings.search.serviceBaseUrl")}</label>
           <input class="oc-settings__input" .value=${s.serviceBaseUrl}
