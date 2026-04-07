@@ -8202,6 +8202,7 @@ img.chat-avatar {
 /* 运行历史 */
 .cm-detail__history {
   margin-top: 24px;
+  padding-bottom: 24px;
 }
 
 .cm-detail__history-title {
