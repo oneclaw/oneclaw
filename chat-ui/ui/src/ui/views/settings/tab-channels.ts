@@ -86,15 +86,15 @@ export function renderTabChannels(state: AppViewState) {
   const active = s.activePlatform;
 
   return html`
-    <h2 class="oc-settings__section-title" style="font-size:18px;font-weight:600;margin:0 0 8px">${t("settings.nav.channels")}</h2>
-    <p class="oc-settings__hint" style="margin:0 0 20px">${t("settings.channels.desc")}</p>
+    <h2 class="oc-settings__section-title">${t("settings.nav.channels")}</h2>
+    <p class="oc-settings__hint">${t("settings.channels.desc")}</p>
     <div class="oc-settings-channels">
       <nav class="oc-settings-channels__nav">
         ${CHANNEL_PLATFORMS.map(p => html`
           <button class="oc-settings-channels__nav-item ${p.id === active ? "oc-settings-channels__nav-item--active" : ""}"
             @click=${() => { switchPlatform(p.id); state.requestUpdate(); }}>
-            ${s.enabledMap[p.id] ? html`<span class="oc-settings-channels__status-dot"></span>` : nothing}
             ${t(p.labelKey)}
+            ${s.enabledMap[p.id] ? html`<span class="oc-settings-channels__status-dot"></span>` : nothing}
           </button>
         `)}
       </nav>

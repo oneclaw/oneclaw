@@ -765,8 +765,8 @@ export function renderTabProvider(state: AppViewState) {
 
   return html`
     <div class="oc-settings__section">
-      <h2 class="oc-settings__section-title" style="font-size:18px;font-weight:600;margin:0 0 8px">${t("settings.provider.title")}</h2>
-      <p class="oc-settings__hint" style="margin:0 0 20px">${t("settings.provider.desc")}</p>
+      <h2 class="oc-settings__section-title">${t("settings.provider.title")}</h2>
+      <p class="oc-settings__hint">${t("settings.provider.desc")}</p>
 
       <div class="oc-provider-layout">
         <!-- Left: Model list -->

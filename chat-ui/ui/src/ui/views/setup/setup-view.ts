@@ -54,29 +54,34 @@ function injectStyles() {
   const sheet = new CSSStyleSheet();
   sheet.replaceSync(/* css */`
     .oc-setup-container {
-      max-width: 580px;
+      max-width: 440px;
       margin: 0 auto;
-      padding: 40px 32px;
+      padding: 72px 32px 32px;
       min-height: 100vh;
       display: flex;
       flex-direction: column;
       align-items: center;
-      justify-content: center;
     }
 
     .oc-setup-progress {
-      display: flex;
-      gap: 6px;
-      margin-bottom: 32px;
+      position: fixed;
+      top: 0;
+      left: 0;
       width: 100%;
-      max-width: 260px;
+      height: 3px;
+      background: var(--bg-secondary, #f0f0f0);
+      z-index: 100;
+      display: flex;
+      gap: 0;
+      margin: 0;
+      max-width: none;
     }
     .oc-setup-progress-dot {
       flex: 1;
-      height: 4px;
-      border-radius: 2px;
-      background: var(--border, #e0e0e0);
-      transition: background 0.2s;
+      height: 3px;
+      border-radius: 0;
+      background: transparent;
+      transition: background 0.4s cubic-bezier(0.4, 0, 0.2, 1);
     }
     .oc-setup-progress-dot--active {
       background: var(--accent, #c0392b);
@@ -86,30 +91,44 @@ function injectStyles() {
       width: 100%;
       display: flex;
       flex-direction: column;
-      align-items: center;
-      text-align: center;
+      align-items: stretch;
+      text-align: left;
     }
 
     .oc-setup-icon {
+      width: 48px;
+      height: 48px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: var(--radius-md, 12px);
       margin-bottom: 16px;
     }
-    .oc-setup-icon--warning { color: #e67e22; }
-    .oc-setup-icon--success { color: #27ae60; }
+    .oc-setup-icon--warning {
+      color: #e67e22;
+      background: rgba(230, 126, 34, 0.12);
+    }
+    .oc-setup-icon--success {
+      color: var(--accent, #c0392b);
+      background: var(--accent-subtle, rgba(192, 57, 43, 0.08));
+    }
 
     .oc-setup-logo {
-      margin-bottom: 16px;
+      margin-bottom: 4px;
     }
 
     .oc-setup-title {
-      font-size: 22px;
-      font-weight: 600;
+      font-size: 26px;
+      font-weight: 700;
+      letter-spacing: -0.02em;
       margin: 0 0 8px;
-      color: var(--text, #1a1a1a);
+      color: var(--text-strong, #18181b);
     }
     .oc-setup-subtitle {
-      font-size: 14px;
+      font-size: 13.5px;
       color: var(--text-secondary, #888);
-      margin: 0 0 24px;
+      margin: 0 0 20px;
+      max-width: none;
     }
     .oc-setup-reassure {
       font-size: 13px;
@@ -121,7 +140,7 @@ function injectStyles() {
       width: 100%;
       display: flex;
       flex-direction: column;
-      gap: 12px;
+      gap: 10px;
       margin-bottom: 24px;
       text-align: left;
     }
@@ -129,20 +148,29 @@ function injectStyles() {
       display: flex;
       align-items: center;
       gap: 10px;
-      font-size: 14px;
-      color: var(--text, #1a1a1a);
+      font-size: 13px;
+      color: var(--text-secondary, #888);
+      line-height: 1.45;
+    }
+    .oc-setup-feature-icon {
+      flex-shrink: 0;
+      width: 28px;
+      height: 28px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: var(--accent-subtle, rgba(192, 57, 43, 0.08));
+      border-radius: var(--radius-sm, 8px);
+      color: var(--accent, #c0392b);
     }
     .oc-setup-feature-item svg { flex-shrink: 0; color: var(--accent, #c0392b); }
 
     .oc-setup-warning {
-      font-size: 13px;
-      color: #e67e22;
-      background: rgba(230, 126, 34, 0.08);
-      border-radius: 8px;
-      padding: 10px 14px;
-      margin-bottom: 24px;
+      font-size: 12px;
+      color: var(--warning, #d97706);
+      line-height: 1.5;
+      margin-bottom: 12px;
       width: 100%;
-      text-align: left;
     }
 
     .oc-setup-conflict-details {
@@ -160,16 +188,26 @@ function injectStyles() {
 
     .oc-setup-info-card {
       width: 100%;
-      background: var(--bg-secondary, #f5f5f5);
-      border-radius: 8px;
-      padding: 12px 16px;
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+      padding: 14px 16px;
+      background: var(--accent-subtle, rgba(192, 57, 43, 0.08));
+      border: 1px solid var(--accent-subtle, rgba(192, 57, 43, 0.08));
+      border-radius: var(--radius-md, 12px);
       margin-bottom: 20px;
       text-align: left;
-      font-size: 13px;
+      font-size: 12.5px;
       color: var(--text-secondary, #888);
+      line-height: 1.45;
+    }
+    .oc-setup-info-card--compact {
+      padding: 10px 14px;
+    }
+    .oc-setup-info-card-text {
       display: flex;
       flex-direction: column;
-      gap: 6px;
+      gap: 4px;
     }
 
     .oc-setup-link {
@@ -302,7 +340,6 @@ function injectStyles() {
     .oc-setup-btn-row {
       display: flex;
       gap: 12px;
-      justify-content: center;
       margin-top: 24px;
       width: 100%;
     }

@@ -75,8 +75,8 @@ export function renderTabSearch(state: AppViewState) {
 
   return html`
     <div class="oc-settings__section">
-      <h2 class="oc-settings__section-title" style="font-size:18px;font-weight:600;margin:0 0 8px">${t("settings.search.title")}</h2>
-      <p class="oc-settings__hint" style="margin:0 0 20px">${t("settings.search.desc")}</p>
+      <h2 class="oc-settings__section-title">${t("settings.search.title")}</h2>
+      <p class="oc-settings__hint">${t("settings.search.desc")}</p>
 
       <oc-toggle-switch .label=${t("settings.search.enable")} .checked=${s.enabled}
         @change=${(e: CustomEvent) => { s.enabled = e.detail.checked; state.requestUpdate(); }}

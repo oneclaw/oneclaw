@@ -77,8 +77,8 @@ export function renderTabAdvanced(state: AppViewState) {
 
   return html`
     <div class="oc-settings__section">
-      <h2 class="oc-settings__section-title" style="font-size:18px;font-weight:600;margin:0 0 8px">${t("settings.advanced.title")}</h2>
-      <p class="oc-settings__hint" style="margin:0 0 20px">${t("settings.advanced.desc")}</p>
+      <h2 class="oc-settings__section-title">${t("settings.advanced.title")}</h2>
+      <p class="oc-settings__hint">${t("settings.advanced.desc")}</p>
 
       <div class="oc-settings__form-group">
         <label class="oc-settings__label">${t("settings.advanced.clawHubRegistry")}</label>
