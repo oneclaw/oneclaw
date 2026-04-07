@@ -56,6 +56,23 @@ type SettingsHost = {
   pendingGatewayUrl?: string | null;
 };
 
+// 只接受 OneClaw 自己注入的受控视图值，避免 URL 垃圾把状态机拖偏。
+function parseInjectedOneclawView(raw: string | null | undefined): UiSettings["oneclawView"] | null {
+  const view = raw?.trim();
+  switch (view) {
+    case "chat":
+    case "setup":
+    case "settings":
+    case "skills":
+    case "workspace":
+    case "cron":
+    case "feedback":
+      return view;
+    default:
+      return null;
+  }
+}
+
 export function applySettings(host: SettingsHost, next: UiSettings) {
   const normalized = {
     ...next,
@@ -93,7 +110,17 @@ export function applySettingsFromUrl(host: SettingsHost) {
   const passwordRaw = params.get("password") ?? hashParams.get("password");
   const sessionRaw = params.get("session") ?? hashParams.get("session");
   const gatewayUrlRaw = params.get("gatewayUrl") ?? hashParams.get("gatewayUrl");
+  const view = parseInjectedOneclawView(hashParams.get("view") ?? params.get("view"));
   let shouldCleanUrl = false;
+
+  if (view) {
+    if (view !== host.settings.oneclawView) {
+      applySettings(host, { ...host.settings, oneclawView: view });
+    }
+    params.delete("view");
+    hashParams.delete("view");
+    shouldCleanUrl = true;
+  }
 
   if (tokenRaw != null) {
     const token = tokenRaw.trim();

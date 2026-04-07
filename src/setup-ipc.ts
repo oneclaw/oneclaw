@@ -1,6 +1,5 @@
 import { app, BrowserWindow, ipcMain } from "electron";
-import { ensureGatewayAuthTokenInConfig } from "./gateway-auth";
-import { SetupManager } from "./setup-manager";
+import { ensureGatewayAuthTokenInConfig, resolveGatewayAuthToken } from "./gateway-auth";
 import * as analytics from "./analytics";
 import { getLaunchAtLoginState, setLaunchAtLoginEnabled } from "./launch-at-login";
 import {
@@ -24,8 +23,13 @@ import {
   uninstallGatewayDaemon,
   uninstallGlobalOpenclaw,
 } from "./install-detector";
+import { markSetupComplete } from "./oneclaw-config";
+import { recordSetupBaselineConfigSnapshot } from "./config-backup";
+import type { WindowManager } from "./window";
+
 interface SetupIpcDeps {
-  setupManager: SetupManager;
+  windowManager: WindowManager;
+  ensureGatewayRunning: (source: string) => Promise<boolean>;
   onOAuthLoginSuccess?: () => void;
 }
 
@@ -86,7 +90,7 @@ async function runTrackedSetupAction<T extends SetupActionResult>(
 
 // 注册 Setup 相关 IPC
 export function registerSetupIpc(deps: SetupIpcDeps): void {
-  const { setupManager } = deps;
+  const { windowManager, ensureGatewayRunning } = deps;
 
   // ── 环境检测：检查已有 OpenClaw 安装 ──
   ipcMain.handle("setup:detect-installation", async () => {
@@ -275,7 +279,7 @@ export function registerSetupIpc(deps: SetupIpcDeps): void {
     });
   });
 
-  // ── Setup 完成（Gateway 启动 + 窗口切换由 setOnComplete 回调统一处理） ──
+  // ── Setup 完成：启动 Gateway → 标记完成 → 导航到 Chat ──
   ipcMain.handle("setup:complete", async (_event, params?: { installCli?: boolean; launchAtLogin?: boolean; sessionMemory?: boolean }) => {
     const launchAtLogin = typeof params?.launchAtLogin === "boolean" ? params.launchAtLogin : undefined;
     const sessionMemory = params?.sessionMemory !== false;
@@ -300,13 +304,35 @@ export function registerSetupIpc(deps: SetupIpcDeps): void {
         log.error(`[setup] 写入 hooks 配置失败: ${err?.message ?? err}`);
       }
 
-      const ok = await setupManager.complete();
-      if (!ok) {
+      // Inline completion: start gateway → mark complete → navigate to chat
+      const running = await ensureGatewayRunning("setup:complete");
+      if (!running) {
         return {
           success: false,
           message: "Gateway 启动超时或失败，请稍后重试。",
         };
       }
+
+      try {
+        // gateway schema 兼容：保留 wizard.lastRunAt
+        const config = readUserConfig();
+        config.wizard ??= {};
+        config.wizard.lastRunAt = new Date().toISOString();
+        delete config.wizard.pendingAt;
+        writeUserConfig(config);
+
+        // 写入 oneclaw.config.json 归属标记
+        markSetupComplete();
+      } catch (err: any) {
+        log.error(`[setup] 写入 setup 完成标记失败: ${err?.message ?? err}`);
+        return { success: false, message: err?.message ?? String(err) };
+      }
+
+      // 导航到 Chat 视图，携带最新 gateway token 避免 renderer 使用旧 token
+      windowManager.inSetupView = false;
+      windowManager.setupPending = false;
+      windowManager.navigate({ view: "chat", token: resolveGatewayAuthToken() });
+      recordSetupBaselineConfigSnapshot();
 
       analytics.track("setup_completed", latestSetupCompletedProps ?? {});
 

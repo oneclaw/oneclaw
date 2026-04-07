@@ -6676,21 +6676,6 @@ img.chat-avatar {
   flex-direction: column;
 }
 
-.oneclaw-settings-host {
-  width: 100%;
-  flex: 1;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
-}
-
-.oneclaw-settings-iframe {
-  width: 100%;
-  flex: 1;
-  min-height: 0;
-  border: none;
-}
-
 @media (max-width: 900px) {
   :root {
     --sidebar-width: 196px;
