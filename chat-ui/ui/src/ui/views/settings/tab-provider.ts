@@ -588,73 +588,109 @@ function injectStyles() {
   sheet.replaceSync(/* css */`
     .oc-provider-layout {
       display: flex;
-      gap: 20px;
+      gap: 24px;
       min-height: 400px;
+      flex: 1;
+      min-width: 0;
     }
     .oc-provider-list {
-      width: 220px;
-      min-width: 220px;
-      border: 1px solid var(--border, #e0e0e0);
-      border-radius: var(--radius-m, 8px);
+      width: 200px;
+      flex-shrink: 0;
+      display: flex;
+      flex-direction: column;
+      border-right: 1px solid var(--border, #e4e4e7);
+      padding-right: 20px;
+    }
+    .oc-provider-list-header {
+      font-weight: 600;
+      font-size: 13px;
+      color: var(--text-secondary, #71717a);
+      margin-bottom: 12px;
+    }
+    .oc-provider-list-scroll {
+      flex: 1;
       overflow-y: auto;
-      max-height: 600px;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
     }
     .oc-provider-list-item {
       display: flex;
       align-items: center;
-      justify-content: space-between;
-      padding: 10px 12px;
+      gap: 4px;
+      padding: 8px 12px;
       cursor: pointer;
-      border-bottom: 1px solid var(--border, #e0e0e0);
-      transition: background 0.1s;
+      border-radius: var(--radius-sm, 8px);
+      transition: background var(--transition, 0.18s ease);
     }
-    .oc-provider-list-item:last-child { border-bottom: none; }
-    .oc-provider-list-item:hover { background: var(--bg-secondary, #f5f5f5); }
-    .oc-provider-list-item--active { background: rgba(192, 57, 43, 0.06); }
+    .oc-provider-list-item:hover { background: var(--bg-hover, #ebebeb); }
+    .oc-provider-list-item--active { background: var(--bg-hover, #ebebeb); }
     .oc-provider-list-item__info { flex: 1; min-width: 0; }
     .oc-provider-list-item__name {
-      font-size: 14px;
+      font-size: 13px;
       font-weight: 500;
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
-      color: var(--text, #1a1a1a);
+      color: var(--text, #3f3f46);
     }
     .oc-provider-list-item__meta {
-      font-size: 12px;
-      color: var(--text-secondary, #888);
+      font-size: 11px;
+      color: var(--text-secondary, #71717a);
+      margin-top: 2px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
     }
     .oc-provider-list-item__actions {
       display: flex;
-      gap: 4px;
+      gap: 2px;
+      flex-shrink: 0;
+    }
+    .oc-provider-list-item__action-btn:not(.is-default) {
       opacity: 0;
-      transition: opacity 0.15s;
+      transition: opacity var(--transition, 0.18s ease);
     }
-    .oc-provider-list-item:hover .oc-provider-list-item__actions { opacity: 1; }
+    .oc-provider-list-item:hover .oc-provider-list-item__action-btn:not(.is-default):not(:disabled) { opacity: 1; }
     .oc-provider-list-item__action-btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 26px;
+      height: 26px;
+      padding: 0;
       border: none;
-      background: none;
-      padding: 4px;
+      border-radius: var(--radius-sm, 8px);
+      background: transparent;
+      color: var(--text-secondary, #71717a);
       cursor: pointer;
-      color: var(--text-secondary, #888);
-      border-radius: 4px;
+      transition: background var(--transition, 0.18s ease), color var(--transition, 0.18s ease);
     }
-    .oc-provider-list-item__action-btn:hover { background: var(--border, #e0e0e0); color: var(--text, #1a1a1a); }
-    .oc-provider-list-item__action-btn.is-default { color: #e67e22; opacity: 1; }
-    .oc-provider-list-item__action-btn:disabled { opacity: 0.3; cursor: default; }
+    .oc-provider-list-item__action-btn:hover:not(:disabled) { background: var(--bg-hover, #ebebeb); color: var(--text-strong, #18181b); }
+    .oc-provider-list-item__action-btn.is-default { color: var(--accent, #c0392b); opacity: 1 !important; }
+    .oc-provider-list-item__action-btn:disabled { opacity: 0; cursor: default; pointer-events: none; }
     .oc-provider-add-btn {
-      display: block;
+      margin-top: 12px;
       width: 100%;
-      padding: 10px 12px;
-      text-align: left;
+      text-align: center;
+      font-size: 13px;
       border: none;
       background: none;
       cursor: pointer;
-      font-size: 14px;
-      color: var(--accent, #c0392b);
+      color: var(--text-secondary, #71717a);
+      padding: 8px 12px;
+      border-radius: var(--radius-sm, 8px);
+      transition: background var(--transition, 0.18s ease), color var(--transition, 0.18s ease);
     }
-    .oc-provider-add-btn:hover { background: var(--bg-secondary, #f5f5f5); }
-    .oc-provider-form { flex: 1; min-width: 0; }
+    .oc-provider-add-btn:hover { background: var(--bg-hover, #ebebeb); color: var(--text, #3f3f46); }
+    .oc-provider-form {
+      flex: 1;
+      min-width: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      overflow-y: auto;
+    }
     .oc-provider-usage {
       display: grid;
       grid-template-columns: 1fr 1fr;
@@ -663,7 +699,7 @@ function injectStyles() {
     }
     .oc-provider-usage-card {
       border: 1px solid var(--border, #e0e0e0);
-      border-radius: var(--radius-s, 6px);
+      border-radius: var(--radius-sm, 8px);
       padding: 12px;
     }
     .oc-provider-usage-title { font-size: 12px; color: var(--text-secondary, #888); margin-bottom: 6px; }
@@ -682,6 +718,31 @@ function injectStyles() {
       transition: width 0.3s;
     }
     .oc-provider-usage-reset { font-size: 11px; color: var(--text-secondary, #888); margin-top: 4px; }
+
+    /* Collapse indicator */
+    .oc-provider-collapse { margin-bottom: 8px; }
+    .oc-provider-collapse__summary {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 13px;
+      color: var(--text-secondary);
+      cursor: pointer;
+      list-style: none;
+      user-select: none;
+    }
+    .oc-provider-collapse__summary::-webkit-details-marker { display: none; }
+    .oc-provider-collapse__summary::marker { display: none; content: ""; }
+    .oc-provider-collapse__icon {
+      transition: transform var(--duration-normal, 0.2s) var(--ease-out);
+      flex-shrink: 0;
+    }
+    .oc-provider-collapse[open] .oc-provider-collapse__icon {
+      transform: rotate(90deg);
+    }
+
+    /* Section spacing */
+    .oc-provider-form .oc-settings__form-group { margin-bottom: 16px; }
   `);
   document.adoptedStyleSheets = [...document.adoptedStyleSheets, sheet];
 }
@@ -704,32 +765,32 @@ export function renderTabProvider(state: AppViewState) {
 
   return html`
     <div class="oc-settings__section">
-      <h3 class="oc-settings__section-title">${t("settings.provider.title")}</h3>
+      <h2 class="oc-settings__section-title" style="font-size:18px;font-weight:600;margin:0 0 8px">${t("settings.provider.title")}</h2>
+      <p class="oc-settings__hint" style="margin:0 0 20px">${t("settings.provider.desc")}</p>
 
       <div class="oc-provider-layout">
         <!-- Left: Model list -->
         <div class="oc-provider-list">
-          ${s.configuredModels.map(item => html`
-            <div class="oc-provider-list-item ${s.selectedModelKey === item.key ? 'oc-provider-list-item--active' : ''}"
-              @click=${() => selectModelInList(item.key, state)}>
-              <div class="oc-provider-list-item__info">
-                <div class="oc-provider-list-item__name">${item.name || item.key}</div>
-                <div class="oc-provider-list-item__meta">${item.provider}</div>
+          <div class="oc-provider-list-header">${t("settings.provider.modelList")}</div>
+          <div class="oc-provider-list-scroll">
+            ${s.configuredModels.map(item => html`
+              <div class="oc-provider-list-item ${s.selectedModelKey === item.key ? 'oc-provider-list-item--active' : ''}"
+                @click=${() => selectModelInList(item.key, state)}>
+                <div class="oc-provider-list-item__info">
+                  <div class="oc-provider-list-item__name">${item.name || item.key}</div>
+                  <div class="oc-provider-list-item__meta">${item.provider}</div>
+                </div>
+                <div class="oc-provider-list-item__actions">
+                  <button class="oc-provider-list-item__action-btn ${item.isDefault ? 'is-default' : ''}" ?disabled=${item.isDefault}
+                    @click=${(e: Event) => { e.stopPropagation(); handleSetDefault(item.key, state); }}>
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="${item.isDefault ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+                  </button>
+                </div>
               </div>
-              <div class="oc-provider-list-item__actions">
-                <button class="oc-provider-list-item__action-btn" ?disabled=${item.isDefault}
-                  @click=${(e: Event) => { e.stopPropagation(); s.selectedModelKey = item.key; handleDeleteModel(state); }}>
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>
-                </button>
-                <button class="oc-provider-list-item__action-btn ${item.isDefault ? 'is-default' : ''}" ?disabled=${item.isDefault}
-                  @click=${(e: Event) => { e.stopPropagation(); handleSetDefault(item.key, state); }}>
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="${item.isDefault ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
-                </button>
-              </div>
-            </div>
-          `)}
+            `)}
+          </div>
           <button class="oc-provider-add-btn" @click=${() => enterAddMode(state)}>
-            ${t("settings.provider.addModel")}
+            + ${t("settings.provider.addModel")}
           </button>
         </div>
 
@@ -744,7 +805,7 @@ export function renderTabProvider(state: AppViewState) {
           ></oc-provider-segment>
 
           ${s.currentProvider === "moonshot" ? html`
-            <div class="oc-settings__form-group" style="margin-top:12px">
+            <div class="oc-settings__form-group" style="margin-top:16px">
               <label class="oc-settings__label">${t("setup.provider.platform")}</label>
               <div class="oc-settings__radio-group">
                 <label class="oc-settings__radio">
@@ -796,8 +857,9 @@ export function renderTabProvider(state: AppViewState) {
           ` : nothing}
 
           ${isOAuth ? html`
-            <details style="margin-top:12px">
-              <summary style="font-size:13px;color:var(--text-secondary);cursor:pointer">
+            <details class="oc-provider-collapse" style="margin-top:16px">
+              <summary class="oc-provider-collapse__summary">
+                <svg class="oc-provider-collapse__icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
                 ${t("setup.provider.oauth.advanced")} — ${t("setup.provider.oauth.or")}
               </summary>
               <div style="margin-top:12px">
@@ -856,7 +918,7 @@ export function renderTabProvider(state: AppViewState) {
           <div class="oc-settings__btn-row">
             <button class="oc-settings__btn oc-settings__btn--primary" ?disabled=${s.saving}
               @click=${() => handleSave(state)}>
-              ${s.saving ? "..." : s.editMode === "edit" ? t("settings.save") : t("settings.provider.addModel")}
+              ${s.saving ? "..." : t("settings.save")}
             </button>
           </div>
         </div>
@@ -894,13 +956,16 @@ function renderOAuthSection(state: AppViewState) {
           </button>
         </div>
       ` : s.oauthSuccess ? html`
-        <div style="display:flex;align-items:center;gap:8px;font-size:14px;color:#27ae60">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#27ae60" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></svg>
+        <div style="display:flex;align-items:center;gap:8px;font-size:14px;color:var(--ok, #22c55e)">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></svg>
           ${t("setup.provider.oauth.success")}
         </div>
       ` : s.oauthLoggedIn ? html`
         <div style="display:flex;align-items:center;gap:8px">
-          <span style="font-size:14px;color:#27ae60">${t("setup.provider.oauth.success")}</span>
+          <span style="display:inline-flex;align-items:center;gap:4px;font-size:14px;color:var(--text-secondary)">
+            <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--ok, #22c55e)"></span>
+            ${t("setup.provider.oauth.success")}
+          </span>
           <button class="oc-settings__btn oc-settings__btn--secondary" style="padding:4px 12px" @click=${() => handleOAuthLogout(state)}>
             ${getLocale() === "zh" ? "退出登录" : "Log out"}
           </button>

@@ -116,7 +116,16 @@ export function renderChannelWecom(state: AppViewState) {
 
   return html`
     <div class="oc-settings__section">
-      <h3 class="oc-settings__section-title">${t("settings.channels.wecom")}</h3>
+      <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:4px">
+        <div>
+          <h3 class="oc-settings__panel-title" style="margin-bottom:4px">${t("settings.channels.wecom")}</h3>
+          <p class="oc-settings__hint" style="margin:0 0 12px">${t("settings.channels.wecom.desc")}</p>
+        </div>
+        <div style="display:flex;gap:12px;flex-shrink:0;padding-top:2px">
+          <a class="oc-settings__link" href="#" @click=${(e: Event) => { e.preventDefault(); ipc.openExternal("https://github.com/nicepkg/openclaw/blob/main/docs/wecom.md"); }}>${t("settings.channels.wecom.pluginReadme")} &rarr;</a>
+          <a class="oc-settings__link" href="#" @click=${(e: Event) => { e.preventDefault(); ipc.openExternal("https://work.weixin.qq.com/wework_admin/frame"); }}>${t("settings.channels.wecom.openConsole")} &rarr;</a>
+        </div>
+      </div>
 
       ${!s.bundled ? html`<oc-message-box .message=${s.bundleMessage || t("settings.channels.wecom.notBundled")} .type=${"info"} .visible=${true}></oc-message-box>` : nothing}
 
@@ -164,11 +173,6 @@ export function renderChannelWecom(state: AppViewState) {
         ` : nothing}
 
         ${s.dmPolicy === "pairing" ? renderPairingPanel(state, "wecom", s.pairingPanel, () => refreshWecomPairing(state)) : nothing}
-
-        <div class="oc-settings__form-group" style="display:flex;gap:8px">
-          <a class="oc-settings__link" href="#" @click=${(e: Event) => { e.preventDefault(); ipc.openExternal("https://github.com/nicepkg/openclaw/blob/main/docs/wecom.md"); }}>${t("settings.channels.wecom.pluginReadme")}</a>
-          <a class="oc-settings__link" href="#" @click=${(e: Event) => { e.preventDefault(); ipc.openExternal("https://work.weixin.qq.com/wework_admin/frame"); }}>${t("settings.channels.wecom.openConsole")}</a>
-        </div>
 
         <oc-message-box .message=${s.error ?? ""} .type=${"error"} .visible=${!!s.error}></oc-message-box>
         <oc-message-box .message=${s.successMsg ?? ""} .type=${"success"} .visible=${!!s.successMsg}></oc-message-box>

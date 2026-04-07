@@ -150,6 +150,9 @@ export function renderTabBackup(state: AppViewState, notice: string | null) {
 
   return html`
     <div class="oc-settings__section">
+      <h2 class="oc-settings__section-title" style="font-size:18px;font-weight:600;margin:0 0 8px">${t("settings.backup.pageTitle")}</h2>
+      <p class="oc-settings__hint" style="margin:0 0 20px">${t("settings.backup.pageDesc")}</p>
+
       ${notice ? html`<oc-message-box .message=${mapRecoveryNotice(notice)} .type=${"error"} .visible=${true}></oc-message-box>` : nothing}
 
       <!-- Backup History -->
@@ -158,7 +161,7 @@ export function renderTabBackup(state: AppViewState, notice: string | null) {
         ${s.hasLastKnownGood ? html`
           <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
             <span style="font-size:13px">${t("settings.backup.lastKnownGood")}: ${formatDateTime(s.lastKnownGoodUpdatedAt)}</span>
-            <button class="oc-settings__btn" ?disabled=${s.restoring} @click=${() => handleRestoreLKG(state)}>${t("settings.backup.restoreLastKnownGood")}</button>
+            <button class="oc-settings__btn oc-settings__btn--primary" style="padding:6px 14px;font-size:12px" ?disabled=${s.restoring} @click=${() => handleRestoreLKG(state)}>${t("settings.backup.restoreLastKnownGood")}</button>
           </div>
         ` : nothing}
         ${s.backups.length ? s.backups.map(b => html`
@@ -166,7 +169,7 @@ export function renderTabBackup(state: AppViewState, notice: string | null) {
             <span>${formatDateTime(b.createdAt)}</span>
             <span style="color:var(--text-secondary);font-size:12px">${formatBytes(b.size)}</span>
             <span style="color:var(--text-secondary);font-size:12px;flex:1;overflow:hidden;text-overflow:ellipsis">${b.fileName}</span>
-            <button class="oc-settings__btn" ?disabled=${s.restoring} @click=${() => handleRestoreBackup(state, b.fileName)}>${t("settings.backup.restoreBackup")}</button>
+            <button class="oc-settings__btn oc-settings__btn--primary" style="padding:6px 14px;font-size:12px" ?disabled=${s.restoring} @click=${() => handleRestoreBackup(state, b.fileName)}>${t("settings.backup.restoreBackup")}</button>
           </div>
         `) : html`<div style="color:var(--text-secondary);font-size:13px">${t("settings.backup.noBackups")}</div>`}
       </div>
@@ -177,8 +180,8 @@ export function renderTabBackup(state: AppViewState, notice: string | null) {
         <div style="display:flex;align-items:center;gap:12px">
           <span style="font-size:13px">${gwStatusKey(gw)}</span>
           ${gw === "running" ? html`
-            <button class="oc-settings__btn" @click=${() => handleGatewayAction(state, "restart")}>${t("settings.backup.restart")}</button>
-            <button class="oc-settings__btn" @click=${() => handleGatewayAction(state, "stop")}>${t("settings.backup.stop")}</button>
+            <button class="oc-settings__btn oc-settings__btn--primary" style="padding:6px 14px;font-size:12px" @click=${() => handleGatewayAction(state, "restart")}>${t("settings.backup.restart")}</button>
+            <button class="oc-settings__btn oc-settings__btn--danger" style="padding:6px 14px;font-size:12px" @click=${() => handleGatewayAction(state, "stop")}>${t("settings.backup.stop")}</button>
           ` : nothing}
           ${gw === "stopped" ? html`
             <button class="oc-settings__btn oc-settings__btn--primary" @click=${() => handleGatewayAction(state, "start")}>${t("settings.backup.start")}</button>

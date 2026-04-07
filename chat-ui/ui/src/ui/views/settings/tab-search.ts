@@ -75,7 +75,12 @@ export function renderTabSearch(state: AppViewState) {
 
   return html`
     <div class="oc-settings__section">
-      <h3 class="oc-settings__section-title">${t("settings.search.title")}</h3>
+      <h2 class="oc-settings__section-title" style="font-size:18px;font-weight:600;margin:0 0 8px">${t("settings.search.title")}</h2>
+      <p class="oc-settings__hint" style="margin:0 0 20px">${t("settings.search.desc")}</p>
+
+      <oc-toggle-switch .label=${t("settings.search.enable")} .checked=${s.enabled}
+        @change=${(e: CustomEvent) => { s.enabled = e.detail.checked; state.requestUpdate(); }}
+      ></oc-toggle-switch>
 
       <oc-provider-segment
         .providers=${["moonshot"]}
@@ -85,12 +90,6 @@ export function renderTabSearch(state: AppViewState) {
 
       <div class="oc-settings__hint" style="margin-bottom:12px">${t("settings.search.guide")}
         <a class="oc-settings__link" href="#" @click=${(e: Event) => { e.preventDefault(); ipc.openExternal("https://platform.moonshot.cn/console/api-keys"); }}>${t("settings.search.getApiKey")}</a>
-      </div>
-
-      <div class="oc-settings__form-group">
-        <oc-toggle-switch .label=${t("settings.search.enable")} .checked=${s.enabled}
-          @change=${(e: CustomEvent) => { s.enabled = e.detail.checked; state.requestUpdate(); }}
-        ></oc-toggle-switch>
       </div>
 
       ${autoReuse ? html`

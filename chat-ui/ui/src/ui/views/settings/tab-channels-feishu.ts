@@ -160,7 +160,16 @@ export function renderChannelFeishu(state: AppViewState) {
 
   return html`
     <div class="oc-settings__section">
-      <h3 class="oc-settings__section-title">${t("settings.channels.feishu")}</h3>
+      <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:4px">
+        <div>
+          <h3 class="oc-settings__panel-title" style="margin-bottom:4px">${t("settings.channels.feishu")}</h3>
+          <p class="oc-settings__hint" style="margin:0 0 12px">${t("settings.channels.feishu.desc")}</p>
+        </div>
+        <div style="display:flex;gap:12px;flex-shrink:0;padding-top:2px">
+          <a class="oc-settings__link" href="#" @click=${(e: Event) => { e.preventDefault(); ipc.openExternal("https://github.com/nicepkg/openclaw/blob/main/docs/feishu.md"); }}>${t("settings.channels.feishu.setupGuide")} &rarr;</a>
+          <a class="oc-settings__link" href="#" @click=${(e: Event) => { e.preventDefault(); ipc.openExternal("https://open.feishu.cn/app"); }}>${t("settings.channels.feishu.openConsole")} &rarr;</a>
+        </div>
+      </div>
 
       <div class="oc-settings__form-group">
         <oc-toggle-switch .label=${t("settings.channels.enable")} .checked=${s.enabled}
@@ -221,7 +230,7 @@ export function renderChannelFeishu(state: AppViewState) {
               <input class="oc-settings__input" .value=${s.addGroupInput} placeholder="oc_..."
                 @input=${(e: Event) => { s.addGroupInput = (e.target as HTMLInputElement).value; }}
                 @keydown=${(e: KeyboardEvent) => { if (e.key === "Enter") confirmAddGroup(state); if (e.key === "Escape") cancelAddGroup(state); }} />
-              ${s.addGroupError ? html`<div style="color:#c0392b;font-size:12px;margin-top:4px">${s.addGroupError}</div>` : nothing}
+              ${s.addGroupError ? html`<div style="color:var(--accent, #c0392b);font-size:12px;margin-top:4px">${s.addGroupError}</div>` : nothing}
               <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:8px">
                 <button class="oc-settings__btn" @click=${() => cancelAddGroup(state)}>${t("settings.cancel")}</button>
                 <button class="oc-settings__btn oc-settings__btn--primary" @click=${() => confirmAddGroup(state)}>${t("settings.confirm")}</button>
@@ -231,11 +240,6 @@ export function renderChannelFeishu(state: AppViewState) {
         ` : nothing}
 
         ${s.dmPolicy === "pairing" || s.groupPolicy === "allowlist" ? renderPairingPanel(state, "feishu", s.pairingPanel, () => refreshFeishuPairing(state)) : nothing}
-
-        <div class="oc-settings__form-group" style="display:flex;gap:8px">
-          <a class="oc-settings__link" href="#" @click=${(e: Event) => { e.preventDefault(); ipc.openExternal("https://github.com/nicepkg/openclaw/blob/main/docs/feishu.md"); }}>${t("settings.channels.feishu.setupGuide")}</a>
-          <a class="oc-settings__link" href="#" @click=${(e: Event) => { e.preventDefault(); ipc.openExternal("https://open.feishu.cn/app"); }}>${t("settings.channels.feishu.openConsole")}</a>
-        </div>
 
         <oc-message-box .message=${s.error ?? ""} .type=${"error"} .visible=${!!s.error}></oc-message-box>
         <oc-message-box .message=${s.successMsg ?? ""} .type=${"success"} .visible=${!!s.successMsg}></oc-message-box>

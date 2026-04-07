@@ -86,6 +86,8 @@ export function renderTabChannels(state: AppViewState) {
   const active = s.activePlatform;
 
   return html`
+    <h2 class="oc-settings__section-title" style="font-size:18px;font-weight:600;margin:0 0 8px">${t("settings.nav.channels")}</h2>
+    <p class="oc-settings__hint" style="margin:0 0 20px">${t("settings.channels.desc")}</p>
     <div class="oc-settings-channels">
       <nav class="oc-settings-channels__nav">
         ${CHANNEL_PLATFORMS.map(p => html`
@@ -117,41 +119,43 @@ function renderChannelPanel(state: AppViewState, platform: string) {
 
 const styleSheet = new CSSStyleSheet();
 styleSheet.replaceSync(/* css */`
-  .oc-settings-channels { display: flex; gap: 16px; }
+  .oc-settings-channels { display: flex; gap: 18px; flex: 1; min-height: 0; }
   .oc-settings-channels__nav {
-    width: 140px;
+    width: 172px;
     flex-shrink: 0;
     display: flex;
     flex-direction: column;
     gap: 2px;
+    padding: 0;
+    align-self: flex-start;
   }
   .oc-settings-channels__nav-item {
+    position: relative;
     display: flex;
     align-items: center;
-    gap: 6px;
-    padding: 8px 12px;
+    gap: 8px;
+    padding: 6px 8px 6px 12px;
     border: none;
     background: transparent;
     color: var(--text-secondary, #888);
     font-size: 13px;
+    font-weight: 600;
     text-align: left;
-    border-radius: var(--radius-s, 6px);
+    border-radius: var(--radius-md, 12px);
     cursor: pointer;
-    transition: all 0.15s;
+    transition: background var(--transition, 0.18s ease), color var(--transition, 0.18s ease);
+    width: 100%;
   }
   .oc-settings-channels__status-dot {
     width: 6px;
     height: 6px;
     border-radius: 50%;
-    background: #27ae60;
+    background: var(--ok, #22c55e);
     flex-shrink: 0;
+    margin-left: auto;
   }
-  .oc-settings-channels__nav-item--active .oc-settings-channels__status-dot {
-    background: #fff;
-  }
-  .oc-settings-channels__nav-item:hover { background: var(--bg-secondary, rgba(0,0,0,0.03)); color: var(--text); }
-  .oc-settings-channels__nav-item--active { background: var(--accent, #c0392b); color: #fff; }
-  .oc-settings-channels__nav-item--active:hover { background: var(--accent); color: #fff; opacity: 0.9; }
-  .oc-settings-channels__panel { flex: 1; min-width: 0; }
+  .oc-settings-channels__nav-item:hover { background: var(--bg-hover, #ebebeb); color: var(--text, #3f3f46); }
+  .oc-settings-channels__nav-item--active { background: var(--bg-hover, #ebebeb); color: var(--text, #3f3f46); }
+  .oc-settings-channels__panel { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 16px; }
 `);
 document.adoptedStyleSheets = [...document.adoptedStyleSheets, styleSheet];

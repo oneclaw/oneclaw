@@ -218,26 +218,32 @@ const dict: Record<Locale, Record<string, string>> = {
     "settings.nav.about": "软件更新",
 
     // Settings: Appearance
+    "settings.appearance.title": "外观显示",
+    "settings.appearance.desc": "调整主题和聊天展示相关设置",
     "settings.appearance.theme": "主题",
     "settings.appearance.showThinking": "显示思考过程",
 
     // Settings: Search
     "settings.search.title": "搜索配置",
-    "settings.search.enable": "启用搜索",
+    "settings.search.desc": "配置网页搜索和内容抓取工具",
+    "settings.search.enable": "启用状态",
     "settings.search.autoReuse": "使用 Kimi 订阅的 API Key",
     "settings.search.serviceBaseUrl": "服务地址",
     "settings.search.getApiKey": "获取 API Key",
     "settings.search.guide": "Kimi Search 为对话提供实时联网搜索能力。",
 
     // Settings: Memory
-    "settings.memory.title": "记忆设置",
-    "settings.memory.autoSave": "自动保存会话记忆",
+    "settings.memory.title": "记忆",
+    "settings.memory.desc": "记忆功能让助手在跨会话时保留上下文",
+    "settings.memory.autoSave": "开新对话时自动保存会话记忆",
     "settings.memory.embedding": "记忆搜索（语义召回）",
     "settings.memory.embeddingEnabled": "已启用",
     "settings.memory.embeddingRequiresKimi": "需要 Kimi 订阅",
 
     // Settings: Advanced
-    "settings.advanced.clawHubRegistry": "ClawHub 注册表地址",
+    "settings.advanced.title": "高级选项",
+    "settings.advanced.desc": "浏览器工具与消息频道设置",
+    "settings.advanced.clawHubRegistry": "ClawHub Registry",
     "settings.advanced.browserProfile": "浏览器模式",
     "settings.advanced.browserDedicated": "独立浏览器",
     "settings.advanced.browserChrome": "Chrome 扩展",
@@ -247,6 +253,8 @@ const dict: Record<Locale, Record<string, string>> = {
     "settings.advanced.cliInstalling": "安装中…",
 
     // Settings: Backup
+    "settings.backup.pageTitle": "备份与恢复",
+    "settings.backup.pageDesc": "当配置改坏导致无法启动时 可在这里回退 openclaw.json",
     "settings.backup.title": "备份历史",
     "settings.backup.lastKnownGood": "最后正常配置",
     "settings.backup.restoreLastKnownGood": "恢复",
@@ -283,13 +291,20 @@ const dict: Record<Locale, Record<string, string>> = {
     "settings.about.upToDate": "当前已是最新版本",
 
     // Settings: Channels
+    "settings.channels.desc": "连接微信、飞书、企业微信、钉钉、Kimi 或 QQ，从聊天软件远程控制 OneClaw",
     "settings.channels.enable": "启用",
     "settings.channels.weixin": "微信",
+    "settings.channels.weixin.desc": "连接微信 在微信中直接与 AI 对话",
+    "settings.channels.feishu.desc": "连接飞书 在群聊中直接与 AI 对话",
+    "settings.channels.wecom.desc": "连接企业微信 在工作群中与 AI 协作",
+    "settings.channels.dingtalk.desc": "连接钉钉 在钉钉中直接与 AI 对话",
+    "settings.channels.kimiclaw.desc": "连接 Kimi 使用 KimiClaw Bot 对话",
+    "settings.channels.qqbot.desc": "连接 QQ 在 QQ 中与 AI 对话",
     "settings.channels.feishu": "飞书",
     "settings.channels.wecom": "企业微信",
     "settings.channels.dingtalk": "钉钉",
     "settings.channels.kimiclaw": "KimiClaw",
-    "settings.channels.qqbot": "QQ 机器人",
+    "settings.channels.qqbot": "QQ",
     "settings.channels.weixin.connected": "已连接",
     "settings.channels.weixin.disconnect": "断开连接",
     "settings.channels.weixin.scanQr": "使用微信扫描二维码",
@@ -353,9 +368,11 @@ const dict: Record<Locale, Record<string, string>> = {
 
     // Settings: Provider
     "settings.provider.title": "模型配置",
-    "settings.provider.modelAlias": "模型别名",
-    "settings.provider.modelAliasPlaceholder": "可选别名",
-    "settings.provider.addModel": "+ 添加模型",
+    "settings.provider.desc": "修改 LLM 云厂商、API 密钥或模型",
+    "settings.provider.modelList": "模型列表",
+    "settings.provider.modelAlias": "别名",
+    "settings.provider.modelAliasPlaceholder": "可选，方便识别",
+    "settings.provider.addModel": "新增模型",
     "settings.provider.deleteConfirm": "确定删除此模型？",
     "settings.provider.usage.title": "使用量",
     "settings.provider.usage.weekUsage": "本周用量",
@@ -712,26 +729,32 @@ const dict: Record<Locale, Record<string, string>> = {
     "settings.nav.about": "Software Update",
 
     // Settings: Appearance
+    "settings.appearance.title": "Appearance",
+    "settings.appearance.desc": "Adjust theme and chat display settings",
     "settings.appearance.theme": "Theme",
     "settings.appearance.showThinking": "Show thinking process",
 
     // Settings: Search
     "settings.search.title": "Search Configuration",
-    "settings.search.enable": "Enable search",
+    "settings.search.desc": "Configure web search and content fetch tools",
+    "settings.search.enable": "Enable",
     "settings.search.autoReuse": "Using your Kimi subscription key",
     "settings.search.serviceBaseUrl": "Service Base URL",
     "settings.search.getApiKey": "Get API Key",
     "settings.search.guide": "Kimi Search provides real-time web search for conversations.",
 
     // Settings: Memory
-    "settings.memory.title": "Memory Settings",
+    "settings.memory.title": "Memory",
+    "settings.memory.desc": "Memory lets the assistant preserve context across sessions",
     "settings.memory.autoSave": "Auto-save session memory on /new",
     "settings.memory.embedding": "Memory search (semantic recall)",
     "settings.memory.embeddingEnabled": "Enabled",
     "settings.memory.embeddingRequiresKimi": "Requires Kimi subscription",
 
     // Settings: Advanced
-    "settings.advanced.clawHubRegistry": "ClawHub Registry URL",
+    "settings.advanced.title": "Advanced",
+    "settings.advanced.desc": "Browser tools and message channel settings",
+    "settings.advanced.clawHubRegistry": "ClawHub Registry",
     "settings.advanced.browserProfile": "Browser Mode",
     "settings.advanced.browserDedicated": "Dedicated browser",
     "settings.advanced.browserChrome": "Chrome extension",
@@ -741,6 +764,8 @@ const dict: Record<Locale, Record<string, string>> = {
     "settings.advanced.cliInstalling": "Installing…",
 
     // Settings: Backup
+    "settings.backup.pageTitle": "Backup & Restore",
+    "settings.backup.pageDesc": "When a broken config prevents startup, roll back openclaw.json here",
     "settings.backup.title": "Backup History",
     "settings.backup.lastKnownGood": "Last Known Good",
     "settings.backup.restoreLastKnownGood": "Restore",
@@ -777,8 +802,15 @@ const dict: Record<Locale, Record<string, string>> = {
     "settings.about.upToDate": "Up to date",
 
     // Settings: Channels
+    "settings.channels.desc": "Connect WeChat, Feishu, WeCom, DingTalk, Kimi, or QQ to remote-control OneClaw from chat apps",
     "settings.channels.enable": "Enable",
     "settings.channels.weixin": "WeChat",
+    "settings.channels.weixin.desc": "Connect WeChat to chat with AI directly",
+    "settings.channels.feishu.desc": "Connect Feishu to chat with AI in groups",
+    "settings.channels.wecom.desc": "Connect WeCom to collaborate with AI at work",
+    "settings.channels.dingtalk.desc": "Connect DingTalk to chat with AI directly",
+    "settings.channels.kimiclaw.desc": "Connect Kimi to chat with KimiClaw Bot",
+    "settings.channels.qqbot.desc": "Connect QQ to chat with AI directly",
     "settings.channels.feishu": "Feishu",
     "settings.channels.wecom": "WeCom",
     "settings.channels.dingtalk": "DingTalk",
@@ -847,9 +879,11 @@ const dict: Record<Locale, Record<string, string>> = {
 
     // Settings: Provider
     "settings.provider.title": "Model Configuration",
-    "settings.provider.modelAlias": "Model Alias",
-    "settings.provider.modelAliasPlaceholder": "Optional alias",
-    "settings.provider.addModel": "+ Add Model",
+    "settings.provider.desc": "Modify LLM provider, API keys, or models",
+    "settings.provider.modelList": "Model List",
+    "settings.provider.modelAlias": "Alias",
+    "settings.provider.modelAliasPlaceholder": "Optional, for identification",
+    "settings.provider.addModel": "Add Model",
     "settings.provider.deleteConfirm": "Delete this model?",
     "settings.provider.usage.title": "Usage",
     "settings.provider.usage.weekUsage": "Weekly Usage",
