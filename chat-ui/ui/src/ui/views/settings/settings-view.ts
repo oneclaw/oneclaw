@@ -231,6 +231,7 @@ function injectStyles() {
       font-size: 13px;
       color: var(--text-secondary, #888);
       margin: 0;
+      margin-bottom: 4px;
     }
     .oc-settings__btn-row {
       display: flex;
@@ -241,13 +242,15 @@ function injectStyles() {
       padding-bottom: 32px;
     }
     .oc-settings__btn {
-      padding: 8px 20px;
-      font-size: 14px;
-      font-weight: 500;
+      padding: 9px 24px;
+      font-size: 13.5px;
+      font-weight: 600;
       border-radius: var(--radius-pill, 9999px);
       cursor: pointer;
       border: 1px solid transparent;
-      transition: opacity var(--duration-fast, 0.12s) var(--ease-out);
+      transition: background var(--transition, 0.18s ease), transform 80ms ease;
+      min-height: 38px;
+      font-family: inherit;
     }
     .oc-settings__btn:disabled {
       opacity: 0.5;
@@ -258,19 +261,20 @@ function injectStyles() {
       color: #fff;
       border-color: var(--accent, #c0392b);
     }
-    .oc-settings__btn--primary:hover:not(:disabled) { opacity: 0.9; }
+    .oc-settings__btn--primary:hover:not(:disabled) { background: var(--accent-hover, #a93226); }
+    .oc-settings__btn--primary:active:not(:disabled) { transform: scale(0.97); }
     .oc-settings__btn--danger {
       background: #e74c3c;
       color: #fff;
       border-color: #e74c3c;
     }
-    .oc-settings__btn--danger:hover:not(:disabled) { opacity: 0.9; }
+    .oc-settings__btn--danger:hover:not(:disabled) { background: var(--accent-hover, #a93226); }
     .oc-settings__btn--secondary {
       background: transparent;
       color: var(--text, #1a1a1a);
       border-color: var(--border, #ddd);
     }
-    .oc-settings__btn--secondary:hover:not(:disabled) { background: var(--bg-secondary, #f5f5f5); }
+    .oc-settings__btn--secondary:hover:not(:disabled) { border-color: var(--accent, #c0392b); color: var(--accent, #c0392b); }
 
     .oc-settings__radio-group {
       display: flex;
@@ -511,6 +515,41 @@ function injectStyles() {
       background: var(--bg-hover, #ebebeb);
       color: var(--text, #3f3f46);
       border-color: var(--text-secondary, #71717a);
+    }
+
+    /* Compact button variant (used in backup tab etc.) */
+    .oc-settings__btn--compact {
+      padding: 6px 14px;
+      min-height: 32px;
+      font-size: 12px;
+    }
+
+    /* Feature badge (red pill, e.g. 支持搜索) */
+    .oc-settings__badge {
+      display: inline-block;
+      font-size: 10px;
+      line-height: 1;
+      padding: 2px 6px;
+      margin-left: 6px;
+      border-radius: 3px;
+      background: var(--accent, #c0392b);
+      color: var(--text-on-accent, #fff);
+      vertical-align: middle;
+    }
+
+    /* CLI command inline code */
+    .oc-settings__cli-code {
+      display: inline-flex;
+      align-items: center;
+      padding: 4px 8px;
+      border-radius: var(--radius-sm, 8px);
+      border: 1px solid var(--border, #e4e4e7);
+      background: var(--bg-input, #f5f5f5);
+      color: var(--text, #1a1a1a);
+      font-size: 12px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+      vertical-align: middle;
+      margin-left: 4px;
     }
 
     /* Spinner animation (reused in provider OAuth) */

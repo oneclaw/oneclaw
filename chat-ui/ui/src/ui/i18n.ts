@@ -250,6 +250,7 @@ const dict: Record<Locale, Record<string, string>> = {
     "settings.advanced.imessage": "iMessage 集成",
     "settings.advanced.launchAtLogin": "开机自启",
     "settings.advanced.cli": "终端命令 openclaw",
+    "settings.advanced.cliLabel": "终端命令",
     "settings.advanced.cliInstalling": "安装中…",
 
     // Settings: Backup
@@ -761,6 +762,7 @@ const dict: Record<Locale, Record<string, string>> = {
     "settings.advanced.imessage": "iMessage integration",
     "settings.advanced.launchAtLogin": "Launch at login",
     "settings.advanced.cli": "Terminal command openclaw",
+    "settings.advanced.cliLabel": "Terminal command",
     "settings.advanced.cliInstalling": "Installing…",
 
     // Settings: Backup

@@ -43,6 +43,7 @@ styleSheet.replaceSync(/* css */`
     align-items: center;
     justify-content: space-between;
     gap: 12px;
+    padding: 4px 0;
     cursor: pointer;
     user-select: none;
   }
