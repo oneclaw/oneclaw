@@ -826,7 +826,7 @@ export function renderTabProvider(state: AppViewState) {
           ${isCustom ? html`
             <div class="oc-settings__form-group" style="margin-top:12px">
               <label class="oc-settings__label">${t("setup.provider.preset")}</label>
-              <select class="oc-settings__input" .value=${s.customPreset}
+              <select class="oc-settings__select" .value=${s.customPreset}
                 @change=${(e: Event) => onPresetChange((e.target as HTMLSelectElement).value, state)}>
                 <option value="__placeholder__" disabled ?selected=${!s.customPreset}>${t("setup.provider.presetPlaceholder")}</option>
                 ${Object.entries(CUSTOM_PRESETS).map(([k, v]) => html`
@@ -877,7 +877,7 @@ export function renderTabProvider(state: AppViewState) {
           ${models.length > 0 ? html`
             <div class="oc-settings__form-group">
               <label class="oc-settings__label">${t("setup.provider.model")}</label>
-              <select class="oc-settings__input" .value=${s.modelId}
+              <select class="oc-settings__select" .value=${s.modelId}
                 @change=${(e: Event) => onModelSelectChange((e.target as HTMLSelectElement).value, state)}>
                 ${models.map(m => html`<option value=${m} ?selected=${s.modelId === m}>${m}</option>`)}
                 <option value=${CUSTOM_MODEL_SENTINEL}>${t("setup.provider.customModelOption")}</option>
@@ -895,8 +895,8 @@ export function renderTabProvider(state: AppViewState) {
 
           ${isManualCustom ? html`
             <div class="oc-settings__form-group">
-              <label style="display:flex;align-items:center;gap:8px;font-size:14px;cursor:pointer">
-                <input type="checkbox" .checked=${s.imageSupport} style="accent-color:var(--accent)"
+              <label class="oc-settings__checkbox">
+                <input type="checkbox" .checked=${s.imageSupport}
                   @change=${(e: Event) => { s.imageSupport = (e.target as HTMLInputElement).checked; state.requestUpdate(); }} />
                 ${t("setup.provider.imageSupport")}
               </label>
@@ -961,15 +961,10 @@ function renderOAuthSection(state: AppViewState) {
           ${t("setup.provider.oauth.success")}
         </div>
       ` : s.oauthLoggedIn ? html`
-        <div style="display:flex;align-items:center;gap:8px">
-          <span style="display:inline-flex;align-items:center;gap:4px;font-size:14px;color:var(--text-secondary)">
-            <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--ok, #22c55e)"></span>
-            ${t("setup.provider.oauth.success")}
-          </span>
-          <button class="oc-settings__btn oc-settings__btn--secondary" style="padding:4px 12px" @click=${() => handleOAuthLogout(state)}>
-            ${getLocale() === "zh" ? "退出登录" : "Log out"}
-          </button>
-        </div>
+        <button class="oc-settings__btn-oauth-logout" @click=${() => handleOAuthLogout(state)}>
+          ${getLocale() === "zh" ? "退出登录" : "Log out"}
+        </button>
+        <div style="font-size:13px;color:var(--ok, #22c55e);margin-top:6px;text-align:center">${t("setup.provider.oauth.success")}</div>
       ` : html`
         <button class="oc-settings__btn oc-settings__btn--primary" @click=${() => handleOAuthLogin(state)}>
           ${t("setup.provider.oauth.login")}

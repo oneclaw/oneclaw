@@ -187,24 +187,37 @@ function injectStyles() {
     }
     .oc-setup-label {
       display: block;
-      font-size: 13px;
+      font-size: 12px;
       font-weight: 500;
-      color: var(--text, #1a1a1a);
+      color: var(--text-secondary, #71717a);
       margin-bottom: 6px;
     }
     .oc-setup-input, .oc-setup-select {
       width: 100%;
-      padding: 8px 12px;
-      font-size: 14px;
+      padding: 9px 12px;
+      font-size: 13.5px;
       border: 1px solid var(--border, #ddd);
-      border-radius: var(--radius-s, 6px);
-      background: var(--bg, #fff);
+      border-radius: var(--radius-sm, 8px);
+      background: var(--bg-input, #f5f5f5);
       color: var(--text, #1a1a1a);
       box-sizing: border-box;
+      outline: none;
+      transition: border-color var(--transition, 0.18s ease), box-shadow var(--transition, 0.18s ease);
+      font-family: inherit;
     }
+    .oc-setup-input::placeholder { color: var(--text-muted, #a1a1aa); }
     .oc-setup-input:focus, .oc-setup-select:focus {
       outline: none;
-      border-color: var(--accent, #c0392b);
+      border-color: var(--border-focus, var(--accent, #c0392b));
+      box-shadow: 0 0 0 3px var(--accent-subtle, rgba(192,57,43,0.15));
+    }
+    .oc-setup-select {
+      appearance: none;
+      background-image: url("data:image/svg+xml,%3Csvg width='12' height='8' viewBox='0 0 12 8' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 1.5L6 6.5L11 1.5' stroke='%2364748b' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+      background-repeat: no-repeat;
+      background-position: right 12px center;
+      padding-right: 32px;
+      cursor: pointer;
     }
 
     .oc-setup-radio-group {
@@ -216,21 +229,75 @@ function injectStyles() {
       display: flex;
       align-items: center;
       gap: 6px;
-      font-size: 14px;
-      color: var(--text, #1a1a1a);
+      font-size: 13px;
+      color: var(--text-secondary, #71717a);
       cursor: pointer;
     }
-    .oc-setup-radio input[type="radio"] { accent-color: var(--accent, #c0392b); }
+    .oc-setup-radio input[type="radio"] {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 16px;
+      height: 16px;
+      border: 1.5px solid var(--border, #e4e4e7);
+      border-radius: 50%;
+      background: var(--bg-input, #f5f5f5);
+      cursor: pointer;
+      position: relative;
+      margin: 0;
+      transition: border-color var(--transition, 0.18s ease);
+    }
+    .oc-setup-radio input[type="radio"]:checked {
+      border-color: var(--accent, #c0392b);
+    }
+    .oc-setup-radio input[type="radio"]:checked::after {
+      content: "";
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--accent, #c0392b);
+    }
 
     .oc-setup-checkbox {
       display: flex;
       align-items: center;
       gap: 8px;
-      font-size: 14px;
-      color: var(--text, #1a1a1a);
+      font-size: 13px;
+      color: var(--text-secondary, #71717a);
       cursor: pointer;
     }
-    .oc-setup-checkbox input[type="checkbox"] { accent-color: var(--accent, #c0392b); }
+    .oc-setup-checkbox input[type="checkbox"] {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 16px;
+      height: 16px;
+      border: 1.5px solid var(--border, #e4e4e7);
+      border-radius: 3px;
+      background: var(--bg-input, #f5f5f5);
+      cursor: pointer;
+      position: relative;
+      flex-shrink: 0;
+      margin: 0;
+      transition: border-color var(--transition, 0.18s ease), background var(--transition, 0.18s ease);
+    }
+    .oc-setup-checkbox input[type="checkbox"]:checked {
+      border-color: var(--accent, #c0392b);
+      background: var(--accent, #c0392b);
+    }
+    .oc-setup-checkbox input[type="checkbox"]:checked::after {
+      content: "";
+      position: absolute;
+      top: 1px;
+      left: 4px;
+      width: 5px;
+      height: 9px;
+      border: solid #fff;
+      border-width: 0 2px 2px 0;
+      transform: rotate(45deg);
+    }
 
     .oc-setup-btn-row {
       display: flex;
@@ -243,11 +310,13 @@ function injectStyles() {
     .oc-setup-btn {
       padding: 10px 28px;
       font-size: 14px;
-      font-weight: 500;
-      border-radius: var(--radius-s, 6px);
+      font-weight: 600;
+      border-radius: var(--radius-pill, 9999px);
       cursor: pointer;
       border: 1px solid transparent;
-      transition: opacity 0.15s;
+      transition: background var(--transition, 0.18s ease), transform 80ms ease;
+      min-height: 40px;
+      font-family: inherit;
     }
     .oc-setup-btn:disabled {
       opacity: 0.5;
@@ -258,7 +327,8 @@ function injectStyles() {
       color: #fff;
       border-color: var(--accent, #c0392b);
     }
-    .oc-setup-btn--primary:hover:not(:disabled) { opacity: 0.9; }
+    .oc-setup-btn--primary:hover:not(:disabled) { background: var(--accent-hover, #a93226); }
+    .oc-setup-btn--primary:active:not(:disabled) { transform: scale(0.97); }
     .oc-setup-btn--secondary {
       background: transparent;
       color: var(--text, #1a1a1a);

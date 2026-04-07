@@ -209,11 +209,15 @@ styleSheet.replaceSync(/* css */`
   .oc-settings-backup__item {
     display: flex;
     align-items: center;
-    gap: 12px;
-    padding: 8px 0;
-    border-bottom: 1px solid var(--border, #e0e0e0);
+    justify-content: space-between;
+    gap: 10px;
+    padding: 10px 12px;
+    border: 1px solid var(--border, #e0e0e0);
+    border-radius: var(--radius-sm, 8px);
+    background: var(--bg-input, #f5f5f5);
     font-size: 13px;
+    margin-bottom: 8px;
   }
-  .oc-settings-backup__item:last-child { border-bottom: none; }
+  .oc-settings-backup__item:last-child { margin-bottom: 0; }
 `);
 document.adoptedStyleSheets = [...document.adoptedStyleSheets, styleSheet];

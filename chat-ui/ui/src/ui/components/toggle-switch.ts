@@ -47,7 +47,7 @@ styleSheet.replaceSync(/* css */`
     user-select: none;
   }
   .oc-toggle--disabled { opacity: 0.5; cursor: not-allowed; }
-  .oc-toggle-label { font-size: 13px; color: var(--text); }
+  .oc-toggle-label { font-size: 13px; font-weight: 500; color: var(--text-secondary, #a1a1aa); }
   .oc-toggle-track {
     position: relative;
     width: 42px;
