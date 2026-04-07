@@ -85,7 +85,16 @@ export function renderChannelDingtalk(state: AppViewState) {
 
   return html`
     <div class="oc-settings__section">
-      <h3 class="oc-settings__section-title">${t("settings.channels.dingtalk")}</h3>
+      <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:4px">
+        <div>
+          <h3 class="oc-settings__panel-title" style="margin-bottom:4px">${t("settings.channels.dingtalk")}</h3>
+          <p class="oc-settings__hint" style="margin:0 0 12px">${t("settings.channels.dingtalk.desc")}</p>
+        </div>
+        <div style="display:flex;gap:12px;flex-shrink:0;padding-top:2px">
+          <a class="oc-settings__link" href="#" @click=${(e: Event) => { e.preventDefault(); ipc.openExternal("https://github.com/nicepkg/openclaw/blob/main/docs/dingtalk.md"); }}>${t("settings.channels.dingtalk.setupGuide")} &rarr;</a>
+          <a class="oc-settings__link" href="#" @click=${(e: Event) => { e.preventDefault(); ipc.openExternal("https://open-dev.dingtalk.com/fe/app"); }}>${t("settings.channels.dingtalk.openConsole")} &rarr;</a>
+        </div>
+      </div>
 
       ${!s.bundled ? html`<oc-message-box .message=${s.bundleMessage || t("settings.channels.dingtalk.notBundled")} .type=${"info"} .visible=${true}></oc-message-box>` : nothing}
 
@@ -114,11 +123,6 @@ export function renderChannelDingtalk(state: AppViewState) {
         </div>
 
         <div class="oc-settings__hint" style="margin-bottom:8px;color:#27ae60">${t("settings.channels.dingtalk.gatewayTokenHint")}</div>
-
-        <div class="oc-settings__form-group" style="display:flex;gap:8px">
-          <a class="oc-settings__link" href="#" @click=${(e: Event) => { e.preventDefault(); ipc.openExternal("https://github.com/nicepkg/openclaw/blob/main/docs/dingtalk.md"); }}>${t("settings.channels.dingtalk.setupGuide")}</a>
-          <a class="oc-settings__link" href="#" @click=${(e: Event) => { e.preventDefault(); ipc.openExternal("https://open-dev.dingtalk.com/fe/app"); }}>${t("settings.channels.dingtalk.openConsole")}</a>
-        </div>
 
         <oc-message-box .message=${s.error ?? ""} .type=${"error"} .visible=${!!s.error}></oc-message-box>
         <oc-message-box .message=${s.successMsg ?? ""} .type=${"success"} .visible=${!!s.successMsg}></oc-message-box>
