@@ -130,16 +130,21 @@ export function renderChannelWeixin(state: AppViewState) {
 
       ${s.enabled ? html`
         ${connected ? html`
-          <div style="font-size:13px;margin-bottom:8px">
-            ${t("settings.channels.weixin.connected")}: ${s.accounts[0]?.id ?? ""}
+          <div class="oc-weixin-connected">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#22c55e" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 12 2 2 4-4"/><circle cx="12" cy="12" r="10"/></svg>
+            <span class="oc-weixin-account-id">${s.accounts[0]?.id ?? ""}</span>
+            <button class="oc-weixin-remove-btn" @click=${() => handleDisconnect(state)}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>
+            </button>
           </div>
-          <button class="oc-settings__btn" @click=${() => handleDisconnect(state)}>${t("settings.channels.weixin.disconnect")}</button>
         ` : html`
           ${s.qrDataUrl ? html`
-            <div style="text-align:center;margin:12px 0">
-              <img src=${s.qrDataUrl} style="width:200px;height:200px" />
-              <div style="font-size:12px;color:var(--text-secondary);margin-top:8px">
-                ${s.loginStatus === "scaned" ? t("settings.channels.weixin.scanned") : t("settings.channels.weixin.scanQr")}
+            <div class="oc-weixin-qr-section">
+              <div class="oc-weixin-qr-container">
+                <img class="oc-weixin-qr-image" src=${s.qrDataUrl} />
+                <div class="oc-weixin-qr-status">
+                  ${s.loginStatus === "scaned" ? t("settings.channels.weixin.scanned") : t("settings.channels.weixin.scanQr")}
+                </div>
               </div>
             </div>
           ` : html`
@@ -154,3 +159,71 @@ export function renderChannelWeixin(state: AppViewState) {
     </div>
   `;
 }
+
+const _weixinSheet = new CSSStyleSheet();
+_weixinSheet.replaceSync(/* css */`
+  .oc-weixin-connected {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 14px;
+    border-radius: 8px;
+    background: var(--bg-elevated, #fff);
+    border: 1px solid var(--border, #e4e4e7);
+    font-size: 13px;
+    color: var(--text, #3f3f46);
+  }
+  .oc-weixin-account-id {
+    flex: 1;
+    font-family: var(--mono, ui-monospace, monospace);
+    font-size: 12px;
+    color: var(--text-secondary, #71717a);
+  }
+  .oc-weixin-remove-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 30px;
+    height: 30px;
+    padding: 0;
+    border: 1px solid var(--border, #e4e4e7);
+    border-radius: 8px;
+    background: var(--bg-input, #f5f5f5);
+    color: var(--text-muted, #a1a1aa);
+    cursor: pointer;
+    transition: border-color var(--transition, 0.18s ease), color var(--transition, 0.18s ease);
+  }
+  .oc-weixin-remove-btn:hover {
+    border-color: var(--accent, #c0392b);
+    color: var(--accent, #c0392b);
+  }
+  .oc-weixin-qr-section {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+    padding: 16px 0;
+  }
+  .oc-weixin-qr-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+    padding: 16px;
+    border: 1px solid var(--border, #e4e4e7);
+    border-radius: 12px;
+    background: var(--bg-elevated, #fff);
+  }
+  .oc-weixin-qr-image {
+    width: 200px;
+    height: 200px;
+    border-radius: 8px;
+    image-rendering: pixelated;
+  }
+  .oc-weixin-qr-status {
+    font-size: 13px;
+    color: var(--text-secondary, #71717a);
+    text-align: center;
+  }
+`);
+document.adoptedStyleSheets = [...document.adoptedStyleSheets, _weixinSheet];

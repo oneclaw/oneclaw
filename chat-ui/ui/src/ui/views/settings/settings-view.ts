@@ -356,15 +356,19 @@ function injectStyles() {
     }
 
     .oc-settings__card {
+      background: var(--bg-elevated, #fff);
       border: 1px solid var(--border, #e0e0e0);
-      border-radius: var(--radius-m, 8px);
-      padding: 16px 20px;
+      border-radius: var(--radius-md, 12px);
+      padding: 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
       margin-bottom: 16px;
     }
     .oc-settings__card-title {
-      font-size: 14px;
+      font-size: 13px;
       font-weight: 600;
-      margin: 0 0 12px;
+      margin: 0;
       color: var(--text, #1a1a1a);
     }
 

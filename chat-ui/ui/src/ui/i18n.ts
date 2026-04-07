@@ -370,6 +370,7 @@ const dict: Record<Locale, Record<string, string>> = {
     // Settings: Provider
     "settings.provider.title": "模型配置",
     "settings.provider.desc": "修改 LLM 云厂商、API 密钥或模型",
+    "settings.provider.currentUsing": "当前使用: ",
     "settings.provider.modelList": "模型列表",
     "settings.provider.modelAlias": "别名",
     "settings.provider.modelAliasPlaceholder": "可选，方便识别",
@@ -882,6 +883,7 @@ const dict: Record<Locale, Record<string, string>> = {
     // Settings: Provider
     "settings.provider.title": "Model Configuration",
     "settings.provider.desc": "Modify LLM provider, API keys, or models",
+    "settings.provider.currentUsing": "Current: ",
     "settings.provider.modelList": "Model List",
     "settings.provider.modelAlias": "Alias",
     "settings.provider.modelAliasPlaceholder": "Optional, for identification",
