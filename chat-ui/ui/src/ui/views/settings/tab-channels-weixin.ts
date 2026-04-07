@@ -119,7 +119,8 @@ export function renderChannelWeixin(state: AppViewState) {
 
   return html`
     <div class="oc-settings__section">
-      <h3 class="oc-settings__section-title">${t("settings.channels.weixin")}</h3>
+      <h3 class="oc-settings__panel-title" style="margin-bottom:4px">${t("settings.channels.weixin")}</h3>
+      <p class="oc-settings__hint" style="margin:0 0 12px">${t("settings.channels.weixin.desc")}</p>
 
       <div class="oc-settings__form-group">
         <oc-toggle-switch .label=${t("settings.channels.enable")} .checked=${s.enabled}

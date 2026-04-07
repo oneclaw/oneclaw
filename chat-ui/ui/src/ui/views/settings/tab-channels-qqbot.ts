@@ -85,7 +85,15 @@ export function renderChannelQqbot(state: AppViewState) {
 
   return html`
     <div class="oc-settings__section">
-      <h3 class="oc-settings__section-title">${t("settings.channels.qqbot")}</h3>
+      <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:4px">
+        <div>
+          <h3 class="oc-settings__panel-title" style="margin-bottom:4px">${t("settings.channels.qqbot")}</h3>
+          <p class="oc-settings__hint" style="margin:0 0 12px">${t("settings.channels.qqbot.desc")}</p>
+        </div>
+        <div style="display:flex;gap:12px;flex-shrink:0;padding-top:2px">
+          <a class="oc-settings__link" href="#" @click=${(e: Event) => { e.preventDefault(); ipc.openExternal("https://q.qq.com"); }}>${t("settings.channels.qqbot.openPlatform")} &rarr;</a>
+        </div>
+      </div>
 
       ${!s.bundled ? html`<oc-message-box .message=${s.bundleMessage || t("settings.channels.qqbot.notBundled")} .type=${"info"} .visible=${true}></oc-message-box>` : nothing}
 
@@ -110,10 +118,6 @@ export function renderChannelQqbot(state: AppViewState) {
           <oc-toggle-switch .label=${t("settings.channels.qqbot.markdown")} .checked=${s.markdownSupport}
             @change=${(e: CustomEvent) => { s.markdownSupport = e.detail.checked; state.requestUpdate(); }}
           ></oc-toggle-switch>
-        </div>
-
-        <div class="oc-settings__form-group">
-          <a class="oc-settings__link" href="#" @click=${(e: Event) => { e.preventDefault(); ipc.openExternal("https://q.qq.com"); }}>${t("settings.channels.qqbot.openPlatform")}</a>
         </div>
 
         <oc-message-box .message=${s.error ?? ""} .type=${"error"} .visible=${!!s.error}></oc-message-box>

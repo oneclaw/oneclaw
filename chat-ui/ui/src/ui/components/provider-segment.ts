@@ -48,26 +48,33 @@ const styleSheet = new CSSStyleSheet();
 styleSheet.replaceSync(/* css */`
   .oc-provider-seg {
     display: flex;
-    flex-wrap: wrap;
-    gap: 6px;
-    margin-bottom: 12px;
+    gap: 0;
+    background: var(--bg-input, #f5f5f5);
+    border: 1px solid var(--border, #e4e4e7);
+    border-radius: var(--radius-pill, 9999px);
+    padding: 3px;
+    overflow: hidden;
+    flex-shrink: 0;
   }
   .oc-provider-seg__pill {
-    padding: 6px 16px;
-    border: 1px solid var(--border, #ddd);
-    border-radius: 999px;
+    flex: 1;
+    padding: 7px 0;
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--text-muted, #a1a1aa);
     background: transparent;
-    color: var(--text);
-    font-size: 13px;
+    border: none;
+    border-radius: var(--radius-pill, 9999px);
     cursor: pointer;
-    transition: all 0.15s;
+    transition: color var(--transition, 0.18s ease), background var(--transition, 0.18s ease);
     white-space: nowrap;
+    font-family: inherit;
   }
-  .oc-provider-seg__pill:hover:not(:disabled) { border-color: var(--accent, #c0392b); color: var(--accent, #c0392b); }
+  .oc-provider-seg__pill:hover:not(:disabled) { color: var(--text-secondary, #71717a); }
   .oc-provider-seg__pill--active {
-    background: var(--accent, #c0392b);
     color: #fff;
-    border-color: var(--accent, #c0392b);
+    background: var(--accent, #c0392b);
+    font-weight: 600;
   }
   .oc-provider-seg__pill--active:hover { opacity: 0.9; }
   .oc-provider-seg__pill--locked { opacity: 0.4; cursor: not-allowed; }
