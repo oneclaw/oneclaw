@@ -371,15 +371,12 @@ export function renderCronManage(props: CronManageProps) {
 
       <!-- 右侧详情 -->
       <div class="cm-layout__detail">
-        ${props.error && !hasJobs
-          ? html`<div class="cm-empty">
-              <p class="cm-empty__title" style="color:var(--error)">${props.error}</p>
-            </div>`
-          : props.showForm
-            ? renderForm(props)
-            : selectedJob
-              ? renderDetail(selectedJob, props)
-              : renderDetailEmpty()}
+        ${props.error ? html`<div class="cm-detail__error">${props.error}</div>` : nothing}
+        ${props.showForm
+          ? renderForm(props)
+          : selectedJob
+            ? renderDetail(selectedJob, props)
+            : renderDetailEmpty()}
       </div>
     </div>
   `;
