@@ -9,7 +9,7 @@ import { parseAgentSessionKey } from "../../../src/routing/session-key.js";
 import { refreshChat, refreshChatAvatar, pendingSessionLabels } from "./app-chat.ts";
 import { syncUrlWithSessionKey } from "./app-settings.ts";
 import { loadChatHistory } from "./controllers/chat.ts";
-import { getLocale, t } from "./i18n.ts";
+import { t } from "./i18n.ts";
 import { icons } from "./icons.ts";
 import { renderSidebar } from "./sidebar.ts";
 import { renderChat } from "./views/chat.ts";
@@ -18,6 +18,8 @@ import { renderGatewayUrlConfirmation } from "./views/gateway-url-confirmation.t
 import { renderRestartGatewayDialog } from "./views/restart-gateway-dialog.ts";
 import { renderSharePrompt } from "./views/share-prompt.ts";
 import { renderReleaseNotesModal } from "./views/release-notes-modal.ts";
+import { renderSetupView } from "./views/setup/setup-view.ts";
+import { renderSettingsView, cleanupSettingsView } from "./views/settings/settings-view.ts";
 import {
   renderFeedbackButton,
   renderFeedbackDialog,
@@ -239,14 +241,17 @@ async function deleteSessionFromSidebar(state: AppViewState, key: string) {
   await loadSessions(s);
 }
 
-function setOneClawView(state: AppViewState, next: "chat" | "settings" | "skills" | "workspace" | "cron" | "feedback") {
+function setOneClawView(state: AppViewState, next: "chat" | "setup" | "settings" | "skills" | "workspace" | "cron" | "feedback") {
   if ((state.settings.oneclawView ?? "chat") === next) {
     return;
   }
-  // 离开反馈视图时释放截图数据，避免内存泄漏
+  // 离开视图时清理资源，避免内存泄漏
   const prev = state.settings.oneclawView ?? "chat";
   if (prev === "feedback" && next !== "feedback") {
     feedbackPanelState = { ...feedbackPanelState, newScreenshots: [], newScreenshotPreviews: [], newFileNames: [] };
+  }
+  if (prev === "settings" && next !== "settings") {
+    cleanupSettingsView();
   }
   state.applySettings({
     ...state.settings,
@@ -255,7 +260,7 @@ function setOneClawView(state: AppViewState, next: "chat" | "settings" | "skills
 }
 
 // 打开内嵌设置页时可携带目标 tab 提示，减少用户二次定位成本。
-function openSettingsView(state: AppViewState, tabHint: "channels" | null = null) {
+function openSettingsView(state: AppViewState, tabHint: string | null = null) {
   state.settingsTabHint = tabHint;
   setOneClawView(state, "settings");
 }
@@ -993,119 +998,28 @@ async function handleApplyUpdate(state: AppViewState) {
   }
 }
 
-function ensureSettingsEmbedBridge(state: AppViewState) {
-  const bridgeKey = "__oneclawSettingsEmbedBridge";
-  const w = window as unknown as {
-    [bridgeKey]?: { state: AppViewState; bound: boolean };
-  };
-  if (!w[bridgeKey]) {
-    w[bridgeKey] = { state, bound: false };
-  } else {
-    w[bridgeKey]!.state = state;
-  }
-  if (w[bridgeKey]!.bound) {
-    return;
-  }
+// Settings iframe bridge + renderer removed: Settings is now a native Lit component (renderSettingsView)
 
-  window.addEventListener("message", (event: MessageEvent) => {
-    const bridge = (window as unknown as { [bridgeKey]?: { state: AppViewState } })[bridgeKey];
-    if (!bridge) {
-      return;
-    }
-    const data = event.data as
-      | {
-          source?: string;
-          type?: string;
-          payload?: { theme?: "system" | "light" | "dark"; showThinking?: boolean };
-        }
-      | undefined;
-    if (!data || data.source !== "oneclaw-settings-embed") {
-      return;
-    }
-
-    if (data.type === "appearance-request-init") {
-      if (event.source && "postMessage" in event.source) {
-        (event.source as Window).postMessage(
-          {
-            source: "oneclaw-chat-ui",
-            type: "appearance-init",
-            payload: {
-              theme: bridge.state.theme,
-              showThinking: bridge.state.settings.chatShowThinking,
-            },
-          },
-          "*",
-        );
-      }
-      return;
-    }
-
-    if (data.type === "navigate-back") {
-      setOneClawView(bridge.state, "chat");
-      return;
-    }
-
-    if (data.type === "appearance-save") {
-      const nextTheme = data.payload?.theme;
-      const nextShowThinking = data.payload?.showThinking;
-      if (nextTheme === "system" || nextTheme === "light" || nextTheme === "dark") {
-        bridge.state.setTheme(nextTheme);
-      }
-      if (typeof nextShowThinking === "boolean") {
-        bridge.state.applySettings({
-          ...bridge.state.settings,
-          chatShowThinking: nextShowThinking,
-        });
-      }
-    }
-  });
-
-  // 监听 preload 派发的文件拖拽/粘贴事件，添加为文件附件
+// 文件拖拽/粘贴事件桥接
+let fileDropBound = false;
+function ensureFileDropBridge(state: AppViewState) {
+  if (fileDropBound) return;
+  fileDropBound = true;
+  let latestState = state;
+  // 更新引用以便事件回调能访问最新的 state
+  (window as any).__oneclawFileDropState = { update: (s: AppViewState) => { latestState = s; } };
   window.addEventListener("oneclaw:file-drop", ((e: CustomEvent<{ paths: string[] }>) => {
-    const bridge = (window as unknown as { [bridgeKey]?: { state: AppViewState } })[bridgeKey];
-    if (!bridge) return;
-    const { state } = bridge;
-    const current = state.chatAttachments ?? [];
+    const current = latestState.chatAttachments ?? [];
     const additions = e.detail.paths.map((p: string) => ({
       id: `att-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
       filePath: p,
       name: p.split(/[/\\]/).pop() || p,
     }));
-    state.chatAttachments = [...current, ...additions];
+    latestState.chatAttachments = [...current, ...additions];
   }) as EventListener);
-
-  w[bridgeKey]!.bound = true;
 }
-
-function resolveEmbeddedSettingsUrl(state: AppViewState) {
-  const lang = getLocale();
-  const baseUrl = new URL(window.location.href);
-  const settingsUrl = new URL("../../settings/index.html", baseUrl);
-  settingsUrl.searchParams.set("lang", lang);
-  settingsUrl.searchParams.set("embedded", "1");
-  settingsUrl.searchParams.set("theme", state.theme);
-  settingsUrl.searchParams.set(
-    "showThinking",
-    state.settings.chatShowThinking ? "1" : "0",
-  );
-  if (state.settingsTabHint) {
-    settingsUrl.searchParams.set("tab", state.settingsTabHint);
-  }
-  return settingsUrl.toString();
-}
-
-function renderOneClawSettingsPage(state: AppViewState) {
-  ensureSettingsEmbedBridge(state);
-  const settingsUrl = resolveEmbeddedSettingsUrl(state);
-  return html`
-    <section class="oneclaw-settings-host">
-      <iframe
-        class="oneclaw-settings-iframe"
-        src=${settingsUrl}
-        title=${t("settings.title")}
-      ></iframe>
-    </section>
-  `;
+function updateFileDropState(state: AppViewState) {
+  (window as any).__oneclawFileDropState?.update(state);
 }
 
 // 在聊天页顶部展示待审批卡片，把“去设置里找批准”改成主流程内的一步动作。
@@ -1151,6 +1065,8 @@ function renderPairingNotice(state: AppViewState) {
 }
 
 export function renderApp(state: AppViewState) {
+  ensureFileDropBridge(state);
+  updateFileDropState(state);
   const chatDisabledReason = state.connected ? null : t("error.disconnected");
   const showThinking = state.onboarding ? false : state.settings.chatShowThinking;
   const assistantAvatarUrl = resolveAssistantAvatarUrl(state);
@@ -1160,6 +1076,7 @@ export function renderApp(state: AppViewState) {
   const currentSessionKey = state.sessionKey;
   const sessionOptions = resolveSessionOptions(state);
   const oneclawView = state.settings.oneclawView ?? "chat";
+  const setupActive = oneclawView === "setup";
   const settingsActive = oneclawView === "settings";
   const skillsActive = oneclawView === "skills";
   const workspaceActive = oneclawView === "workspace";
@@ -1169,9 +1086,9 @@ export function renderApp(state: AppViewState) {
 
   return html`
     <div
-      class="oneclaw-shell ${navigator.platform?.includes("Mac") ? "is-mac" : ""} ${navigator.platform?.includes("Win") ? "is-win" : ""} ${chatFocus ? "oneclaw-shell--focus" : ""} ${sidebarCollapsed ? "oneclaw-shell--sidebar-collapsed" : ""} ${settingsActive || skillsActive || workspaceActive || cronActive || feedbackActive ? "oneclaw-shell--fullpage" : ""}"
+      class="oneclaw-shell ${navigator.platform?.includes("Mac") ? "is-mac" : ""} ${navigator.platform?.includes("Win") ? "is-win" : ""} ${chatFocus ? "oneclaw-shell--focus" : ""} ${sidebarCollapsed ? "oneclaw-shell--sidebar-collapsed" : ""} ${setupActive || settingsActive || skillsActive || workspaceActive || cronActive || feedbackActive ? "oneclaw-shell--fullpage" : ""}"
     >
-      ${chatFocus || sidebarCollapsed || settingsActive || skillsActive || workspaceActive || cronActive || feedbackActive
+      ${chatFocus || sidebarCollapsed || setupActive || settingsActive || skillsActive || workspaceActive || cronActive || feedbackActive
         ? nothing
         : renderSidebar({
             connected: state.connected,
@@ -1230,7 +1147,9 @@ export function renderApp(state: AppViewState) {
       <div class="oneclaw-main">
         <div class="oneclaw-titlebar">
           ${
-            settingsActive || skillsActive || workspaceActive || cronActive || feedbackActive
+            setupActive
+              ? nothing
+              : settingsActive || skillsActive || workspaceActive || cronActive || feedbackActive
               ? html`
                   <div class="oneclaw-floating-actions">
                     <button
@@ -1284,8 +1203,10 @@ export function renderApp(state: AppViewState) {
 
         <main class="oneclaw-content">
           ${renderPairingNotice(state)}
-          ${settingsActive
-            ? renderOneClawSettingsPage(state)
+          ${setupActive
+            ? renderSetupView(state)
+            : settingsActive
+            ? renderSettingsView(state)
             : skillsActive
               ? html`
                   <div class="skills-scroll" @scroll=${(e: Event) => {

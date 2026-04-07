@@ -4,7 +4,7 @@ import { app, clipboard, dialog, ipcMain, shell, Menu, BrowserWindow } from "ele
 import { GatewayProcess } from "./gateway-process";
 import { WindowManager } from "./window";
 import { TrayManager } from "./tray";
-import { SetupManager } from "./setup-manager";
+// SetupManager removed: Setup is now a Lit view inside the main window
 import { registerSetupIpc } from "./setup-ipc";
 import {
   approveFeishuPairingRequest,
@@ -39,14 +39,13 @@ import {
   getConfigRecoveryData,
   inspectUserConfigHealth,
   recordLastKnownGoodConfigSnapshot,
-  recordSetupBaselineConfigSnapshot,
   restoreLastKnownGoodConfigSnapshot,
 } from "./config-backup";
 import { readUserConfig, writeUserConfig } from "./provider-config";
 import { resolveKimiSearchApiKey, readKimiApiKey, readKimiSearchDedicatedApiKey, writeKimiApiKey, ensureMemorySearchProxyConfig } from "./kimi-config";
 import { reconcileCliOnAppLaunch } from "./cli-integration";
 import { uninstallGatewayDaemon, killPortProcess, getPortPid } from "./install-detector";
-import { detectOwnership, migrateFromLegacy, markSetupComplete, readOneclawConfig, writeOneclawConfig, appendChannelUtm } from "./oneclaw-config";
+import { detectOwnership, migrateFromLegacy, readOneclawConfig, writeOneclawConfig, appendChannelUtm } from "./oneclaw-config";
 import { startTokenRefresh, stopTokenRefresh, loadOAuthToken } from "./kimi-oauth";
 import { startAuthProxy, stopAuthProxy, setProxyAccessToken, setProxySearchDedicatedKey, getProxyPort } from "./kimi-auth-proxy";
 import * as log from "./logger";
@@ -140,7 +139,7 @@ const gateway = new GatewayProcess({
 });
 const windowManager = new WindowManager();
 const tray = new TrayManager();
-const setupManager = new SetupManager();
+// Setup view state tracked via windowManager.inSetupView (set by IPC from renderer)
 
 // 应用前台判定：任一窗口拿到系统焦点即视为前台；否则视为后台。
 function isAppInForeground(): boolean {
@@ -179,18 +178,15 @@ pairingMonitor = new ChannelPairingMonitor({
 
 // ── 显示主窗口的统一入口 ──
 
-function showMainWindow(): Promise<void> {
+function showMainWindow(initialView?: "setup" | "chat"): Promise<void> {
   return windowManager.show({
     port: gateway.getPort(),
     token: gateway.getToken(),
+    initialView,
   });
 }
 
 function openSettingsInMainWindow(): Promise<void> {
-  if (setupManager.isSetupOpen()) {
-    setupManager.focusSetup();
-    return Promise.resolve();
-  }
   return windowManager.openSettings({
     port: gateway.getPort(),
     token: gateway.getToken(),
@@ -198,7 +194,15 @@ function openSettingsInMainWindow(): Promise<void> {
 }
 
 function openRecoverySettings(notice: string): void {
-  openSettingsInMainWindow().catch((err) => {
+  // Navigate to settings with tab+notice in the payload so they arrive
+  // through reactive state (settingsTabHint / settingsNotice) — no race
+  // with the settings-view listener registration.
+  windowManager.show({
+    port: gateway.getPort(),
+    token: gateway.getToken(),
+  }).then(() => {
+    windowManager.navigate({ view: "settings", settingsTab: "backup", settingsNotice: notice });
+  }).catch((err) => {
     log.error(`恢复流程打开设置失败(${notice}): ${err}`);
   });
 }
@@ -362,16 +366,10 @@ async function ensureGatewayRunning(source: string): Promise<boolean> {
 }
 
 // 外部 OpenClaw 接管：进 Setup 向导，Step 0 展示冲突并让用户决定
+// 注意：不在此处预清理 daemon/进程，实际卸载动作在 setup:resolve-conflict 中由用户显式触发
 async function handleExternalOpenclawTakeover(): Promise<void> {
-  log.info("[startup] external OpenClaw detected, auto-cleaning daemon before setup");
-  // 先自动清理 daemon + 杀残留进程，不等用户手动操作 Step 0
-  await uninstallGatewayDaemon();
-  const port = resolveGatewayPort();
-  const pid = await getPortPid(port);
-  if (pid > 0) {
-    await killPortProcess(pid);
-  }
-  setupManager.showSetup();
+  log.info("[startup] external OpenClaw detected, showing setup for user decision");
+  await showMainWindow("setup");
 }
 
 async function startGatewayAndShowMain(source: string, opts: StartMainOptions = {}): Promise<boolean> {
@@ -540,13 +538,12 @@ ipcMain.on("gateway:restart", () => requestGatewayRestart("ipc:restart"));
 ipcMain.on("gateway:start", () => requestGatewayStart("ipc:start"));
 ipcMain.on("gateway:stop", () => requestGatewayStop("ipc:stop"));
 ipcMain.handle("gateway:state", () => gateway.getState());
+ipcMain.on("app:quit", () => app.quit());
 ipcMain.on("app:check-updates", () => checkForUpdates(true));
 ipcMain.handle("app:get-update-state", () => getUpdateBannerState());
 ipcMain.handle("app:download-and-install-update", () => downloadAndInstallUpdate());
 ipcMain.handle("app:get-pairing-state", () => pairingMonitor?.getState());
 ipcMain.on("app:refresh-pairing-state", () => pairingMonitor?.triggerNow());
-ipcMain.handle("app:get-feishu-pairing-state", () => pairingMonitor?.getState().channels.feishu);
-ipcMain.on("app:refresh-feishu-pairing-state", () => pairingMonitor?.triggerNow());
 ipcMain.handle("app:open-external", (_e, url: string) => shell.openExternal(appendChannelUtm(url)));
 ipcMain.handle("app:open-path", (_e, filePath: string) => shell.openPath(filePath));
 
@@ -679,7 +676,7 @@ ipcMain.on("app:open-webui", () => {
 });
 ipcMain.handle("gateway:port", () => gateway.getPort());
 
-registerSetupIpc({ setupManager, onOAuthLoginSuccess: ensureOAuthTokenRefresh });
+registerSetupIpc({ windowManager, ensureGatewayRunning, onOAuthLoginSuccess: ensureOAuthTokenRefresh });
 registerSettingsIpc({
   requestGatewayRestart: () => requestGatewayRestart("settings:kimi-search"),
   getGatewayToken: () => gateway.getToken(),
@@ -708,32 +705,11 @@ async function quit(): Promise<void> {
   app.quit();
 }
 
-// ── Setup 完成后：启动 Gateway → 打开主窗口 ──
+// Setup 完成逻辑已内联到 setup-ipc.ts 的 setup:complete handler 中
 
-setupManager.setOnComplete(async () => {
-  const running = await ensureGatewayRunning("setup:complete");
-  if (!running) {
-    return false;
-  }
-
-  try {
-    // gateway schema 兼容：保留 wizard.lastRunAt
-    const config = readUserConfig();
-    config.wizard ??= {};
-    config.wizard.lastRunAt = new Date().toISOString();
-    delete config.wizard.pendingAt;
-    writeUserConfig(config);
-
-    // 写入 oneclaw.config.json 归属标记
-    markSetupComplete();
-  } catch (err: any) {
-    log.error(`写入 setup 完成标记失败: ${err?.message ?? err}`);
-    return false;
-  }
-
-  await showMainWindow();
-  recordSetupBaselineConfigSnapshot();
-  return true;
+// 渲染进程通知 Setup 视图进入/退出状态
+ipcMain.on("app:setup-view-state", (_event, active: boolean) => {
+  windowManager.inSetupView = active;
 });
 
 // ── macOS Dock 可见性：窗口全隐藏时切换纯托盘模式 ──
@@ -910,8 +886,8 @@ app.whenReady().then(async () => {
       break;
 
     case "fresh":
-      // 状态 4：全新安装
-      setupManager.showSetup();
+      // 状态 4：全新安装 → 主窗口显示 Setup 视图
+      await showMainWindow("setup");
       break;
   }
 });
@@ -919,13 +895,9 @@ app.whenReady().then(async () => {
 // ── 二次启动 → 聚焦已有窗口 ──
 
 app.on("second-instance", () => {
-  if (setupManager.isSetupOpen()) {
-    setupManager.focusSetup();
-  } else {
-    showMainWindow().catch((err) => {
-      log.error(`second-instance 打开主窗口失败: ${err}`);
-    });
-  }
+  showMainWindow().catch((err) => {
+    log.error(`second-instance 打开主窗口失败: ${err}`);
+  });
 });
 
 app.on("web-contents-created", (_event, webContents) => {
@@ -938,13 +910,9 @@ app.on("web-contents-created", (_event, webContents) => {
 // ── macOS: 点击 Dock 图标时恢复窗口 ──
 
 app.on("activate", () => {
-  if (setupManager.isSetupOpen()) {
-    setupManager.focusSetup();
-  } else {
-    showMainWindow().catch((err) => {
-      log.error(`activate 打开主窗口失败: ${err}`);
-    });
-  }
+  showMainWindow().catch((err) => {
+    log.error(`activate 打开主窗口失败: ${err}`);
+  });
 });
 
 // ── 托盘应用：所有窗口关闭不退出 ──

@@ -8,8 +8,6 @@ directories:
 files:
   - dist/**/*
   - chat-ui/dist/**/*
-  - setup/**/*
-  - settings/**/*
   - shared/**/*
   - assets/**/*
   - package.json
