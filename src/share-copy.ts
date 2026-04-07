@@ -14,7 +14,7 @@ export type ShareCopyPayload = {
   locales: Record<ShareCopyLocale, ShareCopyLocaleContent>;
 };
 
-const SHARE_COPY_JSON_PATH = path.resolve(__dirname, "../settings/share-copy-content.json");
+const SHARE_COPY_JSON_PATH = path.resolve(__dirname, "../assets/share-copy-content.json");
 const REMOTE_SHARE_COPY_URL = "https://oneclaw.cn/config/share-copy-content.json";
 const REMOTE_FETCH_TIMEOUT_MS = 4000;
 const REMOTE_CACHE_TTL_MS = 5 * 60 * 1000;
