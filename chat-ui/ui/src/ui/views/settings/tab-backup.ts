@@ -157,34 +157,41 @@ export function renderTabBackup(state: AppViewState, notice: string | null) {
 
       <!-- Backup History -->
       <div class="oc-settings__card">
-        <div class="oc-settings__card-title">${t("settings.backup.title")}</div>
+        <div class="oc-settings-backup__card-header">
+          <div class="oc-settings__card-title">${t("settings.backup.title")}</div>
+          ${s.hasLastKnownGood ? html`
+            <button class="oc-settings__btn oc-settings__btn--primary oc-settings__btn--compact" ?disabled=${s.restoring} @click=${() => handleRestoreLKG(state)}>${t("settings.backup.restoreLastKnownGood")}</button>
+          ` : nothing}
+        </div>
         ${s.hasLastKnownGood ? html`
-          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
-            <span style="font-size:13px">${t("settings.backup.lastKnownGood")}: ${formatDateTime(s.lastKnownGoodUpdatedAt)}</span>
-            <button class="oc-settings__btn oc-settings__btn--primary" style="padding:6px 14px;font-size:12px" ?disabled=${s.restoring} @click=${() => handleRestoreLKG(state)}>${t("settings.backup.restoreLastKnownGood")}</button>
-          </div>
+          <div class="oc-settings-backup__meta">${t("settings.backup.lastKnownGood")}: ${formatDateTime(s.lastKnownGoodUpdatedAt)}</div>
         ` : nothing}
-        ${s.backups.length ? s.backups.map(b => html`
-          <div class="oc-settings-backup__item">
-            <span>${formatDateTime(b.createdAt)}</span>
-            <span style="color:var(--text-secondary);font-size:12px">${formatBytes(b.size)}</span>
-            <span style="color:var(--text-secondary);font-size:12px;flex:1;overflow:hidden;text-overflow:ellipsis">${b.fileName}</span>
-            <button class="oc-settings__btn oc-settings__btn--primary" style="padding:6px 14px;font-size:12px" ?disabled=${s.restoring} @click=${() => handleRestoreBackup(state, b.fileName)}>${t("settings.backup.restoreBackup")}</button>
+        ${s.backups.length ? html`
+          <div class="oc-settings-backup__list">
+            ${s.backups.map(b => html`
+              <div class="oc-settings-backup__item">
+                <div class="oc-settings-backup__item-main">
+                  <div class="oc-settings-backup__item-time">${formatDateTime(b.createdAt)} · ${formatBytes(b.size)}</div>
+                  <div class="oc-settings-backup__item-name">${b.fileName}</div>
+                </div>
+                <button class="oc-settings__btn oc-settings__btn--primary oc-settings__btn--compact" ?disabled=${s.restoring} @click=${() => handleRestoreBackup(state, b.fileName)}>${t("settings.backup.restoreBackup")}</button>
+              </div>
+            `)}
           </div>
-        `) : html`<div style="color:var(--text-secondary);font-size:13px">${t("settings.backup.noBackups")}</div>`}
+        ` : html`<div class="oc-settings-backup__empty">${t("settings.backup.noBackups")}</div>`}
       </div>
 
       <!-- Gateway Control -->
       <div class="oc-settings__card">
         <div class="oc-settings__card-title">${t("settings.backup.gateway")}</div>
-        <div style="display:flex;align-items:center;gap:12px">
-          <span style="font-size:13px">${gwStatusKey(gw)}</span>
+        <div class="oc-settings-backup__gateway-row">
+          <span class="oc-settings-backup__meta">${gwStatusKey(gw)}</span>
           ${gw === "running" ? html`
-            <button class="oc-settings__btn oc-settings__btn--primary" style="padding:6px 14px;font-size:12px" @click=${() => handleGatewayAction(state, "restart")}>${t("settings.backup.restart")}</button>
-            <button class="oc-settings__btn oc-settings__btn--danger" style="padding:6px 14px;font-size:12px" @click=${() => handleGatewayAction(state, "stop")}>${t("settings.backup.stop")}</button>
+            <button class="oc-settings__btn oc-settings__btn--primary oc-settings__btn--compact" @click=${() => handleGatewayAction(state, "restart")}>${t("settings.backup.restart")}</button>
+            <button class="oc-settings__btn oc-settings__btn--danger oc-settings__btn--compact" @click=${() => handleGatewayAction(state, "stop")}>${t("settings.backup.stop")}</button>
           ` : nothing}
           ${gw === "stopped" ? html`
-            <button class="oc-settings__btn oc-settings__btn--primary" @click=${() => handleGatewayAction(state, "start")}>${t("settings.backup.start")}</button>
+            <button class="oc-settings__btn oc-settings__btn--primary oc-settings__btn--compact" @click=${() => handleGatewayAction(state, "start")}>${t("settings.backup.start")}</button>
           ` : nothing}
         </div>
       </div>
@@ -192,7 +199,7 @@ export function renderTabBackup(state: AppViewState, notice: string | null) {
       <!-- Reset -->
       <div class="oc-settings__card">
         <div class="oc-settings__card-title">${t("settings.backup.resetTitle")}</div>
-        <p style="font-size:13px;color:var(--text-secondary);margin:0 0 12px">${t("settings.backup.resetDescription")}</p>
+        <p class="oc-settings-backup__reset-desc">${t("settings.backup.resetDescription")}</p>
         <button class="oc-settings__btn oc-settings__btn--danger" ?disabled=${s.resetting} @click=${() => handleResetConfig(state)}>
           ${t("settings.backup.resetButton")}
         </button>
@@ -206,6 +213,28 @@ export function renderTabBackup(state: AppViewState, notice: string | null) {
 
 const styleSheet = new CSSStyleSheet();
 styleSheet.replaceSync(/* css */`
+  .oc-settings-backup__card-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+  }
+  .oc-settings-backup__meta {
+    font-size: 12.5px;
+    color: var(--text-secondary, #71717a);
+    line-height: 1.5;
+  }
+  .oc-settings-backup__empty {
+    font-size: 12.5px;
+    color: var(--text-muted, #a1a1aa);
+  }
+  .oc-settings-backup__list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    max-height: 300px;
+    overflow-y: auto;
+  }
   .oc-settings-backup__item {
     display: flex;
     align-items: center;
@@ -215,9 +244,41 @@ styleSheet.replaceSync(/* css */`
     border: 1px solid var(--border, #e0e0e0);
     border-radius: var(--radius-sm, 8px);
     background: var(--bg-input, #f5f5f5);
-    font-size: 13px;
-    margin-bottom: 8px;
   }
-  .oc-settings-backup__item:last-child { margin-bottom: 0; }
+  .oc-settings-backup__item-main {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+  }
+  .oc-settings-backup__item-time {
+    font-size: 12px;
+    color: var(--text, #3f3f46);
+    user-select: text;
+  }
+  .oc-settings-backup__item-name {
+    font-size: 11.5px;
+    color: var(--text-muted, #a1a1aa);
+    font-family: "SF Mono", "Fira Code", Menlo, monospace;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 460px;
+    user-select: text;
+  }
+  .oc-settings-backup__gateway-row {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 12px;
+  }
+  .oc-settings-backup__gateway-row .oc-settings-backup__meta {
+    margin-right: auto;
+  }
+  .oc-settings-backup__reset-desc {
+    font-size: 13px;
+    color: var(--text-secondary, #71717a);
+    margin: 0;
+  }
 `);
 document.adoptedStyleSheets = [...document.adoptedStyleSheets, styleSheet];

@@ -741,6 +741,18 @@ function injectStyles() {
       transform: rotate(90deg);
     }
 
+    /* Current provider status bar */
+    .oc-provider-status {
+      display: flex;
+      align-items: center;
+      padding: 8px 12px;
+      font-size: 12.5px;
+      font-weight: 500;
+      color: var(--text-secondary, #71717a);
+      background: var(--bg-secondary, #fbfbfb);
+      border-radius: var(--radius-sm, 8px);
+    }
+
     /* Section spacing */
     .oc-provider-form .oc-settings__form-group { margin-bottom: 16px; }
   `);
@@ -767,6 +779,14 @@ export function renderTabProvider(state: AppViewState) {
     <div class="oc-settings__section">
       <h2 class="oc-settings__section-title">${t("settings.provider.title")}</h2>
       <p class="oc-settings__hint">${t("settings.provider.desc")}</p>
+
+      ${(() => {
+        const defaultModel = s.configuredModels.find(m => m.isDefault);
+        if (!defaultModel) return nothing;
+        const displayName = getProviderDisplayName(resolveUiProvider(defaultModel.provider), resolveSubPlatform(defaultModel.provider));
+        const modelName = defaultModel.name || defaultModel.key.split("/").pop() || "";
+        return html`<div class="oc-provider-status">${t("settings.provider.currentUsing")}${displayName} · ${modelName}</div>`;
+      })()}
 
       <div class="oc-provider-layout">
         <!-- Left: Model list -->
