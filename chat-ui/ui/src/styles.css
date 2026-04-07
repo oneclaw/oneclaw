@@ -8085,6 +8085,17 @@ img.chat-avatar {
 .cm-pill--disabled { font-size: 10px; padding: 1px 6px; border-radius: 9999px; background: rgba(239,68,68,0.15); color: #ef4444; flex-shrink: 0; }
 .cm-pill--expired { font-size: 10px; padding: 1px 6px; border-radius: 9999px; background: var(--bg-muted, rgba(128,128,128,0.08)); color: var(--text-muted); flex-shrink: 0; }
 
+.cm-detail__error {
+  width: 100%;
+  max-width: 560px;
+  padding: 8px 12px;
+  font-size: 13px;
+  color: var(--error);
+  background: var(--error-bg, rgba(239, 68, 68, 0.08));
+  border-radius: var(--radius-sm);
+  margin-bottom: 12px;
+}
+
 /* ── 右侧详情面板 ── */
 
 .cm-detail {
