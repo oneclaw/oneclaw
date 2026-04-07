@@ -109,12 +109,12 @@ export function renderTabAdvanced(state: AppViewState) {
       ` : nothing}
 
       <div class="oc-settings__form-group">
-        <oc-toggle-switch
-          .label=${s.cliLoading ? t("settings.advanced.cliInstalling") : t("settings.advanced.cli")}
-          .checked=${s.cliInstalled}
-          .disabled=${s.cliLoading}
-          @change=${(e: CustomEvent) => toggleCli(state, e.detail.checked)}
-        ></oc-toggle-switch>
+        <div class="oc-toggle ${s.cliLoading ? 'oc-toggle--disabled' : ''}" @click=${() => { if (!s.cliLoading) toggleCli(state, !s.cliInstalled); }}>
+          <span class="oc-toggle-label">${s.cliLoading ? t("settings.advanced.cliInstalling") : html`${t("settings.advanced.cliLabel")} <code class="oc-settings__cli-code">openclaw</code>`}</span>
+          <span class="oc-toggle-track ${s.cliInstalled ? 'oc-toggle-track--on' : ''}">
+            <span class="oc-toggle-thumb"></span>
+          </span>
+        </div>
       </div>
 
       <oc-message-box .message=${s.error ?? ""} .type=${"error"} .visible=${!!s.error}></oc-message-box>
