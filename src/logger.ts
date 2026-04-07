@@ -33,11 +33,13 @@ function write(level: string, msg: string): void {
     getLogStream().write(line);
   } catch {}
 
-  if (level === "ERROR") {
-    process.stderr.write(line);
-  } else {
-    process.stdout.write(line);
-  }
+  try {
+    if (level === "ERROR") {
+      process.stderr.write(line);
+    } else {
+      process.stdout.write(line);
+    }
+  } catch {}
 }
 
 export function info(msg: string): void { write("INFO", msg); }
