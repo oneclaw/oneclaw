@@ -84,7 +84,7 @@ export function renderTabSearch(state: AppViewState) {
 
       <oc-provider-segment
         .providers=${["moonshot"]}
-        .selected=${"moonshot"}
+        .selected=${""}
         .labels=${{ moonshot: t("setup.provider.label.moonshot") }}
       ></oc-provider-segment>
 
