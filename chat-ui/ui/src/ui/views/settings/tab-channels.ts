@@ -134,7 +134,7 @@ styleSheet.replaceSync(/* css */`
     display: flex;
     align-items: center;
     gap: 8px;
-    padding: 6px 8px 6px 12px;
+    padding: 12px 8px 12px 12px;
     border: none;
     background: transparent;
     color: var(--text-secondary, #888);
