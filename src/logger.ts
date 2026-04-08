@@ -17,13 +17,29 @@ try {
 
 // 使用 WriteStream 异步缓冲写入，避免高频 appendFileSync 阻塞主进程
 let logStream: fs.WriteStream | null = null;
+let writeCount = 0;
+const ROTATION_CHECK_INTERVAL = 1000;
 
 function getLogStream(): fs.WriteStream {
   if (!logStream) {
     logStream = fs.createWriteStream(LOG_PATH, { flags: "a" });
-    logStream.on("error", () => {});
+    logStream.on("error", () => { logStream = null; });
   }
   return logStream;
+}
+
+function checkRotation(): void {
+  if (++writeCount < ROTATION_CHECK_INTERVAL) return;
+  try {
+    if (fs.statSync(LOG_PATH).size > MAX_LOG_SIZE) {
+      if (logStream) {
+        logStream.destroy();
+        logStream = null;
+      }
+      fs.writeFileSync(LOG_PATH, "[truncated]\n");
+    }
+    writeCount = 0;
+  } catch {}
 }
 
 // 写一行日志到文件 + console 镜像
@@ -31,13 +47,16 @@ function write(level: string, msg: string): void {
   const line = `[${new Date().toISOString()}] [${level}] ${msg}\n`;
   try {
     getLogStream().write(line);
+    checkRotation();
   } catch {}
 
-  if (level === "ERROR") {
-    process.stderr.write(line);
-  } else {
-    process.stdout.write(line);
-  }
+  try {
+    if (level === "ERROR") {
+      process.stderr.write(line);
+    } else {
+      process.stdout.write(line);
+    }
+  } catch {}
 }
 
 export function info(msg: string): void { write("INFO", msg); }

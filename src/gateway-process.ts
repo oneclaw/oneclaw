@@ -24,13 +24,22 @@ import { uninstallGatewayDaemon, getPortPid } from "./install-detector";
 
 // 诊断日志（固定写入 ~/.openclaw/gateway.log，便于用户定位）
 const LOG_PATH = resolveGatewayLogPath();
+const MAX_DIAG_LOG_SIZE = 5 * 1024 * 1024;
+const DIAG_ROTATION_CHECK_INTERVAL = 1000;
+let diagWriteCount = 0;
 
 function diagLog(msg: string): void {
   const line = `[${new Date().toISOString()}] ${msg}\n`;
-  process.stderr.write(line);
+  try { process.stderr.write(line); } catch {}
   try {
     fs.mkdirSync(path.dirname(LOG_PATH), { recursive: true });
     fs.appendFileSync(LOG_PATH, line);
+    if (++diagWriteCount >= DIAG_ROTATION_CHECK_INTERVAL) {
+      if (fs.statSync(LOG_PATH).size > MAX_DIAG_LOG_SIZE) {
+        fs.writeFileSync(LOG_PATH, "[truncated]\n");
+      }
+      diagWriteCount = 0;
+    }
   } catch {}
 }
 
@@ -208,12 +217,12 @@ export class GatewayProcess {
     // 转发日志（同时写入诊断文件）
     this.proc.stdout?.on("data", (d: Buffer) => {
       const s = d.toString();
-      process.stdout.write(`[gateway] ${s}`);
+      try { process.stdout.write(`[gateway] ${s}`); } catch {}
       diagLog(`stdout: ${s.trimEnd()}`);
     });
     this.proc.stderr?.on("data", (d: Buffer) => {
       const s = d.toString();
-      process.stderr.write(`[gateway] ${s}`);
+      try { process.stderr.write(`[gateway] ${s}`); } catch {}
       diagLog(`stderr: ${s.trimEnd()}`);
     });
 

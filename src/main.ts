@@ -113,6 +113,7 @@ if (!process.env.ONECLAW_MULTI_INSTANCE && !app.requestSingleInstanceLock()) {
 // ── 全局错误兜底 ──
 
 process.on("uncaughtException", (err) => {
+  if ((err as NodeJS.ErrnoException).code === "EPIPE") return;
   log.error(`uncaughtException: ${err.stack || err.message}`);
 });
 process.on("unhandledRejection", (reason) => {
