@@ -46,6 +46,8 @@ export function renderTabAbout(state: AppViewState) {
 
   return html`
     <div class="oc-settings__section">
+      <h2 class="oc-settings__section-title">${t("settings.nav.about")}</h2>
+
       <!-- Version -->
       <div class="oc-settings__card">
         <div class="oc-settings__card-title">${t("settings.about.version")}</div>

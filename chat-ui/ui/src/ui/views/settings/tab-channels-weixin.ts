@@ -131,7 +131,7 @@ export function renderChannelWeixin(state: AppViewState) {
       ${s.enabled ? html`
         ${connected ? html`
           <div class="oc-weixin-connected">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#22c55e" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 12 2 2 4-4"/><circle cx="12" cy="12" r="10"/></svg>
+            <span class="oc-weixin-badge">✓</span>
             <span class="oc-weixin-account-id">${s.accounts[0]?.id ?? ""}</span>
             <button class="oc-weixin-remove-btn" @click=${() => handleDisconnect(state)}>
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>
@@ -172,6 +172,10 @@ _weixinSheet.replaceSync(/* css */`
     border: 1px solid var(--border, #e4e4e7);
     font-size: 13px;
     color: var(--text, #3f3f46);
+  }
+  .oc-weixin-badge {
+    color: #22c55e;
+    font-weight: 600;
   }
   .oc-weixin-account-id {
     flex: 1;

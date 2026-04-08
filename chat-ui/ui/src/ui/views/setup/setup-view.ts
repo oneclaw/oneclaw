@@ -415,10 +415,25 @@ function injectStyles() {
       gap: 6px;
     }
 
-    .oc-setup-details-summary {
+    .oc-setup-details-advanced {
+      margin-top: 12px;
+      border: 1px solid var(--border, #e4e4e7);
+      border-radius: var(--radius-sm, 8px);
+      padding: 0;
+    }
+    .oc-setup-details-advanced > summary {
+      cursor: pointer;
+      padding: 8px 12px;
       font-size: 13px;
       color: var(--text-secondary, #888);
-      cursor: pointer;
+      user-select: none;
+    }
+    .oc-setup-details-advanced[open] > summary {
+      border-bottom: 1px solid var(--border, #e4e4e7);
+    }
+    .oc-setup-details-advanced .oc-setup-form-group {
+      padding: 12px;
+      margin: 0;
     }
 
     .oc-setup-options {
