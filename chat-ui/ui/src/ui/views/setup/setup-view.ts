@@ -64,6 +64,7 @@ function injectStyles() {
       overflow-y: auto;
     }
     .oc-setup-container--step2 {
+      max-width: 640px;
       padding-top: 48px;
       padding-bottom: 48px;
     }
@@ -344,7 +345,7 @@ function injectStyles() {
 
     .oc-setup-btn-row {
       display: flex;
-      justify-content: space-between;
+      justify-content: flex-end;
       align-items: center;
       gap: 12px;
       margin-top: 24px;
@@ -377,6 +378,7 @@ function injectStyles() {
       background: transparent;
       color: var(--text, #1a1a1a);
       border-color: var(--border, #ddd);
+      margin-right: auto;
     }
     .oc-setup-btn--secondary:hover:not(:disabled) { background: var(--bg-secondary, #f5f5f5); }
     .oc-setup-btn--text {
