@@ -7950,293 +7950,557 @@ img.chat-avatar {
 }
 
 /* ========================================================================
-   Cron 只读视图
+   定时任务管理页 — master-detail layout
    ======================================================================== */
 
-/* 容器：居中限宽 + 纵向滚动 */
-.cron-readonly {
-  padding: 24px 20px;
-  max-width: 720px;
-  margin: 0 auto;
+/* 两栏布局 */
+.cm-layout {
+  display: grid;
+  grid-template-columns: 260px 1fr;
+  gap: 0;
   height: 100%;
+  overflow: hidden;
+}
+
+.cm-layout__main {
+  padding: 32px;
   overflow-y: auto;
+  max-width: 560px;
+  margin: 0 auto;
 }
 
-.cron-readonly__header {
-  margin-bottom: 16px;
+.cm-layout__detail {
+  border-left: 1px solid var(--border);
+  overflow-y: auto;
+  padding: 52px 32px 24px;
+  display: flex;
+  justify-content: center;
 }
 
-.cron-readonly__title {
-  font-size: 20px;
+/* ── 左侧列表面板 ── */
+
+.cm-list {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.cm-list__top {
+  padding: 42px 16px 4px;
+  flex-shrink: 0;
+}
+
+.cm-list__title {
+  font-size: 16px;
   font-weight: 600;
   color: var(--text-strong);
   margin: 0;
 }
 
-/* 任务列表 */
-.cron-readonly__list {
+.cm-list__new-wrap {
+  padding: 8px 14px 12px;
+  flex-shrink: 0;
+}
+
+.cm-list__new-btn {
   display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-/* 空状态提示 */
-.cron-readonly__empty {
-  text-align: center;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  padding: 8px 16px;
+  border-radius: 9999px;
+  background: transparent;
+  border: 1px solid var(--border-strong);
   color: var(--muted);
-  font-size: 14px;
-  padding: 48px 0;
-}
-
-/* 任务卡片 */
-.cron-readonly__card {
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  background: var(--card);
+  font-size: 13px;
+  font-weight: 500;
+  font-family: inherit;
   cursor: pointer;
-  transition: border-color 0.15s, box-shadow 0.15s;
-  overflow: hidden;
+  transition: border-color 0.15s, color 0.15s;
 }
 
-.cron-readonly__card:hover {
-  border-color: var(--border-strong);
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06);
+.cm-list__new-btn:hover {
+  border-color: var(--accent);
+  color: var(--accent);
 }
 
-/* 展开态 */
-.cron-readonly__card--expanded {
-  border-color: var(--border-strong);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+.cm-list__new-btn svg {
+  flex-shrink: 0;
 }
 
-/* 卡片头部 */
-.cron-readonly__card-header {
+.cm-list__items {
+  flex: 1;
+  overflow-y: auto;
+  padding: 0 8px 8px;
+}
+
+.cm-list__item {
+  position: relative;
+  padding: 10px 12px;
+  border-radius: var(--radius-sm, 8px);
+  cursor: pointer;
+  transition: background 0.12s;
+  margin-bottom: 2px;
+}
+
+.cm-list__item:hover {
+  background: var(--bg-hover);
+}
+
+.cm-list__item--selected {
+  background: var(--bg-hover);
+}
+
+.cm-list__item--expired {
+  opacity: 0.45;
+}
+
+.cm-list__item-top {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 14px 16px 0;
 }
 
-.cron-readonly__card-name {
-  font-size: 14px;
+.cm-list__item-name {
+  font-size: 13px;
   font-weight: 600;
   color: var(--text-strong);
-}
-
-/* 头部弹性占位 */
-.cron-readonly__card-spacer {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   flex: 1;
 }
 
-/* 展开/折叠箭头 */
-.cron-readonly__chevron {
-  color: var(--muted);
-  flex-shrink: 0;
-  transition: transform 0.2s ease;
-}
-
-.cron-readonly__chevron--open {
-  transform: rotate(90deg);
-}
-
-/* 卡片主体（detail + footer 容器） */
-.cron-readonly__card-body {
-  padding: 0 16px 14px;
-}
-
-/* 状态小药丸（启用/禁用） */
-.cron-readonly__pill {
-  font-size: 11px;
-  padding: 2px 8px;
-  border-radius: 9999px;
-  font-weight: 500;
-  line-height: 1.4;
-  flex-shrink: 0;
-}
-
-.cron-readonly__pill--enabled {
-  background: rgba(156, 163, 175, 0.15);
-  color: #6b7280;
-}
-
-.cron-readonly__pill--disabled {
-  background: rgba(239, 68, 68, 0.15);
-  color: #ef4444;
-}
-
-/* 卡片详情行 */
-.cron-readonly__card-detail {
-  display: flex;
-  align-items: baseline;
-  gap: 8px;
-  padding: 4px 0;
-  font-size: 13px;
-}
-
-.cron-readonly__card-detail:first-child {
-  padding-top: 10px;
-}
-
-.cron-readonly__detail-label {
-  color: var(--muted);
-  min-width: 56px;
-  flex-shrink: 0;
+.cm-list__item-schedule {
   font-size: 12px;
+  color: var(--text-muted);
+  margin-top: 2px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.cron-readonly__detail-value {
+/* 列表项 hover 操作按钮 */
+.cm-list__item-actions {
+  display: none;
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  gap: 2px;
+  align-items: center;
+}
+
+.cm-list__item:hover .cm-list__item-actions {
+  display: flex;
+}
+
+.cm-list__item-action {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border: none;
+  border-radius: var(--radius-xs);
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  padding: 0;
+  flex-shrink: 0;
+}
+
+.cm-list__item-action svg {
+  stroke: currentColor;
+  fill: none;
+}
+
+.cm-list__item-action:hover {
+  background: var(--bg-hover);
   color: var(--text);
-  word-break: break-word;
 }
 
-/* 指令文本：完整显示 + 换行 */
-.cron-readonly__prompt {
-  white-space: pre-wrap;
-  line-height: 1.6;
+.cm-list__item-action--danger:hover {
+  color: var(--error, #ef4444);
 }
 
-/* 卡片底部元信息行 */
-.cron-readonly__card-footer {
+/* 列表状态药丸 */
+.cm-pill--enabled { font-size: 10px; padding: 1px 6px; border-radius: 9999px; background: rgba(156,163,175,0.15); color: #6b7280; flex-shrink: 0; }
+.cm-pill--disabled { font-size: 10px; padding: 1px 6px; border-radius: 9999px; background: rgba(239,68,68,0.15); color: #ef4444; flex-shrink: 0; }
+.cm-pill--expired { font-size: 10px; padding: 1px 6px; border-radius: 9999px; background: var(--bg-muted, rgba(128,128,128,0.08)); color: var(--text-muted); flex-shrink: 0; }
+
+.cm-detail__error {
+  width: 100%;
+  max-width: 560px;
+  padding: 8px 12px;
+  font-size: 13px;
+  color: var(--error);
+  background: var(--error-bg, rgba(239, 68, 68, 0.08));
+  border-radius: var(--radius-sm);
+  margin-bottom: 12px;
+}
+
+/* ── toggle switch (iOS style) ── */
+
+.cm-detail__toggle {
+  position: relative;
+  display: inline-block;
+  width: 42px;
+  height: 24px;
+  flex-shrink: 0;
+  cursor: pointer;
+}
+
+.cm-detail__toggle input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+  position: absolute;
+}
+
+.cm-detail__toggle-track {
+  position: absolute;
+  inset: 0;
+  background: var(--border);
+  border-radius: 12px;
+  transition: background 200ms ease;
+}
+
+.cm-detail__toggle-track::before {
+  content: "";
+  position: absolute;
+  left: 2px;
+  top: 2px;
+  width: 20px;
+  height: 20px;
+  background: #fff;
+  border-radius: 50%;
+  transition: transform 200ms ease;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+}
+
+.cm-detail__toggle input:checked + .cm-detail__toggle-track {
+  background: var(--accent);
+}
+
+.cm-detail__toggle input:checked + .cm-detail__toggle-track::before {
+  transform: translateX(18px);
+}
+
+/* ── 右侧详情面板 ── */
+
+.cm-detail {
+  width: 100%;
+  max-width: 560px;
+}
+
+.cm-detail--empty {
   display: flex;
-  flex-wrap: wrap;
+  flex-direction: column;
   align-items: center;
-  gap: 6px;
-  padding-top: 10px;
-  margin-top: 6px;
-  border-top: 1px solid var(--border);
-  font-size: 12px;
-  color: var(--muted);
+  justify-content: center;
+  height: 100%;
+  text-align: center;
 }
 
-.cron-readonly__meta-item {
-  display: inline-flex;
+.cm-detail__header {
+  display: flex;
   align-items: center;
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.cm-detail__name {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--text-strong);
+  margin: 0;
+  flex: 1;
+}
+
+.cm-detail__actions {
+  display: flex;
   gap: 4px;
 }
 
-.cron-readonly__meta-label {
-  color: var(--muted);
-  opacity: 0.7;
+.cm-detail__action-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm, 8px);
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+  padding: 0;
 }
 
-.cron-readonly__meta-sep {
-  width: 1px;
-  height: 12px;
-  background: var(--border);
+.cm-detail__action-btn:hover:not(:disabled) {
+  background: var(--bg-hover);
+  color: var(--text-strong);
+  border-color: var(--border-strong);
+}
+
+.cm-detail__action-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+.cm-detail__action-btn--danger:hover:not(:disabled) {
+  background: rgba(192,57,43,0.08);
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
+/* 详情元信息 */
+.cm-detail__meta {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md, 12px);
+  overflow: hidden;
+}
+
+.cm-detail__meta-row {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  padding: 10px 16px;
+  font-size: 13px;
+}
+
+.cm-detail__meta-row + .cm-detail__meta-row {
+  border-top: 1px solid var(--border);
+}
+
+.cm-detail__meta-label {
+  color: var(--text-muted);
+  min-width: 72px;
   flex-shrink: 0;
+  font-size: 12px;
+  font-weight: 500;
 }
 
-/* 运行状态药丸（4 种状态） */
-.cron-readonly__status-pill {
+.cm-detail__meta-value {
+  color: var(--text);
+  word-break: break-word;
+}
+
+.cm-detail__prompt {
+  white-space: pre-wrap;
+  line-height: 1.5;
+}
+
+.cm-detail__status-pill {
   font-size: 11px;
   padding: 2px 8px;
   border-radius: 9999px;
   font-weight: 500;
-  line-height: 1.4;
-  flex-shrink: 0;
-  margin-left: auto;
 }
 
-.cron-readonly__status--ok {
-  background: rgba(34, 197, 94, 0.15);
-  color: #16a34a;
+.cm-status--ok { background: rgba(34,197,94,0.12); color: #16a34a; }
+.cm-status--error { background: rgba(239,68,68,0.12); color: #ef4444; }
+.cm-status--skipped { background: rgba(234,179,8,0.12); color: #ca8a04; }
+.cm-status--na { background: var(--bg-muted, rgba(128,128,128,0.08)); color: var(--text-muted); }
+
+/* 运行历史 */
+.cm-detail__history {
+  margin-top: 24px;
+  padding-bottom: 24px;
 }
 
-.cron-readonly__status--error {
-  background: rgba(239, 68, 68, 0.15);
-  color: #dc2626;
-}
-
-.cron-readonly__status--skipped {
-  background: rgba(234, 179, 8, 0.15);
-  color: #ca8a04;
-}
-
-.cron-readonly__status--na {
-  background: rgba(156, 163, 175, 0.15);
-  color: #6b7280;
-}
-
-/* 历史记录区域 */
-.cron-readonly__history {
-  border-top: 1px solid var(--border);
-  padding: 12px 16px 14px;
-  background: var(--bg-subtle, rgba(0, 0, 0, 0.02));
-}
-
-.cron-readonly__history-title {
-  font-size: 12px;
+.cm-detail__history-title {
+  font-size: 14px;
   font-weight: 600;
-  color: var(--muted);
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  margin: 0 0 8px;
+  color: var(--text-strong);
+  margin-bottom: 12px;
 }
 
-/* 单次运行记录 */
-.cron-readonly__run {
-  padding: 8px 0;
-}
-
-.cron-readonly__run + .cron-readonly__run {
-  border-top: 1px solid var(--border);
-}
-
-.cron-readonly__run-main {
+.cm-detail__run {
   display: flex;
   align-items: center;
   gap: 8px;
-  font-size: 13px;
-}
-
-.cron-readonly__run-status {
-  font-size: 11px;
-  padding: 1px 6px;
-  border-radius: 9999px;
-  font-weight: 500;
-  flex-shrink: 0;
-}
-
-.cron-readonly__run-time {
-  color: var(--text);
-}
-
-.cron-readonly__run-duration {
-  color: var(--muted);
+  padding: 8px 0;
   font-size: 12px;
+  color: var(--text-secondary);
 }
 
-.cron-readonly__run-summary {
+.cm-detail__run + .cm-detail__run {
+  border-top: 1px solid var(--border);
+}
+
+.cm-detail__run-status { font-size: 11px; padding: 1px 6px; border-radius: 9999px; font-weight: 500; }
+.cm-detail__run-time { color: var(--text-muted); }
+.cm-detail__run-dur { color: var(--text-muted); }
+.cm-detail__run-link {
+  border: none; background: none; color: var(--accent); font-size: 12px;
+  padding: 0; margin-left: auto; cursor: pointer; font-family: inherit;
+}
+.cm-detail__run-link:hover { text-decoration: underline; }
+
+.cm-detail__run-card + .cm-detail__run-card {
+  border-top: 1px solid var(--border);
+}
+
+.cm-detail__run-summary {
   font-size: 12px;
-  color: var(--muted);
+  color: var(--text-secondary);
   margin-top: 4px;
-  line-height: 1.6;
+  line-height: 1.5;
   white-space: pre-wrap;
   word-break: break-word;
 }
 
-/* 错误信息 */
-.cron-readonly__run-error {
+.cm-detail__run-error {
   font-size: 12px;
-  color: var(--destructive, #ef4444);
+  color: #ef4444;
   margin-top: 4px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
 }
 
-/* 查看对话链接按钮 */
-.cron-readonly__run-link {
-  border: none;
-  background: none;
-  color: var(--accent, #c0392b);
-  font-size: 12px;
-  padding: 0;
-  margin-left: auto;
-  cursor: pointer;
+/* 详情内表单标题 */
+.cm-detail__form-title {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--text-strong);
+  margin: 0 0 20px;
+}
+
+/* ── 全屏空状态 ── */
+
+.cm-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  text-align: center;
+  padding: 24px;
+}
+
+.cm-empty__icon { color: var(--text-muted); opacity: 0.3; margin-bottom: 20px; }
+
+.cm-empty__title {
+  font-size: 16px; font-weight: 600; color: var(--text-strong); margin: 0 0 8px;
+}
+
+.cm-empty__desc {
+  font-size: 13px; color: var(--text-muted); margin: 0 0 24px; max-width: 300px; line-height: 1.5;
+}
+
+.cm-empty__action {
+  display: inline-flex; align-items: center; gap: 5px;
+  border: none; border-radius: 9999px;
+  background: var(--accent); color: var(--text-on-accent, #fff);
+  font-size: 13px; font-family: inherit; font-weight: 500;
+  padding: 8px 20px; cursor: pointer; transition: background 0.15s;
+}
+
+.cm-empty__action:hover { background: var(--accent-hover); }
+
+/* 新建任务表单 */
+.cron-form {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md, 12px);
+  background: var(--bg-elevated, var(--card));
+  padding: 24px;
+  margin-bottom: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+}
+
+.cron-form__row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+.cron-form__field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.cron-form__field--grow {
+  flex: 1;
+}
+
+.cron-form__label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-secondary, var(--muted));
+}
+
+.cron-form__input,
+.cron-form__select,
+.cron-form__textarea {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm, 8px);
+  background: var(--bg);
+  color: var(--text-strong);
+  font-size: 14px;
   font-family: inherit;
-  flex-shrink: 0;
+  padding: 9px 12px;
+  outline: none;
+  transition: border-color 0.15s, box-shadow 0.15s;
 }
 
-.cron-readonly__run-link:hover {
-  text-decoration: underline;
+.cron-form__input:focus,
+.cron-form__select:focus,
+.cron-form__textarea:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent-subtle, rgba(192, 57, 43, 0.15));
+}
+
+.cron-form__textarea {
+  resize: vertical;
+  min-height: 96px;
+}
+
+.cron-form__footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  margin-top: 8px;
+}
+
+.cron-form__btn {
+  border: none;
+  border-radius: 9999px;
+  font-size: 13px;
+  font-weight: 500;
+  font-family: inherit;
+  padding: 8px 20px;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+}
+
+.cron-form__btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.cron-form__btn--secondary {
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--text-strong);
+}
+
+.cron-form__btn--secondary:hover:not(:disabled) {
+  background: var(--bg-hover);
+  border-color: var(--border-strong);
+}
+
+.cron-form__btn--primary {
+  background: var(--accent);
+  color: var(--text-on-accent, #fff);
+}
+
+.cron-form__btn--primary:hover:not(:disabled) {
+  background: var(--accent-hover);
 }
 
 /* ── 反馈按钮（titlebar 右侧，始终可见） ── */

@@ -50,6 +50,17 @@ export async function loadCronJobs(state: CronState) {
 }
 
 export function buildCronSchedule(form: CronFormState) {
+  // "daily" is a UI-only kind → convert HH:MM to cron expr
+  if ((form.scheduleKind as string) === "daily") {
+    const match = form.cronExpr.trim().match(/^(\d{1,2}):(\d{2})$/);
+    if (!match) {
+      throw new Error("Invalid daily time.");
+    }
+    const hour = parseInt(match[1], 10);
+    const minute = parseInt(match[2], 10);
+    const tz = form.cronTz.trim() || Intl.DateTimeFormat().resolvedOptions().timeZone;
+    return { kind: "cron" as const, expr: `${minute} ${hour} * * *`, tz };
+  }
   if (form.scheduleKind === "at") {
     const ms = Date.parse(form.scheduleAt);
     if (!Number.isFinite(ms)) {
@@ -138,6 +149,51 @@ export async function addCronJob(state: CronState) {
       description: "",
       payloadText: "",
     };
+    await loadCronJobs(state);
+    await loadCronStatus(state);
+  } catch (err) {
+    state.cronError = String(err);
+  } finally {
+    state.cronBusy = false;
+  }
+}
+
+export async function updateCronJob(state: CronState, jobId: string) {
+  if (!state.client || !state.connected || state.cronBusy) {
+    return;
+  }
+  state.cronBusy = true;
+  state.cronError = null;
+  try {
+    const schedule = buildCronSchedule(state.cronForm);
+    const payload = buildCronPayload(state.cronForm);
+    const name = state.cronForm.name.trim();
+    if (!name) {
+      throw new Error("Name required.");
+    }
+    const delivery =
+      state.cronForm.sessionTarget === "isolated" &&
+      state.cronForm.payloadKind === "agentTurn" &&
+      state.cronForm.deliveryMode
+        ? {
+            mode: state.cronForm.deliveryMode === "announce" ? "announce" : "none",
+            channel: state.cronForm.deliveryChannel.trim() || "last",
+            to: state.cronForm.deliveryTo.trim() || undefined,
+          }
+        : undefined;
+    const agentId = state.cronForm.agentId.trim();
+    const patch: Record<string, unknown> = {
+      name,
+      description: state.cronForm.description.trim() || undefined,
+      agentId: agentId || undefined,
+      enabled: state.cronForm.enabled,
+      schedule,
+      sessionTarget: state.cronForm.sessionTarget,
+      wakeMode: state.cronForm.wakeMode,
+      payload,
+      delivery,
+    };
+    await state.client.request("cron.update", { id: jobId, patch });
     await loadCronJobs(state);
     await loadCronStatus(state);
   } catch (err) {

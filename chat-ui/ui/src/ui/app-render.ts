@@ -30,8 +30,10 @@ import {
 import { patchSession, loadSessions } from "./controllers/sessions.ts";
 import { renderSkillStoreView, type SkillStoreState } from "./skill-store-view.ts";
 import { renderWorkspaceView, initWorkspace } from "./views/workspace.ts";
-import { renderCronReadonly } from "./views/cron-readonly.ts";
-import { loadCronRuns } from "./controllers/cron.ts";
+import { renderCronManage } from "./views/cron-manage.ts";
+import { loadCronRuns, loadCronJobs, loadCronStatus, removeCronJob, toggleCronJob, runCronJob, addCronJob, updateCronJob } from "./controllers/cron.ts";
+import { DEFAULT_CRON_FORM } from "./app-defaults.ts";
+import { isExpiredOneShot } from "./presenter.ts";
 import type { SkillStatusEntry } from "./types.ts";
 import {
   loadSkills,
@@ -542,6 +544,8 @@ function buildFeedbackPanelCallbacks(state: AppViewState) {
 // ── Cron 只读视图状态 ──
 let cronExpandedJobId: string | null = null;
 let cronRunsLoading = false;
+let cronShowForm = false;
+let cronEditingJobId: string | null = null;
 
 // "installed" = 已安装/内置技能（gateway RPC），"store" = 技能商店（clawhub API）
 let skillsSubTab: "installed" | "store" = "installed";
@@ -1177,7 +1181,7 @@ export function renderApp(state: AppViewState) {
             skillsActive,
             workspaceActive,
             cronActive,
-            cronJobCount: state.cronJobs.length,
+            cronJobCount: state.cronJobs.filter((j) => !isExpiredOneShot(j)).length,
             onOpenCron: () => setOneClawView(state, "cron"),
             feedbackActive,
             feedbackHasReply: feedbackHasReplyGlobal,
@@ -1415,20 +1419,21 @@ export function renderApp(state: AppViewState) {
               : workspaceActive
                 ? renderWorkspaceView(state, () => setOneClawView(state, "chat"))
               : cronActive
-                ? renderCronReadonly({
+                ? renderCronManage({
                     jobs: state.cronJobs,
                     loading: state.cronLoading,
                     error: state.cronError,
                     expandedJobId: cronExpandedJobId,
                     runs: state.cronRuns,
                     runsLoading: cronRunsLoading,
+                    busy: state.cronBusy,
+                    showForm: cronShowForm,
+                    editingJobId: cronEditingJobId,
+                    form: state.cronForm,
+                    channelMeta: state.channelsSnapshot?.channelMeta ?? [],
                     onToggleExpand: (jobId: string) => {
-                      if (cronExpandedJobId === jobId) {
-                        cronExpandedJobId = null;
-                        state.requestUpdate();
-                        return;
-                      }
                       cronExpandedJobId = jobId;
+                      cronShowForm = false;
                       cronRunsLoading = true;
                       state.requestUpdate();
                       void loadCronRuns(state as any, jobId).finally(() => {
@@ -1443,6 +1448,89 @@ export function renderApp(state: AppViewState) {
                         sessionKey,
                         oneclawView: "chat",
                       });
+                    },
+                    onRemove: (jobId: string) => {
+                      const job = state.cronJobs.find((j) => j.id === jobId);
+                      if (job) {
+                        void removeCronJob(state as any, job).then(() => state.requestUpdate());
+                      }
+                    },
+                    onToggle: (jobId: string, enabled: boolean) => {
+                      const job = state.cronJobs.find((j) => j.id === jobId);
+                      if (job) {
+                        void toggleCronJob(state as any, job, enabled).then(() => state.requestUpdate());
+                      }
+                    },
+                    onRun: (jobId: string) => {
+                      const job = state.cronJobs.find((j) => j.id === jobId);
+                      if (job) {
+                        void runCronJob(state as any, job).then(() => state.requestUpdate());
+                      }
+                    },
+                    onToggleForm: () => {
+                      cronShowForm = !cronShowForm;
+                      cronEditingJobId = null;
+                      if (cronShowForm) {
+                        cronExpandedJobId = null;
+                        state.cronForm = { ...DEFAULT_CRON_FORM };
+                      }
+                      state.requestUpdate();
+                    },
+                    onFormChange: (patch) => {
+                      state.cronForm = { ...state.cronForm, ...patch };
+                      state.requestUpdate();
+                    },
+                    onAddJob: () => {
+                      if (cronEditingJobId) {
+                        void updateCronJob(state as any, cronEditingJobId).then(() => {
+                          if (!state.cronError) {
+                            cronShowForm = false;
+                            cronEditingJobId = null;
+                          }
+                          state.requestUpdate();
+                        });
+                      } else {
+                        void addCronJob(state as any).then(() => {
+                          if (!state.cronError) {
+                            cronShowForm = false;
+                          }
+                          state.requestUpdate();
+                        });
+                      }
+                    },
+                    onEdit: (jobId: string) => {
+                      const job = state.cronJobs.find((j) => j.id === jobId);
+                      if (!job) return;
+                      cronEditingJobId = jobId;
+                      cronShowForm = true;
+                      cronExpandedJobId = null;
+                      // Detect daily pattern: "M H * * *" → convert to daily mode
+                      let editKind: string = job.schedule.kind;
+                      let editCronExpr = job.schedule.expr ?? "0 7 * * *";
+                      if (job.schedule.kind === "cron" && job.schedule.expr) {
+                        const dm = job.schedule.expr.match(/^(\d{1,2})\s+(\d{1,2})\s+\*\s+\*\s+\*$/);
+                        if (dm) {
+                          editKind = "daily";
+                          editCronExpr = `${dm[2].padStart(2, "0")}:${dm[1].padStart(2, "0")}`;
+                        }
+                      }
+                      state.cronForm = {
+                        ...DEFAULT_CRON_FORM,
+                        name: job.name ?? "",
+                        scheduleKind: editKind as any,
+                        scheduleAt: job.schedule.at ?? "",
+                        everyAmount: job.schedule.everyMs ? String(Math.round(job.schedule.everyMs / 60000)) : "30",
+                        everyUnit: "minutes",
+                        cronExpr: editCronExpr,
+                        cronTz: job.schedule.tz ?? "",
+                        payloadKind: job.payload.kind,
+                        payloadText: job.payload.message ?? job.payload.text ?? "",
+                        sessionTarget: (job as any).sessionTarget ?? "isolated",
+                        deliveryMode: job.delivery?.mode ?? "announce",
+                        deliveryChannel: job.delivery?.channel ?? "last",
+                        deliveryTo: job.delivery?.to ?? "",
+                      };
+                      state.requestUpdate();
                     },
                   })
                 : feedbackActive
