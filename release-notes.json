@@ -1,5 +1,12 @@
 [
   {
+    "version": "2026.408.0",
+    "notes": {
+      "zh": "定时任务支持创建、编辑和删除\n修复若干稳定性和界面问题\n整体视觉体验优化",
+      "en": "Scheduled tasks now support full create, edit, and delete\nStability and UI fixes\nOverall visual polish"
+    }
+  },
+  {
     "version": "2026.328.4",
     "notes": {
       "zh": "新增反馈功能\n新增思考模式：发送消息时可开启深度思考，支持多级别切换\n修复钉钉、微信渠道兼容性问题\n修复 Kimi 登录偶发失效问题\n优化微信连接体验\nAPI 错误提示更清晰\n会话列表自动刷新",

@@ -50,7 +50,7 @@
   };
 
   const SUB_PLATFORM_URLS = {
-    "moonshot-cn": "https://platform.moonshot.cn?utm_source=oneclaw",
+    "moonshot-cn": "https://platform.kimi.com?utm_source=oneclaw",
     "moonshot-ai": "https://platform.moonshot.ai?utm_source=oneclaw",
     "kimi-code": "https://kimi.com/code?utm_source=oneclaw",
   };
