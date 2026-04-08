@@ -693,30 +693,33 @@ function injectStyles() {
     .oc-provider-usage {
       display: grid;
       grid-template-columns: 1fr 1fr;
-      gap: 12px;
-      margin-bottom: 16px;
+      gap: 10px;
+      margin-bottom: 8px;
     }
     .oc-provider-usage-card {
+      padding: 12px 14px;
       border: 1px solid var(--border, #e0e0e0);
       border-radius: var(--radius-sm, 8px);
-      padding: 12px;
+      background: var(--bg-secondary, #fbfbfb);
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
     }
-    .oc-provider-usage-title { font-size: 12px; color: var(--text-secondary, #888); margin-bottom: 6px; }
-    .oc-provider-usage-value { font-size: 18px; font-weight: 600; color: var(--text, #1a1a1a); }
+    .oc-provider-usage-title { font-size: 12px; font-weight: 500; color: var(--text-muted, #a1a1aa); }
+    .oc-provider-usage-value { font-size: 22px; font-weight: 700; color: var(--text-strong, #18181b); letter-spacing: -0.02em; }
     .oc-provider-usage-bar {
       height: 4px;
       background: var(--border, #e0e0e0);
       border-radius: 2px;
-      margin-top: 8px;
       overflow: hidden;
     }
     .oc-provider-usage-bar-fill {
       height: 100%;
-      background: var(--accent, #c0392b);
+      background: var(--text-strong, #18181b);
       border-radius: 2px;
-      transition: width 0.3s;
+      transition: width 0.3s ease;
     }
-    .oc-provider-usage-reset { font-size: 11px; color: var(--text-secondary, #888); margin-top: 4px; }
+    .oc-provider-usage-reset { font-size: 11px; color: var(--text-muted, #a1a1aa); white-space: nowrap; }
 
     /* Collapse indicator */
     .oc-provider-collapse { margin-bottom: 8px; }
