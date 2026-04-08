@@ -60,12 +60,14 @@ export type SkillsProps = {
 
 export function renderSkills(props: SkillsProps) {
   const skills = props.report?.skills ?? [];
+  // 过滤被阻止的 skill
+  const visibleSkills = skills.filter((skill) => skill.eligible !== false);
   const filter = props.filter.trim().toLowerCase();
   const filtered = filter
-    ? skills.filter((skill) =>
+    ? visibleSkills.filter((skill) =>
         [skill.name, skill.description, skill.source].join(" ").toLowerCase().includes(filter),
       )
-    : skills;
+    : visibleSkills;
   const groups = groupSkills(filtered);
 
   return html`
@@ -138,13 +140,6 @@ function renderSkill(skill: SkillStatusEntry, props: SkillsProps) {
     ...skill.missing.config.map((c) => `config:${c}`),
     ...skill.missing.os.map((o) => `os:${o}`),
   ];
-  const reasons: string[] = [];
-  if (skill.disabled) {
-    reasons.push("disabled");
-  }
-  if (skill.blockedByAllowlist) {
-    reasons.push("blocked by allowlist");
-  }
   return html`
     <div class="list-item">
       <div class="list-main">
@@ -161,16 +156,6 @@ function renderSkill(skill: SkillStatusEntry, props: SkillsProps) {
                 `
               : nothing
           }
-          <span class="chip ${skill.eligible ? "chip-ok" : "chip-warn"}">
-            ${skill.eligible ? "eligible" : "blocked"}
-          </span>
-          ${
-            skill.disabled
-              ? html`
-                  <span class="chip chip-warn">disabled</span>
-                `
-              : nothing
-          }
         </div>
         ${
           missing.length > 0
@@ -181,25 +166,18 @@ function renderSkill(skill: SkillStatusEntry, props: SkillsProps) {
             `
             : nothing
         }
-        ${
-          reasons.length > 0
-            ? html`
-              <div class="muted" style="margin-top: 6px;">
-                Reason: ${reasons.join(", ")}
-              </div>
-            `
-            : nothing
-        }
       </div>
       <div class="list-meta">
-        <div class="row" style="justify-content: flex-end; flex-wrap: wrap;">
-          <button
-            class="btn"
-            ?disabled=${busy}
-            @click=${() => props.onToggle(skill.skillKey, skill.disabled)}
-          >
-            ${skill.disabled ? "Enable" : "Disable"}
-          </button>
+        <div class="row" style="justify-content: flex-end; flex-wrap: wrap; gap: 8px; align-items: center;">
+          <label class="skill-toggle-switch">
+            <input
+              type="checkbox"
+              .checked=${!skill.disabled}
+              ?disabled=${busy}
+              @change=${() => props.onToggle(skill.skillKey, skill.disabled)}
+            />
+            <span class="skill-toggle-slider"></span>
+          </label>
           ${
             canInstall
               ? html`<button

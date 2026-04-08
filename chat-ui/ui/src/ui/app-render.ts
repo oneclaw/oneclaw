@@ -780,12 +780,14 @@ function clamp(text: string | undefined, max: number): string {
 function renderInstalledSkillsView(state: AppViewState) {
   const report = state.skillsReport;
   const allSkills = report?.skills ?? [];
+  // 1. 过滤被阻止的 skill（blockedByAllowlist 或 eligible === false）
+  const visibleSkills = allSkills.filter((s: SkillStatusEntry) => s.eligible !== false);
   const filter = ((state as any).skillsFilter ?? "").trim().toLowerCase();
   const filtered = filter
-    ? allSkills.filter((s: SkillStatusEntry) =>
+    ? visibleSkills.filter((s: SkillStatusEntry) =>
         [s.name, s.description, s.source].join(" ").toLowerCase().includes(filter),
       )
-    : allSkills;
+    : visibleSkills;
   const groups = groupLocalSkills(filtered);
   const busy = state.skillsBusyKey;
   const messages = state.skillMessages as SkillMessageMap;
@@ -828,30 +830,28 @@ function renderInstalledSkillsView(state: AppViewState) {
                     <div class="skill-store__card-name">${skill.name ?? key}</div>
                     <div class="skill-store__card-meta">
                       <span class="skills-badge">${skill.source}</span>
-                      <span class="skills-badge ${skill.eligible ? "skills-badge--ok" : "skills-badge--warn"}">
-                        ${skill.eligible ? t("skills.eligible") : t("skills.blocked")}
-                      </span>
-                      ${skill.disabled
-                        ? html`<span class="skills-badge skills-badge--warn">${t("skills.disabled")}</span>`
-                        : nothing}
                     </div>
                   </div>
                   <div class="skill-store__card-action">
-                    <button
-                      class="skill-store__btn ${skill.disabled ? "skill-store__btn--install" : "skill-store__btn--installed"}"
-                      type="button"
-                      ?disabled=${isBusy}
-                      @click=${() => void updateSkillEnabled(state as unknown as SkillsState, key, !!skill.disabled)}
-                    >${skill.disabled ? t("skills.enable") : t("skills.disable")}</button>
                     ${skill.source !== "openclaw-bundled"
                       ? html`
                         <button
-                          class="skill-store__btn skill-store__btn--installed"
+                          class="skill-card__uninstall"
                           type="button"
+                          title="${t("skillStore.uninstall")}"
                           ?disabled=${isBusy}
                           @click=${() => void uninstallLocalSkill(state, skill.name ?? key)}
-                        >${t("skillStore.uninstall")}</button>`
+                        ><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="16" height="16"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg></button>`
                       : nothing}
+                    <label class="skill-toggle-switch">
+                      <input
+                        type="checkbox"
+                        .checked=${!skill.disabled}
+                        ?disabled=${isBusy}
+                        @change=${() => void updateSkillEnabled(state as unknown as SkillsState, key, !!skill.disabled)}
+                      />
+                      <span class="skill-toggle-slider"></span>
+                    </label>
                   </div>
                 </div>
                 <div class="skill-store__card-desc">${clamp(skill.description as string, 160)}</div>
