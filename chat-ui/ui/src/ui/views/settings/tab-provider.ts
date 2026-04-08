@@ -99,13 +99,12 @@ function getPresetModels(provider: string, subPlatform: string | null): string[]
 function getProviderDisplayName(provider: string, subPlatform?: string | null): string {
   if (provider === "moonshot") {
     const names: Record<string, string> = {
-      "moonshot-cn": "Kimi Open Platform",
-      "moonshot-ai": "Moonshot AI",
-      "kimi-code": "Kimi Subscription",
+      "moonshot-cn": t("setup.provider.subPlatform.moonshotCn"),
+      "kimi-code": t("setup.provider.subPlatform.kimiCode"),
     };
     return names[subPlatform ?? ""] ?? "Kimi";
   }
-  const map: Record<string, string> = { anthropic: "Anthropic", openai: "OpenAI", google: "Google", custom: "Custom" };
+  const map: Record<string, string> = { anthropic: "Anthropic", openai: "OpenAI", google: "Google" };
   return map[provider] ?? provider;
 }
 
@@ -830,7 +829,7 @@ export function renderTabProvider(state: AppViewState) {
               <div class="oc-settings__radio-group">
                 <label class="oc-settings__radio">
                   <input type="radio" name="settingsSubPlatform" value="kimi-code" .checked=${s.subPlatform === "kimi-code"}
-                    @change=${() => onSubPlatformChange("kimi-code", state)} /> ${t("setup.provider.subPlatform.kimiCode")}
+                    @change=${() => onSubPlatformChange("kimi-code", state)} /> ${t("setup.provider.subPlatform.kimiCode")}<span class="oc-settings__badge">${t("setup.provider.subPlatform.searchBadge")}</span>
                 </label>
                 <label class="oc-settings__radio">
                   <input type="radio" name="settingsSubPlatform" value="moonshot-cn" .checked=${s.subPlatform === "moonshot-cn"}
@@ -877,12 +876,9 @@ export function renderTabProvider(state: AppViewState) {
           ` : nothing}
 
           ${isOAuth ? html`
-            <details class="oc-provider-collapse" style="margin-top:16px">
-              <summary class="oc-provider-collapse__summary">
-                <svg class="oc-provider-collapse__icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
-                ${t("setup.provider.oauth.advanced")} — ${t("setup.provider.oauth.or")}
-              </summary>
-              <div style="margin-top:12px">
+            <details class="oc-settings__details-advanced" style="margin-top:16px">
+              <summary>${t("setup.provider.oauth.advanced")}</summary>
+              <div class="oc-settings__form-group">
                 ${renderApiKeyInput(state)}
               </div>
             </details>

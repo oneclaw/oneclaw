@@ -298,7 +298,7 @@ export function renderStep2(state: AppViewState, goToStep: (step: number) => voi
             <label class="oc-setup-radio">
               <input type="radio" name="subPlatform" value="kimi-code" .checked=${s.subPlatform === "kimi-code"}
                 @change=${() => onSubPlatformChange("kimi-code", state)} />
-              ${t("setup.provider.subPlatform.kimiCode")}
+              ${t("setup.provider.subPlatform.kimiCode")}<span class="oc-settings__badge">${t("setup.provider.subPlatform.searchBadge")}</span>
             </label>
             <label class="oc-setup-radio">
               <input type="radio" name="subPlatform" value="moonshot-cn" .checked=${s.subPlatform === "moonshot-cn"}
@@ -436,18 +436,14 @@ function renderOAuthSection(state: AppViewState, goToStep: (step: number) => voi
         </button>
       `}
 
-      <details style="margin-top:12px">
-        <summary class="oc-setup-details-summary">
-          ${t("setup.provider.oauth.advanced")} — ${t("setup.provider.oauth.or")}
-        </summary>
-        <div style="margin-top:12px">
-          <div class="oc-setup-form-group">
-            <label class="oc-setup-label">${t("setup.provider.apiKey")}</label>
-            <oc-password-input .value=${s.apiKey} .placeholder=${getPlaceholder()}
-              @input=${(e: CustomEvent) => { s.apiKey = e.detail.value; state.requestUpdate(); }}
-            ></oc-password-input>
-          </div>
-          <div class="oc-setup-btn-row">
+      <details class="oc-setup-details-advanced">
+        <summary>${t("setup.provider.oauth.advanced")}</summary>
+        <div class="oc-setup-form-group">
+          <label class="oc-setup-label">${t("setup.provider.apiKey")}</label>
+          <oc-password-input .value=${s.apiKey} .placeholder=${getPlaceholder()}
+            @input=${(e: CustomEvent) => { s.apiKey = e.detail.value; state.requestUpdate(); }}
+          ></oc-password-input>
+          <div class="oc-setup-btn-row" style="margin-top:12px">
             <button class="oc-setup-btn oc-setup-btn--primary" ?disabled=${s.verifying}
               @click=${() => handleVerify(state, goToStep)}>
               ${s.verifying ? "..." : t("setup.provider.verify")}
