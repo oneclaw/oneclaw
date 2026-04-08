@@ -57,10 +57,15 @@ function injectStyles() {
       max-width: 440px;
       margin: 0 auto;
       padding: 72px 32px 32px;
-      min-height: 100vh;
+      height: 100%;
       display: flex;
       flex-direction: column;
       align-items: center;
+      overflow-y: auto;
+    }
+    .oc-setup-container--step2 {
+      padding-top: 48px;
+      padding-bottom: 48px;
     }
 
     .oc-setup-progress {
@@ -445,7 +450,7 @@ export function renderSetupView(state: AppViewState) {
   const totalSteps = 4;
 
   return html`
-    <div class="oc-setup-container">
+    <div class="oc-setup-container ${step === 2 ? 'oc-setup-container--step2' : ''}">
       ${step >= 0 ? html`
         <div class="oc-setup-progress">
           ${[0, 1, 2, 3].map(i => html`
