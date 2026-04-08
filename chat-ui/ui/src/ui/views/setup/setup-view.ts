@@ -54,7 +54,7 @@ function injectStyles() {
   const sheet = new CSSStyleSheet();
   sheet.replaceSync(/* css */`
     .oc-setup-container {
-      max-width: 440px;
+      max-width: 540px;
       margin: 0 auto;
       padding: 72px 32px 32px;
       height: 100%;
@@ -344,6 +344,8 @@ function injectStyles() {
 
     .oc-setup-btn-row {
       display: flex;
+      justify-content: space-between;
+      align-items: center;
       gap: 12px;
       margin-top: 24px;
       width: 100%;
