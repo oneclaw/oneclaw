@@ -82,10 +82,40 @@ export function renderPairingPanel(
 
 const styleSheet = new CSSStyleSheet();
 styleSheet.replaceSync(/* css */`
-  .oc-settings-pairing { border: 1px solid var(--border); border-radius: var(--radius-s, 6px); padding: 12px; margin-top: 12px; }
-  .oc-settings-pairing__section {}
-  .oc-settings-pairing__item { display: flex; align-items: center; gap: 8px; padding: 6px 0; border-bottom: 1px solid var(--border, #eee); font-size: 13px; }
-  .oc-settings-pairing__item:last-of-type { border-bottom: none; }
-  .oc-settings-pairing__name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+  .oc-settings-pairing {
+    border: 1px solid var(--border, #e4e4e7);
+    border-radius: var(--radius-md, 12px);
+    background: var(--glass-xs, rgba(255,255,255,0.02));
+    padding: 10px 12px;
+    margin-top: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .oc-settings-pairing__section {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .oc-settings-pairing__item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    border: 1px solid var(--glass-border, rgba(255,255,255,0.08));
+    border-radius: var(--radius-sm, 8px);
+    padding: 6px 10px;
+    background: var(--glass-xs, rgba(255,255,255,0.02));
+    font-size: 12.5px;
+  }
+  .oc-settings-pairing__name {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 12.5px;
+    color: var(--text, #e4e4e7);
+  }
 `);
 document.adoptedStyleSheets = [...document.adoptedStyleSheets, styleSheet];
