@@ -75,7 +75,7 @@ export function renderTabMemory(state: AppViewState) {
           .disabled=${!s.isKimiCodeConfigured}
           @change=${(e: CustomEvent) => { s.embeddingEnabled = e.detail.checked; state.requestUpdate(); }}
         ></oc-toggle-switch>
-        ${embeddingStatus ? html`<div class="oc-settings__hint" style="color:${s.isKimiCodeConfigured && s.embeddingEnabled ? '#27ae60' : 'var(--text-secondary)'}">${embeddingStatus}</div>` : ""}
+        ${embeddingStatus ? html`<div class="oc-settings__field-hint">${embeddingStatus}</div>` : ""}
       </div>
 
       <oc-message-box .message=${s.error ?? ""} .type=${"error"} .visible=${!!s.error}></oc-message-box>

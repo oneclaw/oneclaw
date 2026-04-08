@@ -93,7 +93,7 @@ export function renderTabSearch(state: AppViewState) {
       </div>
 
       ${autoReuse ? html`
-        <div class="oc-settings__hint" style="margin-bottom:12px;color:#27ae60">${t("settings.search.autoReuse")}</div>
+        <div class="oc-settings__hint" style="margin-bottom:12px;color:var(--accent, #c0392b)">${t("settings.search.autoReuse")}</div>
       ` : html`
         <div class="oc-settings__form-group">
           <label class="oc-settings__label">${t("setup.provider.apiKey")}</label>

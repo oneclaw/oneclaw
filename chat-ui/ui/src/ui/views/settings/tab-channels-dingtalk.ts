@@ -122,7 +122,7 @@ export function renderChannelDingtalk(state: AppViewState) {
           <div class="oc-settings__hint">${t("settings.channels.dingtalk.sessionTimeoutHint")}</div>
         </div>
 
-        <div class="oc-settings__hint" style="margin-bottom:8px;color:#27ae60">${t("settings.channels.dingtalk.gatewayTokenHint")}</div>
+        <div class="oc-settings__field-hint" style="margin-bottom:8px">${t("settings.channels.dingtalk.gatewayTokenHint")}</div>
 
         <oc-message-box .message=${s.error ?? ""} .type=${"error"} .visible=${!!s.error}></oc-message-box>
         <oc-message-box .message=${s.successMsg ?? ""} .type=${"success"} .visible=${!!s.successMsg}></oc-message-box>
