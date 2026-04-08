@@ -7249,6 +7249,86 @@ img.chat-avatar {
   flex-shrink: 0;
 }
 
+/* 已安装技能：卡片 action 区域右对齐，垃圾桶在左、开关在最右 */
+.skill-store__card-action {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+  margin-left: auto;
+}
+
+/* iOS 风格 toggle-switch（与 settings 页面一致） */
+.skill-toggle-switch {
+  position: relative;
+  display: inline-block;
+  width: 42px;
+  height: 24px;
+  flex-shrink: 0;
+  cursor: pointer;
+}
+
+.skill-toggle-switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+  position: absolute;
+}
+
+.skill-toggle-slider {
+  position: absolute;
+  inset: 0;
+  background: var(--border);
+  border-radius: 12px;
+  transition: background 200ms ease;
+}
+
+.skill-toggle-slider::before {
+  content: "";
+  position: absolute;
+  left: 2px;
+  top: 2px;
+  width: 20px;
+  height: 20px;
+  background: #fff;
+  border-radius: 50%;
+  transition: transform 200ms ease;
+  box-shadow: var(--shadow-sm);
+}
+
+.skill-toggle-switch input:checked + .skill-toggle-slider {
+  background: var(--accent);
+}
+
+.skill-toggle-switch input:checked + .skill-toggle-slider::before {
+  transform: translateX(18px);
+}
+
+/* 已安装技能：卸载垃圾桶按钮 */
+.skill-card__uninstall {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: none;
+  border-radius: var(--radius-md);
+  background: none;
+  color: var(--muted);
+  cursor: pointer;
+  transition: color var(--duration-fast) ease, background var(--duration-fast) ease;
+}
+
+.skill-card__uninstall:hover:not(:disabled) {
+  color: var(--danger);
+  background: var(--danger-subtle);
+}
+
+.skill-card__uninstall:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
 /* --- OneClaw Visual Polish Overrides --- */
 
 /* 1. Immersive Titlebar padding */
