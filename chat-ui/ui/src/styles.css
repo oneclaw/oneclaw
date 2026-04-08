@@ -8036,6 +8036,7 @@ img.chat-avatar {
 }
 
 .cm-list__item {
+  position: relative;
   padding: 10px 12px;
   border-radius: var(--radius-sm, 8px);
   cursor: pointer;
@@ -8080,6 +8081,50 @@ img.chat-avatar {
   white-space: nowrap;
 }
 
+/* 列表项 hover 操作按钮 */
+.cm-list__item-actions {
+  display: none;
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  gap: 2px;
+  align-items: center;
+}
+
+.cm-list__item:hover .cm-list__item-actions {
+  display: flex;
+}
+
+.cm-list__item-action {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border: none;
+  border-radius: var(--radius-xs);
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  padding: 0;
+  flex-shrink: 0;
+}
+
+.cm-list__item-action svg {
+  stroke: currentColor;
+  fill: none;
+}
+
+.cm-list__item-action:hover {
+  background: var(--bg-hover);
+  color: var(--text);
+}
+
+.cm-list__item-action--danger:hover {
+  color: var(--error, #ef4444);
+}
+
 /* 列表状态药丸 */
 .cm-pill--enabled { font-size: 10px; padding: 1px 6px; border-radius: 9999px; background: rgba(156,163,175,0.15); color: #6b7280; flex-shrink: 0; }
 .cm-pill--disabled { font-size: 10px; padding: 1px 6px; border-radius: 9999px; background: rgba(239,68,68,0.15); color: #ef4444; flex-shrink: 0; }
@@ -8094,6 +8139,53 @@ img.chat-avatar {
   background: var(--error-bg, rgba(239, 68, 68, 0.08));
   border-radius: var(--radius-sm);
   margin-bottom: 12px;
+}
+
+/* ── toggle switch (iOS style) ── */
+
+.cm-detail__toggle {
+  position: relative;
+  display: inline-block;
+  width: 42px;
+  height: 24px;
+  flex-shrink: 0;
+  cursor: pointer;
+}
+
+.cm-detail__toggle input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+  position: absolute;
+}
+
+.cm-detail__toggle-track {
+  position: absolute;
+  inset: 0;
+  background: var(--border);
+  border-radius: 12px;
+  transition: background 200ms ease;
+}
+
+.cm-detail__toggle-track::before {
+  content: "";
+  position: absolute;
+  left: 2px;
+  top: 2px;
+  width: 20px;
+  height: 20px;
+  background: #fff;
+  border-radius: 50%;
+  transition: transform 200ms ease;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+}
+
+.cm-detail__toggle input:checked + .cm-detail__toggle-track {
+  background: var(--accent);
+}
+
+.cm-detail__toggle input:checked + .cm-detail__toggle-track::before {
+  transform: translateX(18px);
 }
 
 /* ── 右侧详情面板 ── */

@@ -63,6 +63,20 @@ function renderListItem(job: CronJob, selected: boolean, props: CronManageProps)
         </span>
       </div>
       <div class="cm-list__item-schedule">${schedule}</div>
+      <div class="cm-list__item-actions">
+        <button class="cm-list__item-action" type="button"
+          @click=${(e: Event) => { e.stopPropagation(); props.onEdit(job.id); }}>
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" /><path d="m15 5 4 4" />
+          </svg>
+        </button>
+        <button class="cm-list__item-action cm-list__item-action--danger" type="button"
+          @click=${(e: Event) => { e.stopPropagation(); if (confirm(t("cron.removeConfirm"))) props.onRemove(job.id); }}>
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M3 6h18" /><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6" /><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" />
+          </svg>
+        </button>
+      </div>
     </div>
   `;
 }
@@ -83,13 +97,6 @@ function renderDetail(job: CronJob, props: CronManageProps) {
       <div class="cm-detail__header">
         <h3 class="cm-detail__name">${name}</h3>
         <div class="cm-detail__actions">
-          <button class="cm-detail__action-btn" type="button"
-            data-tooltip=${t("cron.form.edit")} data-tooltip-pos="bottom"
-            @click=${() => props.onEdit(job.id)}>
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" /><path d="m15 5 4 4" />
-            </svg>
-          </button>
           ${expired
             ? nothing
             : html`
@@ -98,21 +105,12 @@ function renderDetail(job: CronJob, props: CronManageProps) {
                 @click=${() => props.onRun(job.id)}>
                 <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor" stroke="none"><polygon points="6,3 20,12 6,21" /></svg>
               </button>
-              <button class="cm-detail__action-btn" type="button" ?disabled=${props.busy}
-                data-tooltip=${enabled ? t("cron.form.disable") : t("cron.form.enable")} data-tooltip-pos="bottom"
-                @click=${() => props.onToggle(job.id, !enabled)}>
-                ${enabled
-                  ? html`<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="4" width="4" height="16" rx="1" /><rect x="14" y="4" width="4" height="16" rx="1" /></svg>`
-                  : html`<svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor" stroke="none"><polygon points="6,3 20,12 6,21" /></svg>`}
-              </button>
+              <label class="cm-detail__toggle">
+                <input type="checkbox" .checked=${enabled} ?disabled=${props.busy}
+                  @change=${() => props.onToggle(job.id, !enabled)} />
+                <span class="cm-detail__toggle-track"></span>
+              </label>
             `}
-          <button class="cm-detail__action-btn cm-detail__action-btn--danger" type="button" ?disabled=${props.busy}
-            data-tooltip=${t("cron.remove")} data-tooltip-pos="bottom"
-            @click=${() => { if (confirm(t("cron.removeConfirm"))) props.onRemove(job.id); }}>
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M3 6h18" /><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6" /><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" />
-            </svg>
-          </button>
         </div>
       </div>
 
