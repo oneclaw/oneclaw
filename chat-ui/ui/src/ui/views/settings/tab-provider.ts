@@ -755,8 +755,8 @@ function injectStyles() {
       border-radius: var(--radius-sm, 8px);
     }
 
-    /* Section spacing */
-    .oc-provider-form .oc-settings__form-group { margin-bottom: 16px; }
+    /* Section spacing — parent gap handles spacing, no extra margin needed */
+    .oc-provider-form .oc-settings__form-group { margin-bottom: 0; }
   `);
   document.adoptedStyleSheets = [...document.adoptedStyleSheets, sheet];
 }
