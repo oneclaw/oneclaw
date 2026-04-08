@@ -42,6 +42,8 @@
   "oneclaw": {
     "openclaw": "2026.3.13",
     "dingtalkConnector": "0.8.3",
-    "weixin": "1.0.3"
+    "weixin": "1.0.3",
+    "wecom": "2026.4.3",
+    "qqbot": "1.6.1"
   }
 }
