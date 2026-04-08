@@ -134,7 +134,7 @@ styleSheet.replaceSync(/* css */`
     display: flex;
     align-items: center;
     gap: 8px;
-    padding: 12px 8px 12px 12px;
+    padding: 6px 8px 6px 12px;
     border: none;
     background: transparent;
     color: var(--text-secondary, #888);
@@ -145,6 +145,7 @@ styleSheet.replaceSync(/* css */`
     cursor: pointer;
     transition: background var(--transition, 0.18s ease), color var(--transition, 0.18s ease);
     width: 100%;
+    min-height: 36px;
   }
   .oc-settings-channels__status-dot {
     width: 6px;
