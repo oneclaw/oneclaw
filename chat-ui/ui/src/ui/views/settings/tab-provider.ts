@@ -1038,9 +1038,5 @@ function renderUsagePanel(state: AppViewState) {
         ${resetL > 0 ? html`<div class="oc-provider-usage-reset">${t("settings.provider.usage.resetIn")} ${formatResetDuration(resetL)}</div>` : nothing}
       </div>
     </div>
-    <div style="text-align:right;margin-bottom:12px">
-      <button class="oc-settings__btn oc-settings__btn--secondary" style="padding:4px 12px;font-size:12px"
-        @click=${() => loadUsage(state)}>${t("settings.provider.usage.refresh")}</button>
-    </div>
   `;
 }

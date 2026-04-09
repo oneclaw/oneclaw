@@ -54,17 +54,16 @@ function injectStyles() {
   const sheet = new CSSStyleSheet();
   sheet.replaceSync(/* css */`
     .oc-setup-container {
-      max-width: 540px;
+      width: 65%;
       margin: 0 auto;
       padding: 72px 32px 32px;
       height: 100%;
       display: flex;
       flex-direction: column;
-      align-items: center;
+      align-items: stretch;
       overflow-y: auto;
     }
     .oc-setup-container--step2 {
-      max-width: 640px;
       padding-top: 48px;
       padding-bottom: 48px;
     }
@@ -99,6 +98,7 @@ function injectStyles() {
       flex-direction: column;
       align-items: stretch;
       text-align: left;
+      flex: 1;
     }
 
     .oc-setup-icon {
@@ -124,37 +124,37 @@ function injectStyles() {
     }
 
     .oc-setup-title {
-      font-size: 26px;
+      font-size: 30px;
       font-weight: 700;
       letter-spacing: -0.02em;
-      margin: 0 0 8px;
+      margin: 0 0 24px;
       color: var(--text-strong, #18181b);
     }
     .oc-setup-subtitle {
-      font-size: 13.5px;
+      font-size: 15px;
       color: var(--text-secondary, #888);
-      margin: 0 0 20px;
+      margin: 0 0 28px;
       max-width: none;
     }
     .oc-setup-reassure {
-      font-size: 13px;
+      font-size: 15px;
       color: var(--text-secondary, #888);
-      margin: 0 0 16px;
+      margin: 0 0 20px;
     }
 
     .oc-setup-features {
       width: 100%;
       display: flex;
       flex-direction: column;
-      gap: 10px;
-      margin-bottom: 24px;
+      gap: 16px;
+      margin-bottom: 32px;
       text-align: left;
     }
     .oc-setup-feature-item {
       display: flex;
       align-items: center;
-      gap: 10px;
-      font-size: 13px;
+      gap: 12px;
+      font-size: 15px;
       color: var(--text-secondary, #888);
       line-height: 1.45;
     }
@@ -172,7 +172,7 @@ function injectStyles() {
     .oc-setup-feature-item svg { flex-shrink: 0; color: var(--accent, #c0392b); }
 
     .oc-setup-warning {
-      font-size: 12px;
+      font-size: 14px;
       color: var(--warning, #d97706);
       line-height: 1.5;
       margin-bottom: 12px;
@@ -186,7 +186,7 @@ function injectStyles() {
       padding: 12px 16px;
       margin-bottom: 20px;
       text-align: left;
-      font-size: 13px;
+      font-size: 15px;
       color: var(--text-secondary, #888);
     }
     .oc-setup-conflict-item { margin-bottom: 6px; }
@@ -203,7 +203,7 @@ function injectStyles() {
       border-radius: var(--radius-md, 12px);
       margin-bottom: 20px;
       text-align: left;
-      font-size: 12.5px;
+      font-size: 14px;
       color: var(--text-secondary, #888);
       line-height: 1.45;
     }
@@ -220,18 +220,18 @@ function injectStyles() {
       color: var(--accent, #c0392b);
       cursor: pointer;
       text-decoration: none;
-      font-size: 13px;
+      font-size: 15px;
     }
     .oc-setup-link:hover { text-decoration: underline; }
 
     .oc-setup-form-group {
       width: 100%;
-      margin-bottom: 16px;
+      margin-bottom: 20px;
       text-align: left;
     }
     .oc-setup-label {
       display: block;
-      font-size: 12px;
+      font-size: 14px;
       font-weight: 500;
       color: var(--text-secondary, #71717a);
       margin-bottom: 6px;
@@ -239,7 +239,7 @@ function injectStyles() {
     .oc-setup-input, .oc-setup-select {
       width: 100%;
       padding: 9px 12px;
-      font-size: 13.5px;
+      font-size: 15px;
       border: 1px solid var(--border, #ddd);
       border-radius: var(--radius-sm, 8px);
       background: var(--bg-input, #f5f5f5);
@@ -273,7 +273,7 @@ function injectStyles() {
       display: flex;
       align-items: center;
       gap: 6px;
-      font-size: 13px;
+      font-size: 15px;
       color: var(--text-secondary, #71717a);
       cursor: pointer;
     }
@@ -309,7 +309,7 @@ function injectStyles() {
       display: flex;
       align-items: center;
       gap: 8px;
-      font-size: 13px;
+      font-size: 15px;
       color: var(--text-secondary, #71717a);
       cursor: pointer;
     }
@@ -348,13 +348,18 @@ function injectStyles() {
       justify-content: flex-end;
       align-items: center;
       gap: 12px;
-      margin-top: 24px;
+      margin-top: auto;
+      padding-top: 24px;
+      padding-bottom: 16px;
       width: 100%;
+      position: sticky;
+      bottom: 48px;
+      background: var(--bg, #fff);
     }
 
     .oc-setup-btn {
-      padding: 10px 28px;
-      font-size: 14px;
+      padding: 11px 30px;
+      font-size: 16px;
       font-weight: 600;
       border-radius: var(--radius-pill, 9999px);
       cursor: pointer;
@@ -386,20 +391,20 @@ function injectStyles() {
       border: none;
       color: var(--text-secondary, #888);
       padding: 4px 8px;
-      font-size: 13px;
+      font-size: 15px;
     }
     .oc-setup-btn--text:hover { color: var(--text, #1a1a1a); }
 
     .oc-setup-oauth-section {
       width: 100%;
-      margin-bottom: 16px;
+      margin-bottom: 20px;
       text-align: left;
     }
     .oc-setup-oauth-status {
       display: flex;
       align-items: center;
       gap: 8px;
-      font-size: 14px;
+      font-size: 16px;
       color: var(--text, #1a1a1a);
       margin-bottom: 8px;
     }
@@ -410,7 +415,7 @@ function injectStyles() {
       padding: 10px 14px;
       background: rgba(231, 76, 60, 0.08);
       border-radius: 8px;
-      font-size: 13px;
+      font-size: 15px;
       color: var(--text, #1a1a1a);
       margin-bottom: 12px;
       text-align: left;
@@ -428,7 +433,7 @@ function injectStyles() {
     .oc-setup-details-advanced > summary {
       cursor: pointer;
       padding: 8px 12px;
-      font-size: 13px;
+      font-size: 15px;
       color: var(--text-secondary, #888);
       user-select: none;
     }
@@ -443,6 +448,13 @@ function injectStyles() {
     .oc-setup-options {
       width: 100%;
       margin-bottom: 16px;
+    }
+
+    /* Override password-input to match setup form field sizes */
+    .oc-setup-step .oc-password-input {
+      padding: 9px 12px;
+      font-size: 15px;
+      border-radius: var(--radius-sm, 8px);
     }
 
     .oc-setup-spinner {

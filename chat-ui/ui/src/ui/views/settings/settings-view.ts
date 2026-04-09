@@ -151,6 +151,7 @@ function injectStyles() {
     .oc-settings-nav-item--active svg {
       color: var(--text-strong, #18181b);
     }
+    .oc-settings-nav-item:focus-visible { box-shadow: none; outline: none; }
 
     .oc-settings-content {
       flex: 1;
@@ -179,7 +180,7 @@ function injectStyles() {
       flex-shrink: 0;
     }
     .oc-settings__section-title {
-      font-size: 18px;
+      font-size: 24px;
       font-weight: 600;
       letter-spacing: -0.01em;
       margin: 0;
@@ -197,10 +198,10 @@ function injectStyles() {
     }
     .oc-settings__input {
       width: 100%;
-      padding: 9px 12px;
-      font-size: 13.5px;
+      padding: 6px 10px;
+      font-size: 13px;
       border: 1px solid var(--border, #ddd);
-      border-radius: var(--radius-sm, 8px);
+      border-radius: 6px;
       background: var(--bg-input, #f5f5f5);
       color: var(--text, #1a1a1a);
       box-sizing: border-box;
@@ -372,18 +373,18 @@ function injectStyles() {
 
     .oc-settings__select {
       width: 100%;
-      padding: 9px 12px;
-      font-size: 13.5px;
+      padding: 6px 10px;
+      font-size: 13px;
       border: 1px solid var(--border, #ddd);
-      border-radius: var(--radius-sm, 8px);
+      border-radius: 6px;
       background: var(--bg-input, #f5f5f5);
       color: var(--text, #1a1a1a);
       box-sizing: border-box;
       appearance: none;
       background-image: url("data:image/svg+xml,%3Csvg width='12' height='8' viewBox='0 0 12 8' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 1.5L6 6.5L11 1.5' stroke='%2364748b' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
       background-repeat: no-repeat;
-      background-position: right 12px center;
-      padding-right: 32px;
+      background-position: right 10px center;
+      padding-right: 28px;
       cursor: pointer;
       outline: none;
       font-family: inherit;
@@ -515,6 +516,12 @@ function injectStyles() {
       padding: 6px 14px;
       min-height: 32px;
       font-size: 12px;
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+    }
+    .oc-settings__btn--compact svg {
+      flex-shrink: 0;
     }
 
     /* Feature badge (red pill, e.g. 支持搜索) */
@@ -547,6 +554,25 @@ function injectStyles() {
 
     /* Spinner animation (reused in provider OAuth) */
     @keyframes oc-setup-spin { to { transform: rotate(360deg); } }
+
+    /* Modal overlay */
+    .oc-modal-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.3);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 1000;
+    }
+    .oc-modal-dialog {
+      background: var(--bg, #fff);
+      border-radius: var(--radius-md, 12px);
+      padding: 20px 24px;
+      min-width: 360px;
+      max-width: 480px;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.15);
+    }
   `);
   document.adoptedStyleSheets = [...document.adoptedStyleSheets, sheet];
 }

@@ -9,7 +9,7 @@ import "../../components/toggle-switch.ts";
 import "../../components/password-input.ts";
 import "../../components/message-box.ts";
 import { updateChannelEnabled } from "./tab-channels.ts";
-import { renderPairingPanel, loadPairingData, type PairingPanelState } from "./tab-channels-pairing-panel.ts";
+import { renderPairingPanel, loadPairingData, type PairingPanelState, type PairingPanelOptions } from "./tab-channels-pairing-panel.ts";
 
 // Feishu 面板状态必须可整体回滚，避免未保存表单和配对缓存跨会话残留。
 function createFeishuState() {
@@ -160,16 +160,13 @@ export function renderChannelFeishu(state: AppViewState) {
 
   return html`
     <div class="oc-settings__section">
-      <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:4px">
-        <div>
-          <h3 class="oc-settings__panel-title" style="margin-bottom:4px">${t("settings.channels.feishu")}</h3>
-          <p class="oc-settings__hint" style="margin:0 0 12px">${t("settings.channels.feishu.desc")}</p>
-        </div>
-        <div style="display:flex;gap:12px;flex-shrink:0;padding-top:2px">
+      <div style="display:flex;align-items:flex-start;justify-content:flex-end;margin-bottom:8px">
+        <div style="display:flex;gap:12px;flex-shrink:0">
           <a class="oc-settings__link" href="#" @click=${(e: Event) => { e.preventDefault(); ipc.openExternal("https://github.com/nicepkg/openclaw/blob/main/docs/feishu.md"); }}>${t("settings.channels.feishu.setupGuide")} &rarr;</a>
           <a class="oc-settings__link" href="#" @click=${(e: Event) => { e.preventDefault(); ipc.openExternal("https://open.feishu.cn/app"); }}>${t("settings.channels.feishu.openConsole")} &rarr;</a>
         </div>
       </div>
+
 
       <div class="oc-settings__form-group">
         <oc-toggle-switch .label=${t("settings.channels.enable")} .checked=${s.enabled}
@@ -217,29 +214,29 @@ export function renderChannelFeishu(state: AppViewState) {
           </select>
         </div>
 
-        ${s.groupPolicy === "allowlist" ? html`
-          <div class="oc-settings__form-group">
-            <button class="oc-settings__btn" @click=${() => openAddGroupDialog(state)}>${t("settings.channels.feishu.addGroup")}</button>
-            ${s.groupAllowFrom.length ? html`
-              <div style="font-size:12px;color:var(--text-secondary);margin-top:4px">${s.groupAllowFrom.join(", ")}</div>
-            ` : nothing}
-          </div>
-          ${s.addGroupDialogOpen ? html`
-            <div class="oc-settings__form-group" style="border:1px solid var(--border);border-radius:8px;padding:12px;margin-top:8px">
+        ${s.groupPolicy === "allowlist" && s.addGroupDialogOpen ? html`
+          <div class="oc-modal-overlay" @click=${(e: Event) => { if (e.target === e.currentTarget) cancelAddGroup(state); }}>
+            <div class="oc-modal-dialog">
               <label class="oc-settings__label">${t("settings.channels.feishu.addGroupPrompt")}</label>
               <input class="oc-settings__input" .value=${s.addGroupInput} placeholder="oc_..."
                 @input=${(e: Event) => { s.addGroupInput = (e.target as HTMLInputElement).value; }}
                 @keydown=${(e: KeyboardEvent) => { if (e.key === "Enter") confirmAddGroup(state); if (e.key === "Escape") cancelAddGroup(state); }} />
               ${s.addGroupError ? html`<div style="color:var(--accent, #c0392b);font-size:12px;margin-top:4px">${s.addGroupError}</div>` : nothing}
-              <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:8px">
+              <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:12px">
                 <button class="oc-settings__btn" @click=${() => cancelAddGroup(state)}>${t("settings.cancel")}</button>
                 <button class="oc-settings__btn oc-settings__btn--primary" @click=${() => confirmAddGroup(state)}>${t("settings.confirm")}</button>
               </div>
             </div>
-          ` : nothing}
+          </div>
         ` : nothing}
 
-        ${s.dmPolicy === "pairing" || s.groupPolicy === "allowlist" ? renderPairingPanel(state, "feishu", s.pairingPanel, () => refreshFeishuPairing(state)) : nothing}
+        ${s.dmPolicy === "pairing" || s.groupPolicy === "allowlist" ? renderPairingPanel(state, "feishu", s.pairingPanel, () => refreshFeishuPairing(state), {
+          onAddGroup: s.groupPolicy === "allowlist" ? () => openAddGroupDialog(state) : undefined,
+          extraApproved: s.groupPolicy === "allowlist" ? s.groupAllowFrom.map(id => ({
+            kind: "group", id,
+            onRemove: () => { s.groupAllowFrom = s.groupAllowFrom.filter(g => g !== id); state.requestUpdate(); },
+          })) : undefined,
+        }) : nothing}
 
         <oc-message-box .message=${s.error ?? ""} .type=${"error"} .visible=${!!s.error}></oc-message-box>
         <oc-message-box .message=${s.successMsg ?? ""} .type=${"success"} .visible=${!!s.successMsg}></oc-message-box>

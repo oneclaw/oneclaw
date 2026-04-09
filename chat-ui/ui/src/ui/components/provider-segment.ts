@@ -55,11 +55,12 @@ styleSheet.replaceSync(/* css */`
     padding: 3px;
     overflow: hidden;
     flex-shrink: 0;
+    margin-bottom: 8px;
   }
   .oc-provider-seg__pill {
     flex: 1;
-    padding: 7px 0;
-    font-size: 12px;
+    padding: 8px 0;
+    font-size: 15px;
     font-weight: 500;
     color: var(--text-muted, #a1a1aa);
     background: transparent;
@@ -70,7 +71,7 @@ styleSheet.replaceSync(/* css */`
     white-space: nowrap;
     font-family: inherit;
   }
-  .oc-provider-seg__pill:hover:not(:disabled) { color: var(--text-secondary, #71717a); }
+  .oc-provider-seg__pill:hover:not(:disabled):not(.oc-provider-seg__pill--active) { color: var(--text-secondary, #71717a); }
   .oc-provider-seg__pill--active {
     color: var(--text-on-accent, #fff);
     background: var(--accent, #c0392b);
