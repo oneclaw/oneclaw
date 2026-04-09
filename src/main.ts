@@ -428,8 +428,10 @@ function requestGatewayStart(source: string): void {
 let restartTimer: ReturnType<typeof setTimeout> | null = null;
 function requestGatewayRestart(source: string): void {
   if (restartTimer) clearTimeout(restartTimer);
-  restartTimer = setTimeout(() => {
+  restartTimer = setTimeout(async () => {
     restartTimer = null;
+    // 重新确保 auth-proxy 运行（kimi-search 配置可能在设置中变化）
+    await ensureAuthProxy();
     gateway.setToken(resolveGatewayAuthToken());
     syncKimiSearchEnv();
     gateway.restart().catch((err) => {
@@ -458,35 +460,46 @@ function parseProxyPortFromConfig(): number {
   return 0;
 }
 
-// 确保 config 中 kimi-coding 指向代理（仅端口变化时写入）
+// 确保 config 中 kimi-coding / kimi-search 指向代理（仅变化时写入）
 function ensureProxyConfig(proxyPort: number): void {
   try {
     const config = readUserConfig();
-    const provider = config?.models?.providers?.["kimi-coding"];
-    if (!provider) return;
+    let changed = false;
 
     const expectedBase = `http://127.0.0.1:${proxyPort}/coding`;
+
     // memorySearch embedding 也走同一个代理
-    const memorySearchChanged = ensureMemorySearchProxyConfig(config, proxyPort);
+    if (ensureMemorySearchProxyConfig(config, proxyPort)) changed = true;
 
-    if (provider.baseUrl === expectedBase && provider.apiKey === "proxy-managed" && !memorySearchChanged) return;
-
-    // 首次迁移：真实 apiKey 存入 sidecar（非 OAuth 用户 + 有效 key）
-    if (provider.apiKey && provider.apiKey !== "proxy-managed" && !loadOAuthToken()) {
-      writeKimiApiKey(provider.apiKey);
+    // kimi-coding provider 指向代理
+    const provider = config?.models?.providers?.["kimi-coding"];
+    if (provider) {
+      if (provider.baseUrl !== expectedBase || provider.apiKey !== "proxy-managed") {
+        // 首次迁移：真实 apiKey 存入 sidecar（非 OAuth 用户 + 有效 key）
+        if (provider.apiKey && provider.apiKey !== "proxy-managed" && !loadOAuthToken()) {
+          writeKimiApiKey(provider.apiKey);
+        }
+        provider.baseUrl = expectedBase;
+        provider.apiKey = "proxy-managed";
+        changed = true;
+      }
     }
 
-    provider.baseUrl = expectedBase;
-    provider.apiKey = "proxy-managed";
-
-    // 同步 kimi-search 插件端点到代理（默认端点在 /coding/v1/ 路径下）
+    // kimi-search 插件端点指向代理
     const searchEntry = config?.plugins?.entries?.["kimi-search"];
     if (searchEntry && typeof searchEntry === "object") {
-      searchEntry.config ??= {};
-      searchEntry.config.search = { baseUrl: `http://127.0.0.1:${proxyPort}/coding/v1/search` };
-      searchEntry.config.fetch = { baseUrl: `http://127.0.0.1:${proxyPort}/coding/v1/fetch` };
+      const expectedSearch = `http://127.0.0.1:${proxyPort}/coding/v1/search`;
+      const expectedFetch = `http://127.0.0.1:${proxyPort}/coding/v1/fetch`;
+      if (searchEntry.config?.search?.baseUrl !== expectedSearch ||
+          searchEntry.config?.fetch?.baseUrl !== expectedFetch) {
+        searchEntry.config ??= {};
+        searchEntry.config.search = { baseUrl: expectedSearch };
+        searchEntry.config.fetch = { baseUrl: expectedFetch };
+        changed = true;
+      }
     }
 
+    if (!changed) return;
     writeUserConfig(config);
     log.info(`[auth-proxy] config updated: baseUrl → 127.0.0.1:${proxyPort}`);
   } catch (err: any) {
@@ -498,8 +511,10 @@ function ensureProxyConfig(proxyPort: number): void {
 async function ensureAuthProxy(): Promise<void> {
   try {
     const config = readUserConfig();
-    // 只有配置了 kimi-coding provider 才启动代理
-    if (!config?.models?.providers?.["kimi-coding"]) return;
+    // kimi-coding 或 kimi-search 任一启用时才需要代理
+    const hasKimiCoding = !!config?.models?.providers?.["kimi-coding"];
+    const hasKimiSearch = config?.plugins?.entries?.["kimi-search"]?.enabled === true;
+    if (!hasKimiCoding && !hasKimiSearch) return;
 
     // 设置 token
     const token = resolveCurrentToken();
