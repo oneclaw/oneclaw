@@ -1,7 +1,7 @@
 /**
  * Shared pairing approval panel for Feishu and WeCom.
  */
-import { html, nothing } from "lit";
+import { html, nothing, type TemplateResult } from "lit";
 import type { AppViewState } from "../../app-view-state.ts";
 import { t } from "../../i18n.ts";
 import * as ipc from "../../data/ipc-bridge.ts";
@@ -11,6 +11,11 @@ export interface PairingPanelState {
   pairingRequests: PairingRequest[];
   approvedEntries: ApprovedEntry[];
   loading: boolean;
+}
+
+export interface PairingPanelOptions {
+  extraApproved?: { kind: string; id: string; onRemove: () => void }[];
+  onAddGroup?: () => void;
 }
 
 export async function loadPairingData(platform: "feishu" | "wecom"): Promise<PairingPanelState> {
@@ -43,14 +48,39 @@ async function handleRemoveApproved(state: AppViewState, platform: "feishu" | "w
   refresh();
 }
 
+// Lucide icons (16x16)
+const refreshIcon = html`<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>`;
+const plusIcon = html`<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>`;
+
 export function renderPairingPanel(
   state: AppViewState,
   platform: "feishu" | "wecom",
   panelState: PairingPanelState,
   refresh: () => void,
+  options?: PairingPanelOptions,
 ) {
+  const extraApproved = options?.extraApproved ?? [];
+  const extraIds = new Set(extraApproved.map(e => e.id));
+  const filteredApproved = panelState.approvedEntries.filter(e => !extraIds.has(e.id));
+  const allApproved = [
+    ...extraApproved.map(e => ({ ...e, isExtra: true as const })),
+    ...filteredApproved.map(e => ({ ...e, isExtra: false as const, onRemove: () => handleRemoveApproved(state, platform, e, refresh) })),
+  ];
+  const hasToolbar = options?.onAddGroup;
+
   return html`
     <div class="oc-settings-pairing">
+      <!-- Toolbar -->
+      ${hasToolbar ? html`
+        <div class="oc-settings-pairing__toolbar">
+          <div class="oc-settings__label" style="margin:0">${t("settings.channels.pairing.whitelistTitle")}</div>
+          <div style="display:flex;gap:12px">
+            <button class="oc-settings-pairing__text-btn" @click=${refresh}>${refreshIcon} ${t("settings.provider.usage.refresh")}</button>
+            <button class="oc-settings-pairing__text-btn" @click=${options!.onAddGroup}>${plusIcon} ${t("settings.channels.feishu.addGroup")}</button>
+          </div>
+        </div>
+      ` : nothing}
+
       <!-- Pending -->
       <div class="oc-settings-pairing__section">
         <div class="oc-settings__label">${t("settings.channels.pairing.pending")}</div>
@@ -66,16 +96,14 @@ export function renderPairingPanel(
       <!-- Approved -->
       <div class="oc-settings-pairing__section" style="margin-top:12px">
         <div class="oc-settings__label">${t("settings.channels.pairing.approved")}</div>
-        ${panelState.approvedEntries.length ? panelState.approvedEntries.map(entry => html`
+        ${allApproved.length ? allApproved.map(entry => html`
           <div class="oc-settings-pairing__item">
             <span style="font-size:11px;color:var(--text-secondary)">${entry.kind}</span>
-            <span class="oc-settings-pairing__name">${entry.name || entry.id}</span>
-            <button class="oc-settings__btn oc-settings__btn--danger" style="padding:4px 12px;font-size:12px;margin-left:auto" @click=${() => handleRemoveApproved(state, platform, entry, refresh)}>${t("settings.channels.pairing.remove")}</button>
+            <span class="oc-settings-pairing__name">${(entry as any).name || entry.id}</span>
+            <button class="oc-settings-pairing__text-btn" style="margin-left:auto;color:var(--accent,#c0392b)" @click=${entry.onRemove}>${t("settings.channels.pairing.remove")}</button>
           </div>
         `) : html`<div style="font-size:12px;color:var(--text-secondary)">${t("settings.channels.pairing.approvedEmpty")}</div>`}
       </div>
-
-      <button class="oc-settings__btn" style="margin-top:8px" @click=${refresh}>${t("settings.provider.usage.refresh")}</button>
     </div>
   `;
 }
@@ -92,6 +120,27 @@ styleSheet.replaceSync(/* css */`
     flex-direction: column;
     gap: 6px;
   }
+  .oc-settings-pairing__toolbar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 4px;
+  }
+  .oc-settings-pairing__text-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    background: none;
+    border: none;
+    padding: 0;
+    font-size: 12px;
+    color: var(--text-secondary, #71717a);
+    cursor: pointer;
+    font-family: inherit;
+    transition: color var(--transition, 0.18s ease);
+  }
+  .oc-settings-pairing__text-btn:hover { color: var(--text, #1a1a1a); }
+  .oc-settings-pairing__text-btn svg { flex-shrink: 0; }
   .oc-settings-pairing__section {
     display: flex;
     flex-direction: column;

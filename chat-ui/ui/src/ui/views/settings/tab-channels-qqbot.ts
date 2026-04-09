@@ -85,12 +85,8 @@ export function renderChannelQqbot(state: AppViewState) {
 
   return html`
     <div class="oc-settings__section">
-      <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:4px">
-        <div>
-          <h3 class="oc-settings__panel-title" style="margin-bottom:4px">${t("settings.channels.qqbot")}</h3>
-          <p class="oc-settings__hint" style="margin:0 0 12px">${t("settings.channels.qqbot.desc")}</p>
-        </div>
-        <div style="display:flex;gap:12px;flex-shrink:0;padding-top:2px">
+      <div style="display:flex;align-items:flex-start;justify-content:flex-end;margin-bottom:8px">
+        <div style="display:flex;gap:12px;flex-shrink:0">
           <a class="oc-settings__link" href="#" @click=${(e: Event) => { e.preventDefault(); ipc.openExternal("https://q.qq.com"); }}>${t("settings.channels.qqbot.openPlatform")} &rarr;</a>
         </div>
       </div>

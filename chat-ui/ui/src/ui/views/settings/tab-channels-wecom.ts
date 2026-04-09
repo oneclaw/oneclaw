@@ -9,7 +9,7 @@ import "../../components/toggle-switch.ts";
 import "../../components/password-input.ts";
 import "../../components/message-box.ts";
 import { updateChannelEnabled } from "./tab-channels.ts";
-import { renderPairingPanel, loadPairingData, type PairingPanelState } from "./tab-channels-pairing-panel.ts";
+import { renderPairingPanel, loadPairingData, type PairingPanelState, type PairingPanelOptions } from "./tab-channels-pairing-panel.ts";
 
 // WeCom 面板状态必须可整体回滚，避免未保存表单和配对缓存跨会话残留。
 function createWecomState() {
@@ -27,6 +27,9 @@ function createWecomState() {
     successMsg: null as string | null,
     pairingPanel: { pairingRequests: [], approvedEntries: [], loading: false } as PairingPanelState,
     initialized: false,
+    addGroupDialogOpen: false,
+    addGroupInput: "",
+    addGroupError: null as string | null,
   };
 }
 
@@ -111,17 +114,46 @@ async function handleSave(state: AppViewState) {
   } catch (e: any) { s.saving = false; s.error = tWithDetail("settings.error.saveFailed", e?.message); state.requestUpdate(); }
 }
 
+function openAddGroupDialog(state: AppViewState) {
+  s.addGroupDialogOpen = true;
+  s.addGroupInput = "";
+  s.addGroupError = null;
+  state.requestUpdate();
+}
+
+function confirmAddGroup(state: AppViewState) {
+  const id = s.addGroupInput.trim();
+  if (!id) return;
+  if (!id.startsWith("oc_")) {
+    s.addGroupError = t("settings.channels.feishu.addGroupInvalidPrefix");
+    state.requestUpdate();
+    return;
+  }
+  if (s.groupAllowFrom.includes(id)) {
+    s.addGroupDialogOpen = false;
+    s.addGroupError = null;
+    state.requestUpdate();
+    return;
+  }
+  s.groupAllowFrom = [...s.groupAllowFrom, id];
+  s.addGroupDialogOpen = false;
+  s.addGroupError = null;
+  state.requestUpdate();
+}
+
+function cancelAddGroup(state: AppViewState) {
+  s.addGroupDialogOpen = false;
+  s.addGroupError = null;
+  state.requestUpdate();
+}
+
 export function renderChannelWecom(state: AppViewState) {
   if (!s.initialized) init(state);
 
   return html`
     <div class="oc-settings__section">
-      <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:4px">
-        <div>
-          <h3 class="oc-settings__panel-title" style="margin-bottom:4px">${t("settings.channels.wecom")}</h3>
-          <p class="oc-settings__hint" style="margin:0 0 12px">${t("settings.channels.wecom.desc")}</p>
-        </div>
-        <div style="display:flex;gap:12px;flex-shrink:0;padding-top:2px">
+      <div style="display:flex;align-items:flex-start;justify-content:flex-end;margin-bottom:8px">
+        <div style="display:flex;gap:12px;flex-shrink:0">
           <a class="oc-settings__link" href="#" @click=${(e: Event) => { e.preventDefault(); ipc.openExternal("https://github.com/nicepkg/openclaw/blob/main/docs/wecom.md"); }}>${t("settings.channels.wecom.pluginReadme")} &rarr;</a>
           <a class="oc-settings__link" href="#" @click=${(e: Event) => { e.preventDefault(); ipc.openExternal("https://work.weixin.qq.com/wework_admin/frame"); }}>${t("settings.channels.wecom.openConsole")} &rarr;</a>
         </div>
@@ -163,16 +195,29 @@ export function renderChannelWecom(state: AppViewState) {
           </select>
         </div>
 
-        ${s.groupPolicy === "allowlist" ? html`
-          <div class="oc-settings__form-group">
-            <label class="oc-settings__label">${t("settings.channels.wecom.groupAllowFromLabel")}</label>
-            <textarea class="oc-settings__input" rows="3" .value=${s.groupAllowFrom.join("\n")}
-              @input=${(e: Event) => { s.groupAllowFrom = parseGroupAllowFrom((e.target as HTMLTextAreaElement).value); }}
-            ></textarea>
+        ${s.groupPolicy === "allowlist" && s.addGroupDialogOpen ? html`
+          <div class="oc-modal-overlay" @click=${(e: Event) => { if (e.target === e.currentTarget) cancelAddGroup(state); }}>
+            <div class="oc-modal-dialog">
+              <label class="oc-settings__label">${t("settings.channels.feishu.addGroupPrompt")}</label>
+              <input class="oc-settings__input" .value=${s.addGroupInput} placeholder="oc_..."
+                @input=${(e: Event) => { s.addGroupInput = (e.target as HTMLInputElement).value; }}
+                @keydown=${(e: KeyboardEvent) => { if (e.key === "Enter") confirmAddGroup(state); if (e.key === "Escape") cancelAddGroup(state); }} />
+              ${s.addGroupError ? html`<div style="color:var(--accent, #c0392b);font-size:12px;margin-top:4px">${s.addGroupError}</div>` : nothing}
+              <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:12px">
+                <button class="oc-settings__btn" @click=${() => cancelAddGroup(state)}>${t("settings.cancel")}</button>
+                <button class="oc-settings__btn oc-settings__btn--primary" @click=${() => confirmAddGroup(state)}>${t("settings.confirm")}</button>
+              </div>
+            </div>
           </div>
         ` : nothing}
 
-        ${s.dmPolicy === "pairing" ? renderPairingPanel(state, "wecom", s.pairingPanel, () => refreshWecomPairing(state)) : nothing}
+        ${s.dmPolicy === "pairing" || s.groupPolicy === "allowlist" ? renderPairingPanel(state, "wecom", s.pairingPanel, () => refreshWecomPairing(state), {
+          onAddGroup: s.groupPolicy === "allowlist" ? () => openAddGroupDialog(state) : undefined,
+          extraApproved: s.groupPolicy === "allowlist" ? s.groupAllowFrom.map(id => ({
+            kind: "group", id,
+            onRemove: () => { s.groupAllowFrom = s.groupAllowFrom.filter(g => g !== id); state.requestUpdate(); },
+          })) : undefined,
+        }) : nothing}
 
         <oc-message-box .message=${s.error ?? ""} .type=${"error"} .visible=${!!s.error}></oc-message-box>
         <oc-message-box .message=${s.successMsg ?? ""} .type=${"success"} .visible=${!!s.successMsg}></oc-message-box>
