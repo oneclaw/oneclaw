@@ -8,6 +8,7 @@ import * as ipc from "../../data/ipc-bridge.ts";
 import "../../components/password-input.ts";
 import "../../components/message-box.ts";
 import "../../components/provider-segment.ts";
+import "../../components/toggle-switch.ts";
 import {
   PROVIDERS, CUSTOM_PRESETS, KIMI_CODE_MODELS, SUB_PLATFORM_URLS,
   CUSTOM_MODEL_SENTINEL, PROVIDER_DISPLAY_ORDER, getProviderLabels,
@@ -276,14 +277,6 @@ export function renderStep2(state: AppViewState, goToStep: (step: number) => voi
     <div class="oc-setup-step">
       <h2 class="oc-setup-title">${t("setup.provider.title")}</h2>
 
-      <div class="oc-setup-info-card">
-        <span>${t("setup.provider.keyNotice")}</span>
-        ${platformUrl ? html`
-          <a class="oc-setup-link" @click=${(e: Event) => { e.preventDefault(); ipc.openExternal(platformUrl); }}>${getPlatformLinkText()}</a>
-        ` : nothing}
-        <a class="oc-setup-link" @click=${(e: Event) => { e.preventDefault(); ipc.openExternal("https://oneclaw.cn/docs?utm_source=oneclaw"); }}>${t("setup.provider.docsLink")}</a>
-      </div>
-
       <oc-provider-segment
         .providers=${PROVIDER_DISPLAY_ORDER.map(p => p)}
         .selected=${s.currentProvider}
@@ -306,6 +299,13 @@ export function renderStep2(state: AppViewState, goToStep: (step: number) => voi
               ${t("setup.provider.subPlatform.moonshotCn")}
             </label>
           </div>
+        </div>
+      ` : nothing}
+
+      ${platformUrl ? html`
+        <div style="display:flex;gap:16px;margin-bottom:16px">
+          <a class="oc-setup-link" @click=${(e: Event) => { e.preventDefault(); ipc.openExternal(platformUrl); }}>${getPlatformLinkText()}</a>
+          <a class="oc-setup-link" @click=${(e: Event) => { e.preventDefault(); ipc.openExternal("https://oneclaw.cn/docs?utm_source=oneclaw"); }}>${t("setup.provider.docsLink")}</a>
         </div>
       ` : nothing}
 
@@ -380,11 +380,9 @@ export function renderStep2(state: AppViewState, goToStep: (step: number) => voi
 
       ${isManualCustom ? html`
         <div class="oc-setup-form-group">
-          <label class="oc-setup-checkbox">
-            <input type="checkbox" .checked=${s.imageSupport}
-              @change=${(e: Event) => { s.imageSupport = (e.target as HTMLInputElement).checked; state.requestUpdate(); }} />
-            ${t("setup.provider.imageSupport")}
-          </label>
+          <oc-toggle-switch .label=${t("setup.provider.imageSupport")} .checked=${s.imageSupport}
+            @change=${(e: CustomEvent) => { s.imageSupport = e.detail.checked; state.requestUpdate(); }}
+          ></oc-toggle-switch>
         </div>
       ` : nothing}
 
@@ -431,9 +429,11 @@ function renderOAuthSection(state: AppViewState, goToStep: (step: number) => voi
           <span>${t("setup.provider.oauth.success")}</span>
         </div>
       ` : html`
-        <button class="oc-setup-btn oc-setup-btn--primary" @click=${() => handleOAuthLogin(state, goToStep)}>
-          ${t("setup.provider.oauth.login")}
-        </button>
+        <div style="text-align:center;margin:24px 0">
+          <button class="oc-setup-btn oc-setup-btn--primary" @click=${() => handleOAuthLogin(state, goToStep)}>
+            ${t("setup.provider.oauth.login")}
+          </button>
+        </div>
       `}
 
       <details class="oc-setup-details-advanced">

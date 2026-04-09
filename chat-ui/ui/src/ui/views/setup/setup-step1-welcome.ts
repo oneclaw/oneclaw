@@ -8,12 +8,6 @@ import { t } from "../../i18n.ts";
 export function renderStep1(_state: AppViewState, goToStep: (step: number) => void) {
   return html`
     <div class="oc-setup-step">
-      <div class="oc-setup-logo">
-        <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="var(--accent, #c0392b)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2z"/>
-          <path d="m9 12 2 2 4-4"/>
-        </svg>
-      </div>
 
       <h2 class="oc-setup-title">${t("setup.welcome.title")}</h2>
       <p class="oc-setup-subtitle">${t("setup.welcome.subtitle")}</p>

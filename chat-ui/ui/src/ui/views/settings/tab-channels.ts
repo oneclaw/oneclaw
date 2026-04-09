@@ -119,15 +119,16 @@ function renderChannelPanel(state: AppViewState, platform: string) {
 
 const styleSheet = new CSSStyleSheet();
 styleSheet.replaceSync(/* css */`
-  .oc-settings-channels { display: flex; gap: 18px; flex: 1; min-height: 0; }
+  .oc-settings-channels { display: flex; gap: 24px; flex: 1; min-height: 0; margin-top: 12px; }
   .oc-settings-channels__nav {
     width: 172px;
     flex-shrink: 0;
     display: flex;
     flex-direction: column;
-    gap: 2px;
+    gap: 4px;
     padding: 0;
     align-self: flex-start;
+    margin-left: -12px;
   }
   .oc-settings-channels__nav-item {
     position: relative;
@@ -157,6 +158,7 @@ styleSheet.replaceSync(/* css */`
   }
   .oc-settings-channels__nav-item:hover { background: var(--bg-hover, #ebebeb); color: var(--text, #3f3f46); }
   .oc-settings-channels__nav-item--active { background: var(--bg-hover, #ebebeb); color: var(--text, #3f3f46); }
-  .oc-settings-channels__panel { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 16px; }
+  .oc-settings-channels__nav-item:focus-visible { box-shadow: none; outline: none; }
+  .oc-settings-channels__panel { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 12px; }
 `);
 document.adoptedStyleSheets = [...document.adoptedStyleSheets, styleSheet];

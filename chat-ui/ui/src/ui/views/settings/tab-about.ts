@@ -59,12 +59,14 @@ export function renderTabAbout(state: AppViewState) {
 
       <!-- Update -->
       <div class="oc-settings__card">
-        <div class="oc-settings__card-title">${t("settings.about.update")}</div>
-        ${us.status === "hidden" ? html`
-          <button class="oc-settings__btn oc-settings__btn--primary" @click=${() => ipc.checkForUpdates()}>
-            ${t("settings.about.checkUpdate")}
-          </button>
-        ` : nothing}
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:12px">
+          <div class="oc-settings__card-title">${t("settings.about.update")}</div>
+          ${us.status === "hidden" ? html`
+            <button class="oc-settings__btn oc-settings__btn--primary oc-settings__btn--compact" @click=${() => ipc.checkForUpdates()}>
+              ${t("settings.about.checkUpdate")}
+            </button>
+          ` : nothing}
+        </div>
         ${us.status === "available" ? html`
           <div style="font-size:13px;margin-bottom:8px">${us.version ?? ""}</div>
           <button class="oc-settings__btn oc-settings__btn--primary" @click=${() => ipc.downloadAndInstallUpdate()}>

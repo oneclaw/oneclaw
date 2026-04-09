@@ -408,7 +408,7 @@ export async function resolveConflict(params: { action: string; pid?: number }):
 }
 
 export async function verifyKey(params: Record<string, unknown>): Promise<VerifyResult> {
-  return unwrapData<VerifyResult>(await oc().verifyKey(params));
+  return oc().verifyKey(params) as Promise<VerifyResult>;
 }
 
 export async function saveConfig(params: Record<string, unknown>): Promise<void> {
