@@ -108,7 +108,6 @@ function injectStyles() {
       gap: 2px;
       overflow-y: auto;
       background: var(--bg-secondary, #fbfbfb);
-      -webkit-app-region: drag;
     }
 
     .oc-settings-nav__title {
@@ -135,7 +134,6 @@ function injectStyles() {
       width: 100%;
       border-radius: 10px;
       transition: color var(--transition, 0.18s ease), background var(--transition, 0.18s ease);
-      -webkit-app-region: no-drag;
     }
     .oc-settings-nav-item svg {
       flex-shrink: 0;
@@ -161,15 +159,6 @@ function injectStyles() {
       overflow-y: auto;
       padding: 44px 32px 28px;
       position: relative;
-    }
-    .oc-settings-content::before {
-      content: "";
-      position: absolute;
-      top: 0;
-      left: 0;
-      right: 0;
-      height: 44px;
-      -webkit-app-region: drag;
     }
     .oc-settings-content > * {
       max-width: 820px;

@@ -666,6 +666,7 @@ function injectStyles() {
       transition: background var(--transition, 0.18s ease), color var(--transition, 0.18s ease);
     }
     .oc-provider-list-item__action-btn:hover:not(:disabled) { background: var(--bg-hover, #ebebeb); color: var(--text-strong, #18181b); }
+    .oc-provider-list-item__delete-btn:hover:not(:disabled) { background: var(--danger-subtle, #fef2f2); color: var(--danger, #e74c3c); }
     .oc-provider-list-item__action-btn.is-default { color: var(--accent, #c0392b); opacity: 1 !important; }
     .oc-provider-list-item__action-btn:disabled { opacity: 0; cursor: default; pointer-events: none; }
     .oc-provider-add-btn {
@@ -804,9 +805,17 @@ export function renderTabProvider(state: AppViewState) {
                 </div>
                 <div class="oc-provider-list-item__actions">
                   <button class="oc-provider-list-item__action-btn ${item.isDefault ? 'is-default' : ''}" ?disabled=${item.isDefault}
+                    data-tooltip=${t("settings.provider.setDefault")}
                     @click=${(e: Event) => { e.stopPropagation(); handleSetDefault(item.key, state); }}>
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="${item.isDefault ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
                   </button>
+                  ${!item.isDefault ? html`
+                    <button class="oc-provider-list-item__action-btn oc-provider-list-item__delete-btn"
+                      data-tooltip=${t("settings.provider.deleteModel")}
+                      @click=${(e: Event) => { e.stopPropagation(); s.selectedModelKey = item.key; handleDeleteModel(state); }}>
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+                    </button>
+                  ` : nothing}
                 </div>
               </div>
             `)}
