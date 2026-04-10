@@ -29,6 +29,7 @@ import {
   saveMoonshotConfig,
   readUserConfig,
   writeUserConfig,
+  syncPdfModelToPrimary,
 } from "./provider-config";
 import { getLatestShareCopyPayload } from "./share-copy";
 import { readSkillStoreRegistry, writeSkillStoreRegistry } from "./skill-store";
@@ -206,7 +207,9 @@ interface SettingsIpcOptions {
 // 注册 Settings 相关 IPC
 export function registerSettingsIpc(opts: SettingsIpcOptions = {}): void {
   // 写入配置后自动重启 gateway，避免新增 handler 遗漏重启调用
+  // 同时自动同步 pdfModel 到当前 primary 模型，确保用户切换默认模型后 pdf tool 跟随激活。
   const writeUserConfigAndRestart: typeof writeUserConfig = (config) => {
+    syncPdfModelToPrimary(config);
     writeUserConfig(config);
     opts.requestGatewayRestart?.();
   };

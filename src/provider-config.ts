@@ -185,6 +185,20 @@ export function saveMoonshotConfig(
   config.agents.defaults.model.primary = `${providerKey}/${modelID}`;
 }
 
+// ── 同步 pdfModel 到当前 primary 模型 ──
+//
+// openclaw 内置 pdf tool 的注册依赖 agents.defaults.pdfModel 配置。
+// 自动发现路径（hasAuthForProvider）对 OneClaw 的 custom provider 无效（apiKey 在 openclaw.json 而非 auth profile store），
+// 所以必须显式写入 pdfModel，让 pdf tool 复用 agent 的主模型。
+// 对纯文本模型也有效：pdf tool 的文本提取 fallback 不需要 image 能力。
+export function syncPdfModelToPrimary(config: any): void {
+  const primary = config?.agents?.defaults?.model?.primary;
+  if (!primary || typeof primary !== "string") return;
+  config.agents ??= {};
+  config.agents.defaults ??= {};
+  config.agents.defaults.pdfModel = { primary };
+}
+
 // ── 用户配置读写（薄封装） ──
 
 export function readUserConfig(): any {
