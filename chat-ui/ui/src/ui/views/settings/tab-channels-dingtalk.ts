@@ -5,15 +5,13 @@ import { html, nothing } from "lit";
 import type { AppViewState } from "../../app-view-state.ts";
 import { t, tWithDetail } from "../../i18n.ts";
 import * as ipc from "../../data/ipc-bridge.ts";
-import "../../components/toggle-switch.ts";
 import "../../components/password-input.ts";
 import "../../components/message-box.ts";
-import { updateChannelEnabled } from "./tab-channels.ts";
+import { getChannelEnabled } from "./tab-channels.ts";
 
 // DingTalk 面板状态必须可整体回滚，避免未保存凭据残留到下次打开。
 function createDingtalkState() {
   return {
-    enabled: false,
     clientId: "",
     clientSecret: "",
     sessionTimeout: 1800000,
@@ -38,7 +36,6 @@ async function init(state: AppViewState) {
   s.initialized = true;
   try {
     const config = await ipc.settingsGetDingtalkConfig();
-    s.enabled = config.enabled ?? false;
     s.clientId = config.clientId ?? "";
     s.clientSecret = config.clientSecret ?? "";
     s.sessionTimeout = config.sessionTimeout ?? 1800000;
@@ -48,34 +45,17 @@ async function init(state: AppViewState) {
   } catch {}
 }
 
-async function handleToggle(state: AppViewState, checked: boolean) {
-  const prevEnabled = s.enabled;
-  s.enabled = checked;
-  s.error = null;
-  s.successMsg = null;
-  if (!checked) {
-    s.saving = true; state.requestUpdate();
-    try {
-      await ipc.settingsSaveDingtalkConfig({ enabled: false, clientId: s.clientId, clientSecret: s.clientSecret, sessionTimeout: s.sessionTimeout });
-      updateChannelEnabled("dingtalk", false);
-      s.saving = false; s.successMsg = t("settings.saved"); state.requestUpdate();
-    } catch (e: any) { s.saving = false; s.enabled = prevEnabled; s.error = tWithDetail("settings.error.saveFailed", e?.message); state.requestUpdate(); }
-  } else {
-    state.requestUpdate();
-  }
-}
-
 async function handleSave(state: AppViewState) {
   s.saving = true; s.error = null; s.successMsg = null; state.requestUpdate();
   try {
-    if (s.enabled) {
+    const enabled = getChannelEnabled("dingtalk");
+    if (enabled) {
       const verifyResult = await ipc.settingsVerifyKey({ provider: "dingtalk", clientId: s.clientId, clientSecret: s.clientSecret });
       if (!verifyResult.success) { s.saving = false; s.error = tWithDetail("settings.error.verifyFailed", verifyResult.message ?? verifyResult.error); state.requestUpdate(); return; }
     }
     await ipc.settingsSaveDingtalkConfig({
-      enabled: s.enabled, clientId: s.clientId, clientSecret: s.clientSecret, sessionTimeout: s.sessionTimeout,
+      enabled, clientId: s.clientId, clientSecret: s.clientSecret, sessionTimeout: s.sessionTimeout,
     });
-    updateChannelEnabled("dingtalk", s.enabled);
     s.saving = false; s.successMsg = t("settings.saved"); state.requestUpdate();
   } catch (e: any) { s.saving = false; s.error = tWithDetail("settings.error.saveFailed", e?.message); state.requestUpdate(); }
 }
@@ -95,13 +75,6 @@ export function renderChannelDingtalk(state: AppViewState) {
       ${!s.bundled ? html`<oc-message-box .message=${s.bundleMessage || t("settings.channels.dingtalk.notBundled")} .type=${"info"} .visible=${true}></oc-message-box>` : nothing}
 
       <div class="oc-settings__form-group">
-        <oc-toggle-switch .label=${t("settings.channels.enable")} .checked=${s.enabled}
-          @change=${(e: CustomEvent) => handleToggle(state, e.detail.checked)}
-        ></oc-toggle-switch>
-      </div>
-
-      ${s.enabled ? html`
-        <div class="oc-settings__form-group">
           <label class="oc-settings__label">${t("settings.channels.dingtalk.clientId")}</label>
           <input class="oc-settings__input" .value=${s.clientId} @input=${(e: Event) => { s.clientId = (e.target as HTMLInputElement).value; }} />
         </div>
@@ -126,7 +99,6 @@ export function renderChannelDingtalk(state: AppViewState) {
         <div class="oc-settings__btn-row">
           <button class="oc-settings__btn oc-settings__btn--primary" ?disabled=${s.saving} @click=${() => handleSave(state)}>${t("settings.save")}</button>
         </div>
-      ` : nothing}
     </div>
   `;
 }

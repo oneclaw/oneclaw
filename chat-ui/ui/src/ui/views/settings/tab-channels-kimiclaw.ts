@@ -5,15 +5,13 @@ import { html, nothing } from "lit";
 import type { AppViewState } from "../../app-view-state.ts";
 import { t, tWithDetail } from "../../i18n.ts";
 import * as ipc from "../../data/ipc-bridge.ts";
-import "../../components/toggle-switch.ts";
 import "../../components/password-input.ts";
 import "../../components/message-box.ts";
-import { updateChannelEnabled } from "./tab-channels.ts";
+import { getChannelEnabled } from "./tab-channels.ts";
 
 // KimiClaw 面板状态必须可整体回滚，避免 bot token 草稿残留到下次打开。
 function createKimiclawState() {
   return {
-    enabled: false,
     botToken: "",
     saving: false,
     error: null as string | null,
@@ -34,7 +32,6 @@ async function init(state: AppViewState) {
   s.initialized = true;
   try {
     const config = await ipc.settingsGetKimiConfig();
-    s.enabled = config.enabled ?? false;
     s.botToken = config.botToken ?? "";
     state.requestUpdate();
   } catch {}
@@ -50,32 +47,10 @@ function maskToken(token: string): string {
   return token.slice(0, 4) + "***" + token.slice(-4);
 }
 
-async function handleToggle(state: AppViewState, checked: boolean) {
-  const prevEnabled = s.enabled;
-  s.enabled = checked;
-  s.error = null;
-  s.successMsg = null;
-  if (!checked) {
-    // Auto-save on disable so the action persists even though the Save button disappears
-    s.saving = true; state.requestUpdate();
-    try {
-      await ipc.settingsSaveKimiConfig({ botToken: s.botToken, enabled: false });
-      updateChannelEnabled("kimiclaw", false);
-    } catch (e: any) {
-      s.enabled = prevEnabled;
-      s.error = tWithDetail("settings.error.saveFailed", e?.message);
-    }
-    s.saving = false; state.requestUpdate();
-  } else {
-    state.requestUpdate();
-  }
-}
-
 async function handleSave(state: AppViewState) {
   s.saving = true; s.error = null; s.successMsg = null; state.requestUpdate();
   try {
-    await ipc.settingsSaveKimiConfig({ botToken: s.botToken, enabled: s.enabled });
-    updateChannelEnabled("kimiclaw", s.enabled);
+    await ipc.settingsSaveKimiConfig({ botToken: s.botToken, enabled: getChannelEnabled("kimiclaw") });
     s.saving = false; s.successMsg = t("settings.saved"); state.requestUpdate();
   } catch (e: any) { s.saving = false; s.error = tWithDetail("settings.error.saveFailed", e?.message); state.requestUpdate(); }
 }
@@ -92,13 +67,6 @@ export function renderChannelKimiclaw(state: AppViewState) {
       </div>
 
       <div class="oc-settings__form-group">
-        <oc-toggle-switch .label=${t("settings.channels.enable")} .checked=${s.enabled}
-          @change=${(e: CustomEvent) => handleToggle(state, e.detail.checked)}
-        ></oc-toggle-switch>
-      </div>
-
-      ${s.enabled ? html`
-        <div class="oc-settings__form-group">
           <label class="oc-settings__label">${t("settings.channels.kimiclaw.botToken")}</label>
           <oc-password-input .value=${s.botToken} .placeholder=${t("settings.channels.kimiclaw.botToken.placeholder")}
             @input=${(e: CustomEvent) => { s.botToken = parseBotToken(e.detail.value); state.requestUpdate(); }}
@@ -112,7 +80,6 @@ export function renderChannelKimiclaw(state: AppViewState) {
         <div class="oc-settings__btn-row">
           <button class="oc-settings__btn oc-settings__btn--primary" ?disabled=${s.saving} @click=${() => handleSave(state)}>${t("settings.save")}</button>
         </div>
-      ` : nothing}
     </div>
   `;
 }

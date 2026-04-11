@@ -5,16 +5,14 @@ import { html, nothing } from "lit";
 import type { AppViewState } from "../../app-view-state.ts";
 import { t, tWithDetail } from "../../i18n.ts";
 import * as ipc from "../../data/ipc-bridge.ts";
-import "../../components/toggle-switch.ts";
 import "../../components/password-input.ts";
 import "../../components/message-box.ts";
-import { updateChannelEnabled } from "./tab-channels.ts";
-import { renderPairingPanel, loadPairingData, type PairingPanelState, type PairingPanelOptions } from "./tab-channels-pairing-panel.ts";
+import { getChannelEnabled } from "./tab-channels.ts";
+import { renderPairingPanel, loadPairingData, type PairingPanelState } from "./tab-channels-pairing-panel.ts";
 
 // WeCom 面板状态必须可整体回滚，避免未保存表单和配对缓存跨会话残留。
 function createWecomState() {
   return {
-    enabled: false,
     botId: "",
     secret: "",
     dmPolicy: "pairing",
@@ -45,7 +43,6 @@ async function init(state: AppViewState) {
   s.initialized = true;
   try {
     const config = await ipc.settingsGetWecomConfig();
-    s.enabled = config.enabled ?? false;
     s.botId = config.botId ?? "";
     s.secret = config.secret ?? "";
     s.dmPolicy = config.dmPolicy ?? "pairing";
@@ -63,50 +60,11 @@ export async function refreshWecomPairing(state: AppViewState) {
   state.requestUpdate();
 }
 
-function parseGroupAllowFrom(text: string): string[] {
-  return text.split(/[,;\n]/).map(s => s.trim()).filter(Boolean);
-}
-
-async function handleToggle(state: AppViewState, checked: boolean) {
-  const prevEnabled = s.enabled;
-  s.enabled = checked;
-  s.error = null;
-  s.successMsg = null;
-  if (!checked) {
-    // Disable -> save immediately
-    s.saving = true; state.requestUpdate();
-    try {
-      await ipc.settingsSaveWecomConfig({
-        enabled: false, botId: s.botId, secret: s.secret,
-        dmPolicy: s.dmPolicy, groupPolicy: s.groupPolicy, groupAllowFrom: s.groupAllowFrom,
-      });
-      updateChannelEnabled("wecom", false);
-      s.saving = false; state.requestUpdate();
-    } catch (e: any) { s.saving = false; s.enabled = prevEnabled; s.error = tWithDetail("settings.error.saveFailed", e?.message); state.requestUpdate(); }
-  } else {
-    // Enable -> save with current config
-    if (!s.botId || !s.secret) {
-      state.requestUpdate();
-      return;
-    }
-    s.saving = true; state.requestUpdate();
-    try {
-      await ipc.settingsSaveWecomConfig({
-        enabled: true, botId: s.botId, secret: s.secret,
-        dmPolicy: s.dmPolicy, groupPolicy: s.groupPolicy, groupAllowFrom: s.groupAllowFrom,
-      });
-      updateChannelEnabled("wecom", true);
-      s.saving = false; s.successMsg = t("settings.saved"); state.requestUpdate();
-      refreshWecomPairing(state);
-    } catch (e: any) { s.saving = false; s.enabled = prevEnabled; s.error = tWithDetail("settings.error.saveFailed", e?.message); state.requestUpdate(); }
-  }
-}
-
 async function handleSave(state: AppViewState) {
   s.saving = true; s.error = null; s.successMsg = null; state.requestUpdate();
   try {
     await ipc.settingsSaveWecomConfig({
-      enabled: s.enabled, botId: s.botId, secret: s.secret,
+      enabled: getChannelEnabled("wecom"), botId: s.botId, secret: s.secret,
       dmPolicy: s.dmPolicy, groupPolicy: s.groupPolicy, groupAllowFrom: s.groupAllowFrom,
     });
     s.saving = false; s.successMsg = t("settings.saved"); state.requestUpdate();
@@ -162,13 +120,6 @@ export function renderChannelWecom(state: AppViewState) {
       ${!s.bundled ? html`<oc-message-box .message=${s.bundleMessage || t("settings.channels.wecom.notBundled")} .type=${"info"} .visible=${true}></oc-message-box>` : nothing}
 
       <div class="oc-settings__form-group">
-        <oc-toggle-switch .label=${t("settings.channels.enable")} .checked=${s.enabled}
-          @change=${(e: CustomEvent) => handleToggle(state, e.detail.checked)}
-        ></oc-toggle-switch>
-      </div>
-
-      ${s.enabled ? html`
-        <div class="oc-settings__form-group">
           <label class="oc-settings__label">${t("settings.channels.wecom.botId")}</label>
           <input class="oc-settings__input" .value=${s.botId} @input=${(e: Event) => { s.botId = (e.target as HTMLInputElement).value; }} />
         </div>
@@ -225,7 +176,6 @@ export function renderChannelWecom(state: AppViewState) {
         <div class="oc-settings__btn-row">
           <button class="oc-settings__btn oc-settings__btn--primary" ?disabled=${s.saving} @click=${() => handleSave(state)}>${t("settings.save")}</button>
         </div>
-      ` : nothing}
     </div>
   `;
 }

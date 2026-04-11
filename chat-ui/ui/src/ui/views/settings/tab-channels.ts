@@ -1,11 +1,12 @@
 /**
  * Settings: Channels Tab — platform sub-navigation container.
  */
-import { html, nothing } from "lit";
+import { html } from "lit";
 import type { AppViewState } from "../../app-view-state.ts";
 import { t } from "../../i18n.ts";
 import * as ipc from "../../data/ipc-bridge.ts";
 import { CHANNEL_PLATFORMS } from "./settings-constants.ts";
+import "../../components/toggle-switch.ts";
 import { renderChannelWeixin, cleanupWeixinTab } from "./tab-channels-weixin.ts";
 import { renderChannelFeishu, refreshFeishuPairing, resetFeishuTab } from "./tab-channels-feishu.ts";
 import { renderChannelWecom, refreshWecomPairing, resetWecomTab } from "./tab-channels-wecom.ts";
@@ -56,9 +57,9 @@ async function init(state: AppViewState) {
   } catch {}
 }
 
-/** Called by sub-panels after a successful enable/disable save to sync the nav status dot. */
-export function updateChannelEnabled(platform: string, enabled: boolean) {
-  s.enabledMap[platform] = enabled;
+/** Read current toggle state for a platform (source of truth for enabled flag). */
+export function getChannelEnabled(platform: string): boolean {
+  return s.enabledMap[platform] ?? false;
 }
 
 function switchPlatform(newPlatform: string) {
@@ -95,7 +96,9 @@ export function renderTabChannels(state: AppViewState) {
             <button class="oc-settings-channels__nav-item ${p.id === active ? "oc-settings-channels__nav-item--active" : ""}"
               @click=${() => { switchPlatform(p.id); state.requestUpdate(); }}>
               ${t(p.labelKey)}
-              ${s.enabledMap[p.id] ? html`<span class="oc-settings-channels__status-dot"></span>` : nothing}
+              <oc-toggle-switch class="oc-settings-channels__nav-toggle" .checked=${s.enabledMap[p.id] ?? false}
+                @change=${(e: CustomEvent) => { s.enabledMap[p.id] = e.detail.checked; switchPlatform(p.id); state.requestUpdate(); }}
+              ></oc-toggle-switch>
             </button>
           `)}
         </nav>
@@ -150,13 +153,11 @@ styleSheet.replaceSync(/* css */`
     width: 100%;
     min-height: 36px;
   }
-  .oc-settings-channels__status-dot {
-    width: 6px;
-    height: 6px;
-    border-radius: 50%;
-    background: var(--ok, #22c55e);
-    flex-shrink: 0;
+  .oc-settings-channels__nav-toggle {
     margin-left: auto;
+    flex-shrink: 0;
+    transform: scale(0.8);
+    transform-origin: right center;
   }
   .oc-settings-channels__nav-item:hover { background: var(--bg-hover, #ebebeb); color: var(--text, #3f3f46); }
   .oc-settings-channels__nav-item--active { background: var(--bg-hover, #ebebeb); color: var(--text, #3f3f46); }
