@@ -8,12 +8,11 @@ import * as ipc from "../../data/ipc-bridge.ts";
 import "../../components/toggle-switch.ts";
 import "../../components/password-input.ts";
 import "../../components/message-box.ts";
-import { updateChannelEnabled } from "./tab-channels.ts";
+import { getChannelEnabled } from "./tab-channels.ts";
 
 // QQ Bot 面板状态必须可整体回滚，避免未保存凭据残留到下次打开。
 function createQqbotState() {
   return {
-    enabled: false,
     appId: "",
     clientSecret: "",
     markdownSupport: false,
@@ -38,7 +37,6 @@ async function init(state: AppViewState) {
   s.initialized = true;
   try {
     const config = await ipc.settingsGetQqbotConfig();
-    s.enabled = config.enabled ?? false;
     s.appId = config.appId ?? "";
     s.clientSecret = config.clientSecret ?? "";
     s.markdownSupport = config.markdownSupport ?? false;
@@ -48,34 +46,17 @@ async function init(state: AppViewState) {
   } catch {}
 }
 
-async function handleToggle(state: AppViewState, checked: boolean) {
-  const prevEnabled = s.enabled;
-  s.enabled = checked;
-  s.error = null;
-  s.successMsg = null;
-  if (!checked) {
-    s.saving = true; state.requestUpdate();
-    try {
-      await ipc.settingsSaveQqbotConfig({ enabled: false, appId: s.appId, clientSecret: s.clientSecret, markdownSupport: s.markdownSupport });
-      updateChannelEnabled("qqbot", false);
-      s.saving = false; s.successMsg = t("settings.saved"); state.requestUpdate();
-    } catch (e: any) { s.saving = false; s.enabled = prevEnabled; s.error = tWithDetail("settings.error.saveFailed", e?.message); state.requestUpdate(); }
-  } else {
-    state.requestUpdate();
-  }
-}
-
 async function handleSave(state: AppViewState) {
   s.saving = true; s.error = null; s.successMsg = null; state.requestUpdate();
   try {
-    if (s.enabled) {
+    const enabled = getChannelEnabled("qqbot");
+    if (enabled) {
       const verifyResult = await ipc.settingsVerifyKey({ provider: "qqbot", appId: s.appId, clientSecret: s.clientSecret });
       if (!verifyResult.success) { s.saving = false; s.error = tWithDetail("settings.error.verifyFailed", verifyResult.message ?? verifyResult.error); state.requestUpdate(); return; }
     }
     await ipc.settingsSaveQqbotConfig({
-      enabled: s.enabled, appId: s.appId, clientSecret: s.clientSecret, markdownSupport: s.markdownSupport,
+      enabled, appId: s.appId, clientSecret: s.clientSecret, markdownSupport: s.markdownSupport,
     });
-    updateChannelEnabled("qqbot", s.enabled);
     s.saving = false; s.successMsg = t("settings.saved"); state.requestUpdate();
   } catch (e: any) { s.saving = false; s.error = tWithDetail("settings.error.saveFailed", e?.message); state.requestUpdate(); }
 }
@@ -94,13 +75,6 @@ export function renderChannelQqbot(state: AppViewState) {
       ${!s.bundled ? html`<oc-message-box .message=${s.bundleMessage || t("settings.channels.qqbot.notBundled")} .type=${"info"} .visible=${true}></oc-message-box>` : nothing}
 
       <div class="oc-settings__form-group">
-        <oc-toggle-switch .label=${t("settings.channels.enable")} .checked=${s.enabled}
-          @change=${(e: CustomEvent) => handleToggle(state, e.detail.checked)}
-        ></oc-toggle-switch>
-      </div>
-
-      ${s.enabled ? html`
-        <div class="oc-settings__form-group">
           <label class="oc-settings__label">${t("settings.channels.qqbot.appId")}</label>
           <input class="oc-settings__input" .value=${s.appId} @input=${(e: Event) => { s.appId = (e.target as HTMLInputElement).value; }} />
         </div>
@@ -122,7 +96,6 @@ export function renderChannelQqbot(state: AppViewState) {
         <div class="oc-settings__btn-row">
           <button class="oc-settings__btn oc-settings__btn--primary" ?disabled=${s.saving} @click=${() => handleSave(state)}>${t("settings.save")}</button>
         </div>
-      ` : nothing}
     </div>
   `;
 }

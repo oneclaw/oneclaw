@@ -1,19 +1,17 @@
 /**
  * Settings: Channels — Weixin sub-panel.
  */
-import { html, nothing } from "lit";
+import { html } from "lit";
 import type { AppViewState } from "../../app-view-state.ts";
 import { t, tWithDetail } from "../../i18n.ts";
 import * as ipc from "../../data/ipc-bridge.ts";
 import type { WeixinQrResult, WeixinLoginWaitResult } from "../../data/ipc-bridge.ts";
-import "../../components/toggle-switch.ts";
 import "../../components/message-box.ts";
-import { updateChannelEnabled } from "./tab-channels.ts";
+import { getChannelEnabled } from "./tab-channels.ts";
 
 // Weixin 面板状态必须可整体回滚，避免二维码和账号缓存残留到下次打开。
 function createWeixinState() {
   return {
-    enabled: false,
     accounts: [] as Array<{ id: string; name?: string }>,
     qrDataUrl: "",
     qrcode: "",
@@ -21,6 +19,7 @@ function createWeixinState() {
     pollTimer: null as ReturnType<typeof setTimeout> | null,
     saving: false,
     error: null as string | null,
+    successMsg: null as string | null,
     initialized: false,
   };
 }
@@ -32,7 +31,6 @@ async function init(state: AppViewState) {
   s.initialized = true;
   try {
     const config = await ipc.settingsGetWeixinConfig();
-    s.enabled = config.enabled ?? false;
     s.accounts = config.accounts ?? [];
     state.requestUpdate();
   } catch {}
@@ -79,16 +77,11 @@ function pollLogin(state: AppViewState) {
   }, 1000);
 }
 
-async function handleToggle(state: AppViewState, checked: boolean) {
-  s.enabled = checked;
-  s.saving = true;
-  state.requestUpdate();
+async function handleSave(state: AppViewState) {
+  s.saving = true; s.error = null; s.successMsg = null; state.requestUpdate();
   try {
-    await ipc.settingsSaveWeixinConfig({ enabled: checked });
-    updateChannelEnabled("weixin", checked);
-    if (checked && s.accounts.length === 0) startLogin(state);
-    s.saving = false;
-    state.requestUpdate();
+    await ipc.settingsSaveWeixinConfig({ enabled: getChannelEnabled("weixin") });
+    s.saving = false; s.successMsg = t("settings.saved"); state.requestUpdate();
   } catch (e: any) {
     s.saving = false;
     s.error = tWithDetail("settings.error.saveFailed", e?.message);
@@ -119,40 +112,37 @@ export function renderChannelWeixin(state: AppViewState) {
 
   return html`
     <div class="oc-settings__section">
-      <div class="oc-settings__form-group">
-        <oc-toggle-switch .label=${t("settings.channels.enable")} .checked=${s.enabled}
-          @change=${(e: CustomEvent) => handleToggle(state, e.detail.checked)}
-        ></oc-toggle-switch>
-      </div>
-
-      ${s.enabled ? html`
-        ${connected ? html`
-          <div class="oc-weixin-connected">
-            <span class="oc-weixin-badge">✓</span>
-            <span class="oc-weixin-account-id">${s.accounts[0]?.id ?? ""}</span>
-            <button class="oc-weixin-remove-btn" @click=${() => handleDisconnect(state)}>
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>
-            </button>
-          </div>
-        ` : html`
-          ${s.qrDataUrl ? html`
-            <div class="oc-weixin-qr-section">
-              <div class="oc-weixin-qr-container">
-                <img class="oc-weixin-qr-image" src=${s.qrDataUrl} />
-                <div class="oc-weixin-qr-status">
-                  ${s.loginStatus === "scaned" ? t("settings.channels.weixin.scanned") : t("settings.channels.weixin.scanQr")}
-                </div>
+      ${connected ? html`
+        <div class="oc-weixin-connected">
+          <span class="oc-weixin-badge">✓</span>
+          <span class="oc-weixin-account-id">${s.accounts[0]?.id ?? ""}</span>
+          <button class="oc-weixin-remove-btn" @click=${() => handleDisconnect(state)}>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>
+          </button>
+        </div>
+      ` : html`
+        ${s.qrDataUrl ? html`
+          <div class="oc-weixin-qr-section">
+            <div class="oc-weixin-qr-container">
+              <img class="oc-weixin-qr-image" src=${s.qrDataUrl} />
+              <div class="oc-weixin-qr-status">
+                ${s.loginStatus === "scaned" ? t("settings.channels.weixin.scanned") : t("settings.channels.weixin.scanQr")}
               </div>
             </div>
-          ` : html`
-            <button class="oc-settings__btn oc-settings__btn--primary" @click=${() => startLogin(state)}>
-              ${t("settings.channels.weixin.startLogin")}
-            </button>
-          `}
+          </div>
+        ` : html`
+          <button class="oc-settings__btn oc-settings__btn--primary" @click=${() => startLogin(state)}>
+            ${t("settings.channels.weixin.startLogin")}
+          </button>
         `}
-      ` : nothing}
+      `}
 
       <oc-message-box .message=${s.error ?? ""} .type=${"error"} .visible=${!!s.error}></oc-message-box>
+      <oc-message-box .message=${s.successMsg ?? ""} .type=${"success"} .visible=${!!s.successMsg}></oc-message-box>
+
+      <div class="oc-settings__btn-row">
+        <button class="oc-settings__btn oc-settings__btn--primary" ?disabled=${s.saving} @click=${() => handleSave(state)}>${t("settings.save")}</button>
+      </div>
     </div>
   `;
 }
