@@ -25,6 +25,7 @@ interface FeedbackParams {
 interface FeedbackResult {
   ok: boolean;
   id?: number;
+  message?: unknown;   // POST /messages 时回填刚插入的 message 对象（供乐观更新替换）
   error?: string;
 }
 
@@ -89,7 +90,17 @@ function postMultipart(url: string, body: Buffer, boundary: string): Promise<Fee
           try {
             const json = JSON.parse(data);
             if (res.statusCode === 200) {
-              resolve({ ok: true, id: json.id });
+              // 兼容三种响应体：
+              //   1) { id, message }    — 包装格式
+              //   2) { id, content, ... } — 后端直接返回 message 对象（POST /messages 当前行为）
+              //   3) { id }             — feedback 主提交
+              if (json && typeof json === "object" && "message" in json) {
+                resolve({ ok: true, id: json.id, message: json.message });
+              } else if (json && typeof json === "object" && "id" in json && "content" in json) {
+                resolve({ ok: true, id: json.id, message: json });
+              } else {
+                resolve({ ok: true, id: json?.id });
+              }
             } else {
               resolve({ ok: false, error: json.error || `HTTP ${res.statusCode}` });
             }
