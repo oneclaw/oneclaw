@@ -20,7 +20,7 @@ import {
 } from "./settings-ipc";
 import { registerSkillStoreIpc } from "./skill-store";
 import { registerWorkspaceIpc } from "./workspace-ipc";
-import { registerFeedbackIpc } from "./feedback-ipc";
+import { registerFeedbackIpc, stopFeedbackSse } from "./feedback-ipc";
 import { ChannelPairingMonitor } from "./channel-pairing-monitor";
 import {
   setupAutoUpdater,
@@ -956,6 +956,7 @@ app.on("window-all-closed", () => {
 // ── 退出前清理 ──
 
 app.on("before-quit", () => {
+  stopFeedbackSse();
   // 先放行窗口关闭，避免 close handler 拦截 WM_CLOSE 导致 NSIS 安装器报"无法关闭"
   windowManager.prepareForAppQuit();
   pairingMonitor?.stop();

@@ -6,6 +6,7 @@ import * as https from "https";
 import { resolveUserStateDir } from "./constants";
 import type { GatewayState } from "./gateway-process";
 import * as log from "./logger";
+import { FeedbackSSE } from "./feedback-sse";
 
 // 反馈服务地址（构建时通过环境变量注入，回退到默认值）
 const FEEDBACK_URL =
@@ -235,6 +236,14 @@ function guessContentType(filename: string): string {
   return map[ext] || "application/octet-stream";
 }
 
+let sseClient: FeedbackSSE | null = null;
+
+/** 应用退出时调用，强制停止 SSE 连接 */
+export function stopFeedbackSse(): void {
+  sseClient?.stop();
+  sseClient = null;
+}
+
 // 注册反馈相关 IPC handler
 export function registerFeedbackIpc(deps: FeedbackIpcDeps): void {
   // feedback:threads — 获取用户的反馈列表
@@ -455,5 +464,35 @@ export function registerFeedbackIpc(deps: FeedbackIpcDeps): void {
       log.error(`反馈提交失败: ${result.error}`);
     }
     return result;
+  });
+
+  // feedback:subscribe — 建立 SSE 长连接（幂等）
+  ipcMain.handle("feedback:subscribe", () => {
+    if (sseClient) return { ok: true };
+    const deviceId = readDeviceId();
+    const base = FEEDBACK_URL.replace(/\/feedback\/?$/, "");
+    const url = `${base}/user/events?device_id=${encodeURIComponent(deviceId)}`;
+    log.info(`feedback:subscribe 建立 SSE 连接: ${base}/user/events`);
+    sseClient = new FeedbackSSE(url);
+    sseClient.on("event", (evt) => {
+      for (const w of BrowserWindow.getAllWindows()) {
+        if (!w.isDestroyed()) w.webContents.send("feedback:event", evt);
+      }
+    });
+    sseClient.on("reconnecting", () => {
+      for (const w of BrowserWindow.getAllWindows()) {
+        if (!w.isDestroyed()) w.webContents.send("feedback:reconnecting");
+      }
+    });
+    sseClient.start();
+    return { ok: true };
+  });
+
+  // feedback:unsubscribe — 主动断开（用户离开反馈面板时）
+  ipcMain.handle("feedback:unsubscribe", () => {
+    sseClient?.stop();
+    sseClient = null;
+    log.info("feedback:unsubscribe SSE 已停止");
+    return { ok: true };
   });
 }
