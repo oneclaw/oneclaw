@@ -502,6 +502,7 @@ function renderDetailContent(
                     ? html`<div class="feedback-msg__label">${t("feedback.official")}</div>`
                     : nothing}
                   <div class="feedback-msg__bubble">${msg.content}</div>
+                  ${msg._failed ? html`<div class="feedback-msg__failed-hint">⚠ ${t("feedback.sendFailed")}</div>` : nothing}
                   ${msg.file_keys?.length ? html`
                     <div class="feedback-msg__attachments">
                       ${msg.file_keys.map((key) => {
