@@ -614,26 +614,76 @@ function buildFeedbackPanelCallbacks(state: AppViewState) {
     },
     onReplySend: async () => {
       if (!feedbackPanelState.detailThread || (!feedbackPanelState.detailReplyContent.trim() && feedbackPanelState.detailReplyFiles.length === 0)) return;
-      feedbackPanelState = { ...feedbackPanelState, detailReplySending: true };
+      const threadId = feedbackPanelState.detailThread.id;
+      const content = feedbackPanelState.detailReplyContent;
+      const files = feedbackPanelState.detailReplyFiles.length > 0
+        ? feedbackPanelState.detailReplyFiles.map((base64, i) => ({ name: feedbackPanelState.detailReplyFileNames[i] || `file-${i + 1}`, base64 }))
+        : undefined;
+
+      // 1. 本地先插入临时 pending 气泡
+      const tempKey = `tmp-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+      const tempMsg: FeedbackMessage = {
+        id: 0,
+        thread_id: threadId,
+        role: "user",
+        content,
+        file_keys: [],
+        created_at: new Date().toISOString(),
+        _pending: true,
+        _tempKey: tempKey,
+      };
+      feedbackPanelState = {
+        ...feedbackPanelState,
+        detailMessages: [...feedbackPanelState.detailMessages, tempMsg],
+        detailReplyContent: "",
+        detailReplyFiles: [],
+        detailReplyFilePreviews: [],
+        detailReplyFileNames: [],
+        detailReplySending: true,
+      };
       state.requestUpdate();
+
+      // 2. 发 POST
       try {
-        const files = feedbackPanelState.detailReplyFiles.length > 0
-          ? feedbackPanelState.detailReplyFiles.map((base64, i) => ({ name: feedbackPanelState.detailReplyFileNames[i] || `file-${i + 1}`, base64 }))
-          : undefined;
-        const result = await window.oneclaw?.feedbackReply?.(
-          feedbackPanelState.detailThread.id,
-          feedbackPanelState.detailReplyContent,
-          files,
-        );
-        if (result?.ok) {
-          const id = feedbackPanelState.detailThread.id;
-          feedbackPanelState = { ...feedbackPanelState, detailReplyContent: "", detailReplyFiles: [], detailReplyFilePreviews: [], detailReplyFileNames: [], detailReplySending: false };
-          void loadFeedbackThreadDetail(state, id);
-        } else {
+        const result = await window.oneclaw?.feedbackReply?.(threadId, content, files);
+        if (result?.ok && result.message) {
+          // 3a. 用真实 message 替换临时占位
+          const m = result.message as any;
+          const real: FeedbackMessage = {
+            id: m.id,
+            thread_id: m.feedback_id ?? threadId,
+            role: m.role ?? "user",
+            content: m.content ?? content,
+            file_keys: m.file_keys ?? [],
+            created_at: m.created_at ?? tempMsg.created_at,
+          };
+          // 移除临时占位 + 追加真实消息；若 SSE echo 已先到，按 id 去重
+          const withoutTemp = feedbackPanelState.detailMessages.filter((msg) => msg._tempKey !== tempKey);
+          const alreadyHasReal = real.id > 0 && withoutTemp.some((msg) => msg.id === real.id);
+          const merged = alreadyHasReal ? withoutTemp : [...withoutTemp, real];
+          merged.sort((a, b) => a.created_at.localeCompare(b.created_at));
+          feedbackPanelState = { ...feedbackPanelState, detailMessages: merged, detailReplySending: false };
+        } else if (result?.ok) {
+          // 3b. 后端 200 但没回 message（兼容老版本）：保留临时占位，依赖 SSE echo 替换
           feedbackPanelState = { ...feedbackPanelState, detailReplySending: false };
+        } else {
+          // 3c. 失败：把临时气泡标红（保留给用户，避免丢字）
+          feedbackPanelState = {
+            ...feedbackPanelState,
+            detailMessages: feedbackPanelState.detailMessages.map((msg) =>
+              msg._tempKey === tempKey ? { ...msg, _pending: false, _failed: true } : msg,
+            ),
+            detailReplySending: false,
+          };
         }
       } catch {
-        feedbackPanelState = { ...feedbackPanelState, detailReplySending: false };
+        feedbackPanelState = {
+          ...feedbackPanelState,
+          detailMessages: feedbackPanelState.detailMessages.map((msg) =>
+            msg._tempKey === tempKey ? { ...msg, _pending: false, _failed: true } : msg,
+          ),
+          detailReplySending: false,
+        };
       }
       state.requestUpdate();
     },
