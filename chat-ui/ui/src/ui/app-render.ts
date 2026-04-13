@@ -69,7 +69,7 @@ declare global {
       submitFeedback?: (params: { content: string; screenshots: string[]; fileNames?: string[]; includeLogs: boolean; email?: string }) => Promise<{ ok: boolean; id?: number; error?: string }>;
       feedbackThreads?: () => Promise<{ ok: boolean; data?: any; error?: string }>;
       feedbackThread?: (id: number) => Promise<{ ok: boolean; data?: any; error?: string }>;
-      feedbackReply?: (id: number, content: string, files?: Array<{name: string; base64: string}>) => Promise<{ ok: boolean; id?: number; error?: string }>;
+      feedbackReply?: (id: number, content: string, files?: Array<{name: string; base64: string}>) => Promise<{ ok: boolean; id?: number; message?: unknown; error?: string }>;
       feedbackPickFiles?: () => Promise<{ files: Array<{name: string; base64: string}> } | null>;
     };
   }
