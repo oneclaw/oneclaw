@@ -9370,8 +9370,7 @@ img.chat-avatar {
   border: 1px solid #c0392b;
 }
 
-.feedback-msg--failed::after {
-  content: "⚠ 发送失败";
+.feedback-msg__failed-hint {
   color: #c0392b;
   font-size: 11px;
   margin-top: 4px;
