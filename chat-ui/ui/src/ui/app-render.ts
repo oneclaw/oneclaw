@@ -26,6 +26,8 @@ import {
   renderFeedbackPanel,
   createFeedbackPanelState,
   type FeedbackPanelState,
+  type FeedbackMessage,
+  type FeedbackThread,
 } from "./views/feedback-dialog.ts";
 import { patchSession, loadSessions } from "./controllers/sessions.ts";
 import { renderSkillStoreView, type SkillStoreState } from "./skill-store-view.ts";
@@ -240,13 +242,18 @@ async function deleteSessionFromSidebar(state: AppViewState, key: string) {
 }
 
 function setOneClawView(state: AppViewState, next: "chat" | "settings" | "skills" | "workspace" | "cron" | "feedback") {
-  if ((state.settings.oneclawView ?? "chat") === next) {
+  const prev = state.settings.oneclawView ?? "chat";
+  if (prev === next) {
     return;
   }
-  // 离开反馈视图时释放截图数据，避免内存泄漏
-  const prev = state.settings.oneclawView ?? "chat";
+  // 离开反馈视图时释放截图数据 + 取消 SSE 订阅
   if (prev === "feedback" && next !== "feedback") {
     feedbackPanelState = { ...feedbackPanelState, newScreenshots: [], newScreenshotPreviews: [], newFileNames: [] };
+    unsubscribeFeedbackSse();
+  }
+  // 进入反馈视图时建立 SSE 订阅
+  if (prev !== "feedback" && next === "feedback") {
+    subscribeFeedbackSse(state);
   }
   state.applySettings({
     ...state.settings,
@@ -336,6 +343,84 @@ async function loadFeedbackThreadDetail(state: AppViewState, id: number) {
   state.requestUpdate();
 }
 
+type FeedbackSseEvent =
+  | { type: "message.created"; thread_id: number; message: FeedbackMessage & { feedback_id: number } }
+  | { type: "thread.updated"; thread_id: number; thread: Partial<FeedbackThread> & { id: number } };
+
+function appendDetailMessageDedup(msg: FeedbackMessage) {
+  const list = feedbackPanelState.detailMessages ?? [];
+  // 以 id 为主键去重；id <= 0 表示乐观占位，不参与去重判定
+  if (msg.id > 0 && list.some((m) => m.id === msg.id)) return;
+  // 同时清掉与该真实消息内容匹配的临时占位（用户自己的 echo 场景）
+  const filtered = list.filter(
+    (m) => !(m._pending && m._tempKey && msg.role === "user" && m.content === msg.content),
+  );
+  const merged = [...filtered, msg].sort((a, b) => a.created_at.localeCompare(b.created_at));
+  feedbackPanelState = { ...feedbackPanelState, detailMessages: merged };
+}
+
+function handleFeedbackEvent(state: AppViewState, evt: FeedbackSseEvent) {
+  if (evt.type === "message.created") {
+    const incoming: FeedbackMessage = {
+      id: evt.message.id,
+      thread_id: evt.message.feedback_id ?? evt.thread_id,
+      role: evt.message.role,
+      content: evt.message.content,
+      file_keys: evt.message.file_keys ?? [],
+      created_at: evt.message.created_at,
+    };
+    const openId = feedbackPanelState.detailThread?.id ?? null;
+    if (openId === evt.thread_id) {
+      // 当前正在看这个 thread → 去重 append
+      appendDetailMessageDedup(incoming);
+    } else if (incoming.role !== "user") {
+      // 其他 thread 且不是自己发的 → 标记未读
+      if (!feedbackPanelState.unreadThreadIds.includes(evt.thread_id)) {
+        feedbackPanelState = {
+          ...feedbackPanelState,
+          unreadThreadIds: [...feedbackPanelState.unreadThreadIds, evt.thread_id],
+        };
+        feedbackHasReplyGlobal = true;
+      }
+    }
+    state.requestUpdate();
+  } else if (evt.type === "thread.updated") {
+    const idx = feedbackPanelState.threads.findIndex((t) => t.id === evt.thread_id);
+    if (idx >= 0) {
+      const prev = feedbackPanelState.threads[idx];
+      const next = { ...prev, ...evt.thread } as FeedbackThread;
+      const threads = [...feedbackPanelState.threads];
+      threads[idx] = next;
+      feedbackPanelState = { ...feedbackPanelState, threads };
+      state.requestUpdate();
+    }
+  }
+}
+
+function subscribeFeedbackSse(state: AppViewState) {
+  if (feedbackSseUnsub) return; // 幂等
+  void (window as any).oneclaw?.feedbackSubscribe?.();
+  feedbackSseUnsub = (window as any).oneclaw?.onFeedbackEvent?.((evt: FeedbackSseEvent) => {
+    handleFeedbackEvent(state, evt);
+  }) ?? null;
+  feedbackReconnectUnsub = (window as any).oneclaw?.onFeedbackReconnecting?.(() => {
+    feedbackPanelState = { ...feedbackPanelState, sseReconnecting: true };
+    state.requestUpdate();
+    // 重连成功后会继续收事件；最简策略：重连事件触发时顺手刷新一次列表
+    loadFeedbackThreads(state);
+    const openId = feedbackPanelState.detailThread?.id ?? null;
+    if (openId) void loadFeedbackThreadDetail(state, openId);
+  }) ?? null;
+}
+
+function unsubscribeFeedbackSse() {
+  feedbackSseUnsub?.();
+  feedbackReconnectUnsub?.();
+  feedbackSseUnsub = null;
+  feedbackReconnectUnsub = null;
+  void (window as any).oneclaw?.feedbackUnsubscribe?.();
+}
+
 function buildFeedbackPanelCallbacks(state: AppViewState) {
   return {
     onLoadThreads: () => loadFeedbackThreads(state),
@@ -356,6 +441,13 @@ function buildFeedbackPanelCallbacks(state: AppViewState) {
       state.requestUpdate();
     },
     onOpenDetail: (id: number) => {
+      // 清除该 thread 的未读标记
+      if (feedbackPanelState.unreadThreadIds.includes(id)) {
+        feedbackPanelState = {
+          ...feedbackPanelState,
+          unreadThreadIds: feedbackPanelState.unreadThreadIds.filter((x) => x !== id),
+        };
+      }
       void loadFeedbackThreadDetail(state, id);
     },
     onBackToList: () => {
@@ -576,6 +668,8 @@ let feedbackState: FeedbackDialogState = createFeedbackDialogState();
 
 let feedbackPanelState: FeedbackPanelState = createFeedbackPanelState();
 let feedbackHasReplyGlobal = false;
+let feedbackSseUnsub: (() => void) | null = null;
+let feedbackReconnectUnsub: (() => void) | null = null;
 
 // toast 定时器句柄
 let toastTimer: ReturnType<typeof setTimeout> | null = null;
