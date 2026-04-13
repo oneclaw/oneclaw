@@ -186,11 +186,14 @@ interface FeedbackThread {
 
 interface FeedbackMessage {
   id: number;
-  thread_id: number;
-  role: "user" | "admin";
+  thread_id: number;          // 保留 UI 内部字段，SSE 入口将 feedback_id → thread_id 映射
+  role: "user" | "admin" | "agent" | "official";
   content: string;
   file_keys: string[];
   created_at: string;
+  _pending?: boolean;          // 乐观更新标记：true = 临时气泡，灰度+重试状态
+  _failed?: boolean;           // 发送失败标记
+  _tempKey?: string;           // 客户端生成的临时 key，用于 HTTP 响应到达时替换
 }
 
 export interface FeedbackPanelState {
@@ -218,6 +221,9 @@ export interface FeedbackPanelState {
   detailReplyFilePreviews: string[];
   detailReplyFileNames: string[];
   detailReplySending: boolean;
+  // 实时化相关
+  unreadThreadIds: number[];   // 未读 thread id 列表，进入详情时清除该 id
+  sseReconnecting: boolean;    // 当前是否在重连中（顶部状态条使用）
 }
 
 export function createFeedbackPanelState(): FeedbackPanelState {
@@ -243,6 +249,8 @@ export function createFeedbackPanelState(): FeedbackPanelState {
     detailReplyFilePreviews: [],
     detailReplyFileNames: [],
     detailReplySending: false,
+    unreadThreadIds: [],
+    sseReconnecting: false,
   };
 }
 
@@ -346,7 +354,7 @@ function renderSidebarNav(
                   <div class="feedback-layout__nav-item-text">${thread.content}</div>
                   <div class="feedback-layout__nav-item-meta">
                     <span class="feedback-layout__nav-time">${timeAgo(thread.updated_at || thread.created_at)}</span>
-                    ${thread.has_reply
+                    ${thread.has_reply || state.unreadThreadIds.includes(thread.id)
                       ? html`<span class="feedback-layout__nav-badge">${t("feedback.hasReply")}</span>`
                       : nothing}
                   </div>
@@ -489,8 +497,8 @@ function renderDetailContent(
                 <div class="feedback-msg__time">${timeAgo(thread.created_at)}</div>
               </div>
               ${state.detailMessages.map((msg) => html`
-                <div class="feedback-msg ${msg.role === "user" ? "feedback-msg--user" : "feedback-msg--admin"}">
-                  ${msg.role === "admin"
+                <div class="feedback-msg ${msg.role === "user" ? "feedback-msg--user" : "feedback-msg--admin"}${msg._pending ? " feedback-msg--pending" : ""}${msg._failed ? " feedback-msg--failed" : ""}">
+                  ${msg.role !== "user"
                     ? html`<div class="feedback-msg__label">${t("feedback.official")}</div>`
                     : nothing}
                   <div class="feedback-msg__bubble">${msg.content}</div>
@@ -565,3 +573,5 @@ function renderDetailContent(
     </div>
   `;
 }
+
+export type { FeedbackMessage, FeedbackThread };
