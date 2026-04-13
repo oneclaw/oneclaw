@@ -9357,6 +9357,27 @@ img.chat-avatar {
   color: var(--text);
 }
 
+/* 乐观更新：pending 占位灰度；failed 加红框并带状态标签 */
+.feedback-msg--pending {
+  opacity: 0.55;
+}
+
+.feedback-msg--failed {
+  opacity: 0.9;
+}
+
+.feedback-msg--failed .feedback-msg__bubble {
+  border: 1px solid #c0392b;
+}
+
+.feedback-msg--failed::after {
+  content: "⚠ 发送失败";
+  color: #c0392b;
+  font-size: 11px;
+  margin-top: 4px;
+  padding-left: 4px;
+}
+
 .feedback-msg__attachments {
   font-size: 11px;
   color: var(--muted);
