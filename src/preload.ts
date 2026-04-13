@@ -187,6 +187,21 @@ contextBridge.exposeInMainWorld("oneclaw", {
     ipcRenderer.invoke("feedback:reply", id, content, files),
   // 从 .openclaw 目录选择文件
   feedbackPickFiles: () => ipcRenderer.invoke("feedback:pick-files"),
+  // SSE 订阅：建连 / 断开
+  feedbackSubscribe: () => ipcRenderer.invoke("feedback:subscribe"),
+  feedbackUnsubscribe: () => ipcRenderer.invoke("feedback:unsubscribe"),
+
+  // SSE 事件监听（返回 unsubscribe 函数，遵循项目既有 onGatewayReady / onAppNavigate 模式）
+  onFeedbackEvent: (cb: (evt: unknown) => void) => {
+    const listener = (_e: unknown, evt: unknown) => cb(evt);
+    ipcRenderer.on("feedback:event", listener);
+    return () => ipcRenderer.removeListener("feedback:event", listener);
+  },
+  onFeedbackReconnecting: (cb: () => void) => {
+    const listener = () => cb();
+    ipcRenderer.on("feedback:reconnecting", listener);
+    return () => ipcRenderer.removeListener("feedback:reconnecting", listener);
+  },
   onNavigate: (cb: (payload: { view: "settings" }) => void) => {
     const listener = (_event: Electron.IpcRendererEvent, payload: { view: "settings" }) => {
       cb(payload);
