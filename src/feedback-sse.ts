@@ -62,6 +62,7 @@ export class FeedbackSSE extends EventEmitter {
   private reconnectDelay = 1000;
   private closed = false;
   private buffer = "";
+  private wasReconnecting = false;
   private lastByteAt = Date.now();
   private watchdog: NodeJS.Timeout | null = null;
   private reconnectTimer: NodeJS.Timeout | null = null;
@@ -118,6 +119,10 @@ export class FeedbackSSE extends EventEmitter {
         res.on("data", (chunk: Buffer) => {
           if (this.closed) return;
           this.lastByteAt = Date.now();
+          if (this.wasReconnecting) {
+            this.wasReconnecting = false;
+            this.emit("reconnected");
+          }
           this.buffer += chunk.toString("utf-8");
           const { events, rest } = parseSseFrames(this.buffer);
           this.buffer = rest;
@@ -146,6 +151,7 @@ export class FeedbackSSE extends EventEmitter {
     if (this.closed) return;
     const delay = this.reconnectDelay;
     this.reconnectDelay = Math.min(this.reconnectDelay * 2, 8000);
+    this.wasReconnecting = true;
     this.emit("reconnecting");
     this.reconnectTimer = setTimeout(() => {
       this.reconnectTimer = null;

@@ -202,6 +202,11 @@ contextBridge.exposeInMainWorld("oneclaw", {
     ipcRenderer.on("feedback:reconnecting", listener);
     return () => ipcRenderer.removeListener("feedback:reconnecting", listener);
   },
+  onFeedbackReconnected: (cb: () => void) => {
+    const listener = () => cb();
+    ipcRenderer.on("feedback:reconnected", listener);
+    return () => ipcRenderer.removeListener("feedback:reconnected", listener);
+  },
   onNavigate: (cb: (payload: { view: "settings" }) => void) => {
     const listener = (_event: Electron.IpcRendererEvent, payload: { view: "settings" }) => {
       cb(payload);

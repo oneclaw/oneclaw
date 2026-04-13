@@ -351,10 +351,13 @@ function appendDetailMessageDedup(msg: FeedbackMessage) {
   const list = feedbackPanelState.detailMessages ?? [];
   // 以 id 为主键去重；id <= 0 表示乐观占位，不参与去重判定
   if (msg.id > 0 && list.some((m) => m.id === msg.id)) return;
-  // 同时清掉与该真实消息内容匹配的临时占位（用户自己的 echo 场景）
-  const filtered = list.filter(
-    (m) => !(m._pending && m._tempKey && msg.role === "user" && m.content === msg.content),
+  // 只移除"最早"一条匹配的占位，避免用户连发同样内容时把后续占位也吞掉
+  const placeholderIdx = list.findIndex(
+    (m) => m._pending && m._tempKey && msg.role === "user" && m.content === msg.content,
   );
+  const filtered = placeholderIdx >= 0
+    ? [...list.slice(0, placeholderIdx), ...list.slice(placeholderIdx + 1)]
+    : list;
   const merged = [...filtered, msg].sort((a, b) => a.created_at.localeCompare(b.created_at));
   feedbackPanelState = { ...feedbackPanelState, detailMessages: merged };
 }
@@ -404,9 +407,14 @@ function subscribeFeedbackSse(state: AppViewState) {
     handleFeedbackEvent(state, evt);
   }) ?? null;
   feedbackReconnectUnsub = (window as any).oneclaw?.onFeedbackReconnecting?.(() => {
+    // 仅切换 UI 状态；refetch 等到 reconnected 才触发，避免在 outage 期间反复打空炮
     feedbackPanelState = { ...feedbackPanelState, sseReconnecting: true };
     state.requestUpdate();
-    // 重连成功后会继续收事件；最简策略：重连事件触发时顺手刷新一次列表
+  }) ?? null;
+  feedbackReconnectedUnsub = (window as any).oneclaw?.onFeedbackReconnected?.(() => {
+    // 重连成功（首字节到达）→ 兜底刷新列表 + 打开的详情
+    feedbackPanelState = { ...feedbackPanelState, sseReconnecting: false };
+    state.requestUpdate();
     loadFeedbackThreads(state);
     const openId = feedbackPanelState.detailThread?.id ?? null;
     if (openId) void loadFeedbackThreadDetail(state, openId);
@@ -416,8 +424,10 @@ function subscribeFeedbackSse(state: AppViewState) {
 function unsubscribeFeedbackSse() {
   feedbackSseUnsub?.();
   feedbackReconnectUnsub?.();
+  feedbackReconnectedUnsub?.();
   feedbackSseUnsub = null;
   feedbackReconnectUnsub = null;
+  feedbackReconnectedUnsub = null;
   void (window as any).oneclaw?.feedbackUnsubscribe?.();
 }
 
@@ -670,6 +680,7 @@ let feedbackPanelState: FeedbackPanelState = createFeedbackPanelState();
 let feedbackHasReplyGlobal = false;
 let feedbackSseUnsub: (() => void) | null = null;
 let feedbackReconnectUnsub: (() => void) | null = null;
+let feedbackReconnectedUnsub: (() => void) | null = null;
 
 // toast 定时器句柄
 let toastTimer: ReturnType<typeof setTimeout> | null = null;

@@ -484,6 +484,11 @@ export function registerFeedbackIpc(deps: FeedbackIpcDeps): void {
         if (!w.isDestroyed()) w.webContents.send("feedback:reconnecting");
       }
     });
+    sseClient.on("reconnected", () => {
+      for (const w of BrowserWindow.getAllWindows()) {
+        if (!w.isDestroyed()) w.webContents.send("feedback:reconnected");
+      }
+    });
     sseClient.start();
     return { ok: true };
   });
