@@ -64,12 +64,17 @@ export class FeedbackSSE extends EventEmitter {
   private buffer = "";
   private lastByteAt = Date.now();
   private watchdog: NodeJS.Timeout | null = null;
+  private reconnectTimer: NodeJS.Timeout | null = null;
 
   constructor(private url: string) {
     super();
   }
 
   start(): void {
+    if (this.watchdog) {
+      // 已启动，幂等返回
+      return;
+    }
     this.closed = false;
     this.connect();
     this.watchdog = setInterval(() => {
@@ -85,6 +90,10 @@ export class FeedbackSSE extends EventEmitter {
     if (this.watchdog) {
       clearInterval(this.watchdog);
       this.watchdog = null;
+    }
+    if (this.reconnectTimer) {
+      clearTimeout(this.reconnectTimer);
+      this.reconnectTimer = null;
     }
     this.req?.destroy();
     this.req = null;
@@ -107,6 +116,7 @@ export class FeedbackSSE extends EventEmitter {
         this.lastByteAt = Date.now();
         log.info("SSE 连接已建立");
         res.on("data", (chunk: Buffer) => {
+          if (this.closed) return;
           this.lastByteAt = Date.now();
           this.buffer += chunk.toString("utf-8");
           const { events, rest } = parseSseFrames(this.buffer);
@@ -115,8 +125,14 @@ export class FeedbackSSE extends EventEmitter {
             this.emit("event", evt);
           }
         });
-        res.on("end", () => this.scheduleReconnect());
-        res.on("error", () => this.scheduleReconnect());
+        res.on("end", () => {
+          if (this.closed) return;
+          this.scheduleReconnect();
+        });
+        res.on("error", () => {
+          if (this.closed) return;
+          this.scheduleReconnect();
+        });
       },
     );
     this.req.on("error", (err) => {
@@ -131,6 +147,9 @@ export class FeedbackSSE extends EventEmitter {
     const delay = this.reconnectDelay;
     this.reconnectDelay = Math.min(this.reconnectDelay * 2, 8000);
     this.emit("reconnecting");
-    setTimeout(() => this.connect(), delay);
+    this.reconnectTimer = setTimeout(() => {
+      this.reconnectTimer = null;
+      this.connect();
+    }, delay);
   }
 }
