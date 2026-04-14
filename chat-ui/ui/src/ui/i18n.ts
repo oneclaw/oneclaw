@@ -187,6 +187,7 @@ const dict: Record<Locale, Record<string, string>> = {
     "feedback.hasReply": "有回复",
     "feedback.sendFailed": "发送失败",
     "feedback.aiThinking": "AI 正在思考…",
+    "feedback.agentFailed": "AI 暂时没法回复，请稍后再试",
     "feedback.sseConnected": "已连接",
     "feedback.sseReconnecting": "重连中…",
     "feedback.sseDisconnected": "未连接",
@@ -440,6 +441,7 @@ const dict: Record<Locale, Record<string, string>> = {
     "feedback.hasReply": "Has reply",
     "feedback.sendFailed": "Send failed",
     "feedback.aiThinking": "AI is thinking…",
+    "feedback.agentFailed": "AI is temporarily unavailable, please try again later",
     "feedback.sseConnected": "Connected",
     "feedback.sseReconnecting": "Reconnecting…",
     "feedback.sseDisconnected": "Offline",
@@ -551,4 +553,26 @@ export function getLocale(): Locale {
 /** Set the locale explicitly. */
 export function setLocale(locale: Locale): void {
   currentLocale = locale;
+}
+
+/** "AI 思考中" 轮播短语，按当前 locale 返回。 */
+const thinkingPhrasesDict: Record<Locale, string[]> = {
+  zh: [
+    "AI 正在思考…",
+    "正在查询日志…",
+    "正在分析问题…",
+    "正在搜索知识库…",
+    "正在整理回复…",
+  ],
+  en: [
+    "AI is thinking…",
+    "Checking logs…",
+    "Analyzing the issue…",
+    "Searching knowledge base…",
+    "Preparing a reply…",
+  ],
+};
+
+export function getThinkingPhrases(): string[] {
+  return thinkingPhrasesDict[currentLocale] ?? thinkingPhrasesDict.en;
 }

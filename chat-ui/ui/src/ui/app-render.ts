@@ -9,7 +9,7 @@ import { parseAgentSessionKey } from "../../../src/routing/session-key.js";
 import { refreshChat, refreshChatAvatar, pendingSessionLabels } from "./app-chat.ts";
 import { syncUrlWithSessionKey } from "./app-settings.ts";
 import { loadChatHistory } from "./controllers/chat.ts";
-import { getLocale, t } from "./i18n.ts";
+import { getLocale, getThinkingPhrases, t } from "./i18n.ts";
 import { icons } from "./icons.ts";
 import { renderSidebar } from "./sidebar.ts";
 import { renderChat } from "./views/chat.ts";
@@ -413,6 +413,35 @@ type FeedbackSseEvent =
 const thinkingSafetyTimers = new Map<number, ReturnType<typeof setTimeout>>();
 const THINKING_SAFETY_TIMEOUT_MS = 300_000; // 5 分钟，对齐设计文档 §3.3 的客户端建议
 
+// ── "AI 思考中" 轮播短语 ──
+let thinkingPhraseIndex = 0;
+let thinkingPhraseTimer: ReturnType<typeof setInterval> | null = null;
+const THINKING_PHRASE_INTERVAL_MS = 3_000; // 每 3 秒切换一条
+
+/** 有任意 thread 在 thinking 时启动轮播定时器 */
+function startPhraseRotation(state: AppViewState) {
+  if (thinkingPhraseTimer) return; // 已在运行
+  const phrases = getThinkingPhrases();
+  thinkingPhraseIndex = 0;
+  feedbackPanelState = { ...feedbackPanelState, thinkingPhrase: phrases[0] };
+  thinkingPhraseTimer = setInterval(() => {
+    const p = getThinkingPhrases();
+    thinkingPhraseIndex = (thinkingPhraseIndex + 1) % p.length;
+    feedbackPanelState = { ...feedbackPanelState, thinkingPhrase: p[thinkingPhraseIndex] };
+    state.requestUpdate();
+  }, THINKING_PHRASE_INTERVAL_MS);
+}
+
+/** 所有 thinking 结束后停止轮播 */
+function stopPhraseRotation() {
+  if (thinkingPhraseTimer) {
+    clearInterval(thinkingPhraseTimer);
+    thinkingPhraseTimer = null;
+  }
+  thinkingPhraseIndex = 0;
+  feedbackPanelState = { ...feedbackPanelState, thinkingPhrase: "" };
+}
+
 function showThinking(state: AppViewState, threadId: number) {
   // 重置 5 分钟兜底（同一 thread 收到二次 thinking 不应延长，但收到 done 后再来新 thinking 需重启）
   const existing = thinkingSafetyTimers.get(threadId);
@@ -422,10 +451,12 @@ function showThinking(state: AppViewState, threadId: number) {
     setTimeout(() => hideThinking(state, threadId), THINKING_SAFETY_TIMEOUT_MS),
   );
   if (feedbackPanelState.thinkingThreadIds.includes(threadId)) return;
+  const wasEmpty = feedbackPanelState.thinkingThreadIds.length === 0;
   feedbackPanelState = {
     ...feedbackPanelState,
     thinkingThreadIds: [...feedbackPanelState.thinkingThreadIds, threadId],
   };
+  if (wasEmpty) startPhraseRotation(state);
 }
 
 function hideThinking(state: AppViewState, threadId: number) {
@@ -439,6 +470,7 @@ function hideThinking(state: AppViewState, threadId: number) {
     ...feedbackPanelState,
     thinkingThreadIds: feedbackPanelState.thinkingThreadIds.filter((x) => x !== threadId),
   };
+  if (feedbackPanelState.thinkingThreadIds.length === 0) stopPhraseRotation();
   state.requestUpdate();
 }
 
@@ -447,6 +479,7 @@ function clearAllThinking(state: AppViewState) {
   thinkingSafetyTimers.clear();
   if (feedbackPanelState.thinkingThreadIds.length === 0) return;
   feedbackPanelState = { ...feedbackPanelState, thinkingThreadIds: [] };
+  stopPhraseRotation();
   state.requestUpdate();
 }
 
@@ -521,7 +554,24 @@ function handleFeedbackEvent(state: AppViewState, evt: FeedbackSseEvent) {
       scrollFeedbackMessagesToBottom("smooth");
     }
   } else if (evt.type === "agent.done") {
+    // 如果 thinking 仍然活跃（没有 message.created 到达过），说明 Agent 失败了
+    // → 在当前打开的 thread 详情底部显示友好提示
+    const agentFailed = feedbackPanelState.thinkingThreadIds.includes(evt.thread_id);
     hideThinking(state, evt.thread_id);
+    if (agentFailed && openId === evt.thread_id) {
+      const failHint: FeedbackMessage = {
+        id: -Date.now(),  // 负数 id 避免与真实消息冲突
+        thread_id: evt.thread_id,
+        role: "agent",
+        content: t("feedback.agentFailed"),
+        file_keys: [],
+        created_at: new Date().toISOString(),
+        _agentFailedHint: true,
+      };
+      appendDetailMessageDedup(failHint);
+      state.requestUpdate();
+      if (wasNearBottom) scrollFeedbackMessagesToBottom("smooth");
+    }
   }
   // 未知 type 默认忽略，符合设计文档 §3.1 约定
 }
