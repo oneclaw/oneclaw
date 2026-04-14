@@ -500,6 +500,11 @@ export function registerFeedbackIpc(deps: FeedbackIpcDeps): void {
         if (!w.isDestroyed()) w.webContents.send("feedback:reconnected");
       }
     });
+    sseClient.on("open", () => {
+      for (const w of BrowserWindow.getAllWindows()) {
+        if (!w.isDestroyed()) w.webContents.send("feedback:open");
+      }
+    });
     sseClient.start();
     return { ok: true };
   });

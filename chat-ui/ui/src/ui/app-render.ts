@@ -247,11 +247,15 @@ function setOneClawView(state: AppViewState, next: "chat" | "settings" | "skills
   if (prev === next) {
     return;
   }
-  // 离开反馈视图时释放截图缓存 + 清掉残留思考动画。
-  // SSE 订阅不再随视图开关，常驻整个应用生命周期（见 initFeedbackBackground）。
+  // 离开反馈视图：释放截图缓存 + 清思考动画 + 断 SSE
   if (prev === "feedback" && next !== "feedback") {
     feedbackPanelState = { ...feedbackPanelState, newScreenshots: [], newScreenshotPreviews: [], newFileNames: [] };
     clearAllThinking(state);
+    unsubscribeFeedbackSse(state);
+  }
+  // 进入反馈视图：建立 SSE 长连接（实时推送）
+  if (prev !== "feedback" && next === "feedback") {
+    subscribeFeedbackSse(state);
   }
   state.applySettings({
     ...state.settings,
@@ -259,14 +263,24 @@ function setOneClawView(state: AppViewState, next: "chat" | "settings" | "skills
   });
 }
 
+// 后台轮询拉取 thread 列表的间隔。SSE 仅在用户进入反馈视图时建立，
+// 平时通过 5 分钟一次的 HTTP 拉取检测"过去未读"，让反馈入口的红点
+// 可以及时反映服务端推送，而不必一直占着 SSE 长连接。
+const FEEDBACK_BACKGROUND_POLL_MS = 5 * 60 * 1000;
+let feedbackBackgroundPollTimer: ReturnType<typeof setInterval> | null = null;
+
 /**
- * 应用启动时调用一次：建立常驻 SSE 订阅 + 拉取一次 thread 列表。
- * 这两步让用户在任意视图都能感知未读（反馈入口按钮的红点），
- * 不需要先进入反馈面板才能"看到"消息。
+ * 应用启动时调用一次：立刻拉一次 thread 列表（识别启动前后端推送的"过去未读"），
+ * 并启动一个 5 分钟一次的后台轮询。SSE 不在这里建立，只在用户实际打开反馈视图时建立。
  */
 export function initFeedbackBackground(state: AppViewState) {
-  subscribeFeedbackSse(state);
   void loadFeedbackThreads(state);
+  if (feedbackBackgroundPollTimer) return; // 幂等，防热更新重复挂表
+  feedbackBackgroundPollTimer = setInterval(() => {
+    // 用户已经在反馈视图：SSE 在推实时事件，轮询纯属浪费一次 HTTP；跳过。
+    if ((state.settings.oneclawView ?? "chat") === "feedback") return;
+    void loadFeedbackThreads(state);
+  }, FEEDBACK_BACKGROUND_POLL_MS);
 }
 
 // 打开内嵌设置页时可携带目标 tab 提示，减少用户二次定位成本。
@@ -514,18 +528,25 @@ function handleFeedbackEvent(state: AppViewState, evt: FeedbackSseEvent) {
 
 function subscribeFeedbackSse(state: AppViewState) {
   if (feedbackSseUnsub) return; // 幂等
+  // 重置连接状态：握手完成（onFeedbackOpen）后才置 true
+  feedbackPanelState = { ...feedbackPanelState, sseConnected: false, sseReconnecting: false };
+  state.requestUpdate();
   void (window as any).oneclaw?.feedbackSubscribe?.();
   feedbackSseUnsub = (window as any).oneclaw?.onFeedbackEvent?.((evt: FeedbackSseEvent) => {
     handleFeedbackEvent(state, evt);
   }) ?? null;
+  feedbackOpenUnsub = (window as any).oneclaw?.onFeedbackOpen?.(() => {
+    feedbackPanelState = { ...feedbackPanelState, sseConnected: true, sseReconnecting: false };
+    state.requestUpdate();
+  }) ?? null;
   feedbackReconnectUnsub = (window as any).oneclaw?.onFeedbackReconnecting?.(() => {
     // 仅切换 UI 状态；refetch 等到 reconnected 才触发，避免在 outage 期间反复打空炮
-    feedbackPanelState = { ...feedbackPanelState, sseReconnecting: true };
+    feedbackPanelState = { ...feedbackPanelState, sseConnected: false, sseReconnecting: true };
     state.requestUpdate();
   }) ?? null;
   feedbackReconnectedUnsub = (window as any).oneclaw?.onFeedbackReconnected?.(() => {
     // 重连成功（首字节到达）→ 兜底刷新列表 + 打开的详情
-    feedbackPanelState = { ...feedbackPanelState, sseReconnecting: false };
+    feedbackPanelState = { ...feedbackPanelState, sseConnected: true, sseReconnecting: false };
     state.requestUpdate();
     loadFeedbackThreads(state);
     const openId = feedbackPanelState.detailThread?.id ?? null;
@@ -535,12 +556,16 @@ function subscribeFeedbackSse(state: AppViewState) {
 
 function unsubscribeFeedbackSse(state: AppViewState) {
   feedbackSseUnsub?.();
+  feedbackOpenUnsub?.();
   feedbackReconnectUnsub?.();
   feedbackReconnectedUnsub?.();
   feedbackSseUnsub = null;
+  feedbackOpenUnsub = null;
   feedbackReconnectUnsub = null;
   feedbackReconnectedUnsub = null;
   void (window as any).oneclaw?.feedbackUnsubscribe?.();
+  feedbackPanelState = { ...feedbackPanelState, sseConnected: false, sseReconnecting: false };
+  state.requestUpdate();
   // 离开反馈视图时清掉所有 thinking 动画 + 定时器，避免再次进入时残留
   clearAllThinking(state);
 }
@@ -848,6 +873,7 @@ let feedbackPanelState: FeedbackPanelState = createFeedbackPanelState();
 let feedbackSseUnsub: (() => void) | null = null;
 let feedbackReconnectUnsub: (() => void) | null = null;
 let feedbackReconnectedUnsub: (() => void) | null = null;
+let feedbackOpenUnsub: (() => void) | null = null;
 
 // toast 定时器句柄
 let toastTimer: ReturnType<typeof setTimeout> | null = null;

@@ -9017,6 +9017,48 @@ img.chat-avatar {
 .feedback-layout__sidebar-header {
   padding: 4px 8px 12px;
   margin-top: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+/* 反馈服务器 SSE 连接状态徽章：小圆点 + 文案 */
+.feedback-sse-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--muted);
+  user-select: none;
+}
+
+.feedback-sse-status__dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--muted);
+  flex-shrink: 0;
+}
+
+.feedback-sse-status--connected .feedback-sse-status__dot {
+  background: #2ecc71; /* 健康绿，区别于主题红 */
+  box-shadow: 0 0 0 3px rgba(46, 204, 113, 0.16);
+}
+
+.feedback-sse-status--reconnecting .feedback-sse-status__dot {
+  background: #f39c12; /* 重连用 amber 警示色 */
+  animation: feedback-sse-status-pulse 1.2s infinite ease-in-out;
+}
+
+.feedback-sse-status--disconnected .feedback-sse-status__dot {
+  background: var(--muted);
+  opacity: 0.6;
+}
+
+@keyframes feedback-sse-status-pulse {
+  0%, 100% { opacity: 0.5; }
+  50%      { opacity: 1; }
 }
 
 .feedback-layout__sidebar-title {

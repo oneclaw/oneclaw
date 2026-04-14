@@ -138,6 +138,9 @@ export class FeedbackSSE extends EventEmitter {
         this.reconnectDelay = 1000;
         this.lastByteAt = Date.now();
         log.info("SSE 连接已建立");
+        // 通知消费者"连接握手成功"。每次成功建连/重连都会触发，
+        // 用于渲染层显示"已连接"状态指示器。
+        this.emit("open");
         res.on("data", (chunk: Buffer) => {
           if (this.closed) return;
           this.lastByteAt = Date.now();
