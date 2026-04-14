@@ -335,10 +335,16 @@ async function loadFeedbackThreads(state: AppViewState) {
       const threads = Array.isArray(result.data) ? result.data : (result.data.items ?? result.data.threads ?? []);
       // 合并"过去未读"：客户端不在线期间后端推送的回复，对照本地 seenMap 标红
       const seenMap = loadFeedbackSeenMap();
+      // 排除"用户当前正在看"的 thread：即使 last_reply_at > seen，也不算未读，
+      // 避免 thread.updated 事件和 message.created 时间戳分歧导致误标红
+      const viewingId = feedbackPanelState.view === "detail" ? feedbackPanelState.detailThread?.id ?? null : null;
       const pastUnread = threads
-        .filter((t: FeedbackThread) => isThreadUnread(t, seenMap))
+        .filter((t: FeedbackThread) => t.id !== viewingId && isThreadUnread(t, seenMap))
         .map((t: FeedbackThread) => t.id);
-      const mergedUnread = Array.from(new Set([...feedbackPanelState.unreadThreadIds, ...pastUnread]));
+      const mergedUnread = Array.from(new Set([
+        ...feedbackPanelState.unreadThreadIds.filter((id) => id !== viewingId),
+        ...pastUnread,
+      ]));
       feedbackPanelState = {
         ...feedbackPanelState,
         threads,
@@ -543,7 +549,20 @@ function handleFeedbackEvent(state: AppViewState, evt: FeedbackSseEvent) {
       const next = { ...prev, ...evt.thread } as FeedbackThread;
       const threads = [...feedbackPanelState.threads];
       threads[idx] = next;
-      feedbackPanelState = { ...feedbackPanelState, threads };
+      // last_reply_at 变化 + 非当前打开的 thread → 标记未读（设计文档 §3.3：thread.updated 用于列表页红点）
+      const replyChanged = evt.thread.last_reply_at && evt.thread.last_reply_at !== prev.last_reply_at;
+      const unread = replyChanged && openId !== evt.thread_id
+        && !feedbackPanelState.unreadThreadIds.includes(evt.thread_id);
+      feedbackPanelState = {
+        ...feedbackPanelState,
+        threads,
+        ...(unread ? { unreadThreadIds: [...feedbackPanelState.unreadThreadIds, evt.thread_id] } : {}),
+      };
+      // 用户正在看该 thread → 同步推进 seen 时间戳，避免后续 loadFeedbackThreads
+      // 用旧 seen 对比新 last_reply_at 误标未读（即使没收到 message.created 也能兜住）
+      if (openId === evt.thread_id && evt.thread.last_reply_at) {
+        markFeedbackThreadSeen(evt.thread_id, evt.thread.last_reply_at);
+      }
       state.requestUpdate();
     }
   } else if (evt.type === "agent.thinking") {
@@ -554,24 +573,8 @@ function handleFeedbackEvent(state: AppViewState, evt: FeedbackSseEvent) {
       scrollFeedbackMessagesToBottom("smooth");
     }
   } else if (evt.type === "agent.done") {
-    // 如果 thinking 仍然活跃（没有 message.created 到达过），说明 Agent 失败了
-    // → 在当前打开的 thread 详情底部显示友好提示
-    const agentFailed = feedbackPanelState.thinkingThreadIds.includes(evt.thread_id);
+    // 静默隐藏思考动画，不向用户暴露 Agent 成功/失败状态
     hideThinking(state, evt.thread_id);
-    if (agentFailed && openId === evt.thread_id) {
-      const failHint: FeedbackMessage = {
-        id: -Date.now(),  // 负数 id 避免与真实消息冲突
-        thread_id: evt.thread_id,
-        role: "agent",
-        content: t("feedback.agentFailed"),
-        file_keys: [],
-        created_at: new Date().toISOString(),
-        _agentFailedHint: true,
-      };
-      appendDetailMessageDedup(failHint);
-      state.requestUpdate();
-      if (wasNearBottom) scrollFeedbackMessagesToBottom("smooth");
-    }
   }
   // 未知 type 默认忽略，符合设计文档 §3.1 约定
 }

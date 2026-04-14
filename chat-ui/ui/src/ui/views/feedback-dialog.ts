@@ -198,7 +198,6 @@ interface FeedbackMessage {
   _pending?: boolean;          // 乐观更新标记：true = 临时气泡，灰度+重试状态
   _failed?: boolean;           // 发送失败标记
   _tempKey?: string;           // 客户端生成的临时 key，用于 HTTP 响应到达时替换
-  _agentFailedHint?: boolean;  // Agent 失败提示（agent.done 到达但无 message.created）
 }
 
 export interface FeedbackPanelState {
@@ -538,7 +537,7 @@ function renderDetailContent(
                 <div class="feedback-msg__time">${timeAgo(thread.created_at)}</div>
               </div>
               ${state.detailMessages.map((msg) => html`
-                <div class="feedback-msg ${msg.role === "user" ? "feedback-msg--user" : "feedback-msg--admin"}${msg._pending ? " feedback-msg--pending" : ""}${msg._failed ? " feedback-msg--failed" : ""}${msg._agentFailedHint ? " feedback-msg--agent-failed" : ""}">
+                <div class="feedback-msg ${msg.role === "user" ? "feedback-msg--user" : "feedback-msg--admin"}${msg._pending ? " feedback-msg--pending" : ""}${msg._failed ? " feedback-msg--failed" : ""}">
                   ${msg.role !== "user"
                     ? html`<div class="feedback-msg__label">${t("feedback.official")}</div>`
                     : nothing}
