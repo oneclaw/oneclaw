@@ -312,7 +312,6 @@ async function loadFeedbackThreads(state: AppViewState) {
     if (result?.ok && result.data) {
       const threads = Array.isArray(result.data) ? result.data : (result.data.items ?? result.data.threads ?? []);
       feedbackPanelState = { ...feedbackPanelState, threads, threadsLoading: false };
-      feedbackHasReplyGlobal = threads.some((th: any) => th.has_reply);
     } else {
       feedbackPanelState = { ...feedbackPanelState, threadsLoading: false, threadsError: result?.error || "Failed to load" };
     }
@@ -457,7 +456,6 @@ function handleFeedbackEvent(state: AppViewState, evt: FeedbackSseEvent) {
           ...feedbackPanelState,
           unreadThreadIds: [...feedbackPanelState.unreadThreadIds, evt.thread_id],
         };
-        feedbackHasReplyGlobal = true;
       }
     }
     // official 回复到达 → 同步隐藏 thinking 动画（设计文档 §3.3 推荐做法：
@@ -824,7 +822,6 @@ let feedbackState: FeedbackDialogState = createFeedbackDialogState();
 // ── 反馈面板状态 ──
 
 let feedbackPanelState: FeedbackPanelState = createFeedbackPanelState();
-let feedbackHasReplyGlobal = false;
 let feedbackSseUnsub: (() => void) | null = null;
 let feedbackReconnectUnsub: (() => void) | null = null;
 let feedbackReconnectedUnsub: (() => void) | null = null;
@@ -1436,7 +1433,8 @@ export function renderApp(state: AppViewState) {
             cronJobCount: state.cronJobs.filter((j) => !isExpiredOneShot(j)).length,
             onOpenCron: () => setOneClawView(state, "cron"),
             feedbackActive,
-            feedbackHasReply: feedbackHasReplyGlobal,
+            // 全局红点派生自当前会话内的未读 thread 集合；点开 thread 自动清除
+            feedbackHasReply: feedbackPanelState.unreadThreadIds.length > 0,
             onOpenFeedback: () => openFeedbackView(state),
             updateStatus: updateBannerState.status,
             updateVersion: updateBannerState.version,
