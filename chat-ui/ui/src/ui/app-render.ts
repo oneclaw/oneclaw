@@ -247,15 +247,16 @@ function setOneClawView(state: AppViewState, next: "chat" | "settings" | "skills
   if (prev === next) {
     return;
   }
-  // 离开反馈视图：释放截图缓存 + 清思考动画 + 断 SSE
+  // 离开反馈视图：释放截图缓存 + 暂停思考定时器（保留 thinkingThreadIds）+ 断 SSE
   if (prev === "feedback" && next !== "feedback") {
     feedbackPanelState = { ...feedbackPanelState, newScreenshots: [], newScreenshotPreviews: [], newFileNames: [] };
-    clearAllThinking(state);
+    pauseThinking();
     unsubscribeFeedbackSse(state);
   }
-  // 进入反馈视图：建立 SSE 长连接（实时推送）
+  // 进入反馈视图：建立 SSE 长连接（实时推送）+ 恢复思考动画
   if (prev !== "feedback" && next === "feedback") {
     subscribeFeedbackSse(state);
+    resumeThinking(state);
   }
   state.applySettings({
     ...state.settings,
@@ -378,6 +379,15 @@ async function loadFeedbackThreadDetail(state: AppViewState, id: number) {
   } catch {
     feedbackPanelState = { ...feedbackPanelState, detailLoading: false };
   }
+  // 加载完成后，对账 thinking 状态：若 Agent 在用户不在时已经回复，隐藏思考气泡。
+  // 判据：消息列表中最后一条是非 user 消息 → Agent 已回复，thinking 无意义。
+  if (feedbackPanelState.thinkingThreadIds.includes(id)) {
+    const msgs = feedbackPanelState.detailMessages;
+    const last = msgs.length > 0 ? msgs[msgs.length - 1] : null;
+    if (last && last.role !== "user") {
+      hideThinking(state, id);
+    }
+  }
   state.requestUpdate();
   // 首屏直接落到底（instant，避免刚打开 thread 就看到滚动动画）
   scrollFeedbackMessagesToBottom("auto");
@@ -480,13 +490,20 @@ function hideThinking(state: AppViewState, threadId: number) {
   state.requestUpdate();
 }
 
-function clearAllThinking(state: AppViewState) {
+/** 暂停定时器和轮播，但保留 thinkingThreadIds，用户回来时可恢复。 */
+function pauseThinking() {
   for (const t of thinkingSafetyTimers.values()) clearTimeout(t);
   thinkingSafetyTimers.clear();
-  if (feedbackPanelState.thinkingThreadIds.length === 0) return;
-  feedbackPanelState = { ...feedbackPanelState, thinkingThreadIds: [] };
   stopPhraseRotation();
-  state.requestUpdate();
+}
+
+/** 进入反馈视图时，为保留的 thinkingThreadIds 重启安全定时器和轮播。 */
+function resumeThinking(state: AppViewState) {
+  if (feedbackPanelState.thinkingThreadIds.length === 0) return;
+  for (const tid of feedbackPanelState.thinkingThreadIds) {
+    thinkingSafetyTimers.set(tid, setTimeout(() => hideThinking(state, tid), THINKING_SAFETY_TIMEOUT_MS));
+  }
+  startPhraseRotation(state);
 }
 
 function appendDetailMessageDedup(msg: FeedbackMessage) {
@@ -619,8 +636,8 @@ function unsubscribeFeedbackSse(state: AppViewState) {
   void (window as any).oneclaw?.feedbackUnsubscribe?.();
   feedbackPanelState = { ...feedbackPanelState, sseConnected: false, sseReconnecting: false };
   state.requestUpdate();
-  // 离开反馈视图时清掉所有 thinking 动画 + 定时器，避免再次进入时残留
-  clearAllThinking(state);
+  // 注意：不在这里清 thinkingThreadIds —— 由 setOneClawView 调用 pauseThinking 保留状态，
+  // 用户重新进入时通过 resumeThinking 恢复。clearAllThinking 仅在应用退出等场景使用。
 }
 
 function buildFeedbackPanelCallbacks(state: AppViewState) {
