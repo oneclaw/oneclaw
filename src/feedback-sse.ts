@@ -28,7 +28,23 @@ export type FeedbackEventThread = {
   };
 };
 
-export type FeedbackEvent = FeedbackEventMessage | FeedbackEventThread;
+/** Agent 开始为某 thread 跑分析。客户端应显示"AI 正在思考"动画。 */
+export type FeedbackEventAgentThinking = {
+  type: "agent.thinking";
+  thread_id: number;
+};
+
+/** Agent 退出（成功或失败）。客户端应隐藏"AI 正在思考"动画。 */
+export type FeedbackEventAgentDone = {
+  type: "agent.done";
+  thread_id: number;
+};
+
+export type FeedbackEvent =
+  | FeedbackEventMessage
+  | FeedbackEventThread
+  | FeedbackEventAgentThinking
+  | FeedbackEventAgentDone;
 
 /** 纯函数：把 buffer 切成完整帧，返回解析出的事件和未完成的剩余 buffer。ping 帧被丢弃。 */
 export function parseSseFrames(buffer: string): { events: FeedbackEvent[]; rest: string } {
@@ -50,9 +66,15 @@ export function parseSseFrames(buffer: string): { events: FeedbackEvent[]; rest:
     }
     if (!json || typeof json.type !== "string") continue;
     if (json.type === "ping") continue;
-    if (json.type === "message.created" || json.type === "thread.updated") {
+    if (
+      json.type === "message.created" ||
+      json.type === "thread.updated" ||
+      json.type === "agent.thinking" ||
+      json.type === "agent.done"
+    ) {
       events.push(json as FeedbackEvent);
     }
+    // 未知 type 默认丢弃，符合"老客户端遇到未识别 type 应忽略"的约定（见设计文档 §3.1）
   }
   return { events, rest };
 }

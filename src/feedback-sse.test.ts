@@ -29,3 +29,26 @@ test("parseSseFrames 遇到非法 JSON 跳过该帧并继续解析后续帧", ()
   assert.equal(events[0].type, "thread.updated");
   assert.equal(rest, "");
 });
+
+test("parseSseFrames 应放行 agent.thinking 和 agent.done 事件", () => {
+  const buf =
+    "event: message\ndata: {\"type\":\"agent.thinking\",\"thread_id\":7}\n\n" +
+    "event: message\ndata: {\"type\":\"agent.done\",\"thread_id\":7}\n\n";
+  const { events, rest } = parseSseFrames(buf);
+  assert.equal(events.length, 2);
+  assert.equal(events[0].type, "agent.thinking");
+  assert.equal((events[0] as any).thread_id, 7);
+  assert.equal(events[1].type, "agent.done");
+  assert.equal((events[1] as any).thread_id, 7);
+  assert.equal(rest, "");
+});
+
+test("parseSseFrames 遇到未知 type 默认丢弃，不抛异常", () => {
+  const buf =
+    "event: message\ndata: {\"type\":\"future.event\",\"thread_id\":99}\n\n" +
+    "event: message\ndata: {\"type\":\"message.created\",\"thread_id\":4,\"message\":{\"id\":12}}\n\n";
+  const { events, rest } = parseSseFrames(buf);
+  assert.equal(events.length, 1);
+  assert.equal(events[0].type, "message.created");
+  assert.equal(rest, "");
+});
