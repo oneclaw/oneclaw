@@ -56,7 +56,7 @@ import {
   handleFirstUpdated,
   handleUpdated,
 } from "./app-lifecycle.ts";
-import { renderApp } from "./app-render.ts";
+import { renderApp, initFeedbackBackground } from "./app-render.ts";
 import {
   exportLogs as exportLogsInternal,
   handleChatScroll as handleChatScrollInternal,
@@ -717,6 +717,9 @@ export class OpenClawApp extends LitElement {
     this.bindPairingState();
     this.bindGatewayReady();
     this.fetchReleaseNotes();
+    // 启动时常驻 SSE 订阅 + 拉取 thread 列表（计算"过去未读"），
+    // 让反馈入口红点在任意视图都能反映服务端推送的新消息。
+    initFeedbackBackground(this as unknown as Parameters<typeof initFeedbackBackground>[0]);
   }
 
   // 首屏拉取更新日志，有未展示的条目时弹出 modal。

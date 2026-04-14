@@ -247,19 +247,26 @@ function setOneClawView(state: AppViewState, next: "chat" | "settings" | "skills
   if (prev === next) {
     return;
   }
-  // 离开反馈视图时释放截图数据 + 取消 SSE 订阅
+  // 离开反馈视图时释放截图缓存 + 清掉残留思考动画。
+  // SSE 订阅不再随视图开关，常驻整个应用生命周期（见 initFeedbackBackground）。
   if (prev === "feedback" && next !== "feedback") {
     feedbackPanelState = { ...feedbackPanelState, newScreenshots: [], newScreenshotPreviews: [], newFileNames: [] };
-    unsubscribeFeedbackSse(state);
-  }
-  // 进入反馈视图时建立 SSE 订阅
-  if (prev !== "feedback" && next === "feedback") {
-    subscribeFeedbackSse(state);
+    clearAllThinking(state);
   }
   state.applySettings({
     ...state.settings,
     oneclawView: next,
   });
+}
+
+/**
+ * 应用启动时调用一次：建立常驻 SSE 订阅 + 拉取一次 thread 列表。
+ * 这两步让用户在任意视图都能感知未读（反馈入口按钮的红点），
+ * 不需要先进入反馈面板才能"看到"消息。
+ */
+export function initFeedbackBackground(state: AppViewState) {
+  subscribeFeedbackSse(state);
+  void loadFeedbackThreads(state);
 }
 
 // 打开内嵌设置页时可携带目标 tab 提示，减少用户二次定位成本。
@@ -1544,7 +1551,10 @@ export function renderApp(state: AppViewState) {
                 : nothing
           }
           <div class="oneclaw-titlebar-right">
-            ${renderFeedbackButton(() => openFeedbackView(state))}
+            ${renderFeedbackButton(
+              () => openFeedbackView(state),
+              feedbackPanelState.unreadThreadIds.length > 0,
+            )}
           </div>
         </div>
 

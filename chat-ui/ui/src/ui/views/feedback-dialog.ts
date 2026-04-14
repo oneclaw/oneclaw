@@ -39,16 +39,19 @@ export interface FeedbackCallbacks {
   onPreviewScreenshot: (src: string | null) => void;
 }
 
-export function renderFeedbackButton(onClick: () => void) {
+export function renderFeedbackButton(onClick: () => void, hasUnread = false) {
   return html`
     <button
-      class="feedback-trigger-btn"
+      class="feedback-trigger-btn ${hasUnread ? "feedback-trigger-btn--unread" : ""}"
       type="button"
       @click=${onClick}
       title=${t("feedback.title")}
       aria-label=${t("feedback.title")}
     >
-      ${icons.bug}
+      <span class="feedback-trigger-icon-wrap">
+        ${icons.bug}
+        ${hasUnread ? html`<span class="feedback-trigger-dot" aria-hidden="true"></span>` : nothing}
+      </span>
       <span class="feedback-trigger-label">${t("feedback.title")}</span>
     </button>
   `;
