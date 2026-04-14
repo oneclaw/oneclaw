@@ -30,7 +30,7 @@ The main process spawns a gateway subprocess, waits for its health check, then o
 
 ```
 oneclaw/
-├── src/                    # 35 TypeScript modules (10270 LOC) + 13 test files
+├── src/                    # 40 TypeScript modules (13416 LOC) + 14 test files (node:test)
 │   ├── main.ts             # App entry, lifecycle, IPC, Dock toggle, config recovery
 │   ├── constants.ts        # Path resolution (dev vs packaged vs ASAR), health check params
 │   ├── gateway-process.ts  # Child process state machine + diagnostics
@@ -80,6 +80,9 @@ oneclaw/
 │   ├── settings.js         # Provider CRUD, multi-channel, Kimi, CLI, backup/restore
 │   ├── lucide-sprite.generated.js  # Icon sprites
 │   └── share-copy-content.json     # Fallback share copy content
+├── builtin-skills/         # OneClaw-owned skills, bundled into app and copied to ~/.openclaw/workspace/skills/ on first launch
+│   ├── env-setup/          # Install uv + Python + PyPI deps with CN/INTL mirror auto-selection
+│   └── document-pro/       # PDF/DOCX/PPTX/XLSX extraction guide
 ├── scripts/
 │   ├── package-resources.js    # Downloads Node.js 22 + installs openclaw from npm
 │   ├── afterPack.js            # electron-builder hook: injects resources post-strip
@@ -119,7 +122,8 @@ out/                                 # electron-builder output (DMG/NSIS)
 ```bash
 npm run build                # Vite (chat-ui) + TypeScript → dist/
 npm run build:chat           # Build Chat UI only (Lit + Vite)
-npm run dev                  # Run in dev mode (electron .)
+npm run dev                  # Run in dev mode (electron .) — does NOT rebuild, see gotcha #31
+npm run dev:isolated         # Run a second dev instance with its own port + state dir (multi-worktree)
 npm run package:resources    # Download Node.js 22 + install openclaw from npm
 npm run dist:mac:arm64       # Full pipeline: package → DMG + ZIP (arm64)
 npm run dist:mac:x64         # Same for x64
@@ -131,10 +135,44 @@ npm run clean                # Remove all generated files
 
 **Full build pipeline** (what `dist:mac:arm64` does):
 
-1. `package:resources` — download Node.js 22, `npm install openclaw --production --install-links` (version auto-fetched from npm), optionally create `gateway.asar` (set `ONECLAW_GATEWAY_ASAR=1`)
+1. `package:resources` — download Node.js 22, `npm install openclaw@<pinned> --production --install-links` plus per-channel plugins, optionally create `gateway.asar` (set `ONECLAW_GATEWAY_ASAR=1`)
 2. `build:chat` — Vite builds Lit Chat UI into `chat-ui/dist/`
 3. `tsc` — compile TypeScript
 4. `electron-builder` → `afterPack.js` injects `resources/targets/<target>/` into app bundle → DMG/ZIP/NSIS
+
+**Single source of truth for bundled dependencies.** `package.json` has a top-level `oneclaw` object that pins the exact `openclaw` version plus the Feishu/WeCom/WeChat/DingTalk/QQ Bot plugin versions:
+
+```json
+"oneclaw": {
+  "openclaw": "2026.3.13",
+  "dingtalkConnector": "0.8.3",
+  "weixin": "1.0.3",
+  "wecom": "2026.4.3",
+  "qqbot": "1.6.1"
+}
+```
+
+`scripts/package-resources.js` reads this block when installing the gateway; CI can override `openclaw` via the `OPENCLAW_PACKAGE_SOURCE` env var. Update versions here — not in the CI workflow, not at the `npm install` site.
+
+## Testing
+
+There is **no `npm test` script** and CI does not run tests. The suite exists but is invoked manually:
+
+```bash
+# Main-process TypeScript tests (node:test + assert/strict, Node 22.6+)
+node --experimental-strip-types --test src/*.test.ts
+
+# Chat UI tests (also node:test, also .ts)
+node --experimental-strip-types --test chat-ui/ui/src/**/*.test.ts
+
+# Build script tests (plain .js)
+node --test scripts/*.test.js
+
+# Single test file
+node --experimental-strip-types --test src/gateway-auth.test.ts
+```
+
+`tsconfig.json` excludes `*.test.ts` from `npm run build`, so compiled JS never contains tests. When adding new tests, keep the `.test.ts` suffix and import source modules by relative path (`./foo`), not from `dist/`.
 
 ## Key Design Decisions
 
