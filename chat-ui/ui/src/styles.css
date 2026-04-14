@@ -9440,6 +9440,13 @@ img.chat-avatar {
   padding-left: 4px;
 }
 
+/* Agent 失败提示气泡：柔和的警告风格，非 error 红 */
+.feedback-msg--agent-failed .feedback-msg__bubble {
+  opacity: 0.75;
+  border: 1px dashed var(--muted);
+  font-style: italic;
+}
+
 /* AI 思考中：三点跳动动画，沿用 admin 气泡的视觉，气泡内嵌点 + 文案 */
 .feedback-msg--thinking .feedback-msg__bubble--thinking {
   display: inline-flex;
@@ -9473,6 +9480,12 @@ img.chat-avatar {
 .feedback-thinking-text {
   color: var(--muted);
   font-size: 13px;
+  animation: feedback-thinking-fade 3s infinite ease-in-out;
+}
+
+@keyframes feedback-thinking-fade {
+  0%, 100% { opacity: 0.4; }
+  10%, 90% { opacity: 1; }
 }
 
 @keyframes feedback-thinking-blink {

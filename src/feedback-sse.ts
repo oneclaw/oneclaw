@@ -10,7 +10,7 @@ export type FeedbackEventMessage = {
   message: {
     id: number;
     feedback_id: number;
-    role: "user" | "official";
+    role: "user" | "agent" | "official";
     content: string;
     file_keys: string[];
     created_at: string;

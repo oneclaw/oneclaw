@@ -191,13 +191,14 @@ interface FeedbackThread {
 interface FeedbackMessage {
   id: number;
   thread_id: number;          // 保留 UI 内部字段，SSE 入口将 feedback_id → thread_id 映射
-  role: "user" | "admin" | "official";
+  role: "user" | "agent" | "official";
   content: string;
   file_keys: string[];
   created_at: string;
   _pending?: boolean;          // 乐观更新标记：true = 临时气泡，灰度+重试状态
   _failed?: boolean;           // 发送失败标记
   _tempKey?: string;           // 客户端生成的临时 key，用于 HTTP 响应到达时替换
+  _agentFailedHint?: boolean;  // Agent 失败提示（agent.done 到达但无 message.created）
 }
 
 export interface FeedbackPanelState {
@@ -230,6 +231,7 @@ export interface FeedbackPanelState {
   sseConnected: boolean;       // SSE 是否已与 feedback 服务器握手成功
   sseReconnecting: boolean;    // 当前是否在重连中
   thinkingThreadIds: number[]; // 当前正在显示"AI 思考中"的 thread id（agent.thinking → agent.done 之间）
+  thinkingPhrase: string;      // 当前轮播的思考短语（由 app-render.ts 定时写入）
 }
 
 export function createFeedbackPanelState(): FeedbackPanelState {
@@ -259,6 +261,7 @@ export function createFeedbackPanelState(): FeedbackPanelState {
     sseConnected: false,
     sseReconnecting: false,
     thinkingThreadIds: [],
+    thinkingPhrase: "",
   };
 }
 
@@ -535,7 +538,7 @@ function renderDetailContent(
                 <div class="feedback-msg__time">${timeAgo(thread.created_at)}</div>
               </div>
               ${state.detailMessages.map((msg) => html`
-                <div class="feedback-msg ${msg.role === "user" ? "feedback-msg--user" : "feedback-msg--admin"}${msg._pending ? " feedback-msg--pending" : ""}${msg._failed ? " feedback-msg--failed" : ""}">
+                <div class="feedback-msg ${msg.role === "user" ? "feedback-msg--user" : "feedback-msg--admin"}${msg._pending ? " feedback-msg--pending" : ""}${msg._failed ? " feedback-msg--failed" : ""}${msg._agentFailedHint ? " feedback-msg--agent-failed" : ""}">
                   ${msg.role !== "user"
                     ? html`<div class="feedback-msg__label">${t("feedback.official")}</div>`
                     : nothing}
@@ -559,7 +562,7 @@ function renderDetailContent(
                     <div class="feedback-msg__label">${t("feedback.official")}</div>
                     <div class="feedback-msg__bubble feedback-msg__bubble--thinking">
                       <span class="feedback-thinking-dots" aria-hidden="true"><span></span><span></span><span></span></span>
-                      <span class="feedback-thinking-text">${t("feedback.aiThinking")}</span>
+                      <span class="feedback-thinking-text">${state.thinkingPhrase || t("feedback.aiThinking")}</span>
                     </div>
                   </div>
                 `
