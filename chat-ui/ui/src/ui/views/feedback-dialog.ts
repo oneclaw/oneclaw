@@ -356,7 +356,7 @@ function renderSidebarNav(
                   <div class="feedback-layout__nav-item-text">${thread.content}</div>
                   <div class="feedback-layout__nav-item-meta">
                     <span class="feedback-layout__nav-time">${timeAgo(thread.updated_at || thread.created_at)}</span>
-                    ${thread.has_reply || state.unreadThreadIds.includes(thread.id)
+                    ${state.unreadThreadIds.includes(thread.id)
                       ? html`<span class="feedback-layout__nav-badge">${t("feedback.hasReply")}</span>`
                       : nothing}
                   </div>
