@@ -341,6 +341,34 @@ async function loadFeedbackThreadDetail(state: AppViewState, id: number) {
     feedbackPanelState = { ...feedbackPanelState, detailLoading: false };
   }
   state.requestUpdate();
+  // 首屏直接落到底（instant，避免刚打开 thread 就看到滚动动画）
+  scrollFeedbackMessagesToBottom("auto");
+}
+
+// 详情页消息列表自动滚动：若用户当前在底部附近则跟随新消息，
+// 否则尊重手动滚动位置（例如在读历史），不强制下拉。
+const FEEDBACK_SCROLL_NEAR_BOTTOM_PX = 120;
+
+function getFeedbackMessagesScrollEl(): HTMLElement | null {
+  return document.querySelector<HTMLElement>(".feedback-panel__messages");
+}
+
+function isFeedbackMessagesNearBottom(): boolean {
+  const el = getFeedbackMessagesScrollEl();
+  // 没找到容器通常意味着详情页刚打开尚未挂载 → 当作 near-bottom，让首屏直接落到底
+  if (!el) return true;
+  return el.scrollHeight - el.scrollTop - el.clientHeight < FEEDBACK_SCROLL_NEAR_BOTTOM_PX;
+}
+
+function scrollFeedbackMessagesToBottom(behavior: ScrollBehavior = "smooth") {
+  // 双 rAF：第一帧等 Lit 调度的 DOM 更新落盘，第二帧等浏览器 layout 完成
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => {
+      const el = getFeedbackMessagesScrollEl();
+      if (!el) return;
+      el.scrollTo({ top: el.scrollHeight, behavior });
+    });
+  });
 }
 
 type FeedbackSseEvent =
@@ -406,6 +434,10 @@ function appendDetailMessageDedup(msg: FeedbackMessage) {
 }
 
 function handleFeedbackEvent(state: AppViewState, evt: FeedbackSseEvent) {
+  const openId = feedbackPanelState.detailThread?.id ?? null;
+  // 在 state 变化之前拍一次"是否已滚到底部附近"快照，用于决定是否跟随新内容滚动
+  const wasNearBottom = openId === evt.thread_id ? isFeedbackMessagesNearBottom() : false;
+
   if (evt.type === "message.created") {
     const incoming: FeedbackMessage = {
       id: evt.message.id,
@@ -415,7 +447,6 @@ function handleFeedbackEvent(state: AppViewState, evt: FeedbackSseEvent) {
       file_keys: evt.message.file_keys ?? [],
       created_at: evt.message.created_at,
     };
-    const openId = feedbackPanelState.detailThread?.id ?? null;
     if (openId === evt.thread_id) {
       // 当前正在看这个 thread → 去重 append
       appendDetailMessageDedup(incoming);
@@ -435,6 +466,10 @@ function handleFeedbackEvent(state: AppViewState, evt: FeedbackSseEvent) {
       hideThinking(state, evt.thread_id);
     }
     state.requestUpdate();
+    // 当前打开的 thread 新增气泡 + 用户原本贴在底部 → 跟随滚动
+    if (openId === evt.thread_id && wasNearBottom) {
+      scrollFeedbackMessagesToBottom("smooth");
+    }
   } else if (evt.type === "thread.updated") {
     const idx = feedbackPanelState.threads.findIndex((t) => t.id === evt.thread_id);
     if (idx >= 0) {
@@ -448,6 +483,10 @@ function handleFeedbackEvent(state: AppViewState, evt: FeedbackSseEvent) {
   } else if (evt.type === "agent.thinking") {
     showThinking(state, evt.thread_id);
     state.requestUpdate();
+    // 思考动画出现在消息列表底部 → 用户原本贴底就跟着滚下来
+    if (openId === evt.thread_id && wasNearBottom) {
+      scrollFeedbackMessagesToBottom("smooth");
+    }
   } else if (evt.type === "agent.done") {
     hideThinking(state, evt.thread_id);
   }
@@ -698,6 +737,8 @@ function buildFeedbackPanelCallbacks(state: AppViewState) {
         detailReplySending: true,
       };
       state.requestUpdate();
+      // 用户主动发消息 → 总是滚到底（不判 near-bottom），让用户看到自己的气泡
+      scrollFeedbackMessagesToBottom("smooth");
 
       // 2. 发 POST
       try {
