@@ -182,6 +182,7 @@ interface FeedbackThread {
   has_reply: boolean;
   created_at: string;
   updated_at: string;
+  last_reply_at?: string | null;  // 后端 §3.3 thread.updated 事件 + thread 列表已带；用于"过去未读"判定
 }
 
 interface FeedbackMessage {

@@ -29,6 +29,7 @@ import {
   type FeedbackMessage,
   type FeedbackThread,
 } from "./views/feedback-dialog.ts";
+import { isThreadUnread, loadFeedbackSeenMap, markFeedbackThreadSeen } from "./feedback-seen.ts";
 import { patchSession, loadSessions } from "./controllers/sessions.ts";
 import { renderSkillStoreView, type SkillStoreState } from "./skill-store-view.ts";
 import { renderWorkspaceView, initWorkspace } from "./views/workspace.ts";
@@ -311,7 +312,18 @@ async function loadFeedbackThreads(state: AppViewState) {
     const result = await window.oneclaw?.feedbackThreads?.();
     if (result?.ok && result.data) {
       const threads = Array.isArray(result.data) ? result.data : (result.data.items ?? result.data.threads ?? []);
-      feedbackPanelState = { ...feedbackPanelState, threads, threadsLoading: false };
+      // 合并"过去未读"：客户端不在线期间后端推送的回复，对照本地 seenMap 标红
+      const seenMap = loadFeedbackSeenMap();
+      const pastUnread = threads
+        .filter((t: FeedbackThread) => isThreadUnread(t, seenMap))
+        .map((t: FeedbackThread) => t.id);
+      const mergedUnread = Array.from(new Set([...feedbackPanelState.unreadThreadIds, ...pastUnread]));
+      feedbackPanelState = {
+        ...feedbackPanelState,
+        threads,
+        threadsLoading: false,
+        unreadThreadIds: mergedUnread,
+      };
     } else {
       feedbackPanelState = { ...feedbackPanelState, threadsLoading: false, threadsError: result?.error || "Failed to load" };
     }
@@ -447,8 +459,10 @@ function handleFeedbackEvent(state: AppViewState, evt: FeedbackSseEvent) {
       created_at: evt.message.created_at,
     };
     if (openId === evt.thread_id) {
-      // 当前正在看这个 thread → 去重 append
+      // 当前正在看这个 thread → 去重 append + 推进 seen 时间戳，
+      // 避免"边看边来新消息，关掉重开又被算未读"
       appendDetailMessageDedup(incoming);
+      markFeedbackThreadSeen(evt.thread_id, incoming.created_at);
     } else if (incoming.role !== "user") {
       // 其他 thread 且不是自己发的 → 标记未读
       if (!feedbackPanelState.unreadThreadIds.includes(evt.thread_id)) {
@@ -544,13 +558,15 @@ function buildFeedbackPanelCallbacks(state: AppViewState) {
       state.requestUpdate();
     },
     onOpenDetail: (id: number) => {
-      // 清除该 thread 的未读标记
+      // 清除该 thread 的未读标记 + 持久化"已读到现在"，
+      // 这样下次重启 OneClaw 时这个 thread 不会被算成"过去未读"
       if (feedbackPanelState.unreadThreadIds.includes(id)) {
         feedbackPanelState = {
           ...feedbackPanelState,
           unreadThreadIds: feedbackPanelState.unreadThreadIds.filter((x) => x !== id),
         };
       }
+      markFeedbackThreadSeen(id);
       void loadFeedbackThreadDetail(state, id);
     },
     onBackToList: () => {
