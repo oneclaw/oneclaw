@@ -8630,6 +8630,27 @@ img.chat-avatar {
   stroke-linejoin: round;
 }
 
+/* 未读红点：套在图标右上角，与系统通知徽章保持一致的 destructive 色 */
+.feedback-trigger-icon-wrap {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.feedback-trigger-dot {
+  position: absolute;
+  top: -2px;
+  right: -2px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--destructive);
+  /* 用页面背景色做一圈描边，让红点在 hover/active 状态下都不糊在图标边上 */
+  box-shadow: 0 0 0 1.5px var(--bg);
+  pointer-events: none;
+}
+
 /* ── 反馈弹窗 ── */
 
 .feedback-card {
