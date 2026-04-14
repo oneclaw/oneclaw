@@ -249,7 +249,7 @@ function setOneClawView(state: AppViewState, next: "chat" | "settings" | "skills
   // 离开反馈视图时释放截图数据 + 取消 SSE 订阅
   if (prev === "feedback" && next !== "feedback") {
     feedbackPanelState = { ...feedbackPanelState, newScreenshots: [], newScreenshotPreviews: [], newFileNames: [] };
-    unsubscribeFeedbackSse();
+    unsubscribeFeedbackSse(state);
   }
   // 进入反馈视图时建立 SSE 订阅
   if (prev !== "feedback" && next === "feedback") {
@@ -345,7 +345,50 @@ async function loadFeedbackThreadDetail(state: AppViewState, id: number) {
 
 type FeedbackSseEvent =
   | { type: "message.created"; thread_id: number; message: FeedbackMessage & { feedback_id: number } }
-  | { type: "thread.updated"; thread_id: number; thread: Partial<FeedbackThread> & { id: number } };
+  | { type: "thread.updated"; thread_id: number; thread: Partial<FeedbackThread> & { id: number } }
+  | { type: "agent.thinking"; thread_id: number }
+  | { type: "agent.done"; thread_id: number };
+
+// thread_id → 5 分钟自动隐藏定时器；防 agent.done 丢失导致动画卡死
+const thinkingSafetyTimers = new Map<number, ReturnType<typeof setTimeout>>();
+const THINKING_SAFETY_TIMEOUT_MS = 300_000; // 5 分钟，对齐设计文档 §3.3 的客户端建议
+
+function showThinking(state: AppViewState, threadId: number) {
+  // 重置 5 分钟兜底（同一 thread 收到二次 thinking 不应延长，但收到 done 后再来新 thinking 需重启）
+  const existing = thinkingSafetyTimers.get(threadId);
+  if (existing) clearTimeout(existing);
+  thinkingSafetyTimers.set(
+    threadId,
+    setTimeout(() => hideThinking(state, threadId), THINKING_SAFETY_TIMEOUT_MS),
+  );
+  if (feedbackPanelState.thinkingThreadIds.includes(threadId)) return;
+  feedbackPanelState = {
+    ...feedbackPanelState,
+    thinkingThreadIds: [...feedbackPanelState.thinkingThreadIds, threadId],
+  };
+}
+
+function hideThinking(state: AppViewState, threadId: number) {
+  const timer = thinkingSafetyTimers.get(threadId);
+  if (timer) {
+    clearTimeout(timer);
+    thinkingSafetyTimers.delete(threadId);
+  }
+  if (!feedbackPanelState.thinkingThreadIds.includes(threadId)) return;
+  feedbackPanelState = {
+    ...feedbackPanelState,
+    thinkingThreadIds: feedbackPanelState.thinkingThreadIds.filter((x) => x !== threadId),
+  };
+  state.requestUpdate();
+}
+
+function clearAllThinking(state: AppViewState) {
+  for (const t of thinkingSafetyTimers.values()) clearTimeout(t);
+  thinkingSafetyTimers.clear();
+  if (feedbackPanelState.thinkingThreadIds.length === 0) return;
+  feedbackPanelState = { ...feedbackPanelState, thinkingThreadIds: [] };
+  state.requestUpdate();
+}
 
 function appendDetailMessageDedup(msg: FeedbackMessage) {
   const list = feedbackPanelState.detailMessages ?? [];
@@ -386,6 +429,11 @@ function handleFeedbackEvent(state: AppViewState, evt: FeedbackSseEvent) {
         feedbackHasReplyGlobal = true;
       }
     }
+    // official 回复到达 → 同步隐藏 thinking 动画（设计文档 §3.3 推荐做法：
+    // message.created 或 agent.done 任一即可隐藏，避免 done 丢失导致动画卡死）
+    if (incoming.role !== "user") {
+      hideThinking(state, evt.thread_id);
+    }
     state.requestUpdate();
   } else if (evt.type === "thread.updated") {
     const idx = feedbackPanelState.threads.findIndex((t) => t.id === evt.thread_id);
@@ -397,7 +445,13 @@ function handleFeedbackEvent(state: AppViewState, evt: FeedbackSseEvent) {
       feedbackPanelState = { ...feedbackPanelState, threads };
       state.requestUpdate();
     }
+  } else if (evt.type === "agent.thinking") {
+    showThinking(state, evt.thread_id);
+    state.requestUpdate();
+  } else if (evt.type === "agent.done") {
+    hideThinking(state, evt.thread_id);
   }
+  // 未知 type 默认忽略，符合设计文档 §3.1 约定
 }
 
 function subscribeFeedbackSse(state: AppViewState) {
@@ -421,7 +475,7 @@ function subscribeFeedbackSse(state: AppViewState) {
   }) ?? null;
 }
 
-function unsubscribeFeedbackSse() {
+function unsubscribeFeedbackSse(state: AppViewState) {
   feedbackSseUnsub?.();
   feedbackReconnectUnsub?.();
   feedbackReconnectedUnsub?.();
@@ -429,6 +483,8 @@ function unsubscribeFeedbackSse() {
   feedbackReconnectUnsub = null;
   feedbackReconnectedUnsub = null;
   void (window as any).oneclaw?.feedbackUnsubscribe?.();
+  // 离开反馈视图时清掉所有 thinking 动画 + 定时器，避免再次进入时残留
+  clearAllThinking(state);
 }
 
 function buildFeedbackPanelCallbacks(state: AppViewState) {

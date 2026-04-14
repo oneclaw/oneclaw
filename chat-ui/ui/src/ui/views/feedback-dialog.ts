@@ -224,6 +224,7 @@ export interface FeedbackPanelState {
   // 实时化相关
   unreadThreadIds: number[];   // 未读 thread id 列表，进入详情时清除该 id
   sseReconnecting: boolean;    // 当前是否在重连中（顶部状态条使用）
+  thinkingThreadIds: number[]; // 当前正在显示"AI 思考中"的 thread id（agent.thinking → agent.done 之间）
 }
 
 export function createFeedbackPanelState(): FeedbackPanelState {
@@ -251,6 +252,7 @@ export function createFeedbackPanelState(): FeedbackPanelState {
     detailReplySending: false,
     unreadThreadIds: [],
     sseReconnecting: false,
+    thinkingThreadIds: [],
   };
 }
 
@@ -515,6 +517,17 @@ function renderDetailContent(
                   <div class="feedback-msg__time">${timeAgo(msg.created_at)}</div>
                 </div>
               `)}
+              ${thread.id !== undefined && state.thinkingThreadIds.includes(thread.id)
+                ? html`
+                  <div class="feedback-msg feedback-msg--admin feedback-msg--thinking" aria-live="polite">
+                    <div class="feedback-msg__label">${t("feedback.official")}</div>
+                    <div class="feedback-msg__bubble feedback-msg__bubble--thinking">
+                      <span class="feedback-thinking-dots" aria-hidden="true"><span></span><span></span><span></span></span>
+                      <span class="feedback-thinking-text">${t("feedback.aiThinking")}</span>
+                    </div>
+                  </div>
+                `
+                : nothing}
             `}
       </div>
 
