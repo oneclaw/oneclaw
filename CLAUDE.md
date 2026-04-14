@@ -34,7 +34,7 @@ The main process spawns a gateway subprocess, waits for its health check, then o
 
 ```
 oneclaw/
-├── src/                    # 35 TypeScript modules (10270 LOC) + 13 test files
+├── src/                    # 40 TypeScript modules (13416 LOC) + 14 test files (node:test)
 │   ├── main.ts             # App entry, lifecycle, IPC, Dock toggle, config recovery
 │   ├── constants.ts        # Path resolution (dev vs packaged vs ASAR), health check params
 │   ├── gateway-process.ts  # Child process state machine + diagnostics
@@ -82,6 +82,9 @@ oneclaw/
 │   ├── settings.js         # Provider CRUD, multi-channel, Kimi, CLI, backup/restore
 │   ├── lucide-sprite.generated.js  # Icon sprites
 │   └── share-copy-content.json     # Fallback share copy content
+├── builtin-skills/         # OneClaw-owned skills, bundled into app and copied to ~/.openclaw/workspace/skills/ on first launch
+│   ├── env-setup/          # Install uv + Python + PyPI deps with CN/INTL mirror auto-selection
+│   └── document-pro/       # PDF/DOCX/PPTX/XLSX extraction guide
 ├── scripts/
 │   ├── package-resources.js    # Downloads Node.js 22 + installs openclaw from npm
 │   ├── afterPack.js            # electron-builder hook: injects resources post-strip
@@ -121,7 +124,8 @@ out/                                 # electron-builder output (DMG/NSIS)
 ```bash
 npm run build                # Vite (chat-ui) + TypeScript → dist/
 npm run build:chat           # Build Chat UI only (Lit + Vite)
-npm run dev                  # Run in dev mode (electron .)
+npm run dev                  # Run in dev mode (electron .) — does NOT rebuild, see gotcha #31
+npm run dev:isolated         # Run a second dev instance with its own port + state dir (multi-worktree)
 npm run package:resources    # Download Node.js 22 + install openclaw from npm
 npm run dist:mac:arm64       # Full pipeline: package → DMG + ZIP (arm64)
 npm run dist:mac:x64         # Same for x64
@@ -148,7 +152,7 @@ rm -rf .dev-state && npm run clean && rm -rf chat-ui/dist tsconfig.tsbuildinfo
 
 **Full build pipeline** (what `dist:mac:arm64` does):
 
-1. `package:resources` — download Node.js 22, `npm install openclaw --production --install-links` (version auto-fetched from npm), optionally create `gateway.asar` (set `ONECLAW_GATEWAY_ASAR=1`)
+1. `package:resources` — download Node.js 22, `npm install openclaw@<pinned> --production --install-links` plus per-channel plugins, optionally create `gateway.asar` (set `ONECLAW_GATEWAY_ASAR=1`)
 2. `build:chat` — Vite builds Lit Chat UI into `chat-ui/dist/`
 3. `tsc` — compile TypeScript
 4. `electron-builder` → `afterPack.js` injects `resources/targets/<target>/` into app bundle → DMG/ZIP/NSIS
@@ -172,6 +176,7 @@ npx tsx --test src/analytics-events.test.ts
 ```
 
 There is no linter configured; `tsc --noEmit` is the de facto type check.
+
 
 ## Key Design Decisions
 
