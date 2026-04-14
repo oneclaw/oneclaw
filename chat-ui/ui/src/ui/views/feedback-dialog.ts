@@ -187,7 +187,7 @@ interface FeedbackThread {
 interface FeedbackMessage {
   id: number;
   thread_id: number;          // 保留 UI 内部字段，SSE 入口将 feedback_id → thread_id 映射
-  role: "user" | "admin" | "agent" | "official";
+  role: "user" | "admin" | "official";
   content: string;
   file_keys: string[];
   created_at: string;
