@@ -197,6 +197,13 @@ export function registerSetupIpc(deps: SetupIpcDeps): void {
         config.agents.defaults.compaction ??= {};
         config.agents.defaults.compaction.mode = "safeguard";
 
+        // 默认 20 min超时，避免复杂 skill 执行中途被切断
+        config.agents.defaults.timeoutSeconds ??= 1200;
+
+        // 子 agent 超时 15 min，morph-ppt 等复杂 skill 需要充足构建时间
+        config.agents.defaults.subagents ??= {};
+        config.agents.defaults.subagents.runTimeoutSeconds ??= 900;
+
         // Moonshot 子平台需要特殊处理
         if (provider === "moonshot") {
           saveMoonshotConfig(config, apiKey, modelID, subPlatform);
