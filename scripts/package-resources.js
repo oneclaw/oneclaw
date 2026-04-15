@@ -2475,6 +2475,103 @@ function countFilesRecursive(dir) {
   return count;
 }
 
+// ─── Step 7: 下载 OfficeCLI 二进制 ───
+
+/**
+ * OfficeCLI 平台映射：Node.js (platform, arch) → GitHub Release 资产名
+ */
+function getOfficecliAssetName(platform, arch) {
+  const map = {
+    "darwin-arm64": "officecli-mac-arm64",
+    "darwin-x64": "officecli-mac-x64",
+    "win32-x64": "officecli-win-x64.exe",
+    "win32-arm64": "officecli-win-arm64.exe",
+  };
+  const key = `${platform}-${arch}`;
+  const name = map[key];
+  if (!name) die(`OfficeCLI 不支持平台 ${key}`);
+  return name;
+}
+
+/**
+ * 下载 OfficeCLI 单体二进制并做 SHA256 校验
+ * - 缓存: .cache/officecli/<version>/<assetName>
+ * - 增量: <targetBase>/officecli/.officecli-stamp
+ * - 输出: <targetBase>/officecli/officecli[.exe]
+ */
+async function downloadOfficeCli(platform, arch, targetBase) {
+  const pkg = JSON.parse(fs.readFileSync(path.join(ROOT, "package.json"), "utf8"));
+  const version = pkg.oneclaw?.officecli;
+  if (!version) {
+    log("package.json oneclaw.officecli 未指定，跳过 OfficeCLI");
+    return;
+  }
+
+  const assetName = getOfficecliAssetName(platform, arch);
+  const outputDir = path.join(targetBase, "officecli");
+  const outputBin = path.join(outputDir, platform === "win32" ? "officecli.exe" : "officecli");
+
+  // 增量检测
+  const stampFile = path.join(outputDir, ".officecli-stamp");
+  const stampValue = `${version}-${platform}-${arch}`;
+  if (fs.existsSync(stampFile) && fs.readFileSync(stampFile, "utf-8").trim() === stampValue) {
+    log(`OfficeCLI 已是 ${stampValue}，跳过`);
+    return;
+  }
+
+  // 缓存目录
+  const cacheDir = path.join(ROOT, ".cache", "officecli", version);
+  ensureDir(cacheDir);
+
+  const baseUrl = `https://github.com/iOfficeAI/OfficeCLI/releases/download/v${version}`;
+  const cachedBin = path.join(cacheDir, assetName);
+  const cachedSums = path.join(cacheDir, "SHA256SUMS");
+
+  // 下载 SHA256SUMS（每版本只下一次）
+  if (!fs.existsSync(cachedSums)) {
+    log("下载 SHA256SUMS ...");
+    await downloadFileWithFallback([`${baseUrl}/SHA256SUMS`], cachedSums);
+  }
+
+  // 下载二进制（如果缓存中没有）
+  if (fs.existsSync(cachedBin)) {
+    log(`使用缓存: ${assetName}`);
+  } else {
+    log(`正在下载 ${assetName} ...`);
+    await downloadFileWithFallback([`${baseUrl}/${assetName}`], cachedBin);
+    log(`下载完成: ${assetName}`);
+  }
+
+  // SHA256 校验
+  const { createHash } = require("crypto");
+  const hash = createHash("sha256").update(fs.readFileSync(cachedBin)).digest("hex");
+  const sumsContent = fs.readFileSync(cachedSums, "utf-8");
+  const expectedLine = sumsContent.split("\n").find((l) => l.includes(assetName));
+  if (!expectedLine) {
+    die(`SHA256SUMS 中未找到 ${assetName}`);
+  }
+  const expectedHash = expectedLine.trim().split(/\s+/)[0];
+  if (hash !== expectedHash) {
+    // 校验失败，清除缓存重试
+    safeUnlink(cachedBin);
+    die(`SHA256 校验失败: ${assetName} (期望 ${expectedHash}, 实际 ${hash})`);
+  }
+  log(`SHA256 校验通过: ${assetName}`);
+
+  // 输出到目标目录
+  ensureDir(outputDir);
+  fs.copyFileSync(cachedBin, outputBin);
+
+  // macOS/Linux 设置可执行权限
+  if (platform !== "win32") {
+    fs.chmodSync(outputBin, 0o755);
+  }
+
+  // 写入版本戳
+  fs.writeFileSync(stampFile, stampValue);
+  log(`OfficeCLI v${version} → ${path.relative(ROOT, outputBin)}`);
+}
+
 // 验证目标目录关键文件是否存在
 function verifyOutput(targetPaths, opts) {
   log("正在验证输出文件...");
@@ -2496,6 +2593,7 @@ function verifyOutput(targetPaths, opts) {
       path.join(targetRel, "gateway.asar"),
       path.join(targetRel, "build-config.json"),
       path.join(targetRel, "app-icon.png"),
+      path.join(targetRel, "officecli", platform === "darwin" ? "officecli" : "officecli.exe"),
     ];
 
     // External channel plugins 不进 gateway.asar，需要单独校验 mirror 输出。
@@ -2529,6 +2627,7 @@ function verifyOutput(targetPaths, opts) {
     path.join(targetRel, "gateway", "node_modules", "clawhub", "bin", "clawdhub.js"),
     path.join(targetRel, "build-config.json"),
     path.join(targetRel, "app-icon.png"),
+    path.join(targetRel, "officecli", platform === "win32" ? "officecli.exe" : "officecli"),
   ];
 
   // Windows arm64 交叉编译时含 native addon 的插件可能注入失败，校验时降级为 warning
@@ -2713,6 +2812,12 @@ async function main() {
   } else {
     log("Step 6: 跳过 ASAR 打包（未指定 --asar）");
   }
+
+  console.log();
+
+  // Step 7: 下载 OfficeCLI 二进制
+  log("Step 7: 下载 OfficeCLI 二进制");
+  await downloadOfficeCli(opts.platform, opts.arch, targetPaths.targetBase);
 
   console.log();
 
