@@ -231,6 +231,7 @@ export interface FeedbackPanelState {
   sseReconnecting: boolean;    // 当前是否在重连中
   thinkingThreadIds: number[]; // 当前正在显示"AI 思考中"的 thread id（agent.thinking → agent.done 之间）
   thinkingPhrase: string;      // 当前轮播的思考短语（由 app-render.ts 定时写入）
+  hasNewMessagesBelow: boolean; // 详情视图：用户不在底部时有新消息到达，显示"有新消息↓"浮动按钮
 }
 
 export function createFeedbackPanelState(): FeedbackPanelState {
@@ -261,6 +262,7 @@ export function createFeedbackPanelState(): FeedbackPanelState {
     sseReconnecting: false,
     thinkingThreadIds: [],
     thinkingPhrase: "",
+    hasNewMessagesBelow: false,
   };
 }
 
@@ -301,6 +303,8 @@ export interface FeedbackPanelCallbacks {
   onReplyPickFiles: () => void;
   onReplyRemoveFile: (index: number) => void;
   onReplySend: () => void;
+  onDetailScroll: () => void;         // 详情消息列表滚动事件
+  onScrollToBottom: () => void;       // "有新消息"按钮点击 → 滚到底部
   requestUpdate: () => void;
 }
 
@@ -528,45 +532,54 @@ function renderDetailContent(
         </span>
       </div>
 
-      <div class="feedback-panel__messages">
-        ${state.detailLoading
-          ? html`<div class="feedback-panel__loading">${icons.loader}</div>`
-          : html`
-              <div class="feedback-msg feedback-msg--user">
-                <div class="feedback-msg__bubble">${thread.content}</div>
-                <div class="feedback-msg__time">${timeAgo(thread.created_at)}</div>
-              </div>
-              ${state.detailMessages.map((msg) => html`
-                <div class="feedback-msg ${msg.role === "user" ? "feedback-msg--user" : "feedback-msg--admin"}${msg._pending ? " feedback-msg--pending" : ""}${msg._failed ? " feedback-msg--failed" : ""}">
-                  ${msg.role !== "user"
-                    ? html`<div class="feedback-msg__label">${t("feedback.official")}</div>`
-                    : nothing}
-                  <div class="feedback-msg__bubble">${msg.content}</div>
-                  ${msg._failed ? html`<div class="feedback-msg__failed-hint">⚠ ${t("feedback.sendFailed")}</div>` : nothing}
-                  ${msg.file_keys?.length ? html`
-                    <div class="feedback-msg__attachments">
-                      ${msg.file_keys.map((key) => {
-                        const isImg = /\.(png|jpe?g|gif|webp|bmp)$/i.test(key);
-                        const name = key.split("_").slice(2).join("_") || key;
-                        return html`<span class="feedback-msg__attach-item">${isImg ? "[图片]" : `[${name}]`}</span>`;
-                      })}
-                    </div>
-                  ` : nothing}
-                  <div class="feedback-msg__time">${timeAgo(msg.created_at)}</div>
+      <div class="feedback-panel__messages-wrap">
+        <div class="feedback-panel__messages" @scroll=${() => callbacks.onDetailScroll()}>
+          ${state.detailLoading
+            ? html`<div class="feedback-panel__loading">${icons.loader}</div>`
+            : html`
+                <div class="feedback-msg feedback-msg--user">
+                  <div class="feedback-msg__bubble">${thread.content}</div>
+                  <div class="feedback-msg__time">${timeAgo(thread.created_at)}</div>
                 </div>
-              `)}
-              ${thread.id !== undefined && state.thinkingThreadIds.includes(thread.id)
-                ? html`
-                  <div class="feedback-msg feedback-msg--admin feedback-msg--thinking" aria-live="polite">
-                    <div class="feedback-msg__label">${t("feedback.official")}</div>
-                    <div class="feedback-msg__bubble feedback-msg__bubble--thinking">
-                      <span class="feedback-thinking-dots" aria-hidden="true"><span></span><span></span><span></span></span>
-                      <span class="feedback-thinking-text">${state.thinkingPhrase || t("feedback.aiThinking")}</span>
-                    </div>
+                ${state.detailMessages.map((msg) => html`
+                  <div class="feedback-msg ${msg.role === "user" ? "feedback-msg--user" : "feedback-msg--admin"}${msg._pending ? " feedback-msg--pending" : ""}${msg._failed ? " feedback-msg--failed" : ""}">
+                    ${msg.role !== "user"
+                      ? html`<div class="feedback-msg__label">${t("feedback.official")}</div>`
+                      : nothing}
+                    <div class="feedback-msg__bubble">${msg.content}</div>
+                    ${msg._failed ? html`<div class="feedback-msg__failed-hint">⚠ ${t("feedback.sendFailed")}</div>` : nothing}
+                    ${msg.file_keys?.length ? html`
+                      <div class="feedback-msg__attachments">
+                        ${msg.file_keys.map((key) => {
+                          const isImg = /\.(png|jpe?g|gif|webp|bmp)$/i.test(key);
+                          const name = key.split("_").slice(2).join("_") || key;
+                          return html`<span class="feedback-msg__attach-item">${isImg ? "[图片]" : `[${name}]`}</span>`;
+                        })}
+                      </div>
+                    ` : nothing}
+                    <div class="feedback-msg__time">${timeAgo(msg.created_at)}</div>
                   </div>
-                `
-                : nothing}
-            `}
+                `)}
+                ${thread.id !== undefined && state.thinkingThreadIds.includes(thread.id)
+                  ? html`
+                    <div class="feedback-msg feedback-msg--admin feedback-msg--thinking" aria-live="polite">
+                      <div class="feedback-msg__label">${t("feedback.official")}</div>
+                      <div class="feedback-msg__bubble feedback-msg__bubble--thinking">
+                        <span class="feedback-thinking-dots" aria-hidden="true"><span></span><span></span><span></span></span>
+                        <span class="feedback-thinking-text">${state.thinkingPhrase || t("feedback.aiThinking")}</span>
+                      </div>
+                    </div>
+                  `
+                  : nothing}
+              `}
+        </div>
+        ${state.hasNewMessagesBelow ? html`
+          <button
+            class="feedback-panel__new-msg-btn"
+            type="button"
+            @click=${() => callbacks.onScrollToBottom()}
+          >${t("feedback.newMessagesBelow")} ↓</button>
+        ` : nothing}
       </div>
 
       ${isOpen
@@ -606,7 +619,7 @@ function renderDetailContent(
                 .value=${state.detailReplyContent}
                 @input=${(e: Event) => callbacks.onReplyChange((e.target as HTMLInputElement).value)}
                 @keydown=${(e: KeyboardEvent) => {
-                  if (e.key === "Enter" && !e.shiftKey && (state.detailReplyContent.trim() || state.detailReplyFiles.length > 0)) {
+                  if (e.key === "Enter" && !e.isComposing && !e.shiftKey && (state.detailReplyContent.trim() || state.detailReplyFiles.length > 0)) {
                     e.preventDefault();
                     callbacks.onReplySend();
                   }

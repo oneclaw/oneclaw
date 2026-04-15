@@ -9367,6 +9367,14 @@ img.chat-avatar {
 
 /* Detail messages */
 
+.feedback-panel__messages-wrap {
+  position: relative;
+  flex: 1;
+  overflow: hidden;           /* 子元素 messages 独立滚动 */
+  display: flex;
+  flex-direction: column;
+}
+
 .feedback-panel__messages {
   flex: 1;
   overflow-y: auto;
@@ -9374,6 +9382,33 @@ img.chat-avatar {
   flex-direction: column;
   gap: 12px;
   padding: 8px 0;
+}
+
+/* "有新消息 ↓" 浮动按钮，锚定在消息区域右下角 */
+.feedback-panel__new-msg-btn {
+  position: absolute;
+  bottom: 8px;
+  right: 16px;
+  padding: 6px 14px;
+  border: none;
+  border-radius: var(--radius-md);
+  background: var(--accent);
+  color: var(--accent-foreground, #fff);
+  font-size: 12px;
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  animation: feedback-new-msg-slide-in 0.2s ease-out;
+  z-index: 10;
+  user-select: none;
+}
+
+.feedback-panel__new-msg-btn:hover {
+  opacity: 0.9;
+}
+
+@keyframes feedback-new-msg-slide-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
 }
 
 .feedback-msg {

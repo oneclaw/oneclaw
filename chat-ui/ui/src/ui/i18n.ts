@@ -196,6 +196,7 @@ const dict: Record<Locale, Record<string, string>> = {
     "feedback.replyPlaceholder": "输入追问内容...",
     "feedback.send": "发送",
     "feedback.official": "官方",
+    "feedback.newMessagesBelow": "有新消息",
     "feedback.emailPlaceholder": "填写邮箱以接收回复通知（选填）",
 
     // OneClaw settings page
@@ -449,6 +450,7 @@ const dict: Record<Locale, Record<string, string>> = {
     "feedback.replyPlaceholder": "Type your follow-up...",
     "feedback.send": "Send",
     "feedback.official": "Official",
+    "feedback.newMessagesBelow": "New messages",
     "feedback.emailPlaceholder": "Email for reply notifications (optional)",
 
     // OneClaw settings page

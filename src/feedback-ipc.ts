@@ -102,9 +102,11 @@ function postMultipart(url: string, body: Buffer, boundary: string): Promise<Fee
                 resolve({ ok: true, id: json?.id });
               }
             } else {
+              log.error(`postMultipart 非 200 响应: status=${res.statusCode} body=${data.slice(0, 500)}`);
               resolve({ ok: false, error: json.error || `HTTP ${res.statusCode}` });
             }
-          } catch {
+          } catch (e) {
+            log.error(`postMultipart 响应解析失败: status=${res.statusCode} body=${data.slice(0, 500)} err=${e}`);
             resolve({ ok: false, error: `HTTP ${res.statusCode}` });
           }
         });
@@ -277,9 +279,11 @@ export function registerFeedbackIpc(deps: FeedbackIpcDeps): void {
   // feedback:reply — 用户追问（支持附件）
   ipcMain.handle("feedback:reply", async (_event, id: number, content: string, files?: Array<{name: string; base64: string}>) => {
     if (typeof id !== "number" || !Number.isInteger(id) || id <= 0) {
+      log.error(`feedback:reply 非法 thread id: ${id}`);
       return { ok: false, error: "invalid thread id" };
     }
     if ((!content || !content.trim()) && (!files || files.length === 0)) {
+      log.error(`feedback:reply 空内容: id=${id}`);
       return { ok: false, error: "content or files required" };
     }
     const deviceId = readDeviceId();
@@ -297,7 +301,33 @@ export function registerFeedbackIpc(deps: FeedbackIpcDeps): void {
     }
     parts.push(Buffer.from(`--${boundary}--\r\n`));
     const body = Buffer.concat(parts);
-    return postMultipart(url, body, boundary);
+    log.info(`feedback:reply 请求 POST ${url} content=${content.length}字 files=${files?.length ?? 0} bodySize=${body.length}`);
+    const result = await postMultipart(url, body, boundary);
+    if (result.ok) {
+      log.info(`feedback:reply 成功: id=${id} messageId=${result.id}`);
+    } else {
+      log.error(`feedback:reply 失败: id=${id} error=${result.error}`);
+    }
+    return result;
+  });
+
+  // feedback:show-error-dialog — 发送失败时弹出原生错误对话框，告知用户具体原因
+  ipcMain.handle("feedback:show-error-dialog", async (event, params: { title: string; message: string; detail?: string }) => {
+    const win = BrowserWindow.fromWebContents(event.sender);
+    const opts = {
+      type: "error" as const,
+      title: params.title || "发送失败",
+      message: params.message || "",
+      detail: params.detail || "",
+      buttons: ["好的"],
+      defaultId: 0,
+      noLink: true,
+    };
+    if (win) {
+      await dialog.showMessageBox(win, opts);
+    } else {
+      await dialog.showMessageBox(opts);
+    }
   });
 
   // feedback:pick-files — 打开文件选择器，默认目录为 .openclaw
