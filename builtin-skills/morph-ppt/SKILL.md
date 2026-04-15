@@ -2,7 +2,14 @@
 name: morph-ppt
 description: "使用 Morph 动画生成精美 PPT，支持从零创建或编辑已有文件"
 metadata:
-  { "openclaw": { "emoji": "🎬", "os": ["darwin", "linux", "win32"] } }
+  {
+    "openclaw":
+      {
+        "emoji": "🎬",
+        "os": ["darwin", "linux", "win32"],
+        "requires": { "bins": ["officecli"] },
+      },
+  }
 ---
 
 # Morph
@@ -105,8 +112,7 @@ For every morph transition, plan the slide pair BEFORE writing any code. Use a t
 **Before generation starts, always remind the user:**
 
 - The PPT file may be rewritten multiple times during build.
-- Once the PPT file appears in the workspace, the user can preview the live generation progress directly in AionUi.
-- Do **not** click "Open with system app" during generation, to avoid file lock / write conflicts.
+- Do **not** open the PPT file during generation, to avoid file lock / write conflicts.
 - Use clear, direct language and make this a concrete warning, not an optional suggestion.
 
 **FIRST: Install `officecli` if needed**
@@ -462,6 +468,7 @@ libreoffice --headless --convert-to pdf deck.pptx
 - Tell the user the deck with polished Morph animations is ready.
 - Explicitly recommend opening the generated PPT now to preview the motion effects.
 - Use affirmative wording (e.g., "ready now", "open it now to preview the animation quality").
+- **Return the `brief.md` file path** so the user can preview the slide plan and design decisions. Example: "Design brief available at: `/path/to/brief.md`".
 
 ---
 
