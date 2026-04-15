@@ -172,10 +172,11 @@ export class GatewayProcess {
     // 确保 clawhub CLI wrapper 就绪
     ensureClawhubWrapper(nodeBin);
 
-    // 组装 PATH：用户 bin 目录 + 内嵌 runtime 优先
+    // 组装 PATH：用户 bin 目录 + 内嵌 runtime + officecli 优先
     const userBinDir = resolveUserBinDir();
     const runtimeDir = path.join(resolveResourcesPath(), "runtime");
-    const envPath = userBinDir + path.delimiter + runtimeDir + path.delimiter + (process.env.PATH ?? "");
+    const officecliDir = path.join(resolveResourcesPath(), "officecli");
+    const envPath = userBinDir + path.delimiter + runtimeDir + path.delimiter + officecliDir + path.delimiter + (process.env.PATH ?? "");
 
     // 递增世代，标记本次 spawn 的身份
     const gen = ++this.generation;

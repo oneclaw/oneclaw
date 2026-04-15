@@ -2,7 +2,14 @@
 name: morph-ppt-3d
 description: "3D Morph PPT — 在 morph-ppt 基础上扩展 GLB 3D 模型、电影运镜和丰富视觉设计系统"
 metadata:
-  { "openclaw": { "emoji": "🎬", "os": ["darwin", "linux", "win32"] } }
+  {
+    "openclaw":
+      {
+        "emoji": "🎬",
+        "os": ["darwin", "linux", "win32"],
+        "requires": { "bins": ["officecli"] },
+      },
+  }
 ---
 
 # Morph PPT — 3D Extension
