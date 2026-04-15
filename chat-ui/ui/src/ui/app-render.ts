@@ -419,6 +419,59 @@ function scrollFeedbackMessagesToBottom(behavior: ScrollBehavior = "smooth") {
   });
 }
 
+/** 把后端原始错误码映射成用户友好的中英文文案 */
+function translateFeedbackError(err: string | undefined): { title: string; message: string; detail: string } {
+  const raw = err || "";
+  const isZh = getLocale() === "zh";
+  // 已知错误码：消息数量超限
+  if (/message limit reached/i.test(raw)) {
+    return {
+      title: isZh ? "发送失败" : "Send failed",
+      message: isZh ? "此对话的消息已达上限" : "Message limit reached",
+      detail: isZh
+        ? "这个反馈会话的消息数量已经达到上限（50 条），无法继续发送。\n如需继续咨询，请新建一个反馈。"
+        : "This feedback thread has reached its 50-message limit.\nPlease create a new feedback to continue.",
+    };
+  }
+  // 网络超时
+  if (/timeout/i.test(raw)) {
+    return {
+      title: isZh ? "发送失败" : "Send failed",
+      message: isZh ? "请求超时" : "Request timeout",
+      detail: isZh ? "请检查网络连接后重试。" : "Please check your network connection and try again.",
+    };
+  }
+  // HTTP 状态码
+  const httpMatch = raw.match(/^HTTP (\d+)/);
+  if (httpMatch) {
+    return {
+      title: isZh ? "发送失败" : "Send failed",
+      message: isZh ? `服务器返回错误 (${httpMatch[1]})` : `Server error (${httpMatch[1]})`,
+      detail: raw,
+    };
+  }
+  // 兜底
+  return {
+    title: isZh ? "发送失败" : "Send failed",
+    message: isZh ? "消息发送失败" : "Failed to send message",
+    detail: raw || (isZh ? "未知错误" : "Unknown error"),
+  };
+}
+
+/** 弹出原生错误对话框（通过 IPC 调用主进程的 dialog.showMessageBox） */
+function showFeedbackReplyErrorDialog(err: string | undefined): Promise<void> | void {
+  const payload = translateFeedbackError(err);
+  return (window as any).oneclaw?.feedbackShowErrorDialog?.(payload);
+}
+
+/** 详情页 scroll 事件回调：用户滚到底部时清除"有新消息"提示 */
+function handleFeedbackDetailScroll(state: AppViewState) {
+  if (isFeedbackMessagesNearBottom() && feedbackPanelState.hasNewMessagesBelow) {
+    feedbackPanelState = { ...feedbackPanelState, hasNewMessagesBelow: false };
+    state.requestUpdate();
+  }
+}
+
 type FeedbackSseEvent =
   | { type: "message.created"; thread_id: number; message: FeedbackMessage & { feedback_id: number } }
   | { type: "thread.updated"; thread_id: number; thread: Partial<FeedbackThread> & { id: number } }
@@ -522,7 +575,10 @@ function appendDetailMessageDedup(msg: FeedbackMessage) {
 }
 
 function handleFeedbackEvent(state: AppViewState, evt: FeedbackSseEvent) {
-  const openId = feedbackPanelState.detailThread?.id ?? null;
+  // 只有 view=detail 时才视为"正在看"；list/new 视图下 detailThread 可能是上次残留
+  const openId = feedbackPanelState.view === "detail"
+    ? feedbackPanelState.detailThread?.id ?? null
+    : null;
   // 在 state 变化之前拍一次"是否已滚到底部附近"快照，用于决定是否跟随新内容滚动
   const wasNearBottom = openId === evt.thread_id ? isFeedbackMessagesNearBottom() : false;
 
@@ -555,9 +611,16 @@ function handleFeedbackEvent(state: AppViewState, evt: FeedbackSseEvent) {
       hideThinking(state, evt.thread_id);
     }
     state.requestUpdate();
-    // 当前打开的 thread 新增气泡 + 用户原本贴在底部 → 跟随滚动
-    if (openId === evt.thread_id && wasNearBottom) {
-      scrollFeedbackMessagesToBottom("smooth");
+    // 当前打开的 thread 新增气泡
+    if (openId === evt.thread_id) {
+      if (wasNearBottom) {
+        // 用户在底部 → 跟随滚动
+        scrollFeedbackMessagesToBottom("smooth");
+      } else if (incoming.role !== "user") {
+        // 用户不在底部 + 官方回复 → 显示"有新消息"浮动提示
+        feedbackPanelState = { ...feedbackPanelState, hasNewMessagesBelow: true };
+        state.requestUpdate();
+      }
     }
   } else if (evt.type === "thread.updated") {
     const idx = feedbackPanelState.threads.findIndex((t) => t.id === evt.thread_id);
@@ -662,16 +725,29 @@ function buildFeedbackPanelCallbacks(state: AppViewState) {
     onOpenDetail: (id: number) => {
       // 清除该 thread 的未读标记 + 持久化"已读到现在"，
       // 这样下次重启 OneClaw 时这个 thread 不会被算成"过去未读"
-      if (feedbackPanelState.unreadThreadIds.includes(id)) {
-        feedbackPanelState = {
-          ...feedbackPanelState,
-          unreadThreadIds: feedbackPanelState.unreadThreadIds.filter((x) => x !== id),
-        };
-      }
+      feedbackPanelState = {
+        ...feedbackPanelState,
+        unreadThreadIds: feedbackPanelState.unreadThreadIds.filter((x) => x !== id),
+        hasNewMessagesBelow: false,
+      };
       markFeedbackThreadSeen(id);
       void loadFeedbackThreadDetail(state, id);
     },
     onBackToList: () => {
+      // 离开 detail 前，用所有已知时间戳的最大值刷新 seenMap，
+      // 确保 loadFeedbackThreads 拉到的 last_reply_at 不会大于 seen
+      const thread = feedbackPanelState.detailThread;
+      if (thread) {
+        const msgs = feedbackPanelState.detailMessages;
+        const candidates = [
+          new Date().toISOString(),
+          thread.last_reply_at || "",
+          thread.updated_at || "",
+          msgs.length > 0 ? msgs[msgs.length - 1].created_at : "",
+        ];
+        const latest = candidates.sort().pop()!;
+        markFeedbackThreadSeen(thread.id, latest);
+      }
       feedbackPanelState = { ...feedbackPanelState, view: "list" };
       loadFeedbackThreads(state);
     },
@@ -823,6 +899,12 @@ function buildFeedbackPanelCallbacks(state: AppViewState) {
       };
       state.requestUpdate();
     },
+    onDetailScroll: () => handleFeedbackDetailScroll(state),
+    onScrollToBottom: () => {
+      feedbackPanelState = { ...feedbackPanelState, hasNewMessagesBelow: false };
+      state.requestUpdate();
+      scrollFeedbackMessagesToBottom("smooth");
+    },
     onReplySend: async () => {
       if (!feedbackPanelState.detailThread || (!feedbackPanelState.detailReplyContent.trim() && feedbackPanelState.detailReplyFiles.length === 0)) return;
       const threadId = feedbackPanelState.detailThread.id;
@@ -880,7 +962,7 @@ function buildFeedbackPanelCallbacks(state: AppViewState) {
           // 3b. 后端 200 但没回 message（兼容老版本）：保留临时占位，依赖 SSE echo 替换
           feedbackPanelState = { ...feedbackPanelState, detailReplySending: false };
         } else {
-          // 3c. 失败：把临时气泡标红（保留给用户，避免丢字）
+          // 3c. 失败：把临时气泡标红（保留给用户，避免丢字）+ 弹原生错误对话框
           feedbackPanelState = {
             ...feedbackPanelState,
             detailMessages: feedbackPanelState.detailMessages.map((msg) =>
@@ -888,8 +970,9 @@ function buildFeedbackPanelCallbacks(state: AppViewState) {
             ),
             detailReplySending: false,
           };
+          void showFeedbackReplyErrorDialog(result?.error);
         }
-      } catch {
+      } catch (err) {
         feedbackPanelState = {
           ...feedbackPanelState,
           detailMessages: feedbackPanelState.detailMessages.map((msg) =>
@@ -897,6 +980,7 @@ function buildFeedbackPanelCallbacks(state: AppViewState) {
           ),
           detailReplySending: false,
         };
+        void showFeedbackReplyErrorDialog(String(err));
       }
       state.requestUpdate();
     },

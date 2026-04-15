@@ -187,6 +187,9 @@ contextBridge.exposeInMainWorld("oneclaw", {
     ipcRenderer.invoke("feedback:reply", id, content, files),
   // 从 .openclaw 目录选择文件
   feedbackPickFiles: () => ipcRenderer.invoke("feedback:pick-files"),
+  // 弹出原生错误对话框
+  feedbackShowErrorDialog: (params: { title: string; message: string; detail?: string }) =>
+    ipcRenderer.invoke("feedback:show-error-dialog", params),
   // SSE 订阅：建连 / 断开
   feedbackSubscribe: () => ipcRenderer.invoke("feedback:subscribe"),
   feedbackUnsubscribe: () => ipcRenderer.invoke("feedback:unsubscribe"),
