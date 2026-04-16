@@ -1,7 +1,7 @@
 import { html, nothing } from "lit";
 import { ref } from "lit/directives/ref.js";
 import { repeat } from "lit/directives/repeat.js";
-import type { SessionsListResult } from "../types.ts";
+import type { GatewaySessionRow, SessionsListResult } from "../types.ts";
 import type { ChatItem, MessageGroup } from "../types/chat-types.ts";
 import type { ChatAttachment, ChatQueueItem, ConfiguredModel } from "../ui-types.ts";
 import {
@@ -14,6 +14,7 @@ import { icons } from "../icons.ts";
 import { t } from "../i18n.ts";
 import { detectTextDirection } from "../text-direction.ts";
 import { renderMarkdownSidebar } from "./markdown-sidebar.ts";
+import { extractModelId, lookupContextWindow } from "../context-window.ts";
 import "../components/resizable-divider.ts";
 
 export type CompactionIndicatorStatus = {
@@ -96,6 +97,78 @@ function adjustTextareaHeight(el: HTMLTextAreaElement, deferred = false) {
   } else {
     apply();
   }
+}
+
+/**
+ * Context Meter — 放在发送按钮左侧，展示当前对话记忆占用。
+ * 数据源：
+ *   - used = session.totalTokens（最后一次调用的 prompt token 数，gateway 在
+ *            turn 结束后持久化）
+ *   - max  = session.contextTokens（gateway 按调用时用的模型写入的窗口大小）
+ *            缺失或模型已被切换时回退到 lookupContextWindow(currentModel)
+ * 仅展示「当前会话」占用比例，跨会话独立；模型未知且 used>0 时整体隐藏。
+ *
+ * 模型切换的陷阱：session.contextTokens 要等到用户在新模型上发完一轮后
+ * gateway 才会覆写。切换后到下一次 chat.final 之间的空窗里，存储值仍是
+ * 旧模型的窗口——这时 session.model 和 currentModel 的 bare id 不一致，
+ * 直接忽略 session.contextTokens，优先走 UI 侧静态表让分母立刻跟上新模型。
+ */
+function contextMeterText(
+  key: string,
+  values: { percent: string; used: string; max: string },
+) {
+  return t(key)
+    .replace("{percent}", values.percent)
+    .replace("{used}", values.used)
+    .replace("{max}", values.max);
+}
+
+function renderContextMeter(
+  session: GatewaySessionRow | null | undefined,
+  currentModel: string | null | undefined,
+) {
+  if (!session) return nothing;
+  const used = typeof session.totalTokens === "number" ? session.totalTokens : 0;
+  if (used <= 0) return nothing;
+  const sessionModelId = extractModelId(typeof session.model === "string" ? session.model : "");
+  const currentModelId = extractModelId(currentModel);
+  const modelChanged =
+    sessionModelId !== "" && currentModelId !== "" && sessionModelId !== currentModelId;
+  const sessionMax =
+    !modelChanged && typeof session.contextTokens === "number" && session.contextTokens > 0
+      ? session.contextTokens
+      : null;
+  const fallbackMax = lookupContextWindow(currentModel);
+  const max = sessionMax ?? fallbackMax ?? 0;
+  if (max <= 0) return nothing;
+  const ratio = Math.min(1, Math.max(0, used / max));
+  const widthPct = (ratio * 100).toFixed(1);
+  const percent = Math.round(ratio * 100);
+  const values = {
+    percent: String(percent),
+    used: used.toLocaleString(),
+    max: max.toLocaleString(),
+  };
+  const label = contextMeterText("chat.contextMeterAria", values);
+  const title = contextMeterText("chat.contextMeterHint", values);
+  return html`
+    <div class="chat-compose__ctx-meter" title=${title} data-tooltip=${title} data-tooltip-wide="true">
+      <span class="chat-compose__ctx-meter-label" aria-hidden="true">
+        ${t("chat.contextMeterLabel")}
+      </span>
+      <div
+        class="chat-compose__ctx-meter-bar"
+        role="progressbar"
+        aria-label=${label}
+        aria-valuemin="0"
+        aria-valuemax="100"
+        aria-valuenow=${String(percent)}
+      >
+        <div class="chat-compose__ctx-meter-fill" style=${`width: ${widthPct}%`}></div>
+      </div>
+      <span class="chat-compose__ctx-meter-percent" aria-hidden="true">${percent}%</span>
+    </div>
+  `;
 }
 
 function renderCompactionIndicator(status: CompactionIndicatorStatus | null | undefined) {
@@ -576,6 +649,7 @@ export function renderChat(props: ChatProps) {
             }
           </div>
           <div class="chat-compose__toolbar-right">
+            ${renderContextMeter(activeSession, props.currentModel)}
             ${isBusy && canAbort
               ? html`<button
                   class="chat-compose__send-btn"

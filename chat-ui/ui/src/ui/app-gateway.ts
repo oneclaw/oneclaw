@@ -292,9 +292,25 @@ function handleGatewayEventUnsafe(host: GatewayHost, evt: GatewayEventFrame) {
       const runId = payload?.runId;
       if (runId && host.refreshSessionsAfterChat.has(runId)) {
         host.refreshSessionsAfterChat.delete(runId);
-        if (state === "final") {
-          void loadSessions(host as unknown as OpenClawApp);
-        }
+      }
+      // 每轮 chat 结束都刷新 sessions，让 context meter 的 token 数及时更新。
+      // gateway 在 emit chat.final 之后才 await persistRunSessionUsage —— 也就是说
+      // 客户端收到 final 的那一刻，新的 totalTokens 在 gateway 内存里都还没写入。
+      // 实测落盘稳定在 ~500ms 后完成，后续 800/1200ms 兜底，任一次拿到新值即停。总窗口 ~2.5s。
+      if (state === "final") {
+        const refreshKey = payload?.sessionKey ?? host.sessionKey;
+        const readTokens = () =>
+          (host as unknown as OpenClawApp).sessionsResult?.sessions?.find(
+            (r) => r.key === refreshKey,
+          )?.totalTokens ?? null;
+        const baseline = readTokens();
+        void (async () => {
+          for (const delay of [500, 800, 1200]) {
+            await new Promise((r) => setTimeout(r, delay));
+            await loadSessions(host as unknown as OpenClawApp);
+            if (readTokens() !== baseline) return;
+          }
+        })();
       }
     }
     if (state === "final") {
