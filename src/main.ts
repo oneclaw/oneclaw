@@ -449,8 +449,10 @@ function requestGatewayStart(source: string): void {
 let restartTimer: ReturnType<typeof setTimeout> | null = null;
 function requestGatewayRestart(source: string): void {
   if (restartTimer) clearTimeout(restartTimer);
+  log.info(`[gateway] restart requested: ${source}`);
   restartTimer = setTimeout(() => {
     restartTimer = null;
+    log.info(`[gateway] restart executing: ${source}`);
     gateway.setToken(resolveGatewayAuthToken());
     syncKimiSearchEnv();
     gateway.restart().catch((err) => {
