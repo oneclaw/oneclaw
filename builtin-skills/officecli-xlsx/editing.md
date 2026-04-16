@@ -16,68 +16,7 @@ Use this guide when modifying an existing .xlsx file or working from a template.
 
 ## Analyzing the Workbook
 
-### Step 1: Issue Detection
-
-```bash
-officecli view data.xlsx issues
-```
-
-### Step 2: Structure Overview
-
-```bash
-officecli view data.xlsx outline
-```
-
-Look for: sheet names, row/column counts, formula counts per sheet.
-
-### Step 3: Content Inspection
-
-```bash
-# Full text dump
-officecli view data.xlsx text
-
-# Limited range
-officecli view data.xlsx text --start 1 --end 20 --cols A,B,C,D
-
-# Annotated (shows formulas, types, formatting)
-officecli view data.xlsx annotated
-```
-
-### Step 4: Statistics
-
-```bash
-officecli view data.xlsx stats
-```
-
-### Step 5: Element Inspection
-
-```bash
-# Workbook root
-officecli get data.xlsx /
-
-# Sheet overview
-officecli get data.xlsx "/Revenue"
-
-# Specific cells
-officecli get data.xlsx "/Revenue/B2"
-officecli get data.xlsx "/Revenue/A1:F20"
-
-# Chart details
-officecli get data.xlsx "/Revenue/chart[1]"
-
-# Named ranges
-officecli get data.xlsx "/namedrange[GrowthRate]"
-```
-
-### Step 6: Find Specific Elements
-
-```bash
-officecli query data.xlsx 'cell:has(formula)'
-officecli query data.xlsx 'cell:contains("{{")'
-officecli query data.xlsx 'table'
-officecli query data.xlsx 'chart'
-officecli query data.xlsx 'pivottable'
-```
+For reading and analyzing commands (`view`, `get`, `query`), see [SKILL.md](SKILL.md#reading--analyzing).
 
 ---
 
@@ -296,23 +235,6 @@ officecli set data.xlsx "/namedrange[GrowthRate]" --prop ref="Assumptions!B3"
 
 ---
 
-## Raw XML Escape Hatch
+## Raw XML
 
-When high-level commands cannot express the needed change:
-
-```bash
-# View raw XML
-officecli raw data.xlsx "/Sheet1"
-
-# View styles XML
-officecli raw data.xlsx /styles
-
-# Modify raw XML
-officecli raw-set data.xlsx "/Sheet1" --xpath "//x:sheetData/x:row[1]" --action setattr --xml 'ht="25"'
-```
-
-XPath prefixes: `x` (SpreadsheetML), `r` (Relationships), `a` (DrawingML), `c` (Charts), `xdr` (Spreadsheet Drawing)
-
-raw-set actions: append, prepend, insertbefore, insertafter, replace, remove, setattr
-
-Use raw XML only as a last resort. The high-level CLI handles most operations correctly without XML knowledge.
+For raw XML operations, see [reference/advanced.md](reference/advanced.md).

@@ -22,11 +22,17 @@ metadata:
 
 ## Quick Reference
 
-| Task | Action |
-|------|--------|
-| Read / analyze content | Use `view` and `get` commands below |
-| Edit existing workbook | Read [editing.md](editing.md) |
-| Create from scratch | Read [creating.md](creating.md) |
+| Task | Read |
+|------|------|
+| Read / analyze content | View and query commands below |
+| Create workbook from scratch | [creating.md](creating.md) |
+| Edit existing workbook | [editing.md](editing.md) |
+| Cell formatting, number formats | [reference/formatting.md](reference/formatting.md) |
+| Formulas, cross-sheet refs | [reference/formulas.md](reference/formulas.md) |
+| Charts | [reference/charts.md](reference/charts.md) |
+| Tables, validation, CF, pivots | [reference/data-features.md](reference/data-features.md) |
+| CSV import, shapes, raw XML | [reference/advanced.md](reference/advanced.md) |
+| Complete worked examples | [example/](example/) |
 
 ---
 
@@ -46,121 +52,49 @@ Running a 50-command script all at once means the first error cascades silently 
 
 ## Reading & Analyzing
 
-### Text Extraction
+### View Modes
 
 ```bash
-officecli view data.xlsx text
-officecli view data.xlsx text --start 1 --end 50 --cols A,B,C
+officecli view data.xlsx text                              # Plain text dump, tab-separated
+officecli view data.xlsx text --start 1 --end 50 --cols A,B,C  # Ranged text extraction
+officecli view data.xlsx outline                           # Sheets with row/col/formula counts
+officecli view data.xlsx annotated                         # Values with type/formula annotations
+officecli view data.xlsx stats                             # Summary statistics
+officecli view data.xlsx issues                            # Empty sheets, broken formulas, missing refs
 ```
 
-Plain text dump, tab-separated per row, with `[/Sheet1/row[N]]` prefixes. Flags: `--mode`, `--start N`, `--end N`, `--max-lines N`, `--cols A,B,C`.
-
-### Structure Overview
+### Element Inspection (`get`)
 
 ```bash
-officecli view data.xlsx outline
+officecli get data.xlsx /                         # Workbook root (sheets, properties)
+officecli get data.xlsx "/Sheet1"                  # Sheet overview (freeze, autoFilter, zoom)
+officecli get data.xlsx "/Sheet1/A1"               # Single cell (value, type, formula, font, fill)
+officecli get data.xlsx "/Sheet1/A1:D10"           # Cell range
+officecli get data.xlsx "/Sheet1/row[1]"           # Row properties
+officecli get data.xlsx "/Sheet1/col[A]"           # Column properties
+officecli get data.xlsx "/Sheet1/chart[1]"         # Chart
+officecli get data.xlsx "/Sheet1/table[1]"         # Table (ListObject)
+officecli get data.xlsx "/Sheet1/validation[1]"    # Data validation rule
+officecli get data.xlsx "/Sheet1/cf[1]"            # Conditional formatting rule
+officecli get data.xlsx "/Sheet1/comment[1]"       # Comment
+officecli get data.xlsx "/namedrange[1]"           # Named range
 ```
 
-Sheets with row/column counts and formula counts per sheet.
-
-### Detailed Inspection
-
-```bash
-officecli view data.xlsx annotated
-```
-
-Cell values with type/formula annotations, warnings for errors and empty cells.
-
-### Statistics
-
-```bash
-officecli view data.xlsx stats
-```
-
-Summary statistics across all sheets.
-
-### Issue Detection
-
-```bash
-officecli view data.xlsx issues
-```
-
-Empty sheets, broken formulas, missing references.
-
-### Element Inspection
-
-```bash
-# Workbook root (lists all sheets, doc properties)
-officecli get data.xlsx /
-
-# Sheet overview (freeze, autoFilter, zoom, tabColor)
-officecli get data.xlsx "/Sheet1"
-
-# Single cell (value, type, formula, font, fill, borders, numFmt)
-officecli get data.xlsx "/Sheet1/A1"
-
-# Cell range
-officecli get data.xlsx "/Sheet1/A1:D10"
-
-# Row properties
-officecli get data.xlsx "/Sheet1/row[1]"
-
-# Column properties
-officecli get data.xlsx "/Sheet1/col[A]"
-
-# Chart
-officecli get data.xlsx "/Sheet1/chart[1]"
-
-# Table (ListObject)
-officecli get data.xlsx "/Sheet1/table[1]"
-
-# Data validation rule
-officecli get data.xlsx "/Sheet1/validation[1]"
-
-# Conditional formatting rule
-officecli get data.xlsx "/Sheet1/cf[1]"
-
-# Comment
-officecli get data.xlsx "/Sheet1/comment[1]"
-
-# Named range
-officecli get data.xlsx "/namedrange[1]"
-```
-
-Add `--depth N` to expand children, `--json` for structured output. Excel-native notation also supported: `Sheet1!A1`, `Sheet1!A1:D10`.
+Add `--depth N` to expand children, `--json` for structured output. Excel notation also works: `Sheet1!A1`, `Sheet1!A1:D10`.
 
 ### CSS-like Queries
 
 ```bash
-# Cells with formulas
-officecli query data.xlsx 'cell:has(formula)'
-
-# Cells containing text
-officecli query data.xlsx 'cell:contains("Revenue")'
-
-# Empty cells
-officecli query data.xlsx 'cell:empty'
-
-# Cells by type
-officecli query data.xlsx 'cell[type=Number]'
-
-# Cells by formatting
-officecli query data.xlsx 'cell[font.bold=true]'
-
-# Column B non-zero
-officecli query data.xlsx 'B[value!=0]'
-
-# Sheet-scoped
-officecli query data.xlsx 'Sheet1!cell[value="100"]'
-
-# Find all charts
-officecli query data.xlsx 'chart'
-
-# Find all tables
-officecli query data.xlsx 'table'
-
-# Find all pivot tables
-officecli query data.xlsx 'pivottable'
+officecli query data.xlsx 'cell:has(formula)'          # Cells with formulas
+officecli query data.xlsx 'cell:contains("Revenue")'   # Cells containing text
+officecli query data.xlsx 'cell:empty'                  # Empty cells
+officecli query data.xlsx 'cell[type=Number]'           # Cells by type
+officecli query data.xlsx 'cell[font.bold=true]'        # Cells by formatting
+officecli query data.xlsx 'B[value!=0]'                 # Column B non-zero
+officecli query data.xlsx 'Sheet1!cell[value="100"]'    # Sheet-scoped
+officecli query data.xlsx 'chart'                       # All charts
+officecli query data.xlsx 'table'                       # All tables
+officecli query data.xlsx 'pivottable'                  # All pivot tables
 ```
 
 Operators: `=`, `!=`, `~=` (contains), `>=`, `<=`, `[attr]` (exists).
@@ -168,8 +102,6 @@ Operators: `=`, `!=`, `~=` (contains), `>=`, `<=`, `[attr]` (exists).
 ---
 
 ## Design Principles
-
-**Professional spreadsheets need clear structure, correct formulas, and intentional formatting.**
 
 ### Use Formulas, Not Hardcoded Values (MANDATORY)
 
@@ -183,84 +115,7 @@ officecli set data.xlsx "/Sheet1/B10" --prop value=5000
 officecli set data.xlsx "/Sheet1/B10" --prop formula="SUM(B2:B9)"
 ```
 
-### Financial Model Color Coding
-
-| Convention | Color | Use For |
-|-----------|-------|---------|
-| Blue text | `font.color=0000FF` | Hardcoded inputs, scenario-variable numbers |
-| Black text | `font.color=000000` | ALL formulas and calculations |
-| Green text | `font.color=008000` | Cross-sheet links within same workbook |
-| Red text | `font.color=FF0000` | External references |
-| Yellow background | `fill=FFFF00` | Key assumptions needing attention |
-
-These are industry-standard financial modeling conventions. Apply when building financial models. For non-financial workbooks, use project-appropriate styling.
-
-### Number Format Strings
-
-| Type | Format String | Example Output | Code |
-|------|--------------|----------------|------|
-| Currency | `$#,##0` | $1,234 | `--prop numFmt='$#,##0'` |
-| Currency (neg parens) | `$#,##0;($#,##0);"-"` | ($1,234) | `--prop numFmt='$#,##0;($#,##0);"-"'` |
-| Percentage | `0.0%` | 12.5% | `--prop numFmt="0.0%"` |
-| Decimal | `#,##0.00` | 1,234.56 | `--prop numFmt="#,##0.00"` |
-| Accounting | `_($* #,##0_);_($* (#,##0);_($* "-"_);_(@_)` | $ 1,234 | `--prop numFmt='_($* #,##0_);_($* (#,##0);_($* "-"_);_(@_)'` |
-| Date | `yyyy-mm-dd` | 2026-03-27 | `--prop numFmt="yyyy-mm-dd"` |
-| Date (long) | `mmmm d, yyyy` | March 27, 2026 | `--prop numFmt="mmmm d, yyyy"` |
-| Year as text | `@` | 2026 (not 2,026) | `--prop type=string` |
-| Multiples | `0.0x` | 12.5x | `--prop numFmt="0.0x"` |
-| Zeros as dash | `#,##0;-#,##0;"-"` | - | `--prop numFmt='#,##0;-#,##0;"-"'` |
-
-**Shell quoting:** Number formats containing `$` must use single quotes (`'$#,##0'`) or heredoc in batch mode. Double quotes cause shell variable expansion.
-
-### Column Width and Row Height
-
-```bash
-# Set column width (character units, ~1 char = 7px)
-officecli set data.xlsx "/Sheet1/col[A]" --prop width=15
-officecli set data.xlsx "/Sheet1/col[B]" --prop width=12
-
-# Set row height (points)
-officecli set data.xlsx "/Sheet1/row[1]" --prop height=20
-
-# Hide column/row
-officecli set data.xlsx "/Sheet1/col[D]" --prop hidden=true
-officecli set data.xlsx "/Sheet1/row[5]" --prop hidden=true
-```
-
-There is no auto-fit. Set column widths explicitly. Common widths: labels=20-25, numbers=12-15, dates=12, short codes=8-10.
-
-### Freeze Panes
-
-```bash
-# Freeze first row (headers)
-officecli set data.xlsx "/Sheet1" --prop freeze=A2
-
-# Freeze first column and first row
-officecli set data.xlsx "/Sheet1" --prop freeze=B2
-```
-
-### Print Area
-
-```bash
-# Set print area on a sheet
-officecli set data.xlsx "/Sheet1" --prop printArea="A1:F20"
-```
-
-### Data Validation for Input Cells
-
-```bash
-# Dropdown list
-officecli add data.xlsx /Sheet1 --type validation --prop sqref="C2:C100" --prop type=list --prop formula1="Yes,No,Maybe" --prop showError=true --prop errorTitle="Invalid" --prop error="Select from list"
-
-# Number range
-officecli add data.xlsx /Sheet1 --type validation --prop sqref="D2:D100" --prop type=decimal --prop operator=between --prop formula1=0 --prop formula2=100 --prop showError=true --prop error="Enter 0-100"
-```
-
-Always add data validation on input cells in financial models and trackers. It prevents data entry errors.
-
-### Print Area and Page Setup
-
-For print-ready workbooks, set appropriate column widths and row heights. Consider which sheets need headers repeated on each page.
+For formatting conventions, number formats, and layout → [reference/formatting.md](reference/formatting.md)
 
 ---
 
@@ -268,25 +123,14 @@ For print-ready workbooks, set appropriate column widths and row heights. Consid
 
 **Assume there are problems. Your job is to find them.**
 
-Your first spreadsheet build is almost never correct. Approach QA as a bug hunt, not a confirmation step. If you found zero issues on first inspection, you were not looking hard enough.
-
 ### Content QA
 
 ```bash
-# Extract text, check for missing data
-officecli view data.xlsx text
-
-# Check structure
-officecli view data.xlsx outline
-
-# Check for issues (broken formulas, missing refs, empty sheets)
-officecli view data.xlsx issues
-
-# Verify formulas exist where expected
-officecli query data.xlsx 'cell:has(formula)'
-
-# Check for formula errors in cell values
-officecli query data.xlsx 'cell:contains("#REF!")'
+officecli view data.xlsx text                          # Check for missing data
+officecli view data.xlsx outline                       # Check structure
+officecli view data.xlsx issues                        # Broken formulas, missing refs
+officecli query data.xlsx 'cell:has(formula)'          # Verify formulas exist
+officecli query data.xlsx 'cell:contains("#REF!")'     # Formula error checks
 officecli query data.xlsx 'cell:contains("#DIV/0!")'
 officecli query data.xlsx 'cell:contains("#VALUE!")'
 officecli query data.xlsx 'cell:contains("#NAME?")'
@@ -319,24 +163,6 @@ officecli query data.xlsx 'cell:contains("placeholder")'
 officecli validate data.xlsx
 ```
 
-### Pre-Delivery Checklist
-
-- [ ] Metadata set (title, author)
-- [ ] All formula cells contain formulas (not hardcoded values)
-- [ ] No formula error values (#REF!, #DIV/0!, #VALUE!, #NAME?, #N/A)
-- [ ] Number formats applied (currency, percentage, dates)
-- [ ] Column widths set explicitly (no default 8.43)
-- [ ] Header row styled (bold, fill, freeze panes)
-- [ ] Data validation on input cells
-- [ ] Charts have titles and readable axis labels
-- [ ] **Chart data matches source cells** -- charts with hardcoded/inline data can drift from formula results. For each chart, verify every data point against the corresponding cell value. Prefer cell-range references (`series1.values="Sheet1!B2:B6"`) over inline data to avoid transcription errors.
-- [ ] Named ranges defined for key assumptions
-- [ ] Document validates with `officecli validate`
-- [ ] No placeholder text remaining
-- [ ] Comments on hardcoded assumption values documenting their source
-
-**NOTE**: Unlike pptx (SVG/HTML), xlsx has no visual preview mode. Verification relies on `view text`, `view annotated`, `view stats`, `view issues`, `validate`, and formula queries. For visual verification, the user must open the file in Excel.
-
 ### Verification Loop
 
 1. Generate workbook
@@ -348,6 +174,8 @@ officecli validate data.xlsx
 7. Repeat until a full pass reveals no new issues
 
 **Do not declare success until you have completed at least one fix-and-verify cycle.**
+
+**NOTE**: Unlike pptx (SVG/HTML), xlsx has no visual preview mode. Verification relies on `view text`, `view annotated`, `view stats`, `view issues`, `validate`, and formula queries. For visual verification, the user must open the file in Excel.
 
 ---
 
@@ -375,7 +203,7 @@ officecli validate data.xlsx
 
 ## Performance: Resident Mode
 
-**Always use `open`/`close` — it is the smart default, not a special-case optimization.** Every command benefits: no repeated file I/O, no repeated parse/serialize cycles.
+**Always use `open`/`close` — it is the smart default.** Every command benefits: no repeated file I/O, no repeated parse/serialize cycles.
 
 ```bash
 officecli open data.xlsx        # Load once into memory
@@ -402,8 +230,6 @@ Batch supports: `add`, `set`, `get`, `query`, `remove`, `move`, `swap`, `view`, 
 Batch fields: `command`, `path`, `parent`, `type`, `from`, `to`, `index`, `after`, `before`, `props` (dict), `selector`, `mode`, `depth`, `part`, `xpath`, `action`, `xml`.
 
 `parent` = container to add into (for `add`). `path` = element to modify (for `set`, `get`, `remove`, `move`, `swap`).
-
-Batch mode executes multiple operations in a single open/save cycle.
 
 ---
 
