@@ -13,6 +13,11 @@ export type AgentEventPayload = {
   data: Record<string, unknown>;
 };
 
+// 每次新 tool call 到来时，把当前在打字的 assistant 文本冻结成一段，挂在这条 tool entry 上。
+// 这样渲染时能按"上一段文本 → tool call → tool result → 下一段文本 …"的时间序展开，
+// 与 gateway 写进 transcript 的消息形态保持一致（history 加载后也是这样分开展示）。
+export type StreamSegment = { text: string; ts: number };
+
 export type ToolStreamEntry = {
   toolCallId: string;
   runId: string;
@@ -22,7 +27,12 @@ export type ToolStreamEntry = {
   output?: string;
   startedAt: number;
   updatedAt: number;
-  message: Record<string, unknown>;
+  // 该 tool 之前冻结下来的 assistant 文本（若有）。只会设一次，就在 entry 创建那一刻。
+  leadingSegment?: StreamSegment;
+  // 分成两条 message：call 走 assistant 气泡 + 内联 tool 卡，result 走独立的 toolResult 气泡。
+  // 和 history 里的消息形态完全一致，复用同一套 renderGroupedMessage 分支。
+  callMessage: Record<string, unknown>;
+  resultMessage?: Record<string, unknown>;
 };
 
 type ToolStreamHost = {
@@ -30,8 +40,14 @@ type ToolStreamHost = {
   chatRunId: string | null;
   toolStreamById: Map<string, ToolStreamEntry>;
   toolStreamOrder: string[];
+  // 已摊平的时间线：segment text / call msg / result msg 混合，供渲染直接 iterate。
   chatToolMessages: Record<string, unknown>[];
   toolStreamSyncTimer: number | null;
+  // 当前在打字的 assistant 文本（尚未被任何 tool call 触发冻结，只有这一段闪红光）
+  chatStream: string | null;
+  chatStreamStartedAt: number | null;
+  // handleChatEvent delta 走 raf 节流，pending 是下一帧要写进 chatStream 的值
+  chatPendingStreamText: string | null;
 };
 
 function extractToolOutputText(value: unknown): string | null {
@@ -92,26 +108,33 @@ function formatToolOutput(value: unknown): string | null {
   return `${truncated.text}\n\n… truncated (${truncated.total} chars, showing first ${truncated.text.length}).`;
 }
 
-function buildToolStreamMessage(entry: ToolStreamEntry): Record<string, unknown> {
-  const content: Array<Record<string, unknown>> = [];
-  content.push({
-    type: "toolcall",
-    name: entry.name,
-    arguments: entry.args ?? {},
-  });
-  if (entry.output) {
-    content.push({
-      type: "toolresult",
-      name: entry.name,
-      text: entry.output,
-    });
-  }
+// 构造 assistant 侧的 tool call 消息：**不挂 toolCallId 到顶层**。
+// 挂了的话 normalizeMessage 会把它归类成 toolResult，渲染走无气泡的 renderCollapsedToolCards 路径；
+// 不挂则 role 保持 assistant → 走正常气泡分支，tool card 以折叠形式嵌在气泡里（和 history 一致）。
+function buildToolCallMessage(entry: ToolStreamEntry): Record<string, unknown> {
   return {
     role: "assistant",
+    runId: entry.runId,
+    content: [
+      {
+        type: "toolCall",
+        id: entry.toolCallId,
+        name: entry.name,
+        arguments: entry.args ?? {},
+      },
+    ],
+    timestamp: entry.startedAt,
+  };
+}
+
+// 构造 toolResult 消息：走 role=toolResult 路径，自成一个 group，渲染为独立的 "Tool output" 气泡。
+function buildToolResultMessage(entry: ToolStreamEntry): Record<string, unknown> {
+  return {
+    role: "toolResult",
     toolCallId: entry.toolCallId,
     runId: entry.runId,
-    content,
-    timestamp: entry.startedAt,
+    content: [{ type: "text", text: entry.output ?? "" }],
+    timestamp: entry.updatedAt,
   };
 }
 
@@ -127,9 +150,26 @@ function trimToolStream(host: ToolStreamHost) {
 }
 
 function syncToolStreamMessages(host: ToolStreamHost) {
-  host.chatToolMessages = host.toolStreamOrder
-    .map((id) => host.toolStreamById.get(id)?.message)
-    .filter((msg): msg is Record<string, unknown> => Boolean(msg));
+  // 摊平成时间线：每条 entry 依次贡献 leadingSegment（若有）→ callMessage → resultMessage（若已出）
+  const out: Record<string, unknown>[] = [];
+  for (const id of host.toolStreamOrder) {
+    const entry = host.toolStreamById.get(id);
+    if (!entry) {
+      continue;
+    }
+    if (entry.leadingSegment && entry.leadingSegment.text.trim().length > 0) {
+      out.push({
+        role: "assistant",
+        content: [{ type: "text", text: entry.leadingSegment.text }],
+        timestamp: entry.leadingSegment.ts,
+      });
+    }
+    out.push(entry.callMessage);
+    if (entry.resultMessage) {
+      out.push(entry.resultMessage);
+    }
+  }
+  host.chatToolMessages = out;
 }
 
 export function flushToolStreamSync(host: ToolStreamHost) {
@@ -251,6 +291,19 @@ export function handleAgentEvent(host: ToolStreamHost, payload?: AgentEventPaylo
   const now = Date.now();
   let entry = host.toolStreamById.get(toolCallId);
   if (!entry) {
+    // 新 tool call：把当前 live 的 assistant 文本冻结下来作为这条 entry 的 leadingSegment。
+    // 优先 pending（raf 队列里尚未 flush 的最新值），否则用已可见的 chatStream。
+    const pending = host.chatPendingStreamText;
+    const live = host.chatStream;
+    const liveText = (pending ?? live ?? "").trim().length > 0 ? (pending ?? live) : null;
+    const leading: StreamSegment | undefined = liveText
+      ? { text: liveText, ts: host.chatStreamStartedAt ?? now }
+      : undefined;
+    if (leading) {
+      host.chatStream = null;
+      host.chatStreamStartedAt = null;
+      host.chatPendingStreamText = null;
+    }
     entry = {
       toolCallId,
       runId: payload.runId,
@@ -260,8 +313,13 @@ export function handleAgentEvent(host: ToolStreamHost, payload?: AgentEventPaylo
       output: output || undefined,
       startedAt: typeof payload.ts === "number" ? payload.ts : now,
       updatedAt: now,
-      message: {},
+      leadingSegment: leading,
+      callMessage: {},
     };
+    entry.callMessage = buildToolCallMessage(entry);
+    if (entry.output !== undefined) {
+      entry.resultMessage = buildToolResultMessage(entry);
+    }
     host.toolStreamById.set(toolCallId, entry);
     host.toolStreamOrder.push(toolCallId);
   } else {
@@ -273,9 +331,16 @@ export function handleAgentEvent(host: ToolStreamHost, payload?: AgentEventPaylo
       entry.output = output || undefined;
     }
     entry.updatedAt = now;
+    // 名称/参数变更要反映到 call 消息，但保留其 timestamp（start 时钉住）。
+    entry.callMessage = {
+      ...buildToolCallMessage(entry),
+      timestamp: entry.callMessage.timestamp ?? entry.startedAt,
+    };
+    if (entry.output !== undefined) {
+      entry.resultMessage = buildToolResultMessage(entry);
+    }
   }
 
-  entry.message = buildToolStreamMessage(entry);
   trimToolStream(host);
   scheduleToolStreamSync(host, phase === "result");
 }
