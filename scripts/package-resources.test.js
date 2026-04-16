@@ -149,6 +149,31 @@ test("Windows 全局 windowsHide 补丁应覆盖 kimi-claw 插件", () => {
   fs.rmSync(tmpRoot, { recursive: true, force: true });
 });
 
+test("buildVolcanoConfig 应写入独立的超时与重试配置", () => {
+  const sandbox = loadPackageResourcesSandbox({
+    process: Object.assign(Object.create(process), {
+      argv: process.argv.slice(),
+      env: {
+        ...process.env,
+        VOLCANO_APP_KEY: "volcano-key",
+        VOLCANO_ENDPOINT: "https://collector.example/v2/event/json",
+        VOLCANO_FALLBACK_ENDPOINT: "https://collector-backup.example/v2/event/json",
+        VOLCANO_REQUEST_TIMEOUT_MS: "12000",
+        VOLCANO_RETRY_DELAYS_MS: "0,1000,3000",
+      },
+    }),
+  });
+
+  assert.deepEqual(JSON.parse(JSON.stringify(sandbox.buildVolcanoConfig())), {
+    enabled: true,
+    appKey: "volcano-key",
+    endpoint: "https://collector.example/v2/event/json",
+    fallbackEndpoint: "https://collector-backup.example/v2/event/json",
+    requestTimeoutMs: 12000,
+    retryDelaysMs: [0, 1000, 3000],
+  });
+});
+
 // 白名单裁剪必须深入保留插件内部继续清垃圾，而不是把整个 extensions 目录豁免掉。
 test("pruneNodeModules 应按扩展白名单裁剪并清理保留插件内部垃圾", () => {
   const sandbox = loadPackageResourcesSandbox();
