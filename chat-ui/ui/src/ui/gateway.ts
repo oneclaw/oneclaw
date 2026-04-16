@@ -1,5 +1,6 @@
 import { buildDeviceAuthPayload } from "../../../src/gateway/device-auth.js";
 import {
+  GATEWAY_CLIENT_CAPS,
   GATEWAY_CLIENT_MODES,
   GATEWAY_CLIENT_NAMES,
   type GatewayClientMode,
@@ -270,7 +271,10 @@ export class GatewayBrowserClient {
       role,
       scopes,
       device,
-      caps: [],
+      // 声明 tool-events：gateway 只给带此 cap 的客户端推送 tool call/result 流。
+      // 不声明则 chat 消息列表只有最终 assistant 文本，看不到中间的多轮 tool 调用。
+      // 对照：openclaw 自带的 control-ui bundle 默认声明 ['tool-events']。
+      caps: [GATEWAY_CLIENT_CAPS.TOOL_EVENTS],
       auth,
       userAgent: navigator.userAgent,
       locale: navigator.language,
