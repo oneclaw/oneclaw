@@ -14,8 +14,6 @@ contextBridge.exposeInMainWorld("oneclaw", {
   downloadAndInstallUpdate: () => ipcRenderer.invoke("app:download-and-install-update"),
   getPairingState: () => ipcRenderer.invoke("app:get-pairing-state"),
   refreshPairingState: () => ipcRenderer.send("app:refresh-pairing-state"),
-  getFeishuPairingState: () => ipcRenderer.invoke("app:get-feishu-pairing-state"),
-  refreshFeishuPairingState: () => ipcRenderer.send("app:refresh-feishu-pairing-state"),
 
   // Setup 相关
   verifyKey: (params: Record<string, unknown>) =>
@@ -143,7 +141,9 @@ contextBridge.exposeInMainWorld("oneclaw", {
     ipcRenderer.invoke("workspace:read-file", filePath),
 
   onSettingsNavigate: (cb: (payload: { tab: string; notice: string }) => void) => {
-    ipcRenderer.on("settings:navigate", (_e, payload) => cb(payload));
+    const handler = (_e: Electron.IpcRendererEvent, payload: { tab: string; notice: string }) => cb(payload);
+    ipcRenderer.on("settings:navigate", handler);
+    return () => { ipcRenderer.removeListener("settings:navigate", handler); };
   },
 
   // 打开外部链接（走 IPC 到主进程，sandbox 下 shell 不可用）
@@ -163,6 +163,8 @@ contextBridge.exposeInMainWorld("oneclaw", {
   dismissReleaseNotes: (version: string) => ipcRenderer.invoke("app:dismiss-release-notes", version),
 
   // Chat UI 侧边栏操作
+  quit: () => ipcRenderer.send("app:quit"),
+  reportSetupViewState: (active: boolean) => ipcRenderer.send("app:setup-view-state", active),
   openSettings: () => ipcRenderer.send("app:open-settings"),
   openWebUI: () => ipcRenderer.send("app:open-webui"),
   getGatewayPort: () => ipcRenderer.invoke("gateway:port"),
@@ -187,8 +189,8 @@ contextBridge.exposeInMainWorld("oneclaw", {
     ipcRenderer.invoke("feedback:reply", id, content, files),
   // 从 .openclaw 目录选择文件
   feedbackPickFiles: () => ipcRenderer.invoke("feedback:pick-files"),
-  onNavigate: (cb: (payload: { view: "settings" }) => void) => {
-    const listener = (_event: Electron.IpcRendererEvent, payload: { view: "settings" }) => {
+  onNavigate: (cb: (payload: { view: "settings" | "setup" | "chat"; settingsTab?: string | null; settingsNotice?: string | null; token?: string | null }) => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, payload: { view: "settings" | "setup" | "chat"; settingsTab?: string | null; settingsNotice?: string | null; token?: string | null }) => {
       cb(payload);
     };
     ipcRenderer.on("app:navigate", listener);
@@ -277,42 +279,6 @@ contextBridge.exposeInMainWorld("oneclaw", {
     };
     ipcRenderer.on("app:pairing-state", listener);
     return () => ipcRenderer.removeListener("app:pairing-state", listener);
-  },
-  onFeishuPairingState: (
-    cb: (payload: {
-      pendingCount: number;
-      requests: Array<{
-        code: string;
-        id: string;
-        name: string;
-        createdAt: string;
-        lastSeenAt: string;
-      }>;
-      updatedAt: number;
-      lastAutoApprovedAt: number | null;
-      lastAutoApprovedName: string | null;
-    }) => void,
-  ) => {
-    const listener = (
-      _event: Electron.IpcRendererEvent,
-      payload: {
-        pendingCount: number;
-        requests: Array<{
-          code: string;
-          id: string;
-          name: string;
-          createdAt: string;
-          lastSeenAt: string;
-        }>;
-        updatedAt: number;
-        lastAutoApprovedAt: number | null;
-        lastAutoApprovedName: string | null;
-      },
-    ) => {
-      cb(payload);
-    };
-    ipcRenderer.on("app:feishu-pairing-state", listener);
-    return () => ipcRenderer.removeListener("app:feishu-pairing-state", listener);
   },
 });
 

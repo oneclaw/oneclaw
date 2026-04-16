@@ -2585,7 +2585,7 @@ function extractProviderInfo(config: any): any {
     apiKey,
     baseURL,
     api,
-    supportsImage,
+    supportImage: supportsImage,
     configuredModels,
     raw: primary,
     savedProviders,
