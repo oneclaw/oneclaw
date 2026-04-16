@@ -18,6 +18,8 @@ officecli set <file>.pptx '/slide[N]' --prop transition=morph    # manual fix
 
 **Stale `!!actor-*` across a section boundary** -- you forgot `helper("ghost-section", OUTPUT, N)` on the first slide of the new section. Add it and re-run.
 
+**Shapes at wrong positions after clone** -- after `helper("clone", ...)`, shape indices shift because `transition=morph` reorders the shape tree. If you used `/slide[N]/shape[M]` to reposition a scene actor, `shape[M]` may now point to a ghosted content shape, moving it back on-screen and causing overlap. Fix: replace all index-based `run("officecli", "set", ..., "/slide[N]/shape[M]", ...)` with `helper("move", OUTPUT, N, "!!scene-name", "x=...", "y=...")`.
+
 **Visual layout debugging** -- `officecli view <file>.pptx html` opens an HTML preview of the deck.
 
 **Reminder:** `!!scene-*` shapes are *meant* to persist across every slide -- that is not a bug. Only `!!actor-*` and `#sN-*` need to be ghosted.

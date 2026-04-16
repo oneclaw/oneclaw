@@ -150,7 +150,7 @@ def morph_clone_slide(deck, from_slide, to_slide):
     # Auto-ghost ALL non-persistent content on the cloned slide.
     # Old behaviour only looked for #s{from_slide}- prefix, which silently
     # missed shapes with wrong/missing prefix — the #1 cause of overlap.
-    # New behaviour: ghost every named shape that is NOT !!scene-* or !!actor-*.
+    # New behaviour: ghost every shape (named or unnamed) that is NOT !!scene-* or !!actor-*.
     print(f"{BLUE}Auto-ghosting content shapes on slide {to_slide}...{NC}")
     rc, out, _ = _run("officecli", "get", deck, f"/slide[{to_slide}]", "--json")
     curr_json_str = out
@@ -159,14 +159,12 @@ def morph_clone_slide(deck, from_slide, to_slide):
     except Exception:
         curr_data = {}
 
-    hits = _collect_matching_paths(curr_data, lambda n: n and not _is_persistent_shape(n))
+    hits = _collect_matching_paths(curr_data, lambda n: not _is_persistent_shape(n))
     if hits:
         _ghost_by_paths(deck, hits)
         print(f"{GREEN}  Auto-ghosted {len(hits)} content shape(s) on slide {to_slide}{NC}")
     else:
-        print(f"{YELLOW}  No named content shapes found on slide {to_slide}.{NC}")
-        print(f"{YELLOW}  If slide {from_slide} had content shapes, they may have empty names.{NC}")
-        print(f"{YELLOW}  Check with: officecli get <deck> '/slide[{to_slide}]' --depth 1{NC}")
+        print(f"{YELLOW}  No non-persistent shapes found on slide {to_slide} to ghost.{NC}")
 
     # Verify transition actually landed.
     print(f"{BLUE}Verifying transition...{NC}")
@@ -251,6 +249,57 @@ def morph_ghost_section(deck, slide):
 
 
 # ---------------------------------------------------------------------------
+# morph_move_shape
+# ---------------------------------------------------------------------------
+
+def morph_move_shape(deck, slide, name, *prop_args):
+    """Find a shape by name and set properties — safe alternative to index-based access.
+
+    After ``helper("clone", ...)``, shape indices are UNRELIABLE because
+    ``transition=morph`` may reorder shapes. This function reads the slide JSON,
+    locates the shape by **substring match** on its name (tolerating the ``!!``
+    prefix that officecli prepends on morph slides), and issues the ``set``
+    command using the correct index-based path.
+
+    Args:
+        deck:       path to .pptx file
+        slide:      slide number (1-based)
+        name:       shape name to match (e.g. ``!!scene-ring``). Uses substring
+                    match so ``!!scene-ring`` finds both ``!!scene-ring`` and
+                    ``!!!!scene-ring``.
+        *prop_args: one or more ``key=value`` strings passed to ``--prop``
+                    (e.g. ``"x=15cm"``, ``"y=5cm"``)
+    """
+    slide = int(slide)
+
+    if not prop_args:
+        print(f"{RED}ERROR: move requires at least one property{NC}")
+        sys.exit(1)
+
+    rc, out, _ = _run("officecli", "get", deck, f"/slide[{slide}]", "--json")
+    try:
+        data = json.loads(out).get("data", {})
+    except Exception:
+        print(f"{RED}ERROR: Failed to read slide {slide}{NC}")
+        sys.exit(1)
+
+    hits = _collect_matching_paths(data, lambda n: name in n)
+    if not hits:
+        print(f"{RED}ERROR: Shape '{name}' not found on slide {slide}{NC}")
+        sys.exit(1)
+
+    path, matched_name = hits[0]
+    cmd = ["officecli", "set", deck, path]
+    for prop in prop_args:
+        cmd.extend(["--prop", prop])
+    rc, _, _ = _run(*cmd)
+    if rc != 0:
+        print(f"{RED}ERROR: Failed to set properties on {matched_name} ({path}){NC}")
+        sys.exit(1)
+    print(f"{GREEN}  Moved {matched_name} ({path}) — {', '.join(prop_args)}{NC}")
+
+
+# ---------------------------------------------------------------------------
 # morph_verify_slide
 # ---------------------------------------------------------------------------
 
@@ -268,6 +317,9 @@ def _check_unghosted(data, current_slide):
         x    = child.get("Format", {}).get("x", "") or ""
         path = child.get("Path", "") or ""
         if not name:
+            # Unnamed shapes should also be ghosted; flag if visible
+            if x and x != "36cm":
+                unghosted.append(f"{path}: name=(unnamed), x={x}")
             return
         # Persistent shapes are expected to stay visible
         if _is_persistent_shape(name):
@@ -469,6 +521,7 @@ def main():
         epilog="""
 commands:
   clone <deck> <from_slide> <to_slide>        Clone + morph transition + auto-ghost #s<from>- content
+  move <deck> <slide> <name> <prop> [...]     Find shape by name, set props (safe index lookup)
   ghost <deck> <slide> <idx> [idx ...]        Ghost specific shapes by index (escape hatch)
   ghost-section <deck> <slide>                Ghost all !!actor-* on this slide (section transition)
   verify <deck> <slide>                       Verify slide setup (transition + ghosting)
@@ -477,6 +530,7 @@ commands:
 example:
   python3 morph-helpers.py clone         deck.pptx 1 2
   python3 morph-helpers.py ghost-section deck.pptx 3
+  python3 morph-helpers.py move         deck.pptx 2 "!!scene-ring" "x=15cm" "y=5cm"
   python3 morph-helpers.py ghost         deck.pptx 2 7 8 9
   python3 morph-helpers.py verify        deck.pptx 2
   python3 morph-helpers.py final-check   deck.pptx
@@ -488,6 +542,12 @@ example:
     p.add_argument("deck")
     p.add_argument("from_slide", type=int)
     p.add_argument("to_slide",   type=int)
+
+    p = sub.add_parser("move")
+    p.add_argument("deck")
+    p.add_argument("slide", type=int)
+    p.add_argument("name")
+    p.add_argument("props", nargs="+")
 
     p = sub.add_parser("ghost")
     p.add_argument("deck")
@@ -509,6 +569,8 @@ example:
 
     if args.command == "clone":
         morph_clone_slide(args.deck, args.from_slide, args.to_slide)
+    elif args.command == "move":
+        morph_move_shape(args.deck, args.slide, args.name, *args.props)
     elif args.command == "ghost":
         morph_ghost_content(args.deck, args.slide, *args.shapes)
     elif args.command == "ghost-section":

@@ -147,3 +147,20 @@ S3 [pillars] ★key slide
 | Cannot determine page count | Decide based on content volume; avoid <3 or >20 |
 
 ---
+
+## Morph Pair Scene Planning (REQUIRED before building)
+
+For every morph transition, plan the slide pair BEFORE writing any code:
+
+| Pair | Slide A (start) | Slide B (end) | Visual narrative purpose |
+|------|-----------------|---------------|--------------------------|
+| 1→2  | Ring centered, title appears | Ring shifts right, subtitle revealed | Attention → context |
+| 2→3  | Feature box large | Feature box small, metric card grows | Zoom out → detail |
+
+**Rules for the planning table:**
+- Determine ALL `!!` shape names during planning — the same name must be used identically across the slide pair
+- For each `!!` shape, decide its role: `!!scene-{desc}` (background/decoration) or `!!actor-{desc}` (content/foreground)
+- Mark which shapes need to be ghosted at each section transition
+- Do NOT start building until the naming table is complete — renaming shapes mid-build causes ghost accumulation bugs
+
+---
