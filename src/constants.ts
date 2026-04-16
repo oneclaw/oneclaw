@@ -30,8 +30,9 @@ export function resolveGatewayPort(): number {
 
 // ── 健康检查 ──
 
-// Windows 冷启动可能受 Defender/磁盘预热影响，30s 容易误判失败。
-export const HEALTH_TIMEOUT_MS = 90_000;
+// Windows 冷启动：Defender 实时扫描 + ASAR 内 ESM/jiti 转译导致模块加载 30-80s。
+// 热重启（上一个实例刚退出）场景下 80s 加载 + 5s 初始化 ≈ 85s，90s 超时余量不足。
+export const HEALTH_TIMEOUT_MS = process.platform === "win32" ? 180_000 : 90_000;
 export const HEALTH_POLL_INTERVAL_MS = 500;
 
 // ── 崩溃冷却 ──
