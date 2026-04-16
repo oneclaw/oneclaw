@@ -49,6 +49,7 @@ import { uninstallGatewayDaemon, killPortProcess, getPortPid } from "./install-d
 import { detectOwnership, migrateFromLegacy, markSetupComplete, readOneclawConfig, writeOneclawConfig, appendChannelUtm } from "./oneclaw-config";
 import { startTokenRefresh, stopTokenRefresh, loadOAuthToken } from "./kimi-oauth";
 import { startAuthProxy, stopAuthProxy, setProxyAccessToken, setProxySearchDedicatedKey, getProxyPort } from "./kimi-auth-proxy";
+import { loadModelCatalog, reloadModelCatalog } from "./model-catalog";
 import * as log from "./logger";
 import * as analytics from "./analytics";
 
@@ -132,6 +133,7 @@ const gateway = new GatewayProcess({
     pairingMonitor?.triggerNow();
     // gateway 就绪后立即通知 Chat UI 重连，避免盲等指数退避
     if (state === "running") {
+      reloadModelCatalog();
       for (const w of BrowserWindow.getAllWindows()) {
         if (!w.isDestroyed()) w.webContents.send("gateway:ready");
       }
@@ -819,6 +821,7 @@ app.whenReady().then(async () => {
   } else {
     Menu.setApplicationMenu(null);
   }
+  loadModelCatalog().catch(() => {});
   analytics.init();
   analytics.track("app_launched");
   setupAutoUpdater();
