@@ -6,6 +6,7 @@ import {
   resolveUserConfigPath,
   resolveUserStateDir,
 } from "./constants";
+import { resetConfigHealthBaseline } from "./openclaw-health-state";
 
 const BACKUP_FILE_PREFIX = "openclaw-";
 const BACKUP_FILE_EXT = ".json";
@@ -201,7 +202,9 @@ function readValidConfigRaw(filePath: string): string | null {
 function writeConfigRaw(raw: string): void {
   const stateDir = resolveUserStateDir();
   fs.mkdirSync(stateDir, { recursive: true });
-  fs.writeFileSync(resolveUserConfigPath(), raw, "utf-8");
+  const configPath = resolveUserConfigPath();
+  fs.writeFileSync(configPath, raw, "utf-8");
+  resetConfigHealthBaseline(configPath);
 }
 
 // 确保备份目录存在，避免首次保存时写文件失败。
