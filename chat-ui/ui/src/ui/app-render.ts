@@ -476,7 +476,8 @@ type FeedbackSseEvent =
   | { type: "message.created"; thread_id: number; message: FeedbackMessage & { feedback_id: number } }
   | { type: "thread.updated"; thread_id: number; thread: Partial<FeedbackThread> & { id: number } }
   | { type: "agent.thinking"; thread_id: number }
-  | { type: "agent.done"; thread_id: number };
+  | { type: "agent.done"; thread_id: number }
+  | { type: "agent.manual_pending"; thread_id: number };
 
 // thread_id → 5 分钟自动隐藏定时器；防 agent.done 丢失导致动画卡死
 const thinkingSafetyTimers = new Map<number, ReturnType<typeof setTimeout>>();
@@ -559,6 +560,15 @@ function resumeThinking(state: AppViewState) {
   startPhraseRotation(state);
 }
 
+/** 清除某 thread 的"人工回复模式"提示 */
+function clearManualPending(threadId: number) {
+  if (!feedbackPanelState.manualPendingThreadIds.includes(threadId)) return;
+  feedbackPanelState = {
+    ...feedbackPanelState,
+    manualPendingThreadIds: feedbackPanelState.manualPendingThreadIds.filter((x) => x !== threadId),
+  };
+}
+
 function appendDetailMessageDedup(msg: FeedbackMessage) {
   const list = feedbackPanelState.detailMessages ?? [];
   // 以 id 为主键去重；id <= 0 表示乐观占位，不参与去重判定
@@ -605,10 +615,10 @@ function handleFeedbackEvent(state: AppViewState, evt: FeedbackSseEvent) {
         };
       }
     }
-    // official 回复到达 → 同步隐藏 thinking 动画（设计文档 §3.3 推荐做法：
-    // message.created 或 agent.done 任一即可隐藏，避免 done 丢失导致动画卡死）
+    // 非 user 消息到达 → 清除所有状态提示（thinking + manualPending）
     if (incoming.role !== "user") {
       hideThinking(state, evt.thread_id);
+      clearManualPending(evt.thread_id);
     }
     state.requestUpdate();
     // 当前打开的 thread 新增气泡
@@ -647,8 +657,22 @@ function handleFeedbackEvent(state: AppViewState, evt: FeedbackSseEvent) {
     }
   } else if (evt.type === "agent.thinking") {
     showThinking(state, evt.thread_id);
+    // 收到 thinking 说明模式切回了自动 → 清除人工回复提示
+    clearManualPending(evt.thread_id);
     state.requestUpdate();
     // 思考动画出现在消息列表底部 → 用户原本贴底就跟着滚下来
+    if (openId === evt.thread_id && wasNearBottom) {
+      scrollFeedbackMessagesToBottom("smooth");
+    }
+  } else if (evt.type === "agent.manual_pending") {
+    // 人工回复模式 → 显示提示
+    if (!feedbackPanelState.manualPendingThreadIds.includes(evt.thread_id)) {
+      feedbackPanelState = {
+        ...feedbackPanelState,
+        manualPendingThreadIds: [...feedbackPanelState.manualPendingThreadIds, evt.thread_id],
+      };
+    }
+    state.requestUpdate();
     if (openId === evt.thread_id && wasNearBottom) {
       scrollFeedbackMessagesToBottom("smooth");
     }

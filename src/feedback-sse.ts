@@ -40,11 +40,18 @@ export type FeedbackEventAgentDone = {
   thread_id: number;
 };
 
+/** 当前 thread 处于人工回复模式。客户端应显示"人工回复"提示。 */
+export type FeedbackEventManualPending = {
+  type: "agent.manual_pending";
+  thread_id: number;
+};
+
 export type FeedbackEvent =
   | FeedbackEventMessage
   | FeedbackEventThread
   | FeedbackEventAgentThinking
-  | FeedbackEventAgentDone;
+  | FeedbackEventAgentDone
+  | FeedbackEventManualPending;
 
 /** 纯函数：把 buffer 切成完整帧，返回解析出的事件和未完成的剩余 buffer。ping 帧被丢弃。 */
 export function parseSseFrames(buffer: string): { events: FeedbackEvent[]; rest: string } {
@@ -70,7 +77,8 @@ export function parseSseFrames(buffer: string): { events: FeedbackEvent[]; rest:
       json.type === "message.created" ||
       json.type === "thread.updated" ||
       json.type === "agent.thinking" ||
-      json.type === "agent.done"
+      json.type === "agent.done" ||
+      json.type === "agent.manual_pending"
     ) {
       events.push(json as FeedbackEvent);
     }

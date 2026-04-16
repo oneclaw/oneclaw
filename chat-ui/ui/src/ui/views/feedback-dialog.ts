@@ -231,6 +231,7 @@ export interface FeedbackPanelState {
   sseReconnecting: boolean;    // 当前是否在重连中
   thinkingThreadIds: number[]; // 当前正在显示"AI 思考中"的 thread id（agent.thinking → agent.done 之间）
   thinkingPhrase: string;      // 当前轮播的思考短语（由 app-render.ts 定时写入）
+  manualPendingThreadIds: number[]; // "人工回复模式"提示的 thread id（agent.manual_pending → message.created/agent.thinking 之间）
   hasNewMessagesBelow: boolean; // 详情视图：用户不在底部时有新消息到达，显示"有新消息↓"浮动按钮
 }
 
@@ -262,6 +263,7 @@ export function createFeedbackPanelState(): FeedbackPanelState {
     sseReconnecting: false,
     thinkingThreadIds: [],
     thinkingPhrase: "",
+    manualPendingThreadIds: [],
     hasNewMessagesBelow: false,
   };
 }
@@ -570,6 +572,9 @@ function renderDetailContent(
                       </div>
                     </div>
                   `
+                  : nothing}
+                ${thread.id !== undefined && state.manualPendingThreadIds.includes(thread.id)
+                  ? html`<div class="feedback-manual-pending" aria-live="polite">${t("feedback.manualPending")}</div>`
                   : nothing}
               `}
         </div>
