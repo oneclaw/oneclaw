@@ -477,7 +477,8 @@ type FeedbackSseEvent =
   | { type: "thread.updated"; thread_id: number; thread: Partial<FeedbackThread> & { id: number } }
   | { type: "agent.thinking"; thread_id: number }
   | { type: "agent.done"; thread_id: number }
-  | { type: "agent.manual_pending"; thread_id: number };
+  | { type: "agent.manual_pending"; thread_id: number }
+  | { type: "agent.online"; thread_id: number };
 
 // thread_id → 5 分钟自动隐藏定时器；防 agent.done 丢失导致动画卡死
 const thinkingSafetyTimers = new Map<number, ReturnType<typeof setTimeout>>();
@@ -569,6 +570,24 @@ function clearManualPending(threadId: number) {
   };
 }
 
+// thread_id → "智能客服已上线"短暂提示的自动清除定时器
+const agentOnlineTimers = new Map<number, ReturnType<typeof setTimeout>>();
+const AGENT_ONLINE_DISPLAY_MS = 5_000; // 5 秒后自动隐藏
+
+/** 清除某 thread 的"智能客服已上线"短暂提示 */
+function clearAgentOnline(threadId: number) {
+  const timer = agentOnlineTimers.get(threadId);
+  if (timer) {
+    clearTimeout(timer);
+    agentOnlineTimers.delete(threadId);
+  }
+  if (!feedbackPanelState.agentOnlineThreadIds.includes(threadId)) return;
+  feedbackPanelState = {
+    ...feedbackPanelState,
+    agentOnlineThreadIds: feedbackPanelState.agentOnlineThreadIds.filter((x) => x !== threadId),
+  };
+}
+
 function appendDetailMessageDedup(msg: FeedbackMessage) {
   const list = feedbackPanelState.detailMessages ?? [];
   // 以 id 为主键去重；id <= 0 表示乐观占位，不参与去重判定
@@ -615,10 +634,11 @@ function handleFeedbackEvent(state: AppViewState, evt: FeedbackSseEvent) {
         };
       }
     }
-    // 非 user 消息到达 → 清除所有状态提示（thinking + manualPending）
+    // 非 user 消息到达 → 清除所有状态提示（thinking + manualPending + agentOnline）
     if (incoming.role !== "user") {
       hideThinking(state, evt.thread_id);
       clearManualPending(evt.thread_id);
+      clearAgentOnline(evt.thread_id);
     }
     state.requestUpdate();
     // 当前打开的 thread 新增气泡
@@ -657,15 +677,17 @@ function handleFeedbackEvent(state: AppViewState, evt: FeedbackSseEvent) {
     }
   } else if (evt.type === "agent.thinking") {
     showThinking(state, evt.thread_id);
-    // 收到 thinking 说明模式切回了自动 → 清除人工回复提示
+    // 收到 thinking 说明 agent 已开始跑 → 清除人工回复和"AI 已上线"提示
     clearManualPending(evt.thread_id);
+    clearAgentOnline(evt.thread_id);
     state.requestUpdate();
     // 思考动画出现在消息列表底部 → 用户原本贴底就跟着滚下来
     if (openId === evt.thread_id && wasNearBottom) {
       scrollFeedbackMessagesToBottom("smooth");
     }
   } else if (evt.type === "agent.manual_pending") {
-    // 人工回复模式 → 显示提示
+    // 人工回复模式 → 显示提示（同时清除 "AI 已上线"，避免旧提示残留）
+    clearAgentOnline(evt.thread_id);
     if (!feedbackPanelState.manualPendingThreadIds.includes(evt.thread_id)) {
       feedbackPanelState = {
         ...feedbackPanelState,
@@ -676,6 +698,30 @@ function handleFeedbackEvent(state: AppViewState, evt: FeedbackSseEvent) {
     if (openId === evt.thread_id && wasNearBottom) {
       scrollFeedbackMessagesToBottom("smooth");
     }
+  } else if (evt.type === "agent.online") {
+    // /auto on → 仅当当前正在显示"人工客服已接管"时，才替换为"智能客服已上线"短暂提示。
+    // 如果用户此前没看到过人工回复提示，就静默切换（不打扰）。
+    const wasManualPending = feedbackPanelState.manualPendingThreadIds.includes(evt.thread_id);
+    clearManualPending(evt.thread_id);
+    if (wasManualPending) {
+      // 已有定时器则重置
+      const existing = agentOnlineTimers.get(evt.thread_id);
+      if (existing) clearTimeout(existing);
+      if (!feedbackPanelState.agentOnlineThreadIds.includes(evt.thread_id)) {
+        feedbackPanelState = {
+          ...feedbackPanelState,
+          agentOnlineThreadIds: [...feedbackPanelState.agentOnlineThreadIds, evt.thread_id],
+        };
+      }
+      agentOnlineTimers.set(
+        evt.thread_id,
+        setTimeout(() => {
+          clearAgentOnline(evt.thread_id);
+          state.requestUpdate();
+        }, AGENT_ONLINE_DISPLAY_MS),
+      );
+    }
+    state.requestUpdate();
   } else if (evt.type === "agent.done") {
     // 静默隐藏思考动画，不向用户暴露 Agent 成功/失败状态
     hideThinking(state, evt.thread_id);
@@ -949,6 +995,8 @@ function buildFeedbackPanelCallbacks(state: AppViewState) {
         _pending: true,
         _tempKey: tempKey,
       };
+      // 乐观更新：本地立刻插入 pending 气泡并清空输入框，不把 detailReplySending 置 true，
+      // 这样 POST 期间（后端可能要 10+ 秒）用户仍可继续输入和发送下一条。
       feedbackPanelState = {
         ...feedbackPanelState,
         detailMessages: [...feedbackPanelState.detailMessages, tempMsg],
@@ -956,15 +1004,27 @@ function buildFeedbackPanelCallbacks(state: AppViewState) {
         detailReplyFiles: [],
         detailReplyFilePreviews: [],
         detailReplyFileNames: [],
-        detailReplySending: true,
       };
       state.requestUpdate();
       // 用户主动发消息 → 总是滚到底（不判 near-bottom），让用户看到自己的气泡
       scrollFeedbackMessagesToBottom("smooth");
 
-      // 2. 发 POST
-      try {
-        const result = await window.oneclaw?.feedbackReply?.(threadId, content, files);
+      // 2. 后台异步发 POST（不阻塞输入）
+      void (async () => {
+        let result: any;
+        try {
+          result = await window.oneclaw?.feedbackReply?.(threadId, content, files);
+        } catch (err) {
+          feedbackPanelState = {
+            ...feedbackPanelState,
+            detailMessages: feedbackPanelState.detailMessages.map((msg) =>
+              msg._tempKey === tempKey ? { ...msg, _pending: false, _failed: true } : msg,
+            ),
+          };
+          state.requestUpdate();
+          void showFeedbackReplyErrorDialog(String(err));
+          return;
+        }
         if (result?.ok && result.message) {
           // 3a. 用真实 message 替换临时占位
           const m = result.message as any;
@@ -981,10 +1041,9 @@ function buildFeedbackPanelCallbacks(state: AppViewState) {
           const alreadyHasReal = real.id > 0 && withoutTemp.some((msg) => msg.id === real.id);
           const merged = alreadyHasReal ? withoutTemp : [...withoutTemp, real];
           merged.sort((a, b) => a.created_at.localeCompare(b.created_at));
-          feedbackPanelState = { ...feedbackPanelState, detailMessages: merged, detailReplySending: false };
+          feedbackPanelState = { ...feedbackPanelState, detailMessages: merged };
         } else if (result?.ok) {
-          // 3b. 后端 200 但没回 message（兼容老版本）：保留临时占位，依赖 SSE echo 替换
-          feedbackPanelState = { ...feedbackPanelState, detailReplySending: false };
+          // 3b. 后端 200 但没回 message（兼容老版本）：保留临时占位，依赖 SSE echo 替换；无需改 state
         } else {
           // 3c. 失败：把临时气泡标红（保留给用户，避免丢字）+ 弹原生错误对话框
           feedbackPanelState = {
@@ -992,21 +1051,11 @@ function buildFeedbackPanelCallbacks(state: AppViewState) {
             detailMessages: feedbackPanelState.detailMessages.map((msg) =>
               msg._tempKey === tempKey ? { ...msg, _pending: false, _failed: true } : msg,
             ),
-            detailReplySending: false,
           };
           void showFeedbackReplyErrorDialog(result?.error);
         }
-      } catch (err) {
-        feedbackPanelState = {
-          ...feedbackPanelState,
-          detailMessages: feedbackPanelState.detailMessages.map((msg) =>
-            msg._tempKey === tempKey ? { ...msg, _pending: false, _failed: true } : msg,
-          ),
-          detailReplySending: false,
-        };
-        void showFeedbackReplyErrorDialog(String(err));
-      }
-      state.requestUpdate();
+        state.requestUpdate();
+      })();
     },
     requestUpdate: () => state.requestUpdate(),
   };

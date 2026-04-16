@@ -46,12 +46,19 @@ export type FeedbackEventManualPending = {
   thread_id: number;
 };
 
+/** 研发在飞书群执行 /auto on，thread 从人工回复切回自动回复。客户端应清除"人工回复"提示，可选显示"AI 已上线"。 */
+export type FeedbackEventAgentOnline = {
+  type: "agent.online";
+  thread_id: number;
+};
+
 export type FeedbackEvent =
   | FeedbackEventMessage
   | FeedbackEventThread
   | FeedbackEventAgentThinking
   | FeedbackEventAgentDone
-  | FeedbackEventManualPending;
+  | FeedbackEventManualPending
+  | FeedbackEventAgentOnline;
 
 /** 纯函数：把 buffer 切成完整帧，返回解析出的事件和未完成的剩余 buffer。ping 帧被丢弃。 */
 export function parseSseFrames(buffer: string): { events: FeedbackEvent[]; rest: string } {
@@ -78,7 +85,8 @@ export function parseSseFrames(buffer: string): { events: FeedbackEvent[]; rest:
       json.type === "thread.updated" ||
       json.type === "agent.thinking" ||
       json.type === "agent.done" ||
-      json.type === "agent.manual_pending"
+      json.type === "agent.manual_pending" ||
+      json.type === "agent.online"
     ) {
       events.push(json as FeedbackEvent);
     }
