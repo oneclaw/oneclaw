@@ -690,6 +690,9 @@ function buildChatItems(props: ChatProps): Array<ChatItem | MessageGroup> {
       message: msg,
     });
   }
+  // toolMessages 本身是摊平的时间线（由 app-tool-stream.ts::syncToolStreamMessages 构造）：
+  // 依次包含 leadingSegment 文本 / tool call / tool result，作为普通 message 追加即可，
+  // groupMessages 会按 role 自动分组成和 history 一致的 "assistant 文本+call → toolResult" 节奏。
   if (props.showThinking) {
     for (let i = 0; i < tools.length; i++) {
       items.push({
