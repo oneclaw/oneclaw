@@ -20,7 +20,7 @@ export interface SaveWeixinConfigParams {
 
 // 统一解析微信插件目录，兼容 dev / packaged 环境。
 export function resolveWeixinPluginDir(): string {
-  return path.join(resolveGatewayPackageDir(), "extensions", WEIXIN_PLUGIN_ID);
+  return path.join(resolveGatewayPackageDir(), "dist", "extensions", WEIXIN_PLUGIN_ID);
 }
 
 // 检查微信插件是否已经随应用一起打包。

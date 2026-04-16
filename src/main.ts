@@ -318,6 +318,27 @@ function migrateDisableGatewayUpdateCheck(): void {
   }
 }
 
+// 存量用户迁移：openclaw 2026.4.x 的 dingtalk-connector 新 schema 设置 additionalProperties: false，
+// 拒绝旧版本遗留的 gatewayToken / sessionTimeout 字段，会导致 gateway 启动时配置校验失败。
+// 幂等删除这两个字段；失败不阻塞启动。
+function migrateDeprecatedDingtalkFields(): void {
+  try {
+    const config = readUserConfig();
+    const channels = config.channels as Record<string, unknown> | undefined;
+    const dingtalk = channels?.["dingtalk-connector"];
+    if (!dingtalk || typeof dingtalk !== "object") return;
+    const record = dingtalk as Record<string, unknown>;
+    const deprecated = ["gatewayToken", "sessionTimeout"] as const;
+    const removed = deprecated.filter((k) => k in record);
+    if (removed.length === 0) return;
+    for (const k of removed) delete record[k];
+    writeUserConfig(config);
+    log.info(`[migrate] 已移除 dingtalk-connector 的 deprecated 字段: ${removed.join(", ")}`);
+  } catch {
+    // 迁移失败不阻塞启动
+  }
+}
+
 // 从配置同步 search API key 到 gateway 环境变量
 // 代理模式下实际请求走代理注入 token，但插件初始化仍需 env var 存在
 function syncKimiSearchEnv(): void {
@@ -885,6 +906,7 @@ app.whenReady().then(async () => {
       // 状态 1：正常启动
       migrateSessionMemoryHook();
       migrateDisableGatewayUpdateCheck();
+      migrateDeprecatedDingtalkFields();
       void reconcileCliOnAppLaunch().catch((err) => {
         log.error(`[migrate] CLI launch reconciliation failed: ${err instanceof Error ? err.message : String(err)}`);
       });
@@ -897,6 +919,7 @@ app.whenReady().then(async () => {
       migrateFromLegacy();
       migrateSessionMemoryHook();
       migrateDisableGatewayUpdateCheck();
+      migrateDeprecatedDingtalkFields();
       void reconcileCliOnAppLaunch().catch((err) => {
         log.error(`[migrate] CLI launch reconciliation failed: ${err instanceof Error ? err.message : String(err)}`);
       });

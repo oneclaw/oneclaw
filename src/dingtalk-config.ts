@@ -22,7 +22,7 @@ export interface SaveDingtalkConfigParams {
 
 // 统一解析钉钉插件目录，兼容 dev / packaged 环境。
 export function resolveDingtalkPluginDir(): string {
-  return path.join(resolveGatewayPackageDir(), "extensions", DINGTALK_CONNECTOR_PLUGIN_ID);
+  return path.join(resolveGatewayPackageDir(), "dist", "extensions", DINGTALK_CONNECTOR_PLUGIN_ID);
 }
 
 // 检查钉钉插件是否已经随应用一起打包。

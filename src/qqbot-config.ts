@@ -20,7 +20,7 @@ export interface SaveQqbotConfigParams {
 
 // 统一解析 QQ Bot 插件目录，兼容 dev / packaged 环境。
 export function resolveQqbotPluginDir(): string {
-  return path.join(resolveGatewayPackageDir(), "extensions", QQBOT_PLUGIN_ID);
+  return path.join(resolveGatewayPackageDir(), "dist", "extensions", QQBOT_PLUGIN_ID);
 }
 
 // 检查 QQ Bot 插件是否已经随应用一起打包。

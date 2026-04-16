@@ -71,7 +71,7 @@ export function saveKimiPluginConfig(config: any, params: SaveKimiPluginParams):
 
 // 解析内置插件目录（packaged/dev 环境统一）
 export function resolveKimiPluginDir(): string {
-  return path.join(resolveGatewayPackageDir(), "extensions", KIMI_PLUGIN_ID);
+  return path.join(resolveGatewayPackageDir(), "dist", "extensions", KIMI_PLUGIN_ID);
 }
 
 // 检查 kimi-claw 插件是否随应用内置（缺失则拒绝写配置，避免网关启动失败）
@@ -244,7 +244,7 @@ export function ensureMemorySearchProxyConfig(config: any, proxyPort: number): b
 
 // 检查 kimi-search 插件是否随应用内置
 export function isKimiSearchPluginBundled(): boolean {
-  const pluginDir = path.join(resolveGatewayPackageDir(), "extensions", KIMI_SEARCH_PLUGIN_ID);
+  const pluginDir = path.join(resolveGatewayPackageDir(), "dist", "extensions", KIMI_SEARCH_PLUGIN_ID);
   const hasEntry =
     fs.existsSync(path.join(pluginDir, "index.ts")) ||
     fs.existsSync(path.join(pluginDir, "dist", "index.js"));
