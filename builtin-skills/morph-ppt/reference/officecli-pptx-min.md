@@ -138,13 +138,7 @@ officecli get deck.pptx '/slide[1]' --depth 1
 
 ### Morph Animation
 
-`transition=morph` creates smooth animations by **matching shapes by name** across adjacent slides.
-
-**How it works:**
-
-1. Adjacent slides must have shapes with **identical names** for morphing
-2. PowerPoint matches by name and animates position/size/color changes
-3. If names don't match → only fade in/out (no morph effect)
+`transition=morph` creates smooth animations by **matching shapes by name** across adjacent slides. For the complete Morph workflow (naming conventions, ghosting, helpers), see `SKILL.md` Phase 3.
 
 **Morph variants:**
 
@@ -154,7 +148,17 @@ officecli get deck.pptx '/slide[1]' --depth 1
 --prop transition=morph-byChar   # Character-by-character text animation
 ```
 
-**For complete Morph workflow** (naming conventions, ghosting, helpers), see `SKILL.md` Phase 3.
+### Known CLI Behaviors with Morph
+
+- **`!!` auto-prefix after `transition=morph`** — officecli prepends `!!` to every shape name on a morph slide (e.g. `#s1-title` → `!!#s1-title`). `morph-helpers.py` handles this via substring matching and is not affected.
+- **Name-based path selectors break on morph slides.** After `transition=morph` is set, `/slide[N]/!!my-shape` returns "Element not found". Always use **index paths** on morph slides:
+
+  ```bash
+  # WRONG: officecli get deck.pptx '/slide[3]/!!my-circle' --depth 1
+  officecli get deck.pptx '/slide[3]' --depth 1       # list to find index
+  officecli get deck.pptx '/slide[3]/shape[2]' --depth 1
+  ```
+- **Verify indices before manual shape ops.** Run `officecli get deck.pptx '/slide[N]' --depth 1` after batch additions to confirm current indices. (Not needed for `helper("clone"/"ghost-section"/"verify"/"final-check")` — they all use the JSON tree, not hand-tracked indices.)
 
 ### Script Best Practices
 

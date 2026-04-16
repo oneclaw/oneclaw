@@ -237,80 +237,37 @@ Browse `reference/styles/` for design inspiration. See `reference/styles/INDEX.m
 
 ---
 
-## 7) Shape Index Mechanics
+## 7) Choreography — Timing and Motion
 
-Shapes are numbered sequentially on each slide: `shape[1]`, `shape[2]`, `shape[3]`...
+Understanding how morph animates multiple shapes helps you plan intentional motion:
 
-### Index Behavior
+| Animation type | How to achieve it |
+|----------------|-------------------|
+| Simple move | Same shape on slide A and B, same size, different `x`/`y` — morph interpolates position |
+| Scale transform | Same shape on slide A and B, different `width`/`height` — morph interpolates size and position |
+| Move + scale | Different `x`, `y`, `width`, `height` simultaneously — morph handles all dimensions at once |
+| Color shift | Same shape, different `fill` color — morph cross-fades the fill |
+| Enter (fade in) | Shape exists only on slide B (no counterpart on slide A) — morph fades it in |
+| Exit (fade out) | Shape only on slide A (no counterpart on slide B) — morph fades it out |
 
-**On Slide 1**: Shapes added in order
+**Multi-shape timing rule:**
+- All `!!` shapes in the same morph pair animate **simultaneously** — there is no way to stagger their start times within a single pair
+- If you need shape A to move before shape B, you MUST split the transition into two morph pairs (i.e., add an intermediate slide between them)
 
-```bash
-# Scene actors: shape[1-6]
-# Content: shape[7+]
+**Staggered timing pattern** (two shapes, offset timing):
+
+```
+Slide 2 → Slide 3:  !!actor-A moves (!!actor-B stays put)
+Slide 3 → Slide 4:  !!actor-B moves (!!actor-A stays put or has already exited)
 ```
 
-**After cloning**: New slide inherits all shapes with identical indices
-
-```bash
-officecli add deck.pptx '/' --from '/slide[1]'  # S2 now has shape[1-N]
-```
-
-**After adding**: New shapes get the next available index
-
-```bash
-# If slide has 9 shapes, next add becomes shape[10]
-```
-
-**After modifying**: Index stays the same
-
-```bash
-officecli set deck.pptx '/slide[2]/shape[3]' --prop x=20cm  # Still shape[3]
-```
-
-### Pattern for Build Scripts
-
-```bash
-# Slide 1: 6 actors + 2 content = 8 shapes total
-# Slide 2: Clone (8) → Ghost content (shape[7-8]) → Add new (shape[9+])
-# Slide 3: Clone (10 shapes) → Ghost content (shape[9-10]) → Add new (shape[11+])
-```
-
-**Formula**: Next slide's first new shape index = Previous slide's total shape count + 1
-
-**Debugging**: Use `officecli get <file> '/slide[N]' --depth 1` to inspect actual indices.
-
----
-
-## 8) Morph Animation Essentials
-
-### Minimum Requirements
-
-1. **Slides 2+ must have `transition=morph`**
-2. **Scene actors must have identical names across slides** (`!!` prefix)
-3. **Previous content must be ghosted** (`x=36cm`) before adding new content
-4. **Adjacent slides should have different spatial layouts**
-
-### Creating Motion
-
-Change at least 3 scene actors between adjacent slides:
-
-- Move positions (x, y)
-- Resize (width, height)
-- Rotate (rotation)
-- Shift colors (fill, opacity)
-
-**Goal**: Create a sense of movement and transformation, not just fade in/out.
+This requires slide 3 as an explicit intermediate keyframe — never try to fake staggering within a single morph pair.
 
 ### Entrance Effects
 
 - Morph handles shape transitions automatically — entrance animations are usually unnecessary
 - If an entrance is needed, use the `with` trigger so it plays simultaneously with morph: `animation=fade-entrance-300-with`
-
-### Animation Format (if needed)
-
-```
-Format: EFFECT[-DIRECTION][-DURATION][-TRIGGER][-delay=N][-easein=N][-easeout=N]
+- Animation format: `EFFECT[-DIRECTION][-DURATION][-TRIGGER][-delay=N][-easein=N][-easeout=N]`
 
 ---
 
@@ -325,8 +282,3 @@ Format: EFFECT[-DIRECTION][-DURATION][-TRIGGER][-delay=N][-easein=N][-easeout=N]
 - Let the content guide the design
 
 **The best presentations come from understanding principles, then applying them creatively to your specific topic.**
-
----
-
-Good design! 🎨
-```

@@ -16,36 +16,35 @@ metadata:
 
 Generate visually compelling PPTs with smooth Morph animations.
 
-**Philosophy**: Trust yourself to learn through practice. This skill provides workflow and references — you bring creativity and judgment.
-
----
-
 ## Use when
 
-- User wants to generate a `.pptx`
-- User uploads or provides a `.pptx` file and requests modifications
-- User wants to add Morph animations to an existing PPT
+Activate this skill when the user's intent matches any of the following:
 
----
+| Intent | Example expressions |
+|--------|-------------------|
+| Create a new PPT / 从零生成 PPT | "make me a pptx", "帮我做个PPT", "生成一个演示文稿", "写一份汇报PPT", "做个幻灯片" |
+| Modify an existing PPT / 编辑已有文件 | "改一下这个PPT", "update this pptx", "把第三页的标题换掉", "调整一下配色" |
+| Add animations / 加动画效果 | "加点动画", "add morph transitions", "让PPT动起来", "加过渡效果" |
+| Content → PPT conversion / 内容转PPT | "把这篇文章做成PPT", "用这个大纲生成演示文稿", "根据这个内容出一套slides" |
+| PPT review & polish / 优化美化 | "帮我美化一下", "排版太丑了", "polish this deck", "让它更专业" |
+
+**Intent parsing rules:**
+
+1. **File extension signal**: Any mention of `.pptx`, `PPT`, `slides`, `deck`, `演示文稿`, `幻灯片` strongly indicates this skill
+2. **Action verbs**: 做/写/生成/创建/制作/出 + presentation-related noun → create intent
+3. **Modification verbs**: 改/换/调/修/更新/优化/美化 + existing file → edit intent
+4. **Implicit intent**: "帮我汇报一下XX" or "我要在周五展示XX" implies PPT creation when no other format is specified — ask to confirm
+5. **Negative signals**: Do NOT activate for pure document/Word requests ("写个文档"), spreadsheet requests ("做个表格"), or image-only requests ("画张图")
 
 ## What is Morph?
 
-PowerPoint's Morph transition creates smooth animations by matching shapes with **identical names** across adjacent slides.
+PowerPoint Morph creates smooth animations by matching shapes with **identical names** across adjacent slides. Three core concepts:
 
-```
-Slide 1: shape name="!!circle" x=5cm  width=8cm
-Slide 2: shape name="!!circle" x=20cm width=12cm
-         ↓
-Result: Circle smoothly moves and grows
-```
+- **Scene Actors** -- persistent shapes with `!!` prefix that evolve across slides (move, resize, recolor)
+- **Ghosting** -- move shapes to `x=36cm` (off-screen) instead of deleting them
+- **Content** -- per-slide text/data named `#sN-*`; previous content is auto-ghosted on clone
 
-**Three core concepts:**
-
-- **Scene Actors**: Persistent shapes with `!!` prefix that evolve across slides
-- **Ghosting**: Move shapes to `x=36cm` (off-screen) instead of deleting
-- **Content**: Text/data added fresh per slide, previous content ghosted first
-
-For details: `{baseDir}/reference/pptx-design.md`
+For deeper design principles: `{baseDir}/reference/pptx-design.md`.
 
 ---
 
@@ -53,497 +52,169 @@ For details: `{baseDir}/reference/pptx-design.md`
 
 ### Phase 1: Understand the Topic
 
-Ask only when topic is unclear, otherwise proceed directly.
-
----
-
-> **⚠️ CRITICAL KNOWN ISSUE: Name-based path selectors break after `transition=morph` is set**
-> After calling `officecli set '/slide[N]' --prop transition=morph`, paths like `/slide[N]/!!my-shape` return 'Element not found'. The CLI auto-prepends `!!` to shape names when morph is applied, which invalidates name-based lookups.
->
-> **Workaround:** Always use shape INDEX paths instead of name paths when accessing shapes on morph slides:
-> ```bash
-> # WRONG (after transition=morph set):
-> officecli get deck.pptx '/slide[3]/!!my-circle' --depth 1
->
-> # CORRECT:
-> officecli get deck.pptx '/slide[3]' --depth 1  # first list all shapes to find index
-> officecli get deck.pptx '/slide[3]/shape[2]' --depth 1
-> ```
-> The build.py template should use `inspect()` + index-based access throughout.
-
----
+Ask only when the topic is unclear; otherwise proceed directly.
 
 ### Phase 2: Plan the Story
 
 **FIRST: Read the thinking framework**
 
-→ Open and read `{baseDir}/reference/decision-rules.md` — it provides the structured approach for planning compelling presentations (Pyramid Principle, SCQA, page types).
+→ Open and read `{baseDir}/reference/decision-rules.md` -- it provides the structured approach for planning compelling presentations (Pyramid Principle, SCQA, page types).
 
 **Then create `brief.md`** with:
 
 - **Context**: Topic, audience, purpose, narrative structure (SCQA or Problem-Solution)
 - **Outline**: Conclusion first + slide-by-slide summary
-- **Page briefs**: For each slide:
-  - Objective (what should this slide achieve?)
-  - Content (specific text/data to include)
-  - Page type (title | evidence | transition | conclusion)
-  - Design notes (visual emphasis, scene actor behavior)
+- **Page briefs**: For each slide -- objective, content, page type (title | evidence | transition | conclusion), design notes
 
 **Morph Pair Scene Planning (REQUIRED before building)**
 
-For every morph transition, plan the slide pair BEFORE writing any code. Use a table like this in `brief.md`:
+For every morph transition, plan the slide pair BEFORE writing any code:
 
 | Pair | Slide A (start) | Slide B (end) | Visual narrative purpose |
 |------|-----------------|---------------|--------------------------|
 | 1→2  | Ring centered, title appears | Ring shifts right, subtitle revealed | Attention → context |
 | 2→3  | Feature box large | Feature box small, metric card grows | Zoom out → detail |
-| 3→4  | Metric card exits (ghost), new actor enters | Actor repositions | Section transition |
 
 **Rules for the planning table:**
-- Determine ALL `!!` shape names during planning — the same name must be used identically across the slide pair
+- Determine ALL `!!` shape names during planning -- the same name must be used identically across the slide pair
 - For each `!!` shape, decide its role: `!!scene-{desc}` (background/decoration) or `!!actor-{desc}` (content/foreground)
 - Mark which shapes need to be ghosted at each section transition
-- Do NOT start building until the naming table is complete — renaming shapes mid-build causes ghost accumulation bugs
+- Do NOT start building until the naming table is complete -- renaming shapes mid-build causes ghost accumulation bugs
 
 ---
 
 ### Phase 3: Design and Generate
 
-**Before generation starts, always remind the user:**
+**Single-script execution (MANDATORY).** Write the entire deck build as ONE complete `build.py` and run it with a single `python3 build.py`. The script must be self-contained: create → open → build all slides with `checkpoint()` saves → close → `final-check`.
 
-- The PPT file may be rewritten multiple times during build.
-- Do **not** open the PPT file during generation, to avoid file lock / write conflicts.
-- Use clear, direct language and make this a concrete warning, not an optional suggestion.
+→ Copy and adapt `{baseDir}/reference/build-template.py` as your starter template.
 
-**FIRST: Install `officecli` if needed**
+- Do NOT issue individual `officecli` commands as separate tool calls -- per-call scheduling overhead compounds into timeout risk.
+- **On failure, RE-RUN the same script -- do NOT rewrite it.** `checkpoint()` keeps completed slides on disk; a re-run is idempotent. Only edit a line when you can point to a specific error on it.
+- **No alternative approaches.** One Python script using the template -- run, diagnose, fix that one line.
 
-officecli 已内置，无需安装。
+**Exec timeout contract.** `exec` defaults to **1800s (30 min)** -- plenty. Do NOT pass a shorter `timeout`; passing `timeout: 120` SIGTERMs the build mid-way. After `yieldMs` (~10s) exec returns `"Command still running"` -- poll via `process({ "action": "poll", "sessionId": "<session>", "timeout": 60000 })` until exit.
 
-**IMPORTANT: Use morph-helpers for reliable workflow**
+**Before generation, warn the user:** The PPT file may be rewritten multiple times during build. Do **not** open the PPT during generation -- file lock / write conflict risk.
 
-Generate a Python script that uses `{baseDir}/reference/morph-helpers.py` — this provides helper functions with built-in verification. Python works cross-platform (Mac / Windows / Linux).
+**officecli is already bundled.** No install step needed.
 
-**Shape naming rules (for best results)**:
+**Use `{baseDir}/reference/morph-helpers.py`** -- it provides cross-platform helpers with built-in verification (auto-ghost on clone, section clearing, morph verification).
 
-Use these naming patterns for clear code and reliable verification:
+**Shape naming rules (load-bearing -- auto-ghost depends on them).**
 
-**Namespace prefixes for `!!` shapes — prevent scene collision:**
+Every shape falls into exactly one of these buckets:
 
-All persistent `!!` shapes MUST use one of these two prefixes to avoid morph engine confusion when multiple morph pairs share similar shape names:
+| Prefix | Role | Lifecycle |
+|--------|------|-----------|
+| `!!scene-{desc}` | Background / decoration (e.g. `!!scene-ring`, `!!scene-bg-gradient`) | Persist entire deck. Move for motion, rarely ghost. |
+| `!!actor-{desc}` | Content / foreground shapes (e.g. `!!actor-feature-box`, `!!actor-metric`) | Ghost at section boundaries via `helper("ghost-section", ...)`. |
+| `#sN-{desc}` | Per-slide content (title, body, card). `N` = current slide number. | Auto-ghosted by `helper("clone", ...)` on the next slide. |
 
-- `!!scene-{desc}` — Background / decoration shapes (e.g., `!!scene-ring`, `!!scene-bg-gradient`, `!!scene-grid-line`)
-  - These persist across the entire deck; move them for motion but rarely ghost them
-- `!!actor-{desc}` — Content / foreground shapes (e.g., `!!actor-feature-box`, `!!actor-metric`, `!!actor-label`)
-  - These carry slide-specific content; ghost them at section boundaries
+**Hard rules:**
 
-**Rule: `!!scene-*` and `!!actor-*` names must NEVER be identical.**
-Bad: `!!scene-card` and `!!actor-card` in the same deck — morph engine will confuse them.
-Good: `!!scene-card-bg` and `!!actor-card-content` — unambiguous.
+1. **Every per-slide content shape MUST be named `#sN-<desc>`** with `N` = the slide number it first appears on. Without this prefix, `helper("clone", ...)` cannot find it to auto-ghost, and it will leak onto the next slide as visible residue. This is the #1 cause of "slide A content still shows on slide B."
+2. **`!!scene-*` and `!!actor-*` names must NEVER collide.** Bad: `!!scene-card` + `!!actor-card`. Good: `!!scene-card-bg` + `!!actor-card-content`.
+3. **Every `!!actor-*` shape needs a planned exit** -- either a permanent ghost to `x=36cm` on a specific slide, or section-wide clearing via `helper("ghost-section", ...)`. Plan exits in the Phase 2 morph-pair table.
+4. **Ghost accumulation is silent.** A `!!actor-*` introduced on slide 3 remains visible on slides 4, 5, 6... until explicitly moved off-screen. Screenshot verification in Phase 4 is required to catch the long tail.
 
-1. **Scene actors** (persistent across slides):
-   - Format: `name=!!scene-{desc}` or `name=!!actor-{desc}`
-   - Examples: `name=!!scene-ring`, `name=!!scene-dot`, `name=!!actor-feature-box`
-   - Behavior: Modify position/size/color across slides — do NOT delete
-   - **Exit strategy — two trigger scenarios**:
-     1. **Permanent exit** (shape no longer needed): Move it off-screen to `x=36cm`.
-        Morph will smoothly slide it out of view.
-        Example: `officecli set deck.pptx '/slide[N]/!!FeatureBox' --prop x=36cm --prop y=14cm`
-        To bring it back on a later slide, simply move it back to a visible position.
-     2. **Scene transition exit** (entering a new topic section): When the presentation
-        moves into a new thematic section, ALL `!!` content shapes from the previous
-        section must also be ghosted to `x=36cm`. Only decoration actors that persist
-        throughout the entire deck (e.g., a background ring) should remain visible.
-        ```bash
-        # Entering new section: ghost all previous section's !! content shapes
-        # First, check what !! shapes are on the current slide
-        officecli get deck.pptx '/slide[N]' --depth 1
-        # Then ghost each one
-        officecli set deck.pptx '/slide[N]/!!FeatureBox'    --prop x=36cm
-        officecli set deck.pptx '/slide[N]/!!MetricCard'    --prop x=36cm
-        officecli set deck.pptx '/slide[N]/!!ChannelLabel'  --prop x=36cm
-        ```
-        **Rule**: Each new section's first slide should be clean — only current-section
-        actors visible; no leftover shapes from the previous section.
+**Helper command cheat sheet:**
 
-2. **Content shapes** (unique per slide):
-   - Format: `name=#sN-description`
-   - Pattern: `#` + `s` + slide_number + `-` + description
-   - Examples: `name=#s1-title`, `name=#s2-card1`, `name=#s3-stats`
-   - Behavior: Ghost (x=36cm) when moving to next slide
+| When | Call | What it does |
+|------|------|--------------|
+| Every new slide after slide 1 | `helper("clone", OUTPUT, N, N+1)` | Clone + set `transition=morph` + auto-ghost every `#sN-*` by name |
+| First slide of a new section | add `helper("ghost-section", OUTPUT, N+1)` right after `clone` | Ghost every `!!actor-*` to `x=36cm`; leaves `!!scene-*` alone |
+| One-off scene-actor exit mid-section | `helper("ghost", OUTPUT, N, idx)` | Ghost specific shape indices -- escape hatch, rarely needed |
+| Per-slide sanity check | `helper("verify", OUTPUT, N)` | Check transition + unghosted content + duplicate text across adjacent slides |
+| End of build | `helper("final-check", OUTPUT)` | Run `verify` on every slide from 2..N |
 
-**Ghost accumulation — critical behavior to understand:**
+**Do NOT call `helper("ghost", ...)` for `#sN-*` content.** `clone` already handles that by name.
 
-> Once a `!!`-prefixed shape appears on any slide, it persists and remains visible on **every subsequent morph slide** unless explicitly moved off-screen.
-
-This means:
-- A `!!actor-feature-box` introduced on slide 3 will still be visible on slides 4, 5, 6, 7 ... unless you ghost it
-- Ghost accumulation builds silently — visual clutter compounds across the deck
-- The `morph_final_check` tool does NOT catch `!!` shapes that linger in the visible area; only screenshot verification can detect this
-
-**Ghost cleanup pattern** — when a `!!actor-*` shape is no longer needed, exit it explicitly:
-
-```bash
-# Pattern: after the last slide where !!actor-feature-box is needed,
-# on the NEXT slide's setup, move it off-screen BEFORE adding new content
-officecli set deck.pptx '/slide[N]/shape[X]' --prop x=36cm --prop y=10cm
-
-# If the shape served a 2-slide story arc (slides 3→4), ghost it on slide 5:
-helper("ghost", OUTPUT, 5, <shape_index_of_actor_feature_box>)
-```
-
-**Rule**: For every `!!actor-*` shape, its "ghost slide" (where it exits) must be planned in the Phase 2 morph pair table. Do not leave any `!!actor-*` shape without a planned exit.
-
-**Why this naming matters:**
-
-- ✅ **Better detection**: Primary method (`#sN-` pattern matching) is fastest and most accurate
-- ✅ **Readable code**: Anyone can tell `#s1-title` is slide 1's title
-- ✅ **Easy debugging**: `grep "#s1-"` finds all slide 1 content quickly
-- ⚠️ **Backup detection exists**: Even without `#` prefix, duplicate text detection will catch most issues (but has edge cases)
-
-**Bottom line**: Follow these patterns in your code examples, and verification will work smoothly.
-
-**Then proceed with pattern**:
-
-```python
-#!/usr/bin/env python3
-import subprocess, sys, os
-
-def run(*args):
-    result = subprocess.run(list(args))
-    if result.returncode != 0:
-        sys.exit(result.returncode)
-
-# Load helper functions (provides morph_clone_slide, morph_ghost_content, morph_verify_slide)
-SKILL_DIR = "{baseDir}"
-def helper(*args):
-    run(sys.executable, os.path.join(SKILL_DIR, "reference", "morph-helpers.py"), *[str(a) for a in args])
-
-OUTPUT = "deck.pptx"
-run("officecli", "create", OUTPUT)
-run("officecli", "open", OUTPUT)   # Resident mode — all commands run in memory
-
-# ============ SLIDE 1 ============
-print("Building Slide 1...")
-run("officecli", "add", OUTPUT, "/", "--type", "slide")
-run("officecli", "set", OUTPUT, "/slide[1]", "--prop", "background=1A1A2E")
-
-# Scene actors (!!scene-* prefix = decoration, persists entire deck)
-run("officecli", "add", OUTPUT, "/slide[1]", "--type", "shape",
-    "--prop", "name=!!scene-ring", "--prop", "preset=ellipse", "--prop", "fill=E94560",
-    "--prop", "opacity=0.3", "--prop", "x=5cm", "--prop", "y=3cm", "--prop", "width=8cm", "--prop", "height=8cm")
-run("officecli", "add", OUTPUT, "/slide[1]", "--type", "shape",
-    "--prop", "name=!!scene-dot", "--prop", "preset=ellipse", "--prop", "fill=0F3460",
-    "--prop", "x=28cm", "--prop", "y=15cm", "--prop", "width=1cm", "--prop", "height=1cm")
-
-# Content shapes (#s1- prefix, will be ghosted on next slide)
-# Use generous width (25-30cm for titles) to avoid text wrapping!
-run("officecli", "add", OUTPUT, "/slide[1]", "--type", "shape",
-    "--prop", "name=#s1-title", "--prop", "text=Main Title",
-    "--prop", "font=Arial Black", "--prop", "size=64", "--prop", "bold=true",
-    "--prop", "color=FFFFFF", "--prop", "x=10cm", "--prop", "y=8cm",
-    "--prop", "width=28cm", "--prop", "height=3cm", "--prop", "fill=none")
-
-# ============ SLIDE 2 ============
-print("Building Slide 2...")
-
-# Use helper: automatically clone + set transition + list shapes + verify
-helper("clone", OUTPUT, 1, 2)
-
-# Use helper: ghost all content from slide 1 (shape index 3 = #s1-title)
-helper("ghost", OUTPUT, 2, 3)
-
-# Add new content for slide 2
-run("officecli", "add", OUTPUT, "/slide[2]", "--type", "shape",
-    "--prop", "name=#s2-title", "--prop", "text=Second Slide",
-    "--prop", "font=Arial Black", "--prop", "size=64", "--prop", "bold=true",
-    "--prop", "color=FFFFFF", "--prop", "x=10cm", "--prop", "y=8cm",
-    "--prop", "width=28cm", "--prop", "height=3cm", "--prop", "fill=none")
-
-# Adjust scene actors to create motion
-# SPATIAL RULE: scene actors must stay in safe zones (see Shape naming rules above)
-run("officecli", "set", OUTPUT, "/slide[2]/shape[1]", "--prop", "x=15cm", "--prop", "y=5cm")  # !!scene-ring moves
-run("officecli", "set", OUTPUT, "/slide[2]/shape[2]", "--prop", "x=5cm",  "--prop", "y=10cm") # !!scene-dot moves
-
-# Use helper: verify slide is correct (transition + ghosting)
-helper("verify", OUTPUT, 2)
-
-# ============ SLIDE 3 ============
-print("Building Slide 3...")
-
-# ============ SECTION TRANSITION: Ghost ALL !! content shapes from previous section ============
-# Before adding new section content, ghost every !! shape that belongs to the previous section.
-# Run: officecli get deck.pptx '/slide[N]' --depth 1  to list all shapes and confirm indices.
-# Then ghost each previous-section actor:
-# helper("ghost", OUTPUT, N, shape_index_1)
-# helper("ghost", OUTPUT, N, shape_index_2)
-# ... repeat for ALL !! shapes that were part of the previous section
-# VERIFY: After building, open screenshot of this slide and confirm zero overlap with previous section content.
-
-helper("clone", OUTPUT, 2, 3)
-helper("ghost", OUTPUT, 3, 4)  # Ghost #s2-title (now at index 4)
-
-run("officecli", "add", OUTPUT, "/slide[3]", "--type", "shape",
-    "--prop", "name=#s3-title", "--prop", "text=Third Slide",
-    "--prop", "font=Arial Black", "--prop", "size=64", "--prop", "bold=true",
-    "--prop", "color=FFFFFF", "--prop", "x=10cm", "--prop", "y=8cm",
-    "--prop", "width=28cm", "--prop", "height=3cm", "--prop", "fill=none")
-
-run("officecli", "set", OUTPUT, "/slide[3]/shape[1]", "--prop", "x=25cm", "--prop", "y=8cm")
-run("officecli", "set", OUTPUT, "/slide[3]/shape[2]", "--prop", "x=10cm", "--prop", "y=5cm")
-
-helper("verify", OUTPUT, 3)
-
-# ============ FINAL VERIFICATION ============
-run("officecli", "close", OUTPUT)  # Save from memory to disk
-print()
-print("=========================================")
-helper("final-check", OUTPUT)
-
-print()
-print("Build complete! Open", OUTPUT, "in PowerPoint to see morph animations.")
-```
-
-**Key advantages of using helpers:**
-
-- ✅ **Fewer steps**: `morph_clone_slide` = clone + transition + list + verify (4 steps → 1 function)
-- ✅ **Instant feedback**: Each helper shows ✅ or ❌ immediately
-- ✅ **Can't forget**: Transition and verification are automatic
-- ✅ **Clear errors**: If something is wrong, you'll know exactly what and where
-- ✅ **Dual detection**: Catches unghosted content by both naming pattern AND duplicate text detection
-  - Even if you forget `#` prefix, duplicate detection will still catch the problem!
-
-**Scene Actor Spatial Rule (CRITICAL):**
-
-Scene actors must stay in **safe zones** at all times — corners and edges only.
-**DO NOT** let scene actors pass through or rest in the content area (`x=2~28cm, y=3~16cm`).
+**Scene Actor Spatial Rule (CRITICAL).** `!!scene-*` shapes must stay in **safe zones** -- corners and edges only. They must never cross or rest in the content area (`x=2~28cm, y=3~16cm`).
 
 ```
 Safe zones:
-  Top-right corner:   x ≥ 24cm, y ≤ 6cm
-  Bottom-right:       x ≥ 24cm, y ≥ 12cm
-  Bottom-left:        x ≤ 2cm,  y ≥ 12cm
-  Off-screen (right): x ≥ 32cm  (fully out of view — use for ghost position)
+  Top-right:      x >= 24cm, y <= 6cm
+  Bottom-right:   x >= 24cm, y >= 12cm
+  Bottom-left:    x <= 2cm,  y >= 12cm
+  Off-screen:     x >= 32cm  (use for ghost position)
 ```
 
-Before planning any scene actor path, inspect existing shape coordinates:
+Before placing a scene actor, run `officecli get deck.pptx '/slide[N]' --depth 1 --json` and confirm the target box does not overlap any content shape.
 
-```bash
-# List all shapes on a slide (check for coordinate conflicts before placing actors)
-officecli get deck.pptx '/slide[N]' --depth 1 --json
-```
-
-Confirm the actor's target position does **not** overlap any content shape's bounding box
-(`x` to `x+width`, `y` to `y+height`).
-
-**Essential rules:**
-
-- **Naming**: Scene actors use `!!` prefix, content uses `#sN-` prefix (best practice for verification and readability)
-- **Transition**: Every slide after the first MUST have `transition=morph` (without this, no animation!)
-- **Ghosting**: Before adding new slide content, ghost ALL previous content shapes to `x=36cm` (don't delete)
-- **Motion**: Adjust scene actor (`!!-*`) positions between slides for animation
-- **Variety**: Create spatial variety between adjacent slides
-- **Text Width**: Use generous widths to prevent text wrapping:
-  - Centered titles (64-72pt): **28-30cm width**
-  - Centered subtitles (28-40pt): **25-28cm width**
-  - Left-aligned titles: **20-25cm width**
-  - Body text: 8-12cm (single-column), 16-18cm (double-column)
-  - **When in doubt, make it wider!** See `{baseDir}/reference/pptx-design.md` for details
-- **Text size rule — 16pt minimum scope**:
-  The 16pt minimum applies to ALL text that conveys primary content. Exceptions allowed for: chart axis labels (≤12pt OK), section eyebrow/kicker labels (≤14pt OK if ≤5 words), decoration shapes with no narrative content. Each exception must be intentional — descriptive body text at 13pt is NOT exempt.
-
-**Choreography — timing and motion principles:**
-
-Understanding how morph animates multiple shapes helps you plan intentional motion:
-
-| Animation type | How to achieve it |
-|----------------|-------------------|
-| Simple move | Same shape on slide A and B, same size, different `x`/`y` — morph interpolates position |
-| Scale transform | Same shape on slide A and B, different `width`/`height` — morph interpolates size and position |
-| Move + scale | Different `x`, `y`, `width`, `height` simultaneously — morph handles all dimensions at once |
-| Color shift | Same shape, different `fill` color — morph cross-fades the fill |
-| Enter (fade in) | Shape exists only on slide B (no counterpart on slide A) — morph fades it in |
-| Exit (fade out) | Shape only on slide A (no counterpart on slide B) — morph fades it out |
-
-**Multi-shape timing rule:**
-- All `!!` shapes in the same morph pair animate **simultaneously** — there is no way to stagger their start times within a single pair
-- If you need shape A to move before shape B, you MUST split the transition into two morph pairs (i.e., add an intermediate slide between them)
-
-**Staggered timing pattern** (two shapes, offset timing):
-
-```
-Slide 2 → Slide 3:  !!actor-A moves (!!actor-B stays put)
-Slide 3 → Slide 4:  !!actor-B moves (!!actor-A stays put or has already exited)
-```
-
-This requires slide 3 as an explicit intermediate keyframe — never try to fake staggering within a single morph pair.
-
-**Known CLI behaviors:**
-
-- **`!!` prefix auto-added after `transition=morph`**: After running `set --prop transition=morph`
-  on a slide, the CLI automatically prepends `!!` to all shape names on that slide
-  (e.g., `#s1-title` → `!!#s1-title`). This is expected behavior.
-  `morph-helpers.py` handles this correctly — its verification logic uses substring matching
-  and is not affected.
-
-  > **⚠️ CRITICAL: Name-based path selectors break after `transition=morph` is set**
-  > After calling `officecli set '/slide[N]' --prop transition=morph`, paths like `/slide[N]/!!my-shape` return 'Element not found'. The CLI auto-prepends `!!` to shape names when morph is applied, which invalidates name-based lookups.
-  >
-  > **Workaround:** Always use shape INDEX paths instead of name paths when accessing shapes on morph slides:
-  >
-  > ```bash
-  > # WRONG (after transition=morph set):
-  > officecli get deck.pptx '/slide[3]/!!my-circle' --depth 1
-  >
-  > # CORRECT:
-  > officecli get deck.pptx '/slide[3]' --depth 1  # first list all shapes to find index
-  > officecli get deck.pptx '/slide[3]/shape[2]' --depth 1
-  > ```
-  >
-  > The build.py template should use `inspect()` + index-based access throughout.
-  >
-  > **Pattern recommendation**: Pre-plan all shape indices in a comment block at the top of your build script before setting morph. This prevents index tracking errors as the slide's shape count grows.
-
-- **Shape index tracking**: After each batch of shape additions, run
-  `officecli get deck.pptx '/slide[N]' --depth 1` to confirm the current slide's
-  shape list and indices. This prevents off-by-one errors when manually computing
-  index values for subsequent ghost/set operations.
+**Typography:** 16pt minimum for primary content. Centered titles (64-72pt): use 28-30cm width. Spatial variety -- adjacent slides should differ in layout. Full guidelines in `{baseDir}/reference/pptx-design.md`.
 
 **Design resources:**
 
-- `{baseDir}/reference/pptx-design.md` — Design principles (Canvas, Fonts, Colors, Scene Actors, Page Types, Style References)
-- `{baseDir}/reference/officecli-pptx-min.md` — Command syntax
-- `{baseDir}/reference/styles/<name>/` — Visual style examples (optional inspiration, browse by use case in `styles/INDEX.md`)
+- `{baseDir}/reference/pptx-design.md` -- Design principles (Canvas, Fonts, Colors, Scene Actors, Page Types, Choreography)
+- `{baseDir}/reference/officecli-pptx-min.md` -- Command syntax
+- `{baseDir}/reference/styles/INDEX.md` -- Visual style examples organized by use case
 
 ---
 
 ### Phase 4: Visual Verification + Deliver
 
-## Phase 4 视觉验证（REQUIRED — final-check 通过后不可跳过）
+Visual verification is REQUIRED -- `final-check` passing is necessary but not sufficient.
 
-### 4A. morph_final_check.py（CLI 数量验证）
-
-If you used `morph-helpers.py`, the build script calls `helper("verify", ...)` and `helper("final-check", ...)` automatically. Also validate the final structure:
+**4A. Structural check (CLI).** The build script already calls `helper("verify", ...)` per slide and `helper("final-check", ...)` at the end. Also run:
 
 ```bash
 officecli validate <file>.pptx
 officecli view <file>.pptx outline
 ```
 
-### 4B. 截图目视验证（必须执行）
+**4B. Screenshot check (MANDATORY).** `final-check` covers `#sN-` ghosting and cross-slide duplicate detection, but **cannot** detect:
+- `!!scene-*` shapes that have drifted into the content area
+- Stale `!!actor-*` shapes that survived at a visible `x`
+- Scene-actor positions that don't change between adjacent slides (static "animation")
 
-**final-check 通过不等于视觉正确。** `morph_final_check` 只验证 `#sN-` 前缀 shapes 的 ghost 状态（x=36cm 检查），它**无法检测**：
-- `!!` shapes 在场景切换后仍停留在可视区域（x < 33.87cm）——这类问题会通过 final-check 但产生视觉叠加
-- 相邻幻灯片间 scene actor 位置/尺寸未发生变化（动画静止）
-
-必须对每张 slide 截图验证：
+Capture one image per slide and eyeball it:
 
 ```bash
-# 方案1: officecli view（pptx 有 SVG 预览）
+# Option 1: SVG preview
 officecli view deck.pptx svg --output-dir screenshots/
 
-# 方案2: LibreOffice PDF → Chrome PNG（更准确）
+# Option 2: LibreOffice -> PDF -> screenshots (higher fidelity)
 libreoffice --headless --convert-to pdf deck.pptx
-# 然后用 Chrome DevTools MCP 截图每页
 ```
 
-逐 slide 检查清单：
-- [ ] 每张 slide 中，前一节的 `!!` content shapes 均不可见（x >= 33.87cm 已移出视野）
-- [ ] 每个场景切换的第一张 slide（新章节起始）：前一节所有 `!!` shapes 已 ghost
-- [ ] 最后一个场景的收尾 slide：整洁，无残留前场景内容
-- [ ] 装饰性 `!!` shapes（背景圆、角标等）在正确位置
+Per-slide checklist:
+- [ ] No previous section's `!!actor-*` visible (should all be at `x >= 33.87cm`).
+- [ ] On each section's opening slide, every prior-section actor is cleared.
+- [ ] Final slide is clean -- no leftover shapes from earlier sections.
+- [ ] Decorative `!!scene-*` shapes are in their intended positions.
 
-**If verification fails**, see Troubleshooting section below.
+If verification fails, see `{baseDir}/reference/troubleshooting.md`.
 
 ---
 
 **Outputs** (3 files):
 
 1. `<topic>.pptx`
-2. Build script (complete, re-runnable — bash/python/powershell/etc.)
-3. `brief.md` — **MUST be a standalone file** (not embedded inside test-report.md or any other file).
+2. Build script (complete, re-runnable)
+3. `brief.md` -- **MUST be a standalone file** (not embedded inside test-report.md or any other file).
    Content: slide-by-slide plan, content per slide, morph design decisions, ghost strategy per transition.
 
 **Final delivery message requirements:**
 
 - Tell the user the deck with polished Morph animations is ready.
 - Explicitly recommend opening the generated PPT now to preview the motion effects.
-- Use affirmative wording (e.g., "ready now", "open it now to preview the animation quality").
-- **Return the `brief.md` file path** so the user can preview the slide plan and design decisions. Example: "Design brief available at: `/path/to/brief.md`".
-
----
-
-### Troubleshooting
-
-**If `morph_verify_slide` or `morph_final_check` reports issues:**
-
-1. **Missing transition**:
-
-   ```bash
-   # Check which slides are missing transition
-   officecli get <file>.pptx '/slide[2]' --json | grep transition
-   officecli get <file>.pptx '/slide[3]' --json | grep transition
-   # Expected: "transition": "morph"
-
-   # Fix:
-   officecli set <file>.pptx '/slide[2]' --prop transition=morph
-   ```
-
-2. **Unghosted content**:
-
-   ```python
-   # Find unghosted shapes manually
-   import subprocess
-   for slide in range(2, 7):
-       print(f"Slide {slide}:")
-       subprocess.run(["officecli", "get", "<file>.pptx", f"/slide[{slide}]", "--depth", "1"])
-   # If you see shapes like "#s1-title" on slide 2 (not at x=36cm), they should be ghosted
-
-   # Fix (run in terminal):
-   # officecli set <file>.pptx /slide[N]/shape[X] --prop x=36cm
-   ```
-
-3. **Visual issues**:
-   ```bash
-   # Open HTML preview to debug layout
-   officecli view <file>.pptx html
-   ```
-
-**Note**: `!!scene-*` shapes (decoration/background actors) should appear on all slides — that's normal and expected. However, `!!actor-*` shapes (content actors) MUST be ghosted at section boundaries to prevent ghost accumulation. Only `#sN-` prefix shapes are checked by `morph_final_check`; `!!actor-*` shapes require screenshot verification to confirm they are off-screen after their section ends.
+- **Return the `brief.md` file path** so the user can preview the slide plan and design decisions.
 
 ---
 
 ### Phase 5: Iterate
 
-Ask user for feedback, support quick adjustments.
+Ask user for feedback, support quick adjustments. For post-build edits: `{baseDir}/reference/troubleshooting.md`.
 
 ---
 
 ## References
 
-- `{baseDir}/reference/decision-rules.md` — Planning logic, Pyramid Principle
-- `{baseDir}/reference/pptx-design.md` — Design principles (Canvas, Fonts, Colors, Scene Actors, Page Types)
-- `{baseDir}/reference/officecli-pptx-min.md` — Tool syntax
-- `{baseDir}/reference/styles/INDEX.md` — Visual style examples organized by use case
-
----
-
-## Adjustments After Creation
-
-When the user requests changes after the deck is built:
-
-| Request | Command |
-|---------|---------|
-| Swap two slides | `officecli swap deck.pptx '/slide[2]' '/slide[4]'` |
-| Move a slide after another | `officecli move deck.pptx '/slide[5]' --after '/slide[2]'` |
-| Edit shape text | `officecli set deck.pptx '/slide[N]/shape[@name=!! ShapeName]' --prop text="..."` |
-| Change color / style | `officecli set deck.pptx '/slide[N]/shape[@name=!! ShapeName]' --prop fill=FF0000` |
-| Remove an element | `officecli remove deck.pptx '/slide[N]/shape[@name=!! ShapeName]'` |
-| Find & replace text | `officecli set deck.pptx / --prop find=OldText --prop replace=NewText` |
-
-> **Morph caution:** Morph transitions rely on matching `!!`-prefixed shape names across consecutive slides. After swapping or moving slides, verify that morph pairs (same `!!` name on adjacent slides) are still correctly aligned. Use `officecli get deck.pptx '/slide[N]' --depth 1` to check shape names.
-
----
-
-**First time?** Read "Understanding Morph" above, skim one style reference for inspiration, then generate. Always use `morph-helpers.py` workflow. You'll learn by doing.
-
-**Trust yourself.** You have vision, design sense, and the ability to iterate. These tools enable you — your creativity makes it excellent.
+- `{baseDir}/reference/decision-rules.md` -- Planning logic, Pyramid Principle
+- `{baseDir}/reference/build-template.py` -- Build script starter template
+- `{baseDir}/reference/pptx-design.md` -- Design principles (Canvas, Fonts, Colors, Scene Actors, Page Types, Choreography)
+- `{baseDir}/reference/officecli-pptx-min.md` -- Tool syntax
+- `{baseDir}/reference/quality-gates.md` -- Content and layout quality checks
+- `{baseDir}/reference/troubleshooting.md` -- Common issues and post-build adjustments
+- `{baseDir}/reference/styles/INDEX.md` -- Visual style examples organized by use case
