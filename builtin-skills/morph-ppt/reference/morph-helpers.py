@@ -4,13 +4,17 @@ Morph PPT Helper Functions
 Cross-platform replacement for morph-helpers.sh (Mac / Windows / Linux)
 
 Usage (CLI):
-  python morph-helpers.py clone <deck> <from_slide> <to_slide>
-  python morph-helpers.py ghost <deck> <slide> <idx> [idx ...]
-  python morph-helpers.py verify <deck> <slide>
-  python morph-helpers.py final-check <deck>
+  python3 morph-helpers.py clone <deck> <from_slide> <to_slide>
+  python3 morph-helpers.py ghost <deck> <slide> <idx> [idx ...]
+  python3 morph-helpers.py ghost-section <deck> <slide>
+  python3 morph-helpers.py verify <deck> <slide>
+  python3 morph-helpers.py final-check <deck>
 
 Usage (import):
-  from morph_helpers import morph_clone_slide, morph_ghost_content, morph_verify_slide, morph_final_check
+  from morph_helpers import (
+      morph_clone_slide, morph_ghost_content, morph_ghost_section,
+      morph_verify_slide, morph_final_check,
+  )
 """
 
 import sys
@@ -77,8 +81,58 @@ def _collect_shapes(children, callback):
 # morph_clone_slide
 # ---------------------------------------------------------------------------
 
+def _collect_matching_paths(data, name_predicate):
+    """Walk a slide JSON tree and return Path for every shape whose name matches.
+
+    name_predicate: callable(name:str) -> bool
+    """
+    hits = []
+
+    def visit(child):
+        name = child.get("Format", {}).get("name", "") or ""
+        path = child.get("Path", "")
+        if path and name_predicate(name):
+            hits.append((path, name))
+
+    if "Children" in data:
+        _collect_shapes(data["Children"], visit)
+    return hits
+
+
+def _ghost_by_paths(deck, hits):
+    """Move each (path, name) shape off-screen to x=36cm. Returns list of ghosted names."""
+    ghosted = []
+    for path, name in hits:
+        rc, _, _ = _run("officecli", "set", deck, path, "--prop", "x=36cm")
+        if rc == 0:
+            ghosted.append(name)
+            print(f"{GREEN}  Ghosted {name} ({path}){NC}")
+        else:
+            print(f"{RED}  Failed to ghost {name} ({path}){NC}")
+    return ghosted
+
+
+def _is_persistent_shape(name):
+    """Return True if shape is a persistent !!scene- or !!actor- (should NOT be auto-ghosted on clone).
+
+    Uses substring match to handle the !! auto-prefix that officecli prepends
+    after transition=morph (e.g. !!scene-ring -> !!!!scene-ring on clone).
+    """
+    return "!!scene-" in name or "!!actor-" in name
+
+
 def morph_clone_slide(deck, from_slide, to_slide):
-    """Clone slide and automatically set transition=morph, then verify.
+    """Clone slide, set transition=morph, auto-ghost all non-persistent content, verify.
+
+    Auto-ghost behavior: after the clone, every shape on the new slide that is
+    NOT a persistent ``!!scene-*`` or ``!!actor-*`` shape is moved off-screen to
+    x=36cm. This catches properly named ``#sN-*`` content as well as any shapes
+    with incorrect or missing naming — preventing the overlap bug where previous
+    slide content leaks through.
+
+    Note: ``!!scene-*`` and ``!!actor-*`` shapes are NOT auto-ghosted here.
+    Persistent scene actors are the whole point of morph. To clear content actors
+    at a section boundary, call morph_ghost_section() right after this.
 
     Args:
         deck:       path to .pptx file
@@ -93,17 +147,36 @@ def morph_clone_slide(deck, from_slide, to_slide):
     print(f"{BLUE}Setting morph transition...{NC}")
     _run("officecli", "set", deck, f"/slide[{to_slide}]", "--prop", "transition=morph")
 
-    print(f"{BLUE}Listing shapes for ghosting reference:{NC}")
-    rc, out, _ = _run("officecli", "get", deck, f"/slide[{to_slide}]", "--depth", "1")
-    print(out)
-
-    # Verify
-    print(f"{BLUE}Verifying transition...{NC}")
+    # Auto-ghost ALL non-persistent content on the cloned slide.
+    # Old behaviour only looked for #s{from_slide}- prefix, which silently
+    # missed shapes with wrong/missing prefix — the #1 cause of overlap.
+    # New behaviour: ghost every named shape that is NOT !!scene-* or !!actor-*.
+    print(f"{BLUE}Auto-ghosting content shapes on slide {to_slide}...{NC}")
     rc, out, _ = _run("officecli", "get", deck, f"/slide[{to_slide}]", "--json")
-    if not _has_morph_transition(out):
-        print(f"{RED}ERROR: Transition not set on slide {to_slide}!{NC}")
-        print(f"{RED}   This slide will not have morph animation.{NC}")
-        sys.exit(1)
+    curr_json_str = out
+    try:
+        curr_data = json.loads(curr_json_str).get("data", {})
+    except Exception:
+        curr_data = {}
+
+    hits = _collect_matching_paths(curr_data, lambda n: n and not _is_persistent_shape(n))
+    if hits:
+        _ghost_by_paths(deck, hits)
+        print(f"{GREEN}  Auto-ghosted {len(hits)} content shape(s) on slide {to_slide}{NC}")
+    else:
+        print(f"{YELLOW}  No named content shapes found on slide {to_slide}.{NC}")
+        print(f"{YELLOW}  If slide {from_slide} had content shapes, they may have empty names.{NC}")
+        print(f"{YELLOW}  Check with: officecli get <deck> '/slide[{to_slide}]' --depth 1{NC}")
+
+    # Verify transition actually landed.
+    print(f"{BLUE}Verifying transition...{NC}")
+    if not _has_morph_transition(curr_json_str):
+        # Re-fetch in case the auto-ghost writes invalidated the cached JSON.
+        rc, out, _ = _run("officecli", "get", deck, f"/slide[{to_slide}]", "--json")
+        if not _has_morph_transition(out):
+            print(f"{RED}ERROR: Transition not set on slide {to_slide}!{NC}")
+            print(f"{RED}   This slide will not have morph animation.{NC}")
+            sys.exit(1)
 
     print(f"{GREEN}Transition verified on slide {to_slide}{NC}")
     print()
@@ -141,18 +214,69 @@ def morph_ghost_content(deck, slide, *shapes):
 
 
 # ---------------------------------------------------------------------------
+# morph_ghost_section
+# ---------------------------------------------------------------------------
+
+def morph_ghost_section(deck, slide):
+    """Clear all !!actor-* content actors on a slide — use at section transitions.
+
+    Moves every shape whose name starts with ``!!actor-`` to x=36cm. Leaves
+    ``!!scene-*`` (persistent decoration) and ``#sN-*`` (handled by clone's
+    auto-ghost) untouched. Safe to call on a freshly-cloned slide before adding
+    the new section's content.
+
+    Args:
+        deck:  path to .pptx file
+        slide: slide number (1-based) — typically the first slide of a new section
+    """
+    slide = int(slide)
+
+    print(f"{BLUE}Ghosting !!actor-* content on slide {slide} (section transition)...{NC}")
+    rc, out, _ = _run("officecli", "get", deck, f"/slide[{slide}]", "--json")
+    try:
+        curr_data = json.loads(out).get("data", {})
+    except Exception:
+        print(f"{RED}  Failed to read slide {slide}{NC}")
+        sys.exit(1)
+
+    hits = _collect_matching_paths(curr_data, lambda n: n.startswith("!!actor-"))
+    if not hits:
+        print(f"{YELLOW}  No !!actor-* shapes on slide {slide} — nothing to ghost{NC}")
+        print()
+        return
+
+    _ghost_by_paths(deck, hits)
+    print(f"{GREEN}  Section-cleared {len(hits)} actor(s) on slide {slide}{NC}")
+    print()
+
+
+# ---------------------------------------------------------------------------
 # morph_verify_slide
 # ---------------------------------------------------------------------------
 
-def _check_unghosted(data, prev_slide):
-    """Return list of shapes with #s{prev_slide}- prefix not yet ghosted."""
+def _check_unghosted(data, current_slide):
+    """Return list of non-persistent shapes that are visible and don't belong to current_slide.
+
+    Catches:
+      - #sN-* content where N != current_slide (stale content from ANY previous slide)
+      - Named shapes without #sN-/!!scene-/!!actor- prefix (improperly named content)
+    """
     unghosted = []
 
     def visit(child):
-        name = child.get("Format", {}).get("name", "")
-        x    = child.get("Format", {}).get("x", "")
-        path = child.get("Path", "")
-        if f"#s{prev_slide}-" in name and x != "36cm":
+        name = child.get("Format", {}).get("name", "") or ""
+        x    = child.get("Format", {}).get("x", "") or ""
+        path = child.get("Path", "") or ""
+        if not name:
+            return
+        # Persistent shapes are expected to stay visible
+        if _is_persistent_shape(name):
+            return
+        # Current slide's own content is expected to be visible
+        if f"#s{current_slide}-" in name:
+            return
+        # Everything else should be at x=36cm (ghosted)
+        if x != "36cm":
             unghosted.append(f"{path}: name={name}, x={x}")
 
     if "Children" in data:
@@ -162,8 +286,11 @@ def _check_unghosted(data, prev_slide):
 
 def _check_duplicates(prev_data, curr_data):
     """Return list of shapes with identical text+position on adjacent slides (excluding ghost zone)."""
+    # Pure decoration primitives only. "actor" is intentionally NOT in this list —
+    # !!actor-* shapes carry slide-specific content and must be checked for duplicates
+    # across section boundaries.
     SCENE_KEYWORDS = ["ring", "dot", "line", "circle", "rect", "slash",
-                      "accent", "actor", "star", "triangle", "diamond"]
+                      "accent", "star", "triangle", "diamond"]
 
     def extract(data):
         boxes = []
@@ -237,16 +364,16 @@ def morph_verify_slide(deck, slide):
     else:
         print(f"{GREEN}  Transition OK{NC}")
 
-    # --- Checks against previous slide ---
+    # --- Check for any stale (unghosted) content ---
     prev_slide = slide - 1
     if prev_slide >= 1:
         try:
             curr_data = json.loads(curr_json_str).get("data", {})
 
-            # Method 1: name-based unghosted detection
-            unghosted = _check_unghosted(curr_data, prev_slide)
+            # Detect any non-persistent shape that should be ghosted but isn't
+            unghosted = _check_unghosted(curr_data, slide)
             if unghosted:
-                print(f"{YELLOW}  Warning: Found unghosted content from slide {prev_slide}:{NC}")
+                print(f"{YELLOW}  Warning: Found unghosted content on slide {slide}:{NC}")
                 for item in unghosted:
                     print(f"     {item}")
                 print(f"{YELLOW}     These shapes should be ghosted to x=36cm{NC}")
@@ -341,16 +468,18 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 commands:
-  clone <deck> <from_slide> <to_slide>        Clone slide and set morph transition
-  ghost <deck> <slide> <idx> [idx ...]        Ghost multiple shapes off-screen (x=36cm)
+  clone <deck> <from_slide> <to_slide>        Clone + morph transition + auto-ghost #s<from>- content
+  ghost <deck> <slide> <idx> [idx ...]        Ghost specific shapes by index (escape hatch)
+  ghost-section <deck> <slide>                Ghost all !!actor-* on this slide (section transition)
   verify <deck> <slide>                       Verify slide setup (transition + ghosting)
   final-check <deck>                          Verify entire deck
 
 example:
-  python morph-helpers.py clone  deck.pptx 1 2
-  python morph-helpers.py ghost  deck.pptx 2 7 8 9
-  python morph-helpers.py verify deck.pptx 2
-  python morph-helpers.py final-check deck.pptx
+  python3 morph-helpers.py clone         deck.pptx 1 2
+  python3 morph-helpers.py ghost-section deck.pptx 3
+  python3 morph-helpers.py ghost         deck.pptx 2 7 8 9
+  python3 morph-helpers.py verify        deck.pptx 2
+  python3 morph-helpers.py final-check   deck.pptx
 """,
     )
     sub = parser.add_subparsers(dest="command")
@@ -365,6 +494,10 @@ example:
     p.add_argument("slide",  type=int)
     p.add_argument("shapes", nargs="+", type=int)
 
+    p = sub.add_parser("ghost-section")
+    p.add_argument("deck")
+    p.add_argument("slide", type=int)
+
     p = sub.add_parser("verify")
     p.add_argument("deck")
     p.add_argument("slide", type=int)
@@ -378,6 +511,8 @@ example:
         morph_clone_slide(args.deck, args.from_slide, args.to_slide)
     elif args.command == "ghost":
         morph_ghost_content(args.deck, args.slide, *args.shapes)
+    elif args.command == "ghost-section":
+        morph_ghost_section(args.deck, args.slide)
     elif args.command == "verify":
         if not morph_verify_slide(args.deck, args.slide):
             sys.exit(1)
