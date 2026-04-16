@@ -40,10 +40,10 @@
     "isbinaryfile": "$isbinaryfile"
   },
   "oneclaw": {
-    "openclaw": "2026.3.13",
-    "dingtalkConnector": "0.8.3",
-    "weixin": "1.0.3",
-    "wecom": "2026.4.3",
+    "openclaw": "2026.4.5",
+    "dingtalkConnector": "0.8.13",
+    "weixin": "2.1.8",
+    "wecom": "2026.4.8",
     "qqbot": "1.6.1"
   }
 }

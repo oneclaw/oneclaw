@@ -941,7 +941,7 @@ function patchWindowsOpenclawArtifacts(gatewayDir, platform = "win32") {
 
   // kimi-claw 插件（terminal-session-manager 有 pipe 回退未加 windowsHide）
   const kimiClawDist = path.join(
-    gatewayDir, "node_modules", "openclaw", "extensions", "kimi-claw", "dist"
+    gatewayDir, "node_modules", "openclaw", "dist", "extensions", "kimi-claw", "dist"
   );
   if (fs.existsSync(kimiClawDist)) {
     scanDirs.push(kimiClawDist);
@@ -1134,26 +1134,114 @@ const BUNDLED_PLUGINS = [
     packageName: QQBOT_PACKAGE_NAME,
     requiredFiles: ["package.json", "openclaw.plugin.json"],
     getSource: getQqbotPackageSource,
+    channelShim: { name: "QQ Bot" },
   },
   {
     id: "dingtalk-connector",
     packageName: DINGTALK_CONNECTOR_PACKAGE_NAME,
     requiredFiles: ["package.json", "openclaw.plugin.json"],
     getSource: getDingtalkConnectorPackageSource,
+    channelShim: { name: "DingTalk" },
   },
   {
     id: "wecom-openclaw-plugin",
     packageName: WECOM_PLUGIN_PACKAGE_NAME,
     requiredFiles: ["package.json", "openclaw.plugin.json"],
     getSource: getWecomPluginPackageSource,
+    channelShim: { name: "WeCom" },
   },
   {
     id: "openclaw-weixin",
     packageName: WEIXIN_PLUGIN_PACKAGE_NAME,
     requiredFiles: ["package.json", "openclaw.plugin.json"],
     getSource: getWeixinPluginPackageSource,
+    channelShim: { name: "Weixin" },
   },
 ];
+
+// openclaw >= 2026.4.5 要求 bundled channel 插件的 default export 带上 `kind: "bundled-channel-entry"`
+// 标记，并提供 `loadChannelPlugin()` 方法（见 bootstrap-registry 的 resolveChannelPluginModuleEntry）。
+// 四个现役 channel 插件还是旧格式（导出 `{ id, name, register }` 或直接 `register` 函数），
+// 这里给每个插件旁边生成一个 wrapper 入口 `oneclaw-bundled-entry.mjs`，复用原 `register` 实现，
+// 并通过把原 register 跑一遍 stub api 来截获 channel plugin 对象给 `loadChannelPlugin()` 返回。
+// 同时把插件的 `package.json#openclaw.extensions` 改成指向 wrapper；原始入口路径保存在 shim meta 文件
+// 里，方便后续缓存命中时也能重新生成 shim 而不丢源入口引用。
+function writeChannelEntryShim(plugin, pluginDir) {
+  const pkgPath = path.join(pluginDir, "package.json");
+  if (!fs.existsSync(pkgPath)) {
+    die(`${plugin.id}: channel shim 生成失败，缺少 package.json: ${pkgPath}`);
+  }
+  let pkg;
+  try { pkg = JSON.parse(fs.readFileSync(pkgPath, "utf-8")); } catch (err) {
+    die(`${plugin.id}: 解析 package.json 失败: ${err.message || String(err)}`);
+  }
+  const originalExtensions = Array.isArray(pkg.openclaw?.extensions) ? pkg.openclaw.extensions.slice() : [];
+  const shimMetaPath = path.join(pluginDir, ".oneclaw-channel-shim.json");
+  let originalEntry = originalExtensions.find((entry) => typeof entry === "string" && !entry.includes("oneclaw-bundled-entry"));
+  if (!originalEntry && fs.existsSync(shimMetaPath)) {
+    // 缓存命中场景：shim 已存在，original entry 从 meta 文件恢复
+    try { originalEntry = JSON.parse(fs.readFileSync(shimMetaPath, "utf-8")).originalEntry; } catch {}
+  }
+  if (!originalEntry) {
+    die(`${plugin.id}: 未在 package.json 的 openclaw.extensions 或 shim meta 中找到原始入口`);
+  }
+  fs.writeFileSync(shimMetaPath, JSON.stringify({ originalEntry }, null, 2), "utf-8");
+
+  const shimName = "oneclaw-bundled-entry.mjs";
+  const shimPath = path.join(pluginDir, shimName);
+  const shimSource = [
+    "// OneClaw auto-generated shim — adapts legacy channel plugins to openclaw >= 2026.4.5",
+    '// "bundled-channel-entry" contract. Regenerated every `npm run package:resources`;',
+    "// do not hand-edit.",
+    `import legacyModule from ${JSON.stringify(originalEntry)};`,
+    "",
+    'const legacy = (legacyModule && typeof legacyModule === "object" && "default" in legacyModule)',
+    "  ? legacyModule.default",
+    "  : legacyModule;",
+    "",
+    'const normalized = typeof legacy === "function"',
+    `  ? { id: ${JSON.stringify(plugin.id)}, name: ${JSON.stringify(plugin.channelShim?.name ?? plugin.id)}, description: "", configSchema: { type: "object", additionalProperties: true }, register: legacy }`,
+    "  : legacy;",
+    "",
+    "let cachedChannelPlugin = null;",
+    "function captureChannelPlugin() {",
+    "  if (cachedChannelPlugin) return cachedChannelPlugin;",
+    "  const stubApi = {",
+    "    runtime: {},",
+    '    registrationMode: "probe",',
+    "    registerChannel({ plugin }) { cachedChannelPlugin = plugin; },",
+    "    registerTool() {},",
+    "    registerHttpRoute() {},",
+    "    registerAgentTool() {},",
+    "    registerHook() {},",
+    "    on() {},",
+    "  };",
+    "  try { normalized.register(stubApi); } catch { /* stub api is lossy; swallow */ }",
+    "  return cachedChannelPlugin;",
+    "}",
+    "",
+    "export default {",
+    '  kind: "bundled-channel-entry",',
+    `  id: normalized.id ?? ${JSON.stringify(plugin.id)},`,
+    `  name: normalized.name ?? ${JSON.stringify(plugin.channelShim?.name ?? plugin.id)},`,
+    '  description: normalized.description ?? "",',
+    '  configSchema: normalized.configSchema ?? { type: "object", additionalProperties: true },',
+    "  register(api) {",
+    "    return normalized.register(api);",
+    "  },",
+    "  loadChannelPlugin() {",
+    "    return captureChannelPlugin();",
+    "  },",
+    "};",
+    "",
+  ].join("\n");
+  fs.writeFileSync(shimPath, shimSource, "utf-8");
+
+  pkg.openclaw = pkg.openclaw && typeof pkg.openclaw === "object" ? pkg.openclaw : {};
+  pkg.openclaw.extensions = [`./${shimName}`];
+  fs.writeFileSync(pkgPath, JSON.stringify(pkg, null, 2), "utf-8");
+  log(`已为 ${plugin.id} 生成 channel shim (${shimName})`);
+}
 
 // openclaw/skills 只保留 OneClaw 产品需要的内置技能，上游新增 skill 不会自动打入。
 const OPENCLAW_SKILLS_ALLOWLIST = new Set([
@@ -1197,13 +1285,17 @@ const OPENCLAW_EXTENSION_ALLOWLIST = new Set([
   "openclaw-weixin",
 ]);
 
-// 构建产物校验需要覆盖白名单中的关键扩展，避免悄悄打出残缺包。
-const REQUIRED_OPENCLAW_EXTENSION_OUTPUTS = [
-  "shared",
+// openclaw >= 2026.4.x 把内置 extension 从 extensions/ 迁到 dist/extensions/
+// （shared/ 目录同时被并入 dist/plugin-sdk/src/shared，不再作为独立 extension）。
+// 这两组校验分别对应「openclaw 自带的 bundled extension」和「OneClaw 另行注入的插件」。
+const REQUIRED_OPENCLAW_BUNDLED_EXTENSIONS = [
   path.join("memory-core", "openclaw.plugin.json"),
   path.join("device-pair", "openclaw.plugin.json"),
   path.join("feishu", "openclaw.plugin.json"),
   path.join("imessage", "openclaw.plugin.json"),
+];
+
+const REQUIRED_OPENCLAW_INJECTED_EXTENSIONS = [
   path.join("kimi-claw", "openclaw.plugin.json"),
   path.join("kimi-search", "openclaw.plugin.json"),
   path.join("qqbot", "openclaw.plugin.json"),
@@ -1299,7 +1391,8 @@ async function bundleNpmPackagePlugin(plugin, gatewayDir, targetId, opts) {
     die(`openclaw 依赖目录不存在，无法注入 ${plugin.id}: ${openclawDir}`);
   }
 
-  const extRoot = path.join(openclawDir, "extensions");
+  // openclaw >= 2026.4.x 的 stock 插件扫描根是 dist/extensions，不再扫描 extensions/。
+  const extRoot = path.join(openclawDir, "dist", "extensions");
   const pluginDir = path.join(extRoot, plugin.id);
   ensureDir(extRoot);
 
@@ -1313,6 +1406,10 @@ async function bundleNpmPackagePlugin(plugin, gatewayDir, targetId, opts) {
       const stamp = JSON.parse(fs.readFileSync(stampPath, "utf-8"));
       if (stamp.source === sourceInfo.stampSource) {
         assertPluginDir(plugin, pluginDir, "");
+        // channel shim 依赖脚本版本，缓存命中时也要重新生成以确保 shim 和脚本同步
+        if (plugin.channelShim) {
+          writeChannelEntryShim(plugin, pluginDir);
+        }
         log(`复用已注入的 ${plugin.id} 插件 (${sourceInfo.stampSource})`);
         return;
       }
@@ -1407,6 +1504,11 @@ async function bundleNpmPackagePlugin(plugin, gatewayDir, targetId, opts) {
 
   // 清理临时目录
   rmDir(tmpDir);
+
+  // channel 插件需要适配 openclaw >= 2026.4.5 的 bundled-channel-entry 契约
+  if (plugin.channelShim) {
+    writeChannelEntryShim(plugin, pluginDir);
+  }
 
   // 写入版本戳
   fs.writeFileSync(
@@ -1526,7 +1628,7 @@ function installTgzPluginDeps(plugin, pluginDir, targetId, opts) {
   log(`${plugin.id} 依赖安装完成`);
 }
 
-// 将插件注入 openclaw/extensions/<id>（支持 tgz 解压和 npm 包两种来源）
+// 将插件注入 openclaw/dist/extensions/<id>（支持 tgz 解压和 npm 包两种来源）
 async function bundlePlugin(plugin, gatewayDir, targetId, opts) {
   // npm 包插件：在独立目录安装，防止传递依赖污染 gateway
   if (plugin.packageName) {
@@ -1538,7 +1640,8 @@ async function bundlePlugin(plugin, gatewayDir, targetId, opts) {
     die(`openclaw 依赖目录不存在，无法注入 ${plugin.id}: ${openclawDir}`);
   }
 
-  const extRoot = path.join(openclawDir, "extensions");
+  // openclaw >= 2026.4.x 的 stock 插件扫描根是 dist/extensions，不再扫描 extensions/。
+  const extRoot = path.join(openclawDir, "dist", "extensions");
   const pluginDir = path.join(extRoot, plugin.id);
   ensureDir(extRoot);
 
@@ -2039,8 +2142,11 @@ function verifyOutput(targetPaths, opts) {
   const crossCompileOptionalExts = new Set(["kimi-claw", "kimi-search"]);
 
   required.push(
-    ...REQUIRED_OPENCLAW_EXTENSION_OUTPUTS.map((relPath) =>
-      path.join(targetRel, "gateway", "node_modules", "openclaw", "extensions", relPath)
+    ...REQUIRED_OPENCLAW_BUNDLED_EXTENSIONS.map((relPath) =>
+      path.join(targetRel, "gateway", "node_modules", "openclaw", "dist", "extensions", relPath)
+    ),
+    ...REQUIRED_OPENCLAW_INJECTED_EXTENSIONS.map((relPath) =>
+      path.join(targetRel, "gateway", "node_modules", "openclaw", "dist", "extensions", relPath)
     )
   );
 
