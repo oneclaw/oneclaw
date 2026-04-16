@@ -46,6 +46,10 @@ export type ChatState = {
   chatHistoryHydrationFrame: number | null;
   chatPendingStreamText: string | null;
   chatStreamFrame: number | null;
+  // 记录最近一次被用户本地 abort 的 runId：gateway 在卡死或重启前可能仍会把
+  // 旧 run 的 delta/final 事件陆续推回，这里用它来幂等丢弃，避免 stop 之后
+  // UI 又被旧事件重新拉回 streaming 状态。
+  chatAbortedRunId: string | null;
   lastError: string | null;
 };
 
@@ -223,6 +227,9 @@ export async function sendChatMessage(
   state.chatRunId = runId;
   state.chatStream = "";
   state.chatStreamStartedAt = now;
+  // 发新消息意味着上一轮本地 abort 的 run 已彻底不相关，清掉旧 runId 避免影响未来判断。
+  state.chatAbortedRunId = null;
+  state.chatPendingStreamText = null;
 
   // 只有图片附件走 base64 API，文件路径已拼入消息文本
   const apiAttachments = hasImages
@@ -272,18 +279,44 @@ export async function sendChatMessage(
   }
 }
 
+// 见 feedback #391：gateway 在工具调用卡死（或嵌套 agent.wait 超时）时，
+// 可能永远不会发 final/error 事件。此时前端靠等 gateway 返回来解冻是没希望的。
+// 策略：点停止后立刻本地清流，让 UI 恢复响应；chat.abort RPC 再在后台尽力发送，
+// 短超时避免悬挂；已终止 run 的后续事件由 chatAbortedRunId 幂等丢弃。
+const CHAT_ABORT_RPC_TIMEOUT_MS = 3000;
+
 export async function abortChatRun(state: ChatState): Promise<boolean> {
   if (!state.client || !state.connected) {
     return false;
   }
   const runId = state.chatRunId;
+  // 先记下待忽略的 runId，再清流；顺序重要：清流会把 chatRunId 置 null。
+  if (runId) {
+    state.chatAbortedRunId = runId;
+  }
+  resetChatStreamState(state);
   try {
-    await state.client.request(
+    const request = state.client.request(
       "chat.abort",
       runId ? { sessionKey: state.sessionKey, runId } : { sessionKey: state.sessionKey },
     );
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    const timeout = new Promise<never>((_, reject) => {
+      timer = setTimeout(
+        () => reject(new Error("chat.abort timed out")),
+        CHAT_ABORT_RPC_TIMEOUT_MS,
+      );
+    });
+    try {
+      await Promise.race([request, timeout]);
+    } finally {
+      if (timer !== null) {
+        clearTimeout(timer);
+      }
+    }
     return true;
   } catch (err) {
+    // RPC 失败或超时不回滚本地状态：用户已经选择停止，UI 必须保持可用。
     state.lastError = String(err);
     return false;
   }
@@ -294,6 +327,15 @@ export function handleChatEvent(state: ChatState, payload?: ChatEventPayload) {
     return null;
   }
   if (payload.sessionKey !== state.sessionKey) {
+    return null;
+  }
+
+  // 用户已本地 abort 过的 run：丢弃其后续事件，避免 delta 把 stream 状态重新拉起来。
+  // final 仍往上抛，方便调用方刷新历史（抛到的是对应路径），但不再驱动本 session 的 stream。
+  if (payload.runId && state.chatAbortedRunId && payload.runId === state.chatAbortedRunId) {
+    if (payload.state === "final") {
+      return "final";
+    }
     return null;
   }
 
