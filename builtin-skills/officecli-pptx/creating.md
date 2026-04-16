@@ -2,18 +2,7 @@
 
 # Creating Presentations from Scratch
 
-> [!CAUTION]
-> **zsh 用户（macOS 默认 shell）**：所有含方括号的路径参数**必须加引号**，否则 zsh 会报错 `zsh: no matches found`。
-> - 正确：`officecli set deck.pptx '/slide[1]'` 或 `"slide[1]"`
-> - 错误：`officecli set deck.pptx /slide[1]`
->
-> **这是首次创建演示文稿时最常见的错误，请在第一条命令前就确认引号已加好。**
->
-> 快速验证命令：
-> ```bash
-> officecli get deck.pptx '/slide[1]' --depth 1   # 有引号 = 正确
-> officecli get deck.pptx /slide[1] --depth 1     # 无引号 = zsh 报错
-> ```
+> **Reminder:** All bracket paths must be quoted in zsh -- see [SKILL.md](SKILL.md#before-you-start-critical) for details.
 
 Use this guide when creating a new presentation with no template.
 
@@ -22,7 +11,7 @@ Use this guide when creating a new presentation with no template.
 1. **Create** blank presentation
 2. **Plan** slide structure (content outline + layout types)
 3. **Build** each slide — one command at a time; use `batch` only for bulk repetitive operations (many shapes with identical props, filling many text boxes). Structural operations (`add slide`, `add chart`, `set transition`) should run individually so errors surface immediately.
-4. **QA** (content + visual + validation) -- see [SKILL.md](SKILL.md#qa-required)
+4. **QA** (content + visual + validation) -- see [reference/qa-checklist.md](reference/qa-checklist.md)
 
 ---
 

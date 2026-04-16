@@ -10,7 +10,7 @@ Use this guide when modifying an existing .pptx file (template-based or content 
 2. **Plan** slide mapping (content -> layout)
 3. **Structural changes** (clone, remove, reorder slides) -- **do this FIRST**
 4. **Content edits** (text, images, charts, tables)
-5. **QA** (content + visual + validation) -- see [SKILL.md](SKILL.md#qa-required)
+5. **QA** (content + visual + validation) -- see [reference/qa-checklist.md](reference/qa-checklist.md)
 
 ---
 
