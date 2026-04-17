@@ -40,7 +40,6 @@ import {
   extractKimiConfig,
   saveKimiPluginConfig,
   isKimiPluginBundled,
-  DEFAULT_KIMI_BRIDGE_WS_URL,
   extractKimiSearchConfig,
   saveKimiSearchConfig,
   isKimiSearchPluginBundled,
@@ -1308,9 +1307,11 @@ export function registerSettingsIpc(opts: SettingsIpcOptions = {}): void {
     }
   });
 
-  // ── 保存 Kimi 插件配置（支持 enabled=false 仅切换开关） ──
+  // ── 保存 Kimi 插件配置（支持 enabled=false 仅切换开关；wsURL/kimiapiHost 为可选覆盖） ──
   ipcMain.handle("settings:save-kimi-config", async (_event, params) => {
     const botToken = typeof params?.botToken === "string" ? params.botToken.trim() : "";
+    const wsURL = typeof params?.wsURL === "string" ? params.wsURL.trim() : "";
+    const kimiapiHost = typeof params?.kimiapiHost === "string" ? params.kimiapiHost.trim() : "";
     const enabled = params?.enabled;
     return runTrackedSettingsAction("save_kimi", { enabled }, async () => {
       try {
@@ -1338,7 +1339,18 @@ export function registerSettingsIpc(opts: SettingsIpcOptions = {}): void {
         }
 
         const gatewayToken = ensureGatewayAuthTokenInConfig(config);
-        saveKimiPluginConfig(config, { botToken, gatewayToken, wsURL: DEFAULT_KIMI_BRIDGE_WS_URL });
+        // kimiapiHost 同时控制 kimi-claw（IM subscribe base_url）与 kimi-search（serviceBaseUrl）
+        // 传 undefined（未提供）→ 保留存量；传空串 → 清回默认。
+        saveKimiPluginConfig(config, {
+          botToken,
+          gatewayToken,
+          wsURL: wsURL || undefined,
+          kimiapiHost: typeof params?.kimiapiHost === "string" ? kimiapiHost : undefined,
+        });
+        // kimi-search 联动：显式提供 kimiapiHost（含空串）都同步写；未提供则保留存量
+        if (typeof params?.kimiapiHost === "string") {
+          saveKimiSearchConfig(config, { enabled: true, serviceBaseUrl: kimiapiHost });
+        }
         writeUserConfigAndRestart(config);
         return { success: true };
       } catch (err: any) {
