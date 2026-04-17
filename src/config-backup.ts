@@ -6,7 +6,7 @@ import {
   resolveUserConfigPath,
   resolveUserStateDir,
 } from "./constants";
-import { resetConfigHealthBaseline } from "./openclaw-health-state";
+import { syncOpenClawStateAfterWrite } from "./openclaw-health-state";
 
 const BACKUP_FILE_PREFIX = "openclaw-";
 const BACKUP_FILE_EXT = ".json";
@@ -204,7 +204,7 @@ function writeConfigRaw(raw: string): void {
   fs.mkdirSync(stateDir, { recursive: true });
   const configPath = resolveUserConfigPath();
   fs.writeFileSync(configPath, raw, "utf-8");
-  resetConfigHealthBaseline(configPath);
+  syncOpenClawStateAfterWrite(configPath);
 }
 
 // 确保备份目录存在，避免首次保存时写文件失败。

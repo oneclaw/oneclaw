@@ -91,3 +91,41 @@ test("默认参数使用当前 user config path", async () => {
   const after = JSON.parse(fs.readFileSync(healthPath, "utf-8"));
   expect(after.entries[configPath]).toBeUndefined();
 });
+
+test("syncOpenClawBackupFile 把 cfg 字节原样拷到 .bak", async () => {
+  const content = JSON.stringify({ foo: "bar", n: 42 });
+  fs.writeFileSync(configPath, content);
+  const { syncOpenClawBackupFile } = await import("./openclaw-health-state");
+  syncOpenClawBackupFile(configPath);
+  expect(fs.readFileSync(`${configPath}.bak`, "utf-8")).toBe(content);
+});
+
+test("syncOpenClawBackupFile 覆盖已有旧 .bak", async () => {
+  const stale = "old stale content much longer than the new one XXXXXXXXXX";
+  const fresh = "{}";
+  fs.writeFileSync(`${configPath}.bak`, stale);
+  fs.writeFileSync(configPath, fresh);
+  const { syncOpenClawBackupFile } = await import("./openclaw-health-state");
+  syncOpenClawBackupFile(configPath);
+  expect(fs.readFileSync(`${configPath}.bak`, "utf-8")).toBe(fresh);
+});
+
+test("syncOpenClawBackupFile 源文件不存在时静默", async () => {
+  const { syncOpenClawBackupFile } = await import("./openclaw-health-state");
+  expect(() => syncOpenClawBackupFile(configPath)).not.toThrow();
+  expect(fs.existsSync(`${configPath}.bak`)).toBe(false);
+});
+
+test("syncOpenClawStateAfterWrite 同时同步 .bak 和清 health entry", async () => {
+  const cfg = JSON.stringify({ ok: 1 });
+  fs.writeFileSync(configPath, cfg);
+  fs.writeFileSync(`${configPath}.bak`, "stale");
+  fs.writeFileSync(healthPath, JSON.stringify({
+    entries: { [configPath]: { lastKnownGood: { bytes: 99 } } },
+  }));
+  const { syncOpenClawStateAfterWrite } = await import("./openclaw-health-state");
+  syncOpenClawStateAfterWrite(configPath);
+  expect(fs.readFileSync(`${configPath}.bak`, "utf-8")).toBe(cfg);
+  const after = JSON.parse(fs.readFileSync(healthPath, "utf-8"));
+  expect(after.entries[configPath]).toBeUndefined();
+});

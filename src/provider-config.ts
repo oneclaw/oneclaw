@@ -2,7 +2,7 @@ import * as https from "https";
 import * as http from "http";
 import * as fs from "fs";
 import { resolveUserConfigPath, resolveUserStateDir } from "./constants";
-import { resetConfigHealthBaseline } from "./openclaw-health-state";
+import { syncOpenClawStateAfterWrite } from "./openclaw-health-state";
 import { backupCurrentUserConfig } from "./config-backup";
 
 // ── Provider 配置预设（与 kimiclaw ProviderSetupView.swift 对齐） ──
@@ -205,9 +205,10 @@ export function writeUserConfig(config: any): void {
   backupCurrentUserConfig();
   const configPath = resolveUserConfigPath();
   fs.writeFileSync(configPath, JSON.stringify(config, null, 2), "utf-8");
-  // openclaw 4.x 的 health-state baseline 会与外部直写不一致，触发误报 clobber，
-  // 这里抹掉它的 entry，让 openclaw 下次读取时把当前文件视为新 baseline。
-  resetConfigHealthBaseline(configPath);
+  // openclaw 4.x 每次读 openclaw.json 会与 health-state baseline 以及
+  // openclaw.json.bak 做字节校验；外部直写会让两者落后，产生 .clobbered 雪崩。
+  // 这里把 .bak 同步成当前内容，并清理 health entry 让 openclaw 重建基线。
+  syncOpenClawStateAfterWrite(configPath);
 }
 
 // ── 验证函数 ──
