@@ -101,12 +101,17 @@ function resolvePackagedWindowsNodeBin(): string {
   }
 }
 
-/** Node.js 二进制（packaged 复用 Electron binary + ELECTRON_RUN_AS_NODE；dev 优先用下载的） */
+/**
+ * Node.js 二进制：dev 和 packaged 都走 Electron binary + ELECTRON_RUN_AS_NODE=1。
+ * 原因：package-resources.js 按 Electron ABI 编译带 binding.gyp 的 native addon
+ * （如 kimi-claw 依赖的 fs-ext），dev 下若改用 runtime/node（ABI 不同）会触发
+ * "was compiled against a different Node.js version using NODE_MODULE_VERSION" 加载失败。
+ * 让 dev 与 packaged 共用 Electron 的 Node ABI，保证带 native addon 的插件可加载、
+ * 同时让 dev 更贴近生产运行环境。
+ */
 export function resolveNodeBin(): string {
   if (!app.isPackaged) {
-    const exe = IS_WIN ? "node.exe" : "node";
-    const bundled = path.join(resolveDevTargetPath(), "runtime", exe);
-    return fs.existsSync(bundled) ? bundled : "node";
+    return process.execPath;
   }
   // macOS：使用 Helper binary（Info.plist 含 LSUIElement=true，不产生 Dock 弹跳图标）
   if (!IS_WIN) {
@@ -154,9 +159,12 @@ export function isAsarMode(): boolean {
   return entry.includes(".asar");
 }
 
-/** packaged 模式需要的额外环境变量（让 Electron binary 作为纯 Node.js 运行） */
+/**
+ * 让 Electron binary 当作纯 Node.js 运行的环境变量。
+ * dev 和 packaged 都需要（配合 resolveNodeBin() 始终返回 Electron binary）。
+ */
 export function resolveNodeExtraEnv(): Record<string, string> {
-  return app.isPackaged ? { ELECTRON_RUN_AS_NODE: "1" } : {};
+  return { ELECTRON_RUN_AS_NODE: "1" };
 }
 
 /** npm CLI（dev 模式优先用 package:resources 下载的，无则降级系统 npm） */
