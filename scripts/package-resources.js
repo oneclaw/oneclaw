@@ -1285,9 +1285,9 @@ const OPENCLAW_EXTENSION_ALLOWLIST = new Set([
   "openclaw-weixin",
 ]);
 
-// openclaw >= 2026.4.x 把内置 extension 从 extensions/ 迁到 dist/extensions/
-// （shared/ 目录同时被并入 dist/plugin-sdk/src/shared，不再作为独立 extension）。
-// 这两组校验分别对应「openclaw 自带的 bundled extension」和「OneClaw 另行注入的插件」。
+// openclaw 的 bundled extension 在 2026.3.x 位于顶层 extensions/，在 2026.4.x 迁到 dist/extensions/。
+// verifyOutput 对 bundled 列表 fallback 两处，任一存在即通过，避免跟随 openclaw 升级反复改路径。
+// OneClaw 另行注入的插件始终写入 dist/extensions/。
 const REQUIRED_OPENCLAW_BUNDLED_EXTENSIONS = [
   path.join("memory-core", "openclaw.plugin.json"),
   path.join("device-pair", "openclaw.plugin.json"),
@@ -2141,14 +2141,32 @@ function verifyOutput(targetPaths, opts) {
   const winArm64Cross = isWindowsArm64CrossCompile(opts);
   const crossCompileOptionalExts = new Set(["kimi-claw", "kimi-search"]);
 
+  // OneClaw 另行注入的插件始终在 dist/extensions/（单一路径）
   required.push(
-    ...REQUIRED_OPENCLAW_BUNDLED_EXTENSIONS.map((relPath) =>
-      path.join(targetRel, "gateway", "node_modules", "openclaw", "dist", "extensions", relPath)
-    ),
     ...REQUIRED_OPENCLAW_INJECTED_EXTENSIONS.map((relPath) =>
       path.join(targetRel, "gateway", "node_modules", "openclaw", "dist", "extensions", relPath)
     )
   );
+
+  // bundled 扩展两处路径 fallback（openclaw 2026.3.x: extensions/, 2026.4.x: dist/extensions/）
+  const bundledCandidates = REQUIRED_OPENCLAW_BUNDLED_EXTENSIONS.map((relPath) => ({
+    label: path.join(
+      targetRel,
+      "gateway",
+      "node_modules",
+      "openclaw",
+      "<extensions|dist/extensions>",
+      relPath,
+    ),
+    candidates: [
+      path.join(
+        targetRel, "gateway", "node_modules", "openclaw", "extensions", relPath,
+      ),
+      path.join(
+        targetRel, "gateway", "node_modules", "openclaw", "dist", "extensions", relPath,
+      ),
+    ],
+  }));
 
   let allOk = true;
   for (const rel of required) {
@@ -2165,6 +2183,15 @@ function verifyOutput(targetPaths, opts) {
     const status = exists ? "OK" : "缺失";
     console.log(`  [${status}] ${rel}`);
     if (!exists) allOk = false;
+  }
+  for (const { label, candidates } of bundledCandidates) {
+    const hit = candidates.find((rel) => fs.existsSync(path.join(ROOT, rel)));
+    if (hit) {
+      console.log(`  [OK] ${hit}`);
+    } else {
+      console.log(`  [缺失] ${label}`);
+      allOk = false;
+    }
   }
 
   if (!allOk) {
