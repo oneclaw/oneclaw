@@ -1,6 +1,7 @@
 import * as fs from "fs";
 import * as path from "path";
 import { resolveGatewayPort, resolveGatewayPackageDir, resolveUserStateDir } from "./constants";
+import { ensureDeviceId } from "./oneclaw-config";
 
 export const KIMI_PLUGIN_ID = "kimi-claw";
 export const KIMI_SEARCH_PLUGIN_ID = "kimi-search";
@@ -39,6 +40,9 @@ export function saveKimiPluginConfig(config: any, params: SaveKimiPluginParams):
         mode: "acp",
         url: params.wsURL,
         token: params.botToken,
+        // 稳定本机 UUID 传给 kimi-claw，避免 fallback 到 "unknown-device"
+        // 被 Kimi 后端按匿名设备严限流（症状：GetMessages 429 resource_exhausted）。
+        deviceId: ensureDeviceId(),
       },
       gateway: {
         ...(typeof existingConfig.gateway === "object" && existingConfig.gateway !== null
@@ -82,6 +86,31 @@ export function isKimiPluginBundled(): boolean {
     fs.existsSync(path.join(pluginDir, "index.ts")) ||
     fs.existsSync(path.join(pluginDir, "dist", "index.js"));
   return hasEntry && fs.existsSync(path.join(pluginDir, "openclaw.plugin.json"));
+}
+
+/**
+ * 幂等补齐 kimi-claw.config.bridge.deviceId。
+ *
+ * 存量 / 升级用户的 openclaw.json 里 kimi-claw.config.bridge 只有 mode/url/token，
+ * 没有 deviceId。kimi-claw extension 读不到就 fallback 到 "unknown-device"，
+ * 然后 Kimi 后端把所有 unknown-device 挤到同一个 rate-limit bucket，导致
+ * GetMessages HTTP 429 resource_exhausted，现象是"连上了但发消息没响应"。
+ *
+ * @returns 是否实际修改了 config（供调用方决定是否重写文件）
+ */
+export function ensureKimiPluginDeviceId(config: any): boolean {
+  const entry = config?.plugins?.entries?.[KIMI_PLUGIN_ID];
+  if (!entry || typeof entry !== "object") return false; // 没启用 kimi-claw：不动它
+  const cfg = entry.config;
+  if (!cfg || typeof cfg !== "object") return false;
+  const bridge = cfg.bridge;
+  if (!bridge || typeof bridge !== "object") return false;
+
+  const existing = typeof bridge.deviceId === "string" ? bridge.deviceId.trim() : "";
+  if (existing) return false; // 已有就不覆盖
+
+  bridge.deviceId = ensureDeviceId();
+  return true;
 }
 
 // 从已有配置中提取 kimi-claw 插件信息（供 settings 回显）

@@ -43,7 +43,7 @@ import {
   restoreLastKnownGoodConfigSnapshot,
 } from "./config-backup";
 import { readUserConfig, writeUserConfig } from "./provider-config";
-import { resolveKimiSearchApiKey, readKimiApiKey, readKimiSearchDedicatedApiKey, writeKimiApiKey, ensureMemorySearchProxyConfig } from "./kimi-config";
+import { resolveKimiSearchApiKey, readKimiApiKey, readKimiSearchDedicatedApiKey, writeKimiApiKey, ensureMemorySearchProxyConfig, ensureKimiPluginDeviceId } from "./kimi-config";
 import { reconcileCliOnAppLaunch } from "./cli-integration";
 import { uninstallGatewayDaemon, killPortProcess, getPortPid } from "./install-detector";
 import { detectOwnership, migrateFromLegacy, markSetupComplete, readOneclawConfig, writeOneclawConfig, appendChannelUtm } from "./oneclaw-config";
@@ -313,6 +313,20 @@ function migrateDisableGatewayUpdateCheck(): void {
     config.update.checkOnStart = false;
     writeUserConfig(config);
     log.info("[migrate] 已禁用 gateway 启动更新检查（update.checkOnStart=false）");
+  } catch {
+    // 迁移失败不阻塞启动
+  }
+}
+
+// 存量用户迁移：给 kimi-claw.config.bridge 补齐 deviceId。
+// 老配置下该字段缺失时 kimi-claw 上报 device_id="unknown-device"，会被 Kimi 后端
+// 按匿名桶严限流（GetMessages 429 resource_exhausted → 发消息无响应）。
+function migrateKimiPluginDeviceId(): void {
+  try {
+    const config = readUserConfig();
+    if (!ensureKimiPluginDeviceId(config)) return;
+    writeUserConfig(config);
+    log.info("[migrate] 已为 kimi-claw.config.bridge 补齐 deviceId");
   } catch {
     // 迁移失败不阻塞启动
   }
@@ -909,6 +923,7 @@ app.whenReady().then(async () => {
       migrateSessionMemoryHook();
       migrateDisableGatewayUpdateCheck();
       migrateDeprecatedDingtalkFields();
+      migrateKimiPluginDeviceId();
       void reconcileCliOnAppLaunch().catch((err) => {
         log.error(`[migrate] CLI launch reconciliation failed: ${err instanceof Error ? err.message : String(err)}`);
       });
@@ -922,6 +937,7 @@ app.whenReady().then(async () => {
       migrateSessionMemoryHook();
       migrateDisableGatewayUpdateCheck();
       migrateDeprecatedDingtalkFields();
+      migrateKimiPluginDeviceId();
       void reconcileCliOnAppLaunch().catch((err) => {
         log.error(`[migrate] CLI launch reconciliation failed: ${err instanceof Error ? err.message : String(err)}`);
       });
