@@ -310,6 +310,9 @@
       "kimi.guideText": "Click 'Associate existing OpenClaw' → copy command → paste below",
       "kimi.inputLabel": "Paste BotToken or command (auto parse token)",
       "kimi.tokenParsed": "Token parsed: ",
+      "kimi.advancedLabel": "Advanced settings",
+      "kimi.bridgeUrlLabel": "Custom Bridge WS URL",
+      "kimi.apiHostLabel": "Custom Kimi API Host",
       "kimi.save": "Save",
       "kimi.saving": "Saving…",
       "error.noKimiBotToken": "Please paste the command or enter your Bot Token",
@@ -617,6 +620,9 @@
       "kimi.guideText": '点击"关联已有 OpenClaw" → 复制命令 → 粘贴到下方输入框',
       "kimi.inputLabel": "粘贴 BotToken 或命令(自动解析Token)",
       "kimi.tokenParsed": "解析到 Token：",
+      "kimi.advancedLabel": "高级设置",
+      "kimi.bridgeUrlLabel": "自定义 Bridge WS URL",
+      "kimi.apiHostLabel": "自定义 Kimi API Host",
       "kimi.save": "保存",
       "kimi.saving": "保存中…",
       "error.noKimiBotToken": "请粘贴命令或输入 Bot Token",
@@ -881,6 +887,9 @@
     kimiEnabled: $("#kimiEnabled"),
     kimiFields: $("#kimiFields"),
     kimiSettingsInput: $("#kimiSettingsInput"),
+    kimiAdvancedWrap: $("#kimiAdvancedWrap"),
+    kimiBridgeUrlInput: $("#kimiBridgeUrlInput"),
+    kimiApiHostInput: $("#kimiApiHostInput"),
     btnToggleKimiToken: $("#btnToggleKimiToken"),
     kimiMsgBox: $("#kimiMsgBox"),
     kimiBotPageLink: $("#kimiBotPageLink"),
@@ -3413,13 +3422,23 @@
   // ── Kimi Tab ──
 
   // 从 install.sh 命令或直接输入解析 bot token
-  function parseBotToken(input) {
-    var match = input.match(/--bot-token\s+(\S+)/);
-    if (match) return match[1];
-    var trimmed = input.trim();
-    if (trimmed && !/\s/.test(trimmed)) return trimmed;
-    return "";
+  // 从粘贴的 install 命令里抽 --bot-token / --ws-url / --kimiapi-host。
+  // 纯 token（无空格）直接当作 botToken；任何一项缺失都返回空串。
+  function parseKimiInstallCommand(input) {
+    var text = typeof input === "string" ? input : "";
+    function pick(flag) {
+      var m = text.match(new RegExp(flag + "\\s+(\\S+)"));
+      return m ? m[1] : "";
+    }
+    var token = pick("--bot-token");
+    if (!token) {
+      var trimmed = text.trim();
+      if (trimmed && !/\s/.test(trimmed)) token = trimmed;
+    }
+    return { botToken: token, wsURL: pick("--ws-url"), kimiapiHost: pick("--kimiapi-host") };
   }
+  // 兼容旧调用点：只要 token
+  function parseBotToken(input) { return parseKimiInstallCommand(input).botToken; }
 
   // 掩码 token（保留首尾各 4 字符）
   function maskToken(token) {
@@ -3455,10 +3474,17 @@
       if (!result.success || !result.data) return;
 
       var data = result.data;
-      // 回填 token 到输入框
       // 回填 token
       if (data.botToken) {
         els.kimiSettingsInput.value = data.botToken;
+      }
+      // 回填高级字段（wsURL/kimiapiHost）。非空就展开 Advanced 折叠块，让用户看到当前生效值。
+      var customWs = typeof data.wsURL === "string" ? data.wsURL : "";
+      var customHost = typeof data.kimiapiHost === "string" ? data.kimiapiHost : "";
+      if (els.kimiBridgeUrlInput) els.kimiBridgeUrlInput.value = customWs;
+      if (els.kimiApiHostInput) els.kimiApiHostInput.value = customHost;
+      if (els.kimiAdvancedWrap && (customWs || customHost)) {
+        els.kimiAdvancedWrap.open = true;
       }
 
       // 回填启用状态
@@ -3495,19 +3521,27 @@
       return;
     }
 
-    // 启用 → 校验 token
-    var botToken = parseBotToken(els.kimiSettingsInput.value);
+    // 启用 → 校验 token + 读高级字段作为 override
+    var parsed = parseKimiInstallCommand(els.kimiSettingsInput.value);
+    var botToken = parsed.botToken;
     if (!botToken) {
       showKimiMsg(t("error.noKimiBotToken"), "error");
       els.kimiEnabled.checked = false;
       return;
     }
+    var wsURLOverride = els.kimiBridgeUrlInput && els.kimiBridgeUrlInput.value.trim();
+    var kimiapiHostOverride = els.kimiApiHostInput && els.kimiApiHostInput.value.trim();
 
     setKimiSaving(true);
     hideKimiMsg();
 
     try {
-      var result = await window.oneclaw.settingsSaveKimiConfig({ botToken: botToken, enabled: true });
+      var result = await window.oneclaw.settingsSaveKimiConfig({
+        botToken: botToken,
+        enabled: true,
+        wsURL: wsURLOverride || "",
+        kimiapiHost: kimiapiHostOverride || "",
+      });
       if (!result.success) {
         showKimiMsg(result.message || "Save failed", "error");
         els.kimiEnabled.checked = false;
@@ -4830,11 +4864,17 @@
     els.btnToggleKimiToken.addEventListener("click", togglePasswordVisibility);
     els.kimiSettingsInput.addEventListener("input", function () {
       var raw = els.kimiSettingsInput.value;
-      var token = parseBotToken(raw);
-      // 从命令格式中提取到 token → 替换输入框 + toast 提示
-      if (token && raw.indexOf("--bot-token") !== -1 && raw !== token) {
-        els.kimiSettingsInput.value = token;
-        showToast(t("kimi.tokenParsed") + maskToken(token));
+      var parsed = parseKimiInstallCommand(raw);
+      var isCmd = raw.indexOf("--bot-token") !== -1;
+      // 从命令格式中提取到 token → 同时回填高级字段（ws-url / kimiapi-host）并展开
+      if (parsed.botToken && isCmd && raw !== parsed.botToken) {
+        els.kimiSettingsInput.value = parsed.botToken;
+        if (parsed.wsURL && els.kimiBridgeUrlInput) els.kimiBridgeUrlInput.value = parsed.wsURL;
+        if (parsed.kimiapiHost && els.kimiApiHostInput) els.kimiApiHostInput.value = parsed.kimiapiHost;
+        if (els.kimiAdvancedWrap && (parsed.wsURL || parsed.kimiapiHost)) {
+          els.kimiAdvancedWrap.open = true;
+        }
+        showToast(t("kimi.tokenParsed") + maskToken(parsed.botToken));
       }
     });
     els.kimiBotPageLink.addEventListener("click", function (e) {

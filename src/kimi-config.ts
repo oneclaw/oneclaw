@@ -7,10 +7,43 @@ export const KIMI_PLUGIN_ID = "kimi-claw";
 export const KIMI_SEARCH_PLUGIN_ID = "kimi-search";
 export const DEFAULT_KIMI_BRIDGE_WS_URL = "wss://www.kimi.com/api-claw/bots/agent-ws";
 
+// 解析 bridge WS URL：override 非空 → 用 override（手动/从粘贴命令解析出的 --ws-url）；
+// 否则返回生产默认。前缀推断不做——环境信息永远来自显式字符串。
+export function resolveKimiBridgeURL(override?: string): string {
+  const explicit = typeof override === "string" ? override.trim() : "";
+  return explicit || DEFAULT_KIMI_BRIDGE_WS_URL;
+}
+
+// 解析 install 命令字符串，抽取 --bot-token / --ws-url / --kimiapi-host 三项。
+// 容错：任何一项缺失都返回空字符串；纯 token（无空格）直接当作 botToken。
+export interface ParsedKimiInstallCommand {
+  botToken: string;
+  wsURL: string;
+  kimiapiHost: string;
+}
+export function parseKimiInstallCommand(input: string): ParsedKimiInstallCommand {
+  const text = typeof input === "string" ? input : "";
+  const pick = (flag: string): string => {
+    const m = text.match(new RegExp(`${flag}\\s+(\\S+)`));
+    return m ? m[1] : "";
+  };
+  let botToken = pick("--bot-token");
+  if (!botToken) {
+    const trimmed = text.trim();
+    if (trimmed && !/\s/.test(trimmed)) botToken = trimmed;
+  }
+  return {
+    botToken,
+    wsURL: pick("--ws-url"),
+    kimiapiHost: pick("--kimiapi-host"),
+  };
+}
+
 export interface SaveKimiPluginParams {
   botToken: string;
   gatewayToken: string;
-  wsURL: string;
+  wsURL?: string;
+  kimiapiHost?: string;
 }
 
 // 写入 kimi-claw 插件配置（启用 + bridge/gateway 参数 + log + kimi-search 联动）
@@ -28,22 +61,37 @@ export function saveKimiPluginConfig(config: any, params: SaveKimiPluginParams):
       ? existingEntry.config
       : {};
 
+  const wsURL = resolveKimiBridgeURL(params.wsURL);
+  const kimiapiHostOverride =
+    typeof params.kimiapiHost === "string" ? params.kimiapiHost.trim() : "";
+
+  const existingBridge =
+    typeof existingConfig.bridge === "object" && existingConfig.bridge !== null
+      ? existingConfig.bridge
+      : {};
+  const newBridge: any = {
+    ...existingBridge,
+    mode: "acp",
+    url: wsURL,
+    token: params.botToken,
+    // 稳定本机 UUID 传给 kimi-claw，避免 fallback 到 "unknown-device"
+    // 被 Kimi 后端按匿名设备严限流（症状：GetMessages 429 resource_exhausted）。
+    deviceId: ensureDeviceId(),
+  };
+  // kimiapiHost 控制 IM subscribe 的 base_url（默认 https://www.kimi.com/api-ws）
+  // 显式传入非空值 → 写入；传入空字符串 → 删除回默认；未传入 → 保留存量。
+  if (kimiapiHostOverride) {
+    newBridge.kimiapiHost = kimiapiHostOverride;
+  } else if (typeof params.kimiapiHost === "string") {
+    delete newBridge.kimiapiHost;
+  }
+
   config.plugins.entries[KIMI_PLUGIN_ID] = {
     ...existingEntry,
     enabled: true,
     config: {
       ...existingConfig,
-      bridge: {
-        ...(typeof existingConfig.bridge === "object" && existingConfig.bridge !== null
-          ? existingConfig.bridge
-          : {}),
-        mode: "acp",
-        url: params.wsURL,
-        token: params.botToken,
-        // 稳定本机 UUID 传给 kimi-claw，避免 fallback 到 "unknown-device"
-        // 被 Kimi 后端按匿名设备严限流（症状：GetMessages 429 resource_exhausted）。
-        deviceId: ensureDeviceId(),
-      },
+      bridge: newBridge,
       gateway: {
         ...(typeof existingConfig.gateway === "object" && existingConfig.gateway !== null
           ? existingConfig.gateway
@@ -114,15 +162,29 @@ export function ensureKimiPluginDeviceId(config: any): boolean {
 }
 
 // 从已有配置中提取 kimi-claw 插件信息（供 settings 回显）
-export function extractKimiConfig(config: any): { enabled: boolean; botToken: string; wsURL: string } {
+// 附带 kimi-search serviceBaseUrl（作为 kimiapiHost 回显），让 UI 能展示配对的测试/生产环境
+export function extractKimiConfig(config: any): {
+  enabled: boolean;
+  botToken: string;
+  wsURL: string;
+  kimiapiHost: string;
+} {
   const entry = config?.plugins?.entries?.[KIMI_PLUGIN_ID];
+  const search = extractKimiSearchConfig(config);
+  // 优先取 kimi-claw bridge.kimiapiHost（真实权威），回退到 kimi-search 反推（旧配置兼容）
+  const bridgeKimiapiHost =
+    typeof entry?.config?.bridge?.kimiapiHost === "string"
+      ? entry.config.bridge.kimiapiHost.trim()
+      : "";
+  const kimiapiHost = bridgeKimiapiHost || search.serviceBaseUrl;
   if (!entry || typeof entry !== "object") {
-    return { enabled: false, botToken: "", wsURL: "" };
+    return { enabled: false, botToken: "", wsURL: "", kimiapiHost };
   }
   return {
     enabled: entry.enabled === true,
     botToken: entry.config?.bridge?.token ?? "",
     wsURL: entry.config?.bridge?.url ?? "",
+    kimiapiHost,
   };
 }
 

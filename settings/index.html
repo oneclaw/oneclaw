@@ -684,6 +684,22 @@
                     </button>
                   </div>
                 </div>
+
+                <details class="kimi-advanced" id="kimiAdvancedWrap">
+                  <summary data-i18n="kimi.advancedLabel">Advanced settings</summary>
+                  <div class="field-group">
+                    <label for="kimiBridgeUrlInput" data-i18n="kimi.bridgeUrlLabel">Custom Bridge WS URL</label>
+                    <input type="text" id="kimiBridgeUrlInput"
+                      placeholder="wss://kimi-file.msdev.cc/api-claw/bots/agent-ws"
+                      autocomplete="off" spellcheck="false">
+                  </div>
+                  <div class="field-group">
+                    <label for="kimiApiHostInput" data-i18n="kimi.apiHostLabel">Custom Kimi API Host</label>
+                    <input type="text" id="kimiApiHostInput"
+                      placeholder="https://kimi-file.msdev.cc/api-claw"
+                      autocomplete="off" spellcheck="false">
+                  </div>
+                </details>
               </div>
 
               <div class="msg-box hidden" id="kimiMsgBox"></div>
