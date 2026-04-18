@@ -376,7 +376,6 @@ function renderSidebarNav(
     <nav class="feedback-layout__sidebar">
       <div class="feedback-layout__sidebar-header">
         <span class="feedback-layout__sidebar-title">${t("feedback.tab")}</span>
-        ${renderSseStatusBadge(state)}
       </div>
 
       <button
