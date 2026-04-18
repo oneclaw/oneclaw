@@ -455,6 +455,7 @@ export class OpenClawApp extends LitElement {
   chatPendingStreamText: string | null = null;
   chatStreamFrame: number | null = null;
   chatRunId: string | null = null;
+  chatAbortedRunId: string | null = null;
   compactionStatus: CompactionStatus | null = null;
   chatAvatarUrl: string | null = null;
   chatThinkingLevel: string | null = null;
