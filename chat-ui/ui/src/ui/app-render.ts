@@ -913,9 +913,17 @@ function buildFeedbackPanelCallbacks(state: AppViewState) {
           email: feedbackPanelState.newEmail || undefined,
         });
         if (result?.ok) {
-          feedbackPanelState = { ...feedbackPanelState, view: "list", newSubmitting: false };
+          feedbackPanelState = { ...feedbackPanelState, newSubmitting: false };
           showToast(state, t("feedback.success"));
-          loadFeedbackThreads(state);
+          if (result.id) {
+            // 有 id → 直接跳转新建的 thread 详情
+            loadFeedbackThreads(state);
+            void loadFeedbackThreadDetail(state, result.id);
+          } else {
+            // 无 id → 回退到列表
+            feedbackPanelState = { ...feedbackPanelState, view: "list" };
+            loadFeedbackThreads(state);
+          }
         } else {
           feedbackPanelState = { ...feedbackPanelState, newSubmitting: false, newError: result?.error || t("feedback.error") };
         }
