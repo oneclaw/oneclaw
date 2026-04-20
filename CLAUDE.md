@@ -1,3 +1,7 @@
+# CLAUDE.md
+
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
 # OneClaw — Electron Shell for openclaw
 
 ## What This Project Is
@@ -148,6 +152,26 @@ rm -rf .dev-state && npm run clean && rm -rf chat-ui/dist tsconfig.tsbuildinfo
 2. `build:chat` — Vite builds Lit Chat UI into `chat-ui/dist/`
 3. `tsc` — compile TypeScript
 4. `electron-builder` → `afterPack.js` injects `resources/targets/<target>/` into app bundle → DMG/ZIP/NSIS
+
+### Dev Loop (important)
+
+`npm run dev` only runs `electron .` against whatever is already in `dist/` and `chat-ui/dist/` — it does **not** rebuild. After editing sources, rebuild manually before restarting Electron, or stale bundles will silently swallow your changes:
+
+```bash
+npx tsc                 # after editing src/*.ts
+npm run build:chat      # after editing chat-ui/ui/** (Lit components)
+npm run build           # both at once
+```
+
+### Tests
+
+Tests use the built-in `node:test` runner (TypeScript, `.test.ts` files in `src/`). There is no `npm test` script. Excluded from the production `tsc` build (see `tsconfig.json`). Run a single test file with a TS-aware node, e.g.:
+
+```bash
+npx tsx --test src/analytics-events.test.ts
+```
+
+There is no linter configured; `tsc --noEmit` is the de facto type check.
 
 ## Key Design Decisions
 

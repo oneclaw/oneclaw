@@ -65,7 +65,7 @@ function loadAnalyticsModule(options = {}) {
           return { resolveResourcesPath: () => resourcesPath };
         case "./oneclaw-config":
           return {
-            ensureDeviceId: () => "device-123",
+            ensureDeviceId: () => "12345678-1234-5678-9abc-def012345678",
             getChannelId: () => "",
           };
         case "./logger":
@@ -267,10 +267,11 @@ test("createVolcanoSink.buildPayload 输出 DataFinder 期望的信封结构", (
 
     const payload = plain(sink.buildPayload("setup_action_started", { action: "verify_key", foo: "bar" }));
 
-    assert.deepEqual(payload.user, { user_unique_id: "device-123" });
+    assert.deepEqual(payload.user, { user_unique_id: "" });
     assert.equal(payload.header.app_id, 1);
     assert.equal(payload.header.app_name, "OneClaw");
     assert.equal(payload.header.app_version, "2026.420.0");
+    assert.equal(payload.header.device_id, "9838263503687778304");
     // os_name 由 sandboxProcess.platform 决定，这里只校验是枚举值之一
     assert.ok(["mac", "windows", "linux"].includes(payload.header.os_name));
     // custom 必须是 JSON 字符串（DataFinder 协议要求）
