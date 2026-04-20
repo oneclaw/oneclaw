@@ -12,6 +12,7 @@ import oneClawLogo from "../assets/openclaw-favicon.svg";
 export type SidebarProps = {
   connected: boolean;
   currentSessionKey: string;
+  mainSessionKey: string | null;
   sessionOptions: Array<{ key: string; label: string; updatedAt?: number }>;
   settingsActive: boolean;
   skillsActive: boolean;
@@ -31,6 +32,7 @@ export type SidebarProps = {
   onNewChat: () => void;
   onRenameSession: (key: string, newLabel: string) => void;
   onDeleteSession: (key: string) => void;
+  isDeletingSession: (key: string) => boolean;
   settingsBadge: boolean;
   onOpenSettings: () => void;
   onOpenSkillStore: () => void;
@@ -143,6 +145,7 @@ export function renderSidebar(props: SidebarProps) {
             (s) => s.key,
             (s) => {
               const isActive = s.key === props.currentSessionKey;
+              const isMain = props.mainSessionKey != null && s.key === props.mainSessionKey;
               return html`
                 <div
                   class="oneclaw-sidebar__session-item ${isActive ? "active" : ""}"
@@ -166,18 +169,27 @@ export function renderSidebar(props: SidebarProps) {
                   >
                     ${icons.edit}
                   </button>
-                  <button
-                    class="oneclaw-sidebar__session-action"
-                    type="button"
-                    @click=${(e: Event) => {
-                      e.stopPropagation();
-                      props.onDeleteSession(s.key);
-                    }}
-                    data-tooltip=${t("sidebar.delete")}
-                    aria-label=${t("sidebar.delete")}
-                  >
-                    ${icons.x}
-                  </button>
+                  ${isMain
+                    ? nothing
+                    : (() => {
+                        const deleting = props.isDeletingSession(s.key);
+                        return html`
+                          <button
+                            class="oneclaw-sidebar__session-action ${deleting ? "is-loading" : ""}"
+                            type="button"
+                            ?disabled=${deleting}
+                            @click=${(e: Event) => {
+                              e.stopPropagation();
+                              if (deleting) return;
+                              props.onDeleteSession(s.key);
+                            }}
+                            data-tooltip=${t("sidebar.delete")}
+                            aria-label=${t("sidebar.delete")}
+                          >
+                            ${deleting ? icons.loader : icons.x}
+                          </button>
+                        `;
+                      })()}
                 </div>
               `;
             },

@@ -3422,7 +3422,6 @@
 
   // ── Kimi Tab ──
 
-  // 从 install.sh 命令或直接输入解析 bot token
   // 从粘贴的 install 命令里抽 --bot-token / --ws-url / --kimiapi-host。
   // 纯 token（无空格）直接当作 botToken；任何一项缺失都返回空串。
   function parseKimiInstallCommand(input) {
@@ -3438,8 +3437,6 @@
     }
     return { botToken: token, wsURL: pick("--ws-url"), kimiapiHost: pick("--kimiapi-host") };
   }
-  // 兼容旧调用点：只要 token
-  function parseBotToken(input) { return parseKimiInstallCommand(input).botToken; }
 
   // 掩码 token（保留首尾各 4 字符）
   function maskToken(token) {

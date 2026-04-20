@@ -7,11 +7,12 @@ import { html, nothing } from "lit";
 import type { AppViewState } from "./app-view-state.ts";
 import { parseAgentSessionKey } from "../../../src/routing/session-key.js";
 import { refreshChat, refreshChatAvatar, pendingSessionLabels } from "./app-chat.ts";
-import { syncUrlWithSessionKey } from "./app-settings.ts";
 import { loadChatHistory } from "./controllers/chat.ts";
 import { t } from "./i18n.ts";
 import { icons } from "./icons.ts";
 import { renderSidebar } from "./sidebar.ts";
+import { applySessionKeyTransition } from "./session-transition.ts";
+import { resolveMainSessionKey, resolveVisibleSessionSelection } from "./session-visibility.ts";
 import { renderChat } from "./views/chat.ts";
 import { renderExecApprovalPrompt } from "./views/exec-approval.ts";
 import { renderGatewayUrlConfirmation } from "./views/gateway-url-confirmation.ts";
@@ -95,35 +96,14 @@ function resolveAssistantAvatarUrl(state: AppViewState): string | undefined {
 }
 
 function applySessionKey(state: AppViewState, next: string, syncUrl = false) {
-  if (!next || next === state.sessionKey) {
-    return;
+  const changed = applySessionKeyTransition(
+    state as unknown as Parameters<typeof applySessionKeyTransition>[0],
+    next,
+    syncUrl,
+  );
+  if (changed) {
+    void refreshChatAvatar(state as any);
   }
-  state.sessionKey = next;
-  state.chatMessage = "";
-  state.chatAttachments = [];
-  state.chatStream = null;
-  (state as any).chatPendingStreamText = null;
-  (state as any).chatVisibleMessageCount = 0;
-  (state as any).chatStreamStartedAt = null;
-  state.chatRunId = null;
-  state.chatQueue = [];
-  (state as any).resetToolStream();
-  (state as any).resetChatScroll();
-  state.applySettings({
-    ...state.settings,
-    sessionKey: next,
-    lastActiveSessionKey: next,
-  });
-  if (syncUrl) {
-    syncUrlWithSessionKey(
-      state as unknown as Parameters<typeof syncUrlWithSessionKey>[0],
-      next,
-      true,
-    );
-  }
-  void state.loadAssistantIdentity();
-  void loadChatHistory(state as any);
-  void refreshChatAvatar(state as any);
 }
 
 function resolveSessionOptionLabel(
@@ -146,7 +126,6 @@ function resolveSessionOptions(
   state: AppViewState,
 ): Array<{ key: string; label: string; updatedAt?: number }> {
   const sessions = state.sessionsResult?.sessions ?? [];
-  const current = state.sessionKey?.trim() || "main";
   const seen = new Set<string>();
   const options: Array<{ key: string; label: string; updatedAt?: number }> = [];
 
@@ -168,9 +147,11 @@ function resolveSessionOptions(
     });
   };
 
-  // 收集所有会话（含当前会话和 API 列表）
+  const current = state.sessionKey?.trim() || "main";
   const currentSession = sessions.find((entry) => entry.key === current);
-  pushOption(current, currentSession, true);
+  if (currentSession) {
+    pushOption(current, currentSession, true);
+  }
   for (const session of sessions) {
     pushOption(session.key, session);
   }
@@ -178,10 +159,18 @@ function resolveSessionOptions(
   // 按 updatedAt 降序排列（最近使用的在前，无时间戳的在末尾）
   options.sort((a, b) => (b.updatedAt ?? 0) - (a.updatedAt ?? 0));
 
-  if (options.length === 0) {
-    return [{ key: current, label: current }];
-  }
   return options;
+}
+
+function reconcileVisibleSession(state: AppViewState) {
+  if (!state.sessionsResult) {
+    return;
+  }
+  const next = resolveVisibleSessionSelection(state.sessionKey, state.hello, state.sessionsResult);
+  if (!next || next === state.sessionKey) {
+    return;
+  }
+  applySessionKey(state, next, true);
 }
 
 // 侧边栏点击会话：切换 session 并确保回到对话视图
@@ -198,47 +187,48 @@ async function patchSessionFromSidebar(state: AppViewState, key: string, newLabe
   await patchSession(state as any, key, { label: newLabel || null });
 }
 
-// 侧边栏删除回调：归档对话 → 删除会话 → UI 即时更新
+// 正在删除的 session key —— 侧边栏 per-row spinner 状态
+const deletingSessionKeys = new Set<string>();
+
+// 侧边栏删除回调：同步走完 reset + delete，期间该行按钮显示 loading。
 async function deleteSessionFromSidebar(state: AppViewState, key: string) {
   const s = state as any;
-  if (!s.client || !s.connected) {
-    return;
-  }
+  if (!s.client || !s.connected) return;
+  if (deletingSessionKeys.has(key)) return;
+
   const confirmed = window.confirm(t("sidebar.deleteSession"));
-  if (!confirmed) {
-    return;
-  }
+  if (!confirmed) return;
 
-  // 立刻从本地列表移除，UI 即时响应
-  const sessions = state.sessionsResult?.sessions ?? [];
-  state.sessionsResult = {
-    ...state.sessionsResult,
-    sessions: sessions.filter((entry) => entry.key !== key),
-  };
+  deletingSessionKeys.add(key);
+  state.requestUpdate();
 
-  // 删除当前活跃会话时，立刻切换到下一个
-  if (key === state.sessionKey) {
-    const remaining = state.sessionsResult?.sessions ?? [];
-    const nextKey = remaining[0]?.key ?? "main";
-    applySessionKey(state, nextKey, true);
-  }
-
-  // 触发 session-memory hook → 对话摘要归档到 ~/memory/*.md
   try {
-    await s.client.request("sessions.reset", { key, reason: "new" });
-  } catch {
-    // 本地独有会话 gateway 不认识，忽略
-  }
+    // 1) reset：触发 session-memory hook 归档对话摘要；gateway 不认识时忽略。
+    try {
+      await s.client.request("sessions.reset", { key, reason: "new" });
+    } catch {
+      // 本地独有会话（新建未发消息）gateway 不可见，跳过
+    }
 
-  // gateway 后端删除
-  try {
-    await s.client.request("sessions.delete", { key, deleteTranscript: true });
-  } catch {
-    // main 会话等 gateway 可能拒绝，已在上面本地移除
-  }
+    // 2) delete：移除 sessions.json 条目并归档 transcript。
+    try {
+      await s.client.request("sessions.delete", { key, deleteTranscript: true });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      if (!/session not found|unknown session/i.test(msg)) {
+        showToast(state, `${t("sidebar.deleteSessionFailed")}: ${msg}`);
+        return;
+      }
+      // not-found 视作等效成功，继续刷新
+    }
 
-  // 与 gateway 同步最终列表
-  await loadSessions(s);
+    // 3) 成功：全量刷新侧边栏；reconcileVisibleSession 会在活跃会话被删时切到下一个可见会话。
+    await loadSessions(s);
+    reconcileVisibleSession(state);
+  } finally {
+    deletingSessionKeys.delete(key);
+    state.requestUpdate();
+  }
 }
 
 function setOneClawView(state: AppViewState, next: "chat" | "setup" | "settings" | "skills" | "workspace" | "cron" | "feedback") {
@@ -1093,6 +1083,7 @@ export function renderApp(state: AppViewState) {
         : renderSidebar({
             connected: state.connected,
             currentSessionKey,
+            mainSessionKey: resolveMainSessionKey(state.hello, state.sessionsResult),
             sessionOptions,
             settingsActive,
             skillsActive,
@@ -1115,6 +1106,7 @@ export function renderApp(state: AppViewState) {
             onDeleteSession: (key: string) => {
               void deleteSessionFromSidebar(state, key);
             },
+            isDeletingSession: (key: string) => deletingSessionKeys.has(key),
             onToggleSidebar: () => {
               state.applySettings({
                 ...state.settings,
