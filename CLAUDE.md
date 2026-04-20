@@ -82,9 +82,11 @@ oneclaw/
 │   ├── settings.js         # Provider CRUD, multi-channel, Kimi, CLI, backup/restore
 │   ├── lucide-sprite.generated.js  # Icon sprites
 │   └── share-copy-content.json     # Fallback share copy content
-├── builtin-skills/         # OneClaw-owned skills, bundled into app and copied to ~/.openclaw/workspace/skills/ on first launch
+├── builtin-skills/         # OneClaw-owned skills, injected at build time into gateway/node_modules/openclaw/skills/
 │   ├── env-setup/          # Install uv + Python + PyPI deps with CN/INTL mirror auto-selection
-│   └── document-pro/       # PDF/DOCX/PPTX/XLSX extraction guide
+│   ├── officecli-docx/     # DOCX generation/editing via officecli
+│   ├── officecli-pptx/     # PPTX generation/editing via officecli
+│   └── officecli-xlsx/     # XLSX generation/editing via officecli
 ├── scripts/
 │   ├── package-resources.js    # Downloads Node.js 22 + installs openclaw from npm
 │   ├── afterPack.js            # electron-builder hook: injects resources post-strip

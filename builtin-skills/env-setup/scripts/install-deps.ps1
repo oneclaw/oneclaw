@@ -16,7 +16,14 @@ if ($args.Count -lt 2) {
 $pythonTarget = $args[0]
 $packages = $args[1..($args.Count - 1)]
 
-$venvDir = Join-Path $env:USERPROFILE ".openclaw\venvs\venv$pythonTarget"
+if ($pythonTarget -notmatch '^[0-9]+\.[0-9]+(\.[0-9]+)?$') {
+    throw "Invalid python version '$pythonTarget'. Expected X.Y or X.Y.Z (e.g. 3.11 or 3.11.9)."
+}
+
+$parts = $pythonTarget.Split('.')
+$pythonMinor = "$($parts[0]).$($parts[1])"
+
+$venvDir = Join-Path $env:USERPROFILE ".openclaw\venvs\venv$pythonMinor"
 
 if (-not (Test-Path $venvDir)) {
     uv venv --python $pythonTarget $venvDir

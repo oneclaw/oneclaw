@@ -11,7 +11,14 @@ fi
 PYTHON_TARGET=$1
 shift
 
-VENV_DIR="$HOME/.openclaw/venvs/venv$PYTHON_TARGET"
+if ! printf '%s' "$PYTHON_TARGET" | grep -Eq '^[0-9]+\.[0-9]+(\.[0-9]+)?$'; then
+  echo "Error: invalid python version '$PYTHON_TARGET'. Expected X.Y or X.Y.Z (e.g. 3.11 or 3.11.9)." >&2
+  exit 64
+fi
+
+PYTHON_MINOR=$(printf '%s' "$PYTHON_TARGET" | awk -F. '{print $1"."$2}')
+
+VENV_DIR="$HOME/.openclaw/venvs/venv$PYTHON_MINOR"
 
 if [ ! -d "$VENV_DIR" ]; then
   uv venv --python "$PYTHON_TARGET" "$VENV_DIR"
