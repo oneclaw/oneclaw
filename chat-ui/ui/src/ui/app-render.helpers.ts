@@ -4,12 +4,12 @@ import type { AppViewState } from "./app-view-state.ts";
 import type { ThemeTransitionContext } from "./theme-transition.ts";
 import type { ThemeMode } from "./theme.ts";
 import type { SessionsListResult } from "./types.ts";
-import { refreshChat } from "./app-chat.ts";
-import { syncUrlWithSessionKey } from "./app-settings.ts";
+import { refreshChat, refreshChatAvatar } from "./app-chat.ts";
 import { OpenClawApp } from "./app.ts";
-import { ChatState, loadChatHistory } from "./controllers/chat.ts";
 import { icons } from "./icons.ts";
 import { iconForTab, pathForTab, titleForTab, type Tab } from "./navigation.ts";
+import { applySessionKeyTransition } from "./session-transition.ts";
+import { resolveMainSessionKey } from "./session-visibility.ts";
 
 export function renderTab(state: AppViewState, tab: Tab) {
   const href = pathForTab(tab, state.basePath);
@@ -92,27 +92,14 @@ export function renderChatControls(state: AppViewState) {
           ?disabled=${!state.connected}
           @change=${(e: Event) => {
             const next = (e.target as HTMLSelectElement).value;
-            state.sessionKey = next;
-            state.chatMessage = "";
-            state.chatStream = null;
-            (state as unknown as OpenClawApp).chatPendingStreamText = null;
-            (state as unknown as OpenClawApp).chatVisibleMessageCount = 0;
-            (state as unknown as OpenClawApp).chatStreamStartedAt = null;
-            state.chatRunId = null;
-            (state as unknown as OpenClawApp).resetToolStream();
-            (state as unknown as OpenClawApp).resetChatScroll();
-            state.applySettings({
-              ...state.settings,
-              sessionKey: next,
-              lastActiveSessionKey: next,
-            });
-            void state.loadAssistantIdentity();
-            syncUrlWithSessionKey(
-              state as unknown as Parameters<typeof syncUrlWithSessionKey>[0],
+            const changed = applySessionKeyTransition(
+              state as unknown as Parameters<typeof applySessionKeyTransition>[0],
               next,
               true,
             );
-            void loadChatHistory(state as unknown as ChatState);
+            if (changed) {
+              void refreshChatAvatar(state as any);
+            }
           }}
         >
           ${repeat(
@@ -197,30 +184,6 @@ export function renderChatControls(state: AppViewState) {
   `;
 }
 
-type SessionDefaultsSnapshot = {
-  mainSessionKey?: string;
-  mainKey?: string;
-};
-
-function resolveMainSessionKey(
-  hello: AppViewState["hello"],
-  sessions: SessionsListResult | null,
-): string | null {
-  const snapshot = hello?.snapshot as { sessionDefaults?: SessionDefaultsSnapshot } | undefined;
-  const mainSessionKey = snapshot?.sessionDefaults?.mainSessionKey?.trim();
-  if (mainSessionKey) {
-    return mainSessionKey;
-  }
-  const mainKey = snapshot?.sessionDefaults?.mainKey?.trim();
-  if (mainKey) {
-    return mainKey;
-  }
-  if (sessions?.sessions?.some((row) => row.key === "main")) {
-    return "main";
-  }
-  return null;
-}
-
 export function resolveSessionDisplayName(
   key: string,
   row?: SessionsListResult["sessions"][number],
@@ -247,17 +210,16 @@ function resolveSessionOptions(
   const resolvedMain = mainSessionKey && sessions?.sessions?.find((s) => s.key === mainSessionKey);
   const resolvedCurrent = sessions?.sessions?.find((s) => s.key === sessionKey);
 
-  // Add main session key first
-  if (mainSessionKey) {
-    seen.add(mainSessionKey);
+  // 只展示当前真正可见的会话，不把已隐藏/失效的 key 再注回列表。
+  if (mainSessionKey && resolvedMain) {
+    seen.add(resolvedMain.key);
     options.push({
-      key: mainSessionKey,
-      displayName: resolveSessionDisplayName(mainSessionKey, resolvedMain || undefined),
+      key: resolvedMain.key,
+      displayName: resolveSessionDisplayName(resolvedMain.key, resolvedMain),
     });
   }
 
-  // Add current session key next
-  if (!seen.has(sessionKey)) {
+  if (resolvedCurrent && !seen.has(sessionKey)) {
     seen.add(sessionKey);
     options.push({
       key: sessionKey,

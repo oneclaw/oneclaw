@@ -4,8 +4,8 @@ import type { ExecApprovalRequest } from "./controllers/exec-approval.ts";
 import type { GatewayEventFrame, GatewayHelloOk } from "./gateway.ts";
 import type { Tab } from "./navigation.ts";
 import type { UiSettings } from "./storage.ts";
-import type { AgentsListResult, PresenceEntry, HealthSnapshot, StatusSummary } from "./types.ts";
-import { flushChatQueueForEvent, flushPendingSessionLabel } from "./app-chat.ts";
+import type { AgentsListResult, PresenceEntry, HealthSnapshot, SessionsListResult, StatusSummary } from "./types.ts";
+import { flushChatQueueForEvent, flushPendingSessionLabel, refreshChatAvatar } from "./app-chat.ts";
 import {
   applySettings,
   loadCron,
@@ -29,6 +29,8 @@ import {
 import { loadNodes } from "./controllers/nodes.ts";
 import { loadSessions } from "./controllers/sessions.ts";
 import { GatewayBrowserClient } from "./gateway.ts";
+import { applySessionKeyTransition } from "./session-transition.ts";
+import { resolveVisibleSessionSelection } from "./session-visibility.ts";
 
 type GatewayHost = {
   settings: UiSettings;
@@ -52,6 +54,13 @@ type GatewayHost = {
   assistantAvatar: string | null;
   assistantAgentId: string | null;
   sessionKey: string;
+  sessionsLoading: boolean;
+  sessionsResult: SessionsListResult | null;
+  sessionsError: string | null;
+  sessionsFilterActive: string;
+  sessionsFilterLimit: string;
+  sessionsIncludeGlobal: boolean;
+  sessionsIncludeUnknown: boolean;
   chatRunId: string | null;
   refreshSessionsAfterChat: Set<string>;
   execApprovalQueue: ExecApprovalRequest[];
@@ -117,6 +126,31 @@ function applySessionDefaults(host: GatewayHost, defaults?: SessionDefaultsSnaps
   }
 }
 
+function reconcileSessionSelection(host: GatewayHost) {
+  if (!host.sessionsResult) {
+    return;
+  }
+  const nextSessionKey = resolveVisibleSessionSelection(
+    host.sessionKey,
+    host.hello,
+    host.sessionsResult,
+  );
+  if (!nextSessionKey || nextSessionKey === host.sessionKey) {
+    return;
+  }
+  applySessionKeyTransition(
+    host as unknown as Parameters<typeof applySessionKeyTransition>[0],
+    nextSessionKey,
+    true,
+  );
+  void refreshChatAvatar(host as unknown as Parameters<typeof refreshChatAvatar>[0]);
+}
+
+async function loadSessionsAndReconcile(host: GatewayHost) {
+  await loadSessions(host as unknown as OpenClawApp);
+  reconcileSessionSelection(host);
+}
+
 // gap 重连状态：最多重试 3 次，指数退避 (1s, 2s, 4s)
 const GAP_RECONNECT_MAX = 3;
 let gapReconnectCount = 0;
@@ -160,10 +194,11 @@ export function connectGateway(host: GatewayHost) {
       void loadAgents(host as unknown as OpenClawApp);
       void loadNodes(host as unknown as OpenClawApp, { quiet: true });
       void loadDevices(host as unknown as OpenClawApp, { quiet: true });
+      void loadSessionsAndReconcile(host);
       void refreshActiveTab(host as unknown as Parameters<typeof refreshActiveTab>[0]);
       // 注册定时轮询并启动客户端定时器
       registerTickHandler("cron", () => loadCronJobs(host as unknown as Parameters<typeof loadCronJobs>[0]));
-      registerTickHandler("sessions", () => loadSessions(host as unknown as OpenClawApp));
+      registerTickHandler("sessions", () => loadSessionsAndReconcile(host));
       startTicker();
     },
     onClose: ({ code, reason }) => {
