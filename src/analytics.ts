@@ -23,8 +23,6 @@ const DEVICE_MODEL = process.platform === "darwin"
   ? (os.cpus()[0]?.model ?? "").trim()
   : "";
 
-// ── PostHog 配置（沿用原结构） ──
-
 interface PostHogConfig {
   enabled: boolean;
   captureURL: string;
@@ -33,8 +31,6 @@ interface PostHogConfig {
   requestTimeoutMs: number;
   retryDelaysMs: number[];
 }
-
-// ── 火山 DataFinder 配置 ──
 
 interface VolcanoConfig {
   enabled: boolean;
@@ -45,8 +41,6 @@ interface VolcanoConfig {
   requestTimeoutMs: number;
   retryDelaysMs: number[];
 }
-
-// ── Sink 抽象：每个 sink 持有自己的 payload 构建、鉴权头、endpoint、retry 参数 ──
 
 interface SinkConfig {
   name: string;
@@ -132,8 +126,7 @@ function emptyBuildConfig(): PartialBuildConfig {
   return { posthog: {} as Partial<PostHogConfig>, volcano: {} as Partial<VolcanoConfig> };
 }
 
-// 新 schema 是 { posthog, volcano, ... }；旧 schema（pre-dual-sink）是 { analytics: {...} }，
-// 此处只做嵌套回退，保证升级前写入的 build-config.json 仍能识别 PostHog 部分。
+// 向后兼容旧 build-config.json 的扁平 `analytics` 字段，避免升级安装包读到旧结构时静默关掉 PostHog。
 export function parseAnalyticsBuildConfig(raw: unknown): PartialBuildConfig {
   const empty = emptyBuildConfig();
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) return empty;
@@ -154,8 +147,6 @@ function readPackagedConfig(): PartialBuildConfig {
   resolvedConfigPath = cfgPath;
 
   try {
-    // 优先读新 schema 的 posthog/volcano 字段；若开发机残留旧 build-config.json（嵌套 analytics
-    // 或扁平 PostHog），由 parseAnalyticsBuildConfig 负责回退，避免静默把 PostHog 关掉。
     return parseAnalyticsBuildConfig(JSON.parse(fs.readFileSync(cfgPath, "utf-8")));
   } catch (err) {
     log.warn(`[analytics] 配置解析失败: ${String(err)}`);
@@ -207,6 +198,21 @@ export function normalizeVolcanoConfig(raw: Partial<VolcanoConfig>): VolcanoConf
   return { enabled, appId, appKey, endpoint, fallbackEndpoint, requestTimeoutMs, retryDelaysMs };
 }
 
+// 把 OneClaw 的 UUID device-id 转成 DataFinder device_id 要求的十进制字符串。
+// DataFinder header.device_id 名义上是 uint64，但服务端用 Java/Go Long（signed int64）存储：
+// 折叠结果 >= 2^63 时会被反序列化成负数，事件入库但在看板里检索不到（曾经实测复现：
+// UUID 3e4ca5f1-63ad-4b5d-857c-dad03a9dbdec 折叠出 13488420665181664945 > 2^63-1，消失）。
+// 做法：128 bit 折叠成 64 bit 后再 AND 上 (2^63-1)，把值域钳在 signed int63 正区间。
+// 熵从 64 bit 降到 63 bit，生日碰撞阈值仍在 30 亿设备级，对 OneClaw 规模完全够用。
+function uuidToDataFinderDeviceId(uuid: string): string {
+  const hex = uuid.replace(/-/g, "");
+  if (hex.length < 32) return "0";
+  const high = BigInt("0x" + hex.slice(0, 16));
+  const low = BigInt("0x" + hex.slice(16, 32));
+  const INT63_MASK = (1n << 63n) - 1n;
+  return ((high ^ low) & INT63_MASK).toString(10);
+}
+
 // 映射 process.platform 到 DataFinder 的 os_name 枚举。
 function volcanoOsName(): string {
   switch (process.platform) {
@@ -249,7 +255,9 @@ export function createVolcanoSink(config: VolcanoConfig): SinkConfig {
     enabled: config.enabled,
     endpoints,
     buildPayload: (event, eventProps) => ({
-      user: { user_unique_id: deviceId },
+      // OneClaw 没有账号体系，user_unique_id 留空；把本地 UUID 转成 uint64 填到 header.device_id，
+      // DataFinder 按纯设备维度识别。合法 uint64 是服务端接受空 user_unique_id 的唯一条件。
+      user: { user_unique_id: "" },
       header: {
         app_id: config.appId,
         app_name: "OneClaw",
@@ -257,6 +265,7 @@ export function createVolcanoSink(config: VolcanoConfig): SinkConfig {
         os_name: volcanoOsName(),
         os_version: typeof process.getSystemVersion === "function" ? process.getSystemVersion() : "",
         device_model: DEVICE_MODEL,
+        device_id: uuidToDataFinderDeviceId(deviceId),
         custom: JSON.stringify(volcanoCustomProps()),
       },
       events: [{
