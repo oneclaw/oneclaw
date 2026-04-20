@@ -155,6 +155,7 @@ test("buildVolcanoConfig 应写入独立的超时与重试配置", () => {
       argv: process.argv.slice(),
       env: {
         ...process.env,
+        VOLCANO_APP_ID: "1",
         VOLCANO_APP_KEY: "volcano-key",
         VOLCANO_ENDPOINT: "https://collector.example/v2/event/json",
         VOLCANO_FALLBACK_ENDPOINT: "https://collector-backup.example/v2/event/json",
@@ -166,6 +167,7 @@ test("buildVolcanoConfig 应写入独立的超时与重试配置", () => {
 
   assert.deepEqual(JSON.parse(JSON.stringify(sandbox.buildVolcanoConfig())), {
     enabled: true,
+    appId: 1,
     appKey: "volcano-key",
     endpoint: "https://collector.example/v2/event/json",
     fallbackEndpoint: "https://collector-backup.example/v2/event/json",

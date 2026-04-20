@@ -38,6 +38,7 @@ interface PostHogConfig {
 
 interface VolcanoConfig {
   enabled: boolean;
+  appId: number;
   appKey: string;
   endpoint: string;
   fallbackEndpoint: string;
@@ -131,25 +132,14 @@ function emptyBuildConfig(): PartialBuildConfig {
   return { posthog: {} as Partial<PostHogConfig>, volcano: {} as Partial<VolcanoConfig> };
 }
 
-function looksLikeLegacyPostHogConfig(value: unknown): value is Partial<PostHogConfig> {
-  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
-  return [
-    "enabled",
-    "captureURL",
-    "captureFallbackURL",
-    "apiKey",
-    "requestTimeoutMs",
-    "retryDelaysMs",
-  ].some((key) => key in value);
-}
-
+// 新 schema 是 { posthog, volcano, ... }；旧 schema（pre-dual-sink）是 { analytics: {...} }，
+// 此处只做嵌套回退，保证升级前写入的 build-config.json 仍能识别 PostHog 部分。
 export function parseAnalyticsBuildConfig(raw: unknown): PartialBuildConfig {
   const empty = emptyBuildConfig();
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) return empty;
 
   const parsed = raw as Record<string, unknown>;
-  const legacyPostHog = parsed.analytics ?? (looksLikeLegacyPostHogConfig(parsed) ? parsed : undefined);
-  const posthog = (parsed.posthog ?? legacyPostHog ?? {}) as Partial<PostHogConfig>;
+  const posthog = (parsed.posthog ?? parsed.analytics ?? {}) as Partial<PostHogConfig>;
   const volcano = (parsed.volcano ?? {}) as Partial<VolcanoConfig>;
 
   return { posthog, volcano };
@@ -203,15 +193,18 @@ export function normalizeVolcanoConfig(raw: Partial<VolcanoConfig>): VolcanoConf
   const appKey = (typeof raw.appKey === "string" ? raw.appKey : "").trim();
   const endpoint = (typeof raw.endpoint === "string" ? raw.endpoint : "").trim();
   const fallbackEndpoint = (typeof raw.fallbackEndpoint === "string" ? raw.fallbackEndpoint : "").trim() || endpoint;
+  // DataFinder header.app_id 是 uint32 必填，缺失或非正整数直接禁用 sink，避免无意义的 HTTP 400 重试。
+  const appId =
+    typeof raw.appId === "number" && Number.isInteger(raw.appId) && raw.appId > 0 ? raw.appId : 0;
   const requestTimeoutMs =
     typeof raw.requestTimeoutMs === "number" && raw.requestTimeoutMs > 0
       ? raw.requestTimeoutMs
       : DEFAULT_REQUEST_TIMEOUT_MS;
   const retryDelaysMs = normalizeRetryDelays(raw.retryDelaysMs);
-  const hasCore = endpoint.length > 0 && appKey.length > 0;
+  const hasCore = endpoint.length > 0 && appKey.length > 0 && appId > 0;
   const enabled = raw.enabled === true && hasCore;
 
-  return { enabled, appKey, endpoint, fallbackEndpoint, requestTimeoutMs, retryDelaysMs };
+  return { enabled, appId, appKey, endpoint, fallbackEndpoint, requestTimeoutMs, retryDelaysMs };
 }
 
 // 映射 process.platform 到 DataFinder 的 os_name 枚举。
@@ -258,6 +251,7 @@ export function createVolcanoSink(config: VolcanoConfig): SinkConfig {
     buildPayload: (event, eventProps) => ({
       user: { user_unique_id: deviceId },
       header: {
+        app_id: config.appId,
         app_name: "OneClaw",
         app_version: app.getVersion(),
         os_name: volcanoOsName(),

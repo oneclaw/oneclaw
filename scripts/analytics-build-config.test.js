@@ -137,6 +137,7 @@ test("parseAnalyticsBuildConfig 应兼容旧版 analytics 嵌套字段", () => {
     },
     volcano: {
       enabled: true,
+      appId: 1,
       appKey: "volcano-key",
       endpoint: "https://collector.example/v2/event/json",
     },
@@ -152,31 +153,10 @@ test("parseAnalyticsBuildConfig 应兼容旧版 analytics 嵌套字段", () => {
     },
     volcano: {
       enabled: true,
+      appId: 1,
       appKey: "volcano-key",
       endpoint: "https://collector.example/v2/event/json",
     },
-  });
-});
-
-test("parseAnalyticsBuildConfig 应兼容扁平旧版 PostHog schema", () => {
-  const { module } = loadAnalyticsModule();
-  const { parseAnalyticsBuildConfig } = module;
-
-  const config = JSON.parse(JSON.stringify(parseAnalyticsBuildConfig({
-    enabled: true,
-    captureURL: "https://posthog.example/capture",
-    apiKey: "flat-legacy-key",
-    captureFallbackURL: "https://posthog-backup.example/capture",
-  })));
-
-  assert.deepEqual(config, {
-    posthog: {
-      enabled: true,
-      captureURL: "https://posthog.example/capture",
-      apiKey: "flat-legacy-key",
-      captureFallbackURL: "https://posthog-backup.example/capture",
-    },
-    volcano: {},
   });
 });
 
@@ -191,6 +171,7 @@ test("normalizeVolcanoConfig 空入参时禁用并回填默认值", () => {
 
   assert.deepEqual(plain(normalizeVolcanoConfig({})), {
     enabled: false,
+    appId: 0,
     appKey: "",
     endpoint: "",
     fallbackEndpoint: "",
@@ -199,16 +180,24 @@ test("normalizeVolcanoConfig 空入参时禁用并回填默认值", () => {
   });
 });
 
-test("normalizeVolcanoConfig 缺 appKey 或 endpoint 时禁用", () => {
+test("normalizeVolcanoConfig 缺 appId/appKey/endpoint 任一时禁用", () => {
   const { module } = loadAnalyticsModule();
   const { normalizeVolcanoConfig } = module;
 
   assert.equal(
-    normalizeVolcanoConfig({ enabled: true, appKey: "only-key", endpoint: "" }).enabled,
+    normalizeVolcanoConfig({ enabled: true, appId: 1, appKey: "only-key", endpoint: "" }).enabled,
     false,
   );
   assert.equal(
-    normalizeVolcanoConfig({ enabled: true, appKey: "", endpoint: "https://ep.example" }).enabled,
+    normalizeVolcanoConfig({ enabled: true, appId: 1, appKey: "", endpoint: "https://ep.example" }).enabled,
+    false,
+  );
+  assert.equal(
+    normalizeVolcanoConfig({ enabled: true, appKey: "k", endpoint: "https://ep.example" }).enabled,
+    false,
+  );
+  assert.equal(
+    normalizeVolcanoConfig({ enabled: true, appId: 0, appKey: "k", endpoint: "https://ep.example" }).enabled,
     false,
   );
 });
@@ -220,6 +209,7 @@ test("normalizeVolcanoConfig 完整配置时启用并用 endpoint 兜底 fallbac
   assert.deepEqual(
     plain(normalizeVolcanoConfig({
       enabled: true,
+      appId: 1,
       appKey: "  volcano-key  ",
       endpoint: "https://collector.example/v2/event/json",
       requestTimeoutMs: 5000,
@@ -227,6 +217,7 @@ test("normalizeVolcanoConfig 完整配置时启用并用 endpoint 兜底 fallbac
     })),
     {
       enabled: true,
+      appId: 1,
       appKey: "volcano-key",
       endpoint: "https://collector.example/v2/event/json",
       fallbackEndpoint: "https://collector.example/v2/event/json",
@@ -243,6 +234,7 @@ test("normalizeVolcanoConfig 非法 retryDelaysMs 回退到默认值", () => {
   assert.deepEqual(
     plain(normalizeVolcanoConfig({
       enabled: true,
+      appId: 1,
       appKey: "k",
       endpoint: "https://ep.example",
       retryDelaysMs: ["bad", -1],
@@ -259,6 +251,7 @@ test("createVolcanoSink.buildPayload 输出 DataFinder 期望的信封结构", (
   try {
     const sink = mod.createVolcanoSink({
       enabled: true,
+      appId: 1,
       appKey: "volcano-key",
       endpoint: "https://collector.example/v2/event/json",
       fallbackEndpoint: "https://collector-backup.example/v2/event/json",
@@ -275,6 +268,7 @@ test("createVolcanoSink.buildPayload 输出 DataFinder 期望的信封结构", (
     const payload = plain(sink.buildPayload("setup_action_started", { action: "verify_key", foo: "bar" }));
 
     assert.deepEqual(payload.user, { user_unique_id: "device-123" });
+    assert.equal(payload.header.app_id, 1);
     assert.equal(payload.header.app_name, "OneClaw");
     assert.equal(payload.header.app_version, "2026.420.0");
     // os_name 由 sandboxProcess.platform 决定，这里只校验是枚举值之一
@@ -309,6 +303,7 @@ test("init 应记录 enabled sinks 的 fan-out 规模", () => {
       },
       volcano: {
         enabled: true,
+        appId: 1,
         appKey: "volcano-key",
         endpoint: "https://collector.example/v2/event/json",
       },
@@ -370,6 +365,7 @@ test("track 遇到不可 JSON 序列化的 Volcano 属性时只丢弃当前 sink
     config: {
       volcano: {
         enabled: true,
+        appId: 1,
         appKey: "volcano-key",
         endpoint: "https://collector.example/v2/event/json",
       },

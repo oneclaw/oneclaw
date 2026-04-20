@@ -515,15 +515,17 @@ function buildPostHogConfig() {
 }
 
 function buildVolcanoConfig() {
+  const appId = readEnvPositiveInt("VOLCANO_APP_ID", 0);
   const appKey = readEnvText("VOLCANO_APP_KEY");
   const endpoint = readEnvText("VOLCANO_ENDPOINT");
   const fallbackEndpoint = readEnvText("VOLCANO_FALLBACK_ENDPOINT") || endpoint;
   const requestTimeoutMs = readEnvPositiveInt("VOLCANO_REQUEST_TIMEOUT_MS", 8000);
   const retryDelaysMs = readEnvRetryDelays("VOLCANO_RETRY_DELAYS_MS", [0, 500, 1500]);
-  const enabled = appKey.length > 0 && endpoint.length > 0;
+  const enabled = appId > 0 && appKey.length > 0 && endpoint.length > 0;
 
   return {
     enabled,
+    appId: enabled ? appId : 0,
     appKey: enabled ? appKey : "",
     endpoint: enabled ? endpoint : "",
     fallbackEndpoint: enabled ? fallbackEndpoint : "",
