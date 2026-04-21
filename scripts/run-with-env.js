@@ -42,9 +42,13 @@ function run() {
     process.exit(1);
   }
 
-  const envFromFile = loadEnvFile(path.resolve(process.cwd(), ".env"));
-  // 变量优先级：命令行/当前 shell > .env 默认值
-  const env = { ...envFromFile, ...process.env };
+  // 两文件职责：
+  //   .env.build — git-tracked 构建参数默认值（ASAR 开关、依赖锁），CI 与本地共享
+  //   .env       — gitignored 本机 secrets（签名证书、API key），per-machine 覆盖
+  const envBuild = loadEnvFile(path.resolve(process.cwd(), ".env.build"));
+  const envSecrets = loadEnvFile(path.resolve(process.cwd(), ".env"));
+  // 优先级（低 → 高）：.env.build < .env < shell exported
+  const env = { ...envBuild, ...envSecrets, ...process.env };
   const command = args[0];
   const commandArgs = args.slice(1);
 
