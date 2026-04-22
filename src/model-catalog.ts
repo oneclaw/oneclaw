@@ -52,7 +52,16 @@ export async function loadModelCatalog(): Promise<void> {
       );
     });
 
-    const parsed = JSON.parse(stdout);
+    // openclaw CLI 的 plugin loader 会把注册日志（带 ANSI 色码）打到 stdout，
+    // 污染 JSON payload 前面的字节。切到首个 `{` 开始解析，兼容未来污染行数变化。
+    const jsonStart = stdout.indexOf("{");
+    if (jsonStart < 0) {
+      throw new Error("no JSON payload in openclaw models list output");
+    }
+    if (jsonStart > 0) {
+      log.warn(`[model-catalog] stripped ${jsonStart} bytes of non-JSON preamble from CLI stdout`);
+    }
+    const parsed = JSON.parse(stdout.slice(jsonStart));
     const map = new Map<string, CatalogEntry>();
     const byModelId = new Map<string, CatalogEntry>();
     for (const m of parsed.models ?? []) {
