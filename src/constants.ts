@@ -264,6 +264,24 @@ export function resolveGatewayLogPath(): string {
   return path.join(resolveUserStateDir(), "gateway.log");
 }
 
+/**
+ * 内置 channel plugin 的镜像源目录（resources/<target>/extensions-mirror/<id>/）。
+ * package-resources 把 4 个第三方 channel plugin 写入这里，afterPack 注入到
+ * app bundle 内。主进程启动时从这里 reconcile 到 ~/.openclaw/extensions/，由
+ * openclaw 的 external-plugin scan 路径加载。
+ */
+export function resolveExtensionsMirrorDir(): string {
+  return path.join(resolveResourcesPath(), "extensions-mirror");
+}
+
+/**
+ * 用户 external plugin 目录（~/.openclaw/extensions/）。
+ * openclaw host 会扫描这里加载 external plugin，无需 bundled-channel-entry shim。
+ */
+export function resolveUserExtensionsDir(): string {
+  return path.join(resolveUserStateDir(), "extensions");
+}
+
 // ── Chat UI 路径 ──
 
 /** Chat UI 的 index.html（dev 模式在 chat-ui/dist/，打包后在 app 资源中） */
