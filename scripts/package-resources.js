@@ -17,6 +17,11 @@ const {
   normalizeSemverText,
   readRemoteLatestVersion,
 } = require("./lib/openclaw-version-utils");
+const {
+  ensurePluginNativeEntry,
+  resolveOpenClawPluginEntry,
+  NATIVE_EXT,
+} = require("./lib/bundle-plugin-entry");
 
 // ─── 项目根目录 ───
 const ROOT = path.resolve(__dirname, "..");
@@ -1684,6 +1689,54 @@ async function bundleAllPlugins(targetPaths, opts) {
       await bundleChannelPluginToMirror(plugin, channelMirrorDir, gatewayDir, targetId, opts);
     }
   }
+
+  // (3) 入口标准化：把所有 OneClaw 打包的插件入口强制转成 native (.mjs/.js/.cjs)。
+  //     .ts 入口会走 jiti transpile，openclaw 内部 10+ 份 jitiLoaders Map 会各
+  //     instantiate 一次，模块级变量（如 setWeixinRuntime 的闭包）互相不可见。
+  //     esbuild bundle 到 dist/oneclaw-bundle.mjs 后，openclaw 走 Node 原生
+  //     createRequire 路径，module cache 单例天然成立。
+  //     详见 vault: 学习笔记/openclaw插件打包/2026-04-23-问题清单与本质方案.md
+  const bundledDir = path.join(gatewayDir, "node_modules", "openclaw", "dist", "extensions");
+  for (const plugin of BUNDLED_PLUGINS) {
+    const pluginDir = path.join(bundledDir, plugin.id);
+    if (!fs.existsSync(pluginDir)) continue; // 被 winArm64Cross 跳过的插件
+    // 内置 plugin 住在 gateway/node_modules/openclaw/dist/extensions/，openclaw
+    // 的 plugin loader 对它们走的是内置 resolve 路径，native `.mjs` 入口能直接
+    // 访问 `openclaw` peer——跳过即可，无需重 bundle。
+    await normalizePluginEntry(plugin.id, pluginDir, { allowNativeSkip: true });
+  }
+  for (const plugin of CHANNEL_MIRROR_PLUGINS) {
+    const pluginDir = path.join(channelMirrorDir, plugin.id);
+    if (!fs.existsSync(pluginDir)) continue;
+    // Mirror plugin 被 reconcile 到 ~/.openclaw/extensions/，jiti aliasMap 只给
+    // **入口文件** 挂 openclaw alias；上游 multi-chunk 的 .mjs 入口里每个 chunk
+    // 都走 Node 原生 import，chunk 里的 `import "openclaw"` 找不到包。必须强制
+    // 重 bundle 成 single-file（不传 allowNativeSkip），确保 `openclaw` 只出现
+    // 在入口，由 jiti aliasMap 覆盖。
+    await normalizePluginEntry(plugin.id, pluginDir);
+  }
+}
+
+// 对单个 plugin 目录确保入口是 native 形态。失败是 fatal——宁可 build fail
+// 也不要发出会被 jiti 双实例坑到的包。
+async function normalizePluginEntry(pluginId, pluginDir, opts = {}) {
+  const result = await ensurePluginNativeEntry(pluginDir, { label: pluginId, ...opts });
+  switch (result.action) {
+    case "skip":
+      log(`插件 ${pluginId} 入口已是 native (${result.entry})，跳过 bundle`);
+      break;
+    case "bundled":
+      log(`插件 ${pluginId} 入口 ${result.entry} 已 esbuild → ${result.outFile}`);
+      break;
+    case "bundled-reused":
+      log(`插件 ${pluginId} 复用已有 bundle (${result.outFile})`);
+      break;
+    case "missing":
+      die(`插件 ${pluginId} 未找到任何入口文件，目录: ${pluginDir}`);
+      break;
+    default:
+      die(`插件 ${pluginId} ensurePluginNativeEntry 未知返回: ${result.action}`);
+  }
 }
 
 // 裁剪 node_modules，删除无用文件以减小体积
@@ -2175,6 +2228,50 @@ function verifyOutput(targetPaths, opts) {
   log("所有关键文件验证通过");
 }
 
+// 入口标准化断言：所有 OneClaw 打包的插件入口必须是 .mjs/.js/.cjs。
+// 这是 jiti 双实例分裂的硬护栏——任何 .ts 入口都会让护栏失效。
+// 必须在 ASAR 打包前跑（ASAR 会删 gateway 散文件，断言就没法查 injected 插件了）。
+function assertPluginsNativeEntry(targetPaths) {
+  const plugins = [
+    ...BUNDLED_PLUGINS.map((p) => ({
+      id: p.id,
+      dir: path.join(
+        targetPaths.gatewayDir,
+        "node_modules",
+        "openclaw",
+        "dist",
+        "extensions",
+        p.id,
+      ),
+    })),
+    ...CHANNEL_MIRROR_PLUGINS.map((p) => ({
+      id: p.id,
+      dir: path.join(targetPaths.channelMirrorDir, p.id),
+    })),
+  ];
+
+  let ok = true;
+  for (const { id, dir } of plugins) {
+    if (!fs.existsSync(dir)) continue; // Windows arm64 交叉编译可能跳过某些插件
+    const entry = resolveOpenClawPluginEntry(dir);
+    if (!entry) {
+      console.log(`  [入口缺失] ${id} @ ${path.relative(ROOT, dir)}`);
+      ok = false;
+      continue;
+    }
+    const ext = path.extname(entry.relPath).toLowerCase();
+    if (!NATIVE_EXT.has(ext)) {
+      console.log(`  [入口非 native] ${id} → ${entry.relPath} (必须是 .mjs/.js/.cjs)`);
+      ok = false;
+    } else {
+      console.log(`  [入口 OK] ${id} → ${entry.relPath}`);
+    }
+  }
+  if (!ok) {
+    die("存在非 native 入口的插件，jiti 双实例护栏失效，打包失败");
+  }
+}
+
 // ─── 主流程 ───
 
 async function main() {
@@ -2210,6 +2307,10 @@ async function main() {
   // Step 2.5: 注入 bundled 插件（kimi-claw + kimi-search）
   log("Step 2.5: 注入 bundled 插件");
   await bundleAllPlugins(targetPaths, opts);
+
+  // 护栏：所有插件入口必须是 native——必须在 ASAR 打包前跑，因为 ASAR 会删散文件
+  log("Step 2.6: 校验插件入口形态");
+  assertPluginsNativeEntry(targetPaths);
 
   console.log();
 

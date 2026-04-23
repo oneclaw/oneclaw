@@ -21,7 +21,12 @@
 
 import * as fs from "fs";
 import * as path from "path";
-import { resolveExtensionsMirrorDir, resolveUserExtensionsDir } from "./constants";
+import {
+  resolveExtensionsMirrorDir,
+  resolveUserConfigPath,
+  resolveUserExtensionsDir,
+  resolveUserStateDir,
+} from "./constants";
 import * as log from "./logger";
 
 /** 读取 `<dir>/package.json` 的 version 字段，失败返回 null */
@@ -31,6 +36,28 @@ function readPluginVersion(dir: string): string | null {
     const pkg = JSON.parse(raw);
     const v = pkg?.version;
     return typeof v === "string" && v.length > 0 ? v : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * 读 `<dir>/package.json` 的 `openclaw.extensions[0]`。
+ *
+ * 这是 OneClaw 入口标准化（ensurePluginNativeEntry）在构建期改写的字段。
+ * reconcile 时把它一起纳入"相等"判定——即便 plugin version 没变，只要 OneClaw
+ * 改了 bundle 策略（如把 `.ts` 入口替换为 `./dist/oneclaw-bundle.mjs`），
+ * dest 也会被强制刷新。
+ */
+function readPluginEntrySig(dir: string): string | null {
+  try {
+    const raw = fs.readFileSync(path.join(dir, "package.json"), "utf-8");
+    const pkg = JSON.parse(raw);
+    const exts = pkg?.openclaw?.extensions;
+    if (Array.isArray(exts) && exts.length > 0 && typeof exts[0] === "string") {
+      return exts[0];
+    }
+    return null;
   } catch {
     return null;
   }
@@ -107,12 +134,20 @@ function reconcileOne(pluginId: string, mirrorDir: string, userDir: string): Rec
     }
   }
 
-  // 版本一致 — 跳过（不覆盖用户手改）
-  if (mirrorVersion && destVersion && mirrorVersion === destVersion) {
+  // 两个维度都相等才 skip：
+  //   - 插件上游版本（pkg.version）
+  //   - OneClaw 构建期重写的入口（pkg.openclaw.extensions[0]）
+  // 后者是为了让 OneClaw 换 bundle 策略（比如把 `.ts` 入口替换成
+  // `./dist/oneclaw-bundle.mjs`）能触发 reconcile，即使 plugin 版本没变。
+  const mirrorSig = readPluginEntrySig(src);
+  const destSig = readPluginEntrySig(dest);
+  const versionMatch = !!mirrorVersion && !!destVersion && mirrorVersion === destVersion;
+  const sigMatch = mirrorSig === destSig; // 两者都 null 也算 match（远古插件没这字段）
+  if (versionMatch && sigMatch) {
     return { pluginId, action: "skipped", fromVersion: destVersion, toVersion: mirrorVersion };
   }
 
-  // 版本变化或读不到版本 — 强制覆盖
+  // 版本或入口签名任一不同（或读不到） — 强制覆盖
   try {
     fs.rmSync(dest, { recursive: true, force: true });
     copyDirSync(src, dest);
@@ -173,5 +208,75 @@ export async function reconcileExtensionsOnAppLaunch(): Promise<void> {
     if (o.action === "failed") {
       log.warn(`[ext-mirror] reconcile failed for ${o.pluginId}: ${o.error}`);
     }
+  }
+
+  // 把成功 reconcile 的 plugin id 注册到 plugins.allow。
+  // openclaw 对未在 allow 列表里的 external plugin 走降级路径——只 call register、
+  // 不跑 per-account channel lifecycle，导致 channel 能登录但永远不回消息。
+  const trustedIds = outcomes
+    .filter((o) => o.action === "installed" || o.action === "upgraded" || o.action === "skipped")
+    .map((o) => o.pluginId);
+  if (trustedIds.length > 0) {
+    ensurePluginsAllow(trustedIds);
+  }
+}
+
+/**
+ * 确保 ~/.openclaw/openclaw.json 的 plugins.allow 包含给定的 plugin id 集合。
+ *
+ * 语义：union（不覆盖用户已加入 allow 的其他 id），atomic write（先写 .tmp 再 rename）。
+ * 失败永远不抛——log warn 后继续，gateway 启动逻辑可以照常进行（只是这些 plugin
+ * 会继续走降级路径）。
+ *
+ * 仅当确实有变化时才写盘——避免把"reconcile 一次就 bump 一次 mtime"加进重启风暴。
+ */
+function ensurePluginsAllow(pluginIds: readonly string[]): void {
+  const configPath = resolveUserConfigPath();
+  let raw: string;
+  try {
+    raw = fs.readFileSync(configPath, "utf-8");
+  } catch (err) {
+    // 配置文件不存在（首次启动 setup 还没跑完）—— 跳过，不创建空配置
+    log.info(`[ext-mirror] skip plugins.allow: config not present yet (${(err as Error).message})`);
+    return;
+  }
+
+  let config: any;
+  try {
+    config = JSON.parse(raw);
+  } catch (err) {
+    log.warn(`[ext-mirror] skip plugins.allow: config not valid JSON (${(err as Error).message})`);
+    return;
+  }
+
+  if (!config || typeof config !== "object") {
+    log.warn(`[ext-mirror] skip plugins.allow: config root is not an object`);
+    return;
+  }
+
+  const plugins = (config.plugins ??= {});
+  const existingAllow: string[] = Array.isArray(plugins.allow) ? plugins.allow.slice() : [];
+  const merged = new Set<string>(existingAllow);
+  let added = 0;
+  for (const id of pluginIds) {
+    if (!merged.has(id)) {
+      merged.add(id);
+      added += 1;
+    }
+  }
+
+  if (added === 0) return; // 已经全部在列，不写盘
+
+  plugins.allow = Array.from(merged).sort();
+
+  const tmpPath = `${configPath}.ext-mirror.tmp`;
+  try {
+    fs.mkdirSync(resolveUserStateDir(), { recursive: true });
+    fs.writeFileSync(tmpPath, JSON.stringify(config, null, 2), { encoding: "utf-8", mode: 0o600 });
+    fs.renameSync(tmpPath, configPath);
+    log.info(`[ext-mirror] plugins.allow updated (+${added}): ${pluginIds.join(",")}`);
+  } catch (err) {
+    log.warn(`[ext-mirror] failed to persist plugins.allow: ${(err as Error).message}`);
+    try { fs.unlinkSync(tmpPath); } catch {}
   }
 }

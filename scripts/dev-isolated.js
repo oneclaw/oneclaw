@@ -80,6 +80,10 @@ const env = {
   ONECLAW_MULTI_INSTANCE: "1",
   OPENCLAW_STATE_DIR: stateDir,
   OPENCLAW_GATEWAY_PORT: String(port),
+  // dev 主进程走 !app.isPackaged 分支，强制读 gateway/ 散文件（无法读 asar 虚路径）。
+  // .env.build 里 ONECLAW_GATEWAY_ASAR=1 是给 dist:* 用的——在 dev 里覆盖为 0，
+  // 避免 package:resources 打完 gateway.asar 后删掉散文件导致 gateway 起不来。
+  ONECLAW_GATEWAY_ASAR: "0",
 };
 
 console.log(`[dev-isolated] 状态目录: ${stateDir}`);
