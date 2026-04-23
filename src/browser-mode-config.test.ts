@@ -4,6 +4,7 @@ import {
   BROWSER_MODES,
   isBrowserMode,
   applyBrowserModeConfig,
+  detectBrowserMode,
   type BrowserMode,
 } from "./browser-mode-config";
 
@@ -189,4 +190,46 @@ test("applyBrowserModeConfig(webbridge) 保留其他字段", () => {
   assert.deepEqual(after.plugins.entries.matrix, { enabled: true });
   assert.deepEqual(after.skills.entries["some-other-skill"], { enabled: true });
   assert.equal(after.plugins.entries.browser.enabled, false);
+});
+
+test("detectBrowserMode 空 config → openclaw", () => {
+  assert.equal(detectBrowserMode({}), "openclaw");
+});
+
+test("detectBrowserMode plugins.entries.browser.enabled=false → webbridge", () => {
+  const cfg = { plugins: { entries: { browser: { enabled: false } } } };
+  assert.equal(detectBrowserMode(cfg), "webbridge");
+});
+
+test("detectBrowserMode defaultProfile=openclaw + browser.enabled=true → openclaw", () => {
+  const cfg = applyBrowserModeConfig({}, "openclaw");
+  assert.equal(detectBrowserMode(cfg), "openclaw");
+});
+
+test("detectBrowserMode defaultProfile=chrome + browser.enabled=true → chrome", () => {
+  const cfg = applyBrowserModeConfig({}, "chrome");
+  assert.equal(detectBrowserMode(cfg), "chrome");
+});
+
+test("detectBrowserMode webbridge 模式 apply 后能往返", () => {
+  const cfg = applyBrowserModeConfig({}, "webbridge");
+  assert.equal(detectBrowserMode(cfg), "webbridge");
+});
+
+test("detectBrowserMode webbridge 优先级高于 defaultProfile=chrome", () => {
+  const cfg = applyBrowserModeConfig(
+    applyBrowserModeConfig({}, "chrome"),
+    "webbridge",
+  );
+  assert.equal(detectBrowserMode(cfg), "webbridge");
+});
+
+test("detectBrowserMode 未知 defaultProfile 当作 openclaw", () => {
+  const cfg = { browser: { defaultProfile: "some-custom" } };
+  assert.equal(detectBrowserMode(cfg), "openclaw");
+});
+
+test("detectBrowserMode 迁移：老用户 defaultProfile=user → openclaw（保守默认）", () => {
+  const cfg = { browser: { defaultProfile: "user" } };
+  assert.equal(detectBrowserMode(cfg), "openclaw");
 });
