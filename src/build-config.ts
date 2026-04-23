@@ -42,3 +42,10 @@ export function readBuildConfigClawhubRegistry(): string {
   const val = config.clawhubRegistry;
   return typeof val === "string" ? val.trim() : "";
 }
+
+// 读取构建时注入的 Kimi WebBridge 浏览器扩展 ID
+export function readBuildConfigWebbridgeExtensionId(): string {
+  const config = readBuildConfig();
+  const val = config.webbridgeExtensionId;
+  return typeof val === "string" ? val.trim() : "";
+}

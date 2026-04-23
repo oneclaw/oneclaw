@@ -24,9 +24,17 @@ import {
   uninstallGatewayDaemon,
   uninstallGlobalOpenclaw,
 } from "./install-detector";
+import { applyBrowserModeConfig } from "./browser-mode-config";
+import { installWebbridge } from "./webbridge-installer";
+import { installForAllDetectedBrowsers } from "./browser-extension-installer";
+import { readBuildConfigWebbridgeExtensionId } from "./build-config";
+import { runWebbridgeSetupTask } from "./webbridge-setup-task";
+
 interface SetupIpcDeps {
   setupManager: SetupManager;
   onOAuthLoginSuccess?: () => void;
+  // Setup 完成后若降级到 openclaw 模式重写 config，触发 gateway 重启
+  onBrowserModeChanged?: () => void;
 }
 
 let latestSetupCompletedProps: Record<string, string> | null = null;
@@ -244,9 +252,9 @@ export function registerSetupIpc(deps: SetupIpcDeps): void {
         config.gateway.mode = "local";
         ensureGatewayAuthTokenInConfig(config);
 
-        // 默认使用独立浏览器实例，免去用户手动安装 Chrome 扩展
-        config.browser ??= {};
-        config.browser.defaultProfile = "openclaw";
+        // 默认使用 kimi-webbridge 模式：browser 插件关闭 + skill 默认启用
+        // Setup 完成后台会下载二进制 + 装浏览器扩展；下载失败会降级到 openclaw 模式
+        Object.assign(config, applyBrowserModeConfig(config, "webbridge"));
 
         // 显式禁用 iMessage 频道（openclaw 默认启用，会因 macOS 权限拒绝产生大量错误日志）
         config.channels ??= {};
@@ -326,6 +334,35 @@ export function registerSetupIpc(deps: SetupIpcDeps): void {
           analytics.track("cli_uninstall_failed", { error: cliResult.message });
         }
       }
+
+      // 后台静默 task：下载 webbridge 二进制 + 装浏览器扩展。
+      // fire-and-forget——Setup 已结束，主窗已打开，不阻塞用户。
+      // 下载失败时会降级到 openclaw 模式并通过 onBrowserModeChanged 触发 gateway 重启。
+      runWebbridgeSetupTask({
+        installer: () => installWebbridge(),
+        installExtensions: (extId) => installForAllDetectedBrowsers(extId),
+        readConfig: readUserConfig,
+        writeConfig: writeUserConfig,
+        applyMode: applyBrowserModeConfig,
+        extensionId: readBuildConfigWebbridgeExtensionId(),
+        onConfigRewritten: () => deps.onBrowserModeChanged?.(),
+        logger: {
+          info: (msg) => log.info(msg),
+          error: (msg) => log.error(msg),
+        },
+      })
+        .then((summary) => {
+          analytics.track("webbridge_setup_task", {
+            outcome: summary.outcome,
+            webbridge_installed: summary.webbridgeInstalled,
+            has_error: Boolean(summary.error),
+          });
+        })
+        .catch((err) => {
+          log.error(
+            `[setup] webbridge background task 意外异常: ${err?.message ?? err}`,
+          );
+        });
 
       return { success: true };
     });
