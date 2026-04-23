@@ -107,6 +107,130 @@ export function httpHead(initialUrl: string): Promise<HeadResult> {
   });
 }
 
+export interface ProgressEvent {
+  downloaded: number;
+  total: number | null;
+  pct: number | null;
+}
+
+export type ProgressHandler = (event: ProgressEvent) => void;
+
+const DOWNLOAD_TIMEOUT_MS = 60_000;
+const PROGRESS_INTERVAL_MS = 200;
+const PROGRESS_BYTES_THRESHOLD = 64 * 1024;
+
+export function downloadToFile(
+  initialUrl: string,
+  dest: string,
+  onProgress?: ProgressHandler,
+): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const tmpPath = `${dest}.tmp-${process.pid}-${Date.now()}`;
+    fs.mkdirSync(path.dirname(dest), { recursive: true });
+
+    let redirects = 0;
+    let settled = false;
+    let lastProgressAt = 0;
+    let lastProgressBytes = 0;
+
+    const cleanupTmp = () => {
+      try {
+        if (fs.existsSync(tmpPath)) fs.unlinkSync(tmpPath);
+      } catch {}
+    };
+
+    const fail = (err: Error) => {
+      if (settled) return;
+      settled = true;
+      cleanupTmp();
+      reject(err);
+    };
+
+    const request = (url: string) => {
+      const req = chooseTransport(url).get(url, (res) => {
+        const status = res.statusCode ?? 0;
+        if (status >= 300 && status < 400 && res.headers.location) {
+          if (++redirects > MAX_REDIRECTS) {
+            fail(new Error(`Too many redirects (>${MAX_REDIRECTS})`));
+            res.resume();
+            return;
+          }
+          request(new URL(res.headers.location, url).toString());
+          res.resume();
+          return;
+        }
+        if (status !== 200) {
+          fail(new Error(`HTTP ${status} — ${url}`));
+          res.resume();
+          return;
+        }
+
+        const lenRaw = res.headers["content-length"];
+        const total =
+          typeof lenRaw === "string"
+            ? Number.parseInt(lenRaw, 10) || null
+            : null;
+
+        const file = fs.createWriteStream(tmpPath);
+        let downloaded = 0;
+
+        res.on("data", (chunk: Buffer) => {
+          downloaded += chunk.length;
+          if (!onProgress) return;
+          const now = Date.now();
+          if (
+            now - lastProgressAt >= PROGRESS_INTERVAL_MS ||
+            downloaded - lastProgressBytes >= PROGRESS_BYTES_THRESHOLD
+          ) {
+            lastProgressAt = now;
+            lastProgressBytes = downloaded;
+            onProgress({
+              downloaded,
+              total,
+              pct: total ? (downloaded / total) * 100 : null,
+            });
+          }
+        });
+
+        res.on("error", fail);
+        file.on("error", fail);
+
+        file.on("finish", () => {
+          file.close((closeErr) => {
+            if (settled) return;
+            if (closeErr) {
+              fail(closeErr);
+              return;
+            }
+            try {
+              fs.renameSync(tmpPath, dest);
+            } catch (err) {
+              fail(err as Error);
+              return;
+            }
+            onProgress?.({
+              downloaded,
+              total,
+              pct: total ? 100 : null,
+            });
+            settled = true;
+            resolve();
+          });
+        });
+
+        res.pipe(file);
+      });
+
+      req.setTimeout(DOWNLOAD_TIMEOUT_MS, () => {
+        req.destroy(new Error(`Download timed out after ${DOWNLOAD_TIMEOUT_MS}ms`));
+      });
+      req.on("error", fail);
+    };
+
+    request(initialUrl);
+  });
+}
+
 export function resolvePlatformBinaryName(
   platform: NodeJS.Platform | string,
   arch: string,

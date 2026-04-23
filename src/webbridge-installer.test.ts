@@ -12,6 +12,7 @@ import {
   readCacheManifest,
   writeCacheManifest,
   httpHead,
+  downloadToFile,
 } from "./webbridge-installer";
 
 function makeTempDir(): string {
@@ -231,5 +232,89 @@ test("httpHead 超过 5 次重定向抛错", async () => {
     await assert.rejects(httpHead(`${url}/0`), /Too many redirects/);
   } finally {
     await close();
+  }
+});
+
+test("downloadToFile 正常路径：写入内容 + 进度回调触发", async () => {
+  const body = Buffer.alloc(200 * 1024, 0x41); // 200KB 'A'
+  const { url, close } = await startTestServer((_req, res) => {
+    res.writeHead(200, { "Content-Length": String(body.length) });
+    res.end(body);
+  });
+  const dir = makeTempDir();
+  const dest = path.join(dir, "out.bin");
+  const events: { downloaded: number; total: number | null }[] = [];
+  try {
+    await downloadToFile(`${url}/x`, dest, (p) => events.push(p));
+    const written = fs.readFileSync(dest);
+    assert.equal(written.length, body.length);
+    assert.ok(events.length > 0, "应至少触发一次进度回调");
+    const last = events[events.length - 1];
+    assert.equal(last.downloaded, body.length);
+    assert.equal(last.total, body.length);
+  } finally {
+    await close();
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("downloadToFile 下载失败时清理 tmp 文件", async () => {
+  const { url, close } = await startTestServer((_req, res) => {
+    res.writeHead(500);
+    res.end();
+  });
+  const dir = makeTempDir();
+  const dest = path.join(dir, "out.bin");
+  try {
+    await assert.rejects(downloadToFile(`${url}/x`, dest), /HTTP 500/);
+    const leftover = fs.readdirSync(dir);
+    assert.equal(
+      leftover.length,
+      0,
+      `tmp 应被清理，实际残留: ${leftover.join(", ")}`,
+    );
+  } finally {
+    await close();
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("downloadToFile 跟随重定向后下载成功", async () => {
+  const body = Buffer.from("hello");
+  const { url, close } = await startTestServer((req, res) => {
+    if (req.url === "/start") {
+      res.writeHead(302, { Location: `${url}/target` });
+      res.end();
+      return;
+    }
+    res.writeHead(200, { "Content-Length": String(body.length) });
+    res.end(body);
+  });
+  const dir = makeTempDir();
+  const dest = path.join(dir, "out.bin");
+  try {
+    await downloadToFile(`${url}/start`, dest);
+    assert.equal(fs.readFileSync(dest, "utf-8"), "hello");
+  } finally {
+    await close();
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("downloadToFile 覆盖已存在目标文件（原子替换）", async () => {
+  const body = Buffer.from("new");
+  const { url, close } = await startTestServer((_req, res) => {
+    res.writeHead(200, { "Content-Length": String(body.length) });
+    res.end(body);
+  });
+  const dir = makeTempDir();
+  const dest = path.join(dir, "out.bin");
+  fs.writeFileSync(dest, "old");
+  try {
+    await downloadToFile(`${url}/x`, dest);
+    assert.equal(fs.readFileSync(dest, "utf-8"), "new");
+  } finally {
+    await close();
+    fs.rmSync(dir, { recursive: true, force: true });
   }
 });
