@@ -68,6 +68,10 @@ export function saveWeixinConfig(config: any, params: SaveWeixinConfigParams): v
   config.channels[WEIXIN_CHANNEL_ID] = {
     ...existingChannel,
     enabled: params.enabled === true,
+    // openclaw gateway 的 hasMeaningfulChannelConfig() 只有在 channels.<id> 里
+    // 存在非 enabled 字段时才把该 channel 视作 "已配置"，进而纳入启动插件集合。
+    // 写一个时间戳字段，让 weixin 通过 hasMeaningfulChannelConfig 检查。
+    channelConfigUpdatedAt: new Date().toISOString(),
   };
 }
 
@@ -307,6 +311,14 @@ export function saveWeixinLoginResult(result: WeixinQrPollResult): string {
     fs.writeFileSync(indexPath, JSON.stringify([...existing, normalizedId], null, 2), "utf-8");
   }
 
+  return normalizedId;
+}
+
+// 登录成功后，账号凭据和 enabled 开关必须一起落盘；否则设置页会显示扫码成功，
+// 但 Gateway 重启后不会真正启动微信 channel。
+export function persistWeixinLoginSuccess(config: any, result: WeixinQrPollResult): string {
+  const normalizedId = saveWeixinLoginResult(result);
+  saveWeixinConfig(config, { enabled: true });
   return normalizedId;
 }
 
