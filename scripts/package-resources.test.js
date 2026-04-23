@@ -3,7 +3,6 @@ const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
-const { pathToFileURL } = require("node:url");
 const vm = require("node:vm");
 
 // 加载 package-resources 脚本并跳过 main()，只测试局部函数。
@@ -148,91 +147,6 @@ test("Windows 全局 windowsHide 补丁应覆盖 kimi-claw 插件", () => {
 
   assert.match(fs.readFileSync(termFile, "utf-8"), /windowsHide:\s*true/);
   fs.rmSync(tmpRoot, { recursive: true, force: true });
-});
-
-test("writeChannelEntryShim 应优先复用命名导出的 channel plugin，避免重复 register", async () => {
-  const sandbox = loadPackageResourcesSandbox();
-  const pluginDir = fs.mkdtempSync(path.join(os.tmpdir(), "oneclaw-channel-shim-"));
-
-  writeFixture(path.join(pluginDir, "package.json"), JSON.stringify({
-    name: "@test/dingtalk-connector",
-    type: "module",
-    openclaw: { extensions: ["./index.mjs"] },
-  }, null, 2));
-  writeFixture(path.join(pluginDir, "index.mjs"), [
-    "const calls = globalThis.__oneclawShimNamedCalls ??= [];",
-    "globalThis.__oneclawShimNamedRuntime = null;",
-    'export const dingtalkPlugin = { id: "dingtalk-connector", sendMessage() {} };',
-    "export function setDingtalkRuntime(runtime) { globalThis.__oneclawShimNamedRuntime = runtime; }",
-    "export default function register(api) {",
-    "  calls.push(api.runtime);",
-    "  api.registerChannel({ plugin: dingtalkPlugin });",
-    "}",
-    "",
-  ].join("\n"));
-
-  sandbox.writeChannelEntryShim({ id: "dingtalk-connector", channelShim: { name: "DingTalk" } }, pluginDir);
-
-  const shimPath = path.join(pluginDir, "oneclaw-bundled-entry.mjs");
-  const shim = await import(`${pathToFileURL(shimPath).href}?t=${Date.now()}`);
-  const runtime = { channel: { reply: { ok: true } } };
-  const seen = [];
-  await shim.default.register({
-    runtime,
-    registerChannel({ plugin }) { seen.push(plugin); },
-    registerTool() {},
-    registerHttpRoute() {},
-    registerAgentTool() {},
-    registerHook() {},
-    on() {},
-  });
-
-  const channelPlugin = shim.default.loadChannelPlugin();
-  const probeRuntime = { channel: { reply: { ok: "probe" } } };
-  shim.default.setChannelRuntime(probeRuntime);
-  assert.equal(channelPlugin.id, "dingtalk-connector");
-  assert.equal(globalThis.__oneclawShimNamedCalls.length, 1);
-  assert.equal(globalThis.__oneclawShimNamedCalls[0], runtime);
-  assert.equal(globalThis.__oneclawShimNamedRuntime, probeRuntime);
-  assert.equal(seen.length, 1);
-
-  delete globalThis.__oneclawShimNamedCalls;
-  delete globalThis.__oneclawShimNamedRuntime;
-  fs.rmSync(pluginDir, { recursive: true, force: true });
-});
-
-test("writeChannelEntryShim fallback probe 应复用真实 runtime，避免覆盖 channel 能力", async () => {
-  const sandbox = loadPackageResourcesSandbox();
-  const pluginDir = fs.mkdtempSync(path.join(os.tmpdir(), "oneclaw-channel-shim-"));
-
-  writeFixture(path.join(pluginDir, "package.json"), JSON.stringify({
-    name: "@test/legacy-channel",
-    type: "module",
-    openclaw: { extensions: ["./index.mjs"] },
-  }, null, 2));
-  writeFixture(path.join(pluginDir, "index.mjs"), [
-    "const calls = globalThis.__oneclawShimFallbackCalls ??= [];",
-    "export default function register(api) {",
-    "  calls.push(api.runtime);",
-    '  api.registerChannel({ plugin: { id: "legacy-channel", sendMessage() {} } });',
-    "}",
-    "",
-  ].join("\n"));
-
-  sandbox.writeChannelEntryShim({ id: "legacy-channel", channelShim: { name: "Legacy" } }, pluginDir);
-
-  const shimPath = path.join(pluginDir, "oneclaw-bundled-entry.mjs");
-  const shim = await import(`${pathToFileURL(shimPath).href}?t=${Date.now()}`);
-  const runtime = { channel: { reply: { ok: true } } };
-  shim.default.setChannelRuntime(runtime);
-
-  const channelPlugin = shim.default.loadChannelPlugin();
-  assert.equal(channelPlugin.id, "legacy-channel");
-  assert.equal(globalThis.__oneclawShimFallbackCalls.length, 1);
-  assert.equal(globalThis.__oneclawShimFallbackCalls[0], runtime);
-
-  delete globalThis.__oneclawShimFallbackCalls;
-  fs.rmSync(pluginDir, { recursive: true, force: true });
 });
 
 // 白名单裁剪必须深入保留插件内部继续清垃圾，而不是把整个 extensions 目录豁免掉。

@@ -1,6 +1,6 @@
 import * as fs from "fs";
 import * as path from "path";
-import { resolveGatewayPackageDir } from "./constants";
+import { resolveUserExtensionsDir } from "./constants";
 import { ensureGatewayAuthTokenInConfig } from "./gateway-auth";
 
 export const DINGTALK_CONNECTOR_PLUGIN_ID = "dingtalk-connector";
@@ -20,9 +20,10 @@ export interface SaveDingtalkConfigParams {
   sessionTimeout?: number;
 }
 
-// 统一解析钉钉插件目录，兼容 dev / packaged 环境。
+// 统一解析钉钉插件目录。已迁出 gateway.asar，由 extension-mirror reconcile 到
+// ~/.openclaw/extensions/dingtalk-connector/ 后由 openclaw external-plugin scan 加载。
 export function resolveDingtalkPluginDir(): string {
-  return path.join(resolveGatewayPackageDir(), "dist", "extensions", DINGTALK_CONNECTOR_PLUGIN_ID);
+  return path.join(resolveUserExtensionsDir(), DINGTALK_CONNECTOR_PLUGIN_ID);
 }
 
 // 检查钉钉插件是否已经随应用一起打包。
