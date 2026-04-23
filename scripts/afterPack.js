@@ -78,6 +78,19 @@ exports.default = async function afterPack(context) {
   copyDirSync(runtimeSrc, path.join(targetBase, "runtime"));
   console.log(`[afterPack] 已注入 runtime/ → ${path.relative(appOutDir, path.join(targetBase, "runtime"))}`);
 
+  // extensions-mirror/ 是 OneClaw 第三方 channel plugin 的镜像源目录。
+  // 主进程启动时会把它 reconcile 到 ~/.openclaw/extensions/<id>/，由 openclaw
+  // 的 external-plugin scan 路径正常加载，避免 bundled-channel-entry shim 引发
+  // 的 jiti module-identity 分裂问题。
+  // 这是必需资源——缺失意味着 4 个 channel 插件都装不上，应直接 fail 打包。
+  const mirrorSrc = path.join(sourceBase, "extensions-mirror");
+  if (!fs.existsSync(mirrorSrc)) {
+    throw new Error(`[afterPack] 资源目录不存在: ${mirrorSrc}（package-resources 是否漏跑？）`);
+  }
+  const mirrorDest = path.join(targetBase, "extensions-mirror");
+  copyDirSync(mirrorSrc, mirrorDest);
+  console.log(`[afterPack] 已注入 extensions-mirror/ → ${path.relative(appOutDir, mirrorDest)}`);
+
   // 注入必须存在的单文件资源
   for (const name of REQUIRED_FILES) {
     const src = path.join(sourceBase, name);

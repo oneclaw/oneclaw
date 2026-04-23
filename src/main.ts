@@ -45,6 +45,7 @@ import {
 import { readUserConfig, writeUserConfig } from "./provider-config";
 import { resolveKimiSearchApiKey, readKimiApiKey, readKimiSearchDedicatedApiKey, writeKimiApiKey, ensureMemorySearchProxyConfig, ensureKimiPluginDeviceId } from "./kimi-config";
 import { reconcileCliOnAppLaunch } from "./cli-integration";
+import { reconcileExtensionsOnAppLaunch } from "./extension-mirror";
 import { uninstallGatewayDaemon, killPortProcess, getPortPid } from "./install-detector";
 import { detectOwnership, migrateFromLegacy, markSetupComplete, readOneclawConfig, writeOneclawConfig, appendChannelUtm } from "./oneclaw-config";
 import { startTokenRefresh, stopTokenRefresh, loadOAuthToken } from "./kimi-oauth";
@@ -420,6 +421,11 @@ async function startGatewayAndShowMain(source: string, opts: StartMainOptions = 
   if (loadOAuthToken()) {
     ensureOAuthTokenRefresh();
   }
+
+  // 把内置 channel plugin 从 mirror reconcile 到 ~/.openclaw/extensions/。
+  // 必须在 gateway 启动前 await——openclaw 首次扫描 plugin root 时要看到完整目录。
+  // 函数自身吞掉所有错误，不会阻断启动。
+  await reconcileExtensionsOnAppLaunch();
 
   const running = await ensureGatewayRunning(source);
   if (!running) {
