@@ -8,3 +8,68 @@ export function isBrowserMode(value: unknown): value is BrowserMode {
     (BROWSER_MODES as readonly string[]).includes(value)
   );
 }
+
+// openclaw.json 的最小形状——只列本模块会碰的字段；其他字段用 Record 兜底
+interface OneclawConfigShape {
+  browser?: {
+    defaultProfile?: string;
+    [key: string]: unknown;
+  };
+  plugins?: {
+    entries?: {
+      browser?: { enabled?: boolean; [key: string]: unknown };
+      [key: string]: unknown;
+    };
+    [key: string]: unknown;
+  };
+  skills?: {
+    entries?: {
+      "kimi-webbridge"?: { enabled?: boolean; [key: string]: unknown };
+      [key: string]: unknown;
+    };
+    [key: string]: unknown;
+  };
+  [key: string]: unknown;
+}
+
+export function applyBrowserModeConfig(
+  config: OneclawConfigShape,
+  mode: BrowserMode,
+): any {
+  switch (mode) {
+    case "openclaw":
+      return applyOpenclawMode(config);
+    default:
+      throw new Error(`mode not yet implemented: ${mode}`);
+  }
+}
+
+function applyOpenclawMode(config: OneclawConfigShape): any {
+  return {
+    ...config,
+    browser: {
+      ...(config.browser ?? {}),
+      defaultProfile: "openclaw",
+    },
+    plugins: {
+      ...(config.plugins ?? {}),
+      entries: {
+        ...(config.plugins?.entries ?? {}),
+        browser: {
+          ...(config.plugins?.entries?.browser ?? {}),
+          enabled: true,
+        },
+      },
+    },
+    skills: {
+      ...(config.skills ?? {}),
+      entries: {
+        ...(config.skills?.entries ?? {}),
+        "kimi-webbridge": {
+          ...(config.skills?.entries?.["kimi-webbridge"] ?? {}),
+          enabled: false,
+        },
+      },
+    },
+  };
+}
