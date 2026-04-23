@@ -1,3 +1,16 @@
+export const CDN_BASE_URL = "https://kimi-web-img.moonshot.cn/webbridge";
+
+export function buildDownloadUrl(version: string, filename: string): string {
+  return `${CDN_BASE_URL}/${version}/releases/${filename}`;
+}
+
+export function resolveWebbridgeVersion(override?: string): string {
+  if (override) return override;
+  const env = process.env.KIMI_WEBBRIDGE_VERSION?.trim();
+  if (env) return env;
+  return "latest";
+}
+
 export function resolvePlatformBinaryName(
   platform: NodeJS.Platform | string,
   arch: string,
