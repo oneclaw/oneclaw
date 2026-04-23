@@ -1,11 +1,20 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import * as fs from "fs";
+import * as os from "os";
+import * as path from "path";
 import {
   resolvePlatformBinaryName,
   buildDownloadUrl,
   resolveWebbridgeVersion,
   CDN_BASE_URL,
+  readCacheManifest,
+  writeCacheManifest,
 } from "./webbridge-installer";
+
+function makeTempDir(): string {
+  return fs.mkdtempSync(path.join(os.tmpdir(), "webbridge-test-"));
+}
 
 test("resolvePlatformBinaryName 映射 darwin-arm64", () => {
   assert.equal(
@@ -86,4 +95,56 @@ test("resolveWebbridgeVersion 读 KIMI_WEBBRIDGE_VERSION env", () => {
 
 test("resolveWebbridgeVersion 接受参数覆盖", () => {
   assert.equal(resolveWebbridgeVersion("1.0.0"), "1.0.0");
+});
+
+test("readCacheManifest 目录不存在返回 null", () => {
+  const dir = path.join(os.tmpdir(), `webbridge-nonexistent-${Date.now()}`);
+  assert.equal(readCacheManifest(dir), null);
+});
+
+test("readCacheManifest 文件损坏返回 null（不抛错）", () => {
+  const dir = makeTempDir();
+  try {
+    fs.writeFileSync(path.join(dir, ".download-cache.json"), "{not json");
+    assert.equal(readCacheManifest(dir), null);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("writeCacheManifest + readCacheManifest 往返", () => {
+  const dir = makeTempDir();
+  try {
+    writeCacheManifest(dir, {
+      version: "latest",
+      etag: "\"abc123\"",
+      lastModified: "Mon, 23 Apr 2026 10:00:00 GMT",
+      contentLength: 7345678,
+    });
+    const read = readCacheManifest(dir);
+    assert.deepEqual(read, {
+      version: "latest",
+      etag: "\"abc123\"",
+      lastModified: "Mon, 23 Apr 2026 10:00:00 GMT",
+      contentLength: 7345678,
+    });
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("writeCacheManifest 自动创建不存在的目录", () => {
+  const parent = makeTempDir();
+  const dir = path.join(parent, "nested", "deep");
+  try {
+    writeCacheManifest(dir, {
+      version: "latest",
+      etag: "e1",
+      lastModified: null,
+      contentLength: 1,
+    });
+    assert.ok(fs.existsSync(path.join(dir, ".download-cache.json")));
+  } finally {
+    fs.rmSync(parent, { recursive: true, force: true });
+  }
 });
