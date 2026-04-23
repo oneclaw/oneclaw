@@ -14,6 +14,7 @@ import {
   httpHead,
   downloadToFile,
   checkForUpdate,
+  installWebbridge,
 } from "./webbridge-installer";
 
 function makeTempDir(): string {
@@ -389,6 +390,207 @@ test("checkForUpdate ETag 不同 → upToDate=false", async () => {
     });
     assert.equal(result.upToDate, false);
     assert.equal(result.remoteEtag, "\"remote-v2\"");
+  } finally {
+    await close();
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("installWebbridge 首次安装：下载 + 写 manifest + chmod", async () => {
+  const body = Buffer.alloc(10 * 1024, 0x42);
+  let headCalls = 0;
+  let getCalls = 0;
+  const { url, close } = await startTestServer((req, res) => {
+    if (req.method === "HEAD") {
+      headCalls++;
+      res.writeHead(200, {
+        ETag: "\"v1\"",
+        "Content-Length": String(body.length),
+      });
+      res.end();
+      return;
+    }
+    getCalls++;
+    res.writeHead(200, { "Content-Length": String(body.length) });
+    res.end(body);
+  });
+  const dir = makeTempDir();
+  const binaryPath = path.join(dir, "bin", "kimi-webbridge");
+  try {
+    const result = await installWebbridge({
+      dataDir: dir,
+      binaryPath,
+      platform: "darwin",
+      arch: "arm64",
+      cdnBaseUrl: url,
+    });
+    assert.equal(result.installed, true);
+    assert.equal(result.skipped, false);
+    assert.equal(result.etag, "\"v1\"");
+    assert.equal(fs.statSync(binaryPath).size, body.length);
+
+    if (process.platform !== "win32") {
+      const mode = fs.statSync(binaryPath).mode & 0o777;
+      assert.equal(mode, 0o755, `期望 0o755，实际 0o${mode.toString(8)}`);
+    }
+
+    const manifest = readCacheManifest(dir);
+    assert.equal(manifest?.etag, "\"v1\"");
+    assert.equal(headCalls, 1);
+    assert.equal(getCalls, 1);
+  } finally {
+    await close();
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("installWebbridge ETag 命中且二进制存在 → skipped", async () => {
+  let getCalls = 0;
+  const { url, close } = await startTestServer((req, res) => {
+    if (req.method === "HEAD") {
+      res.writeHead(200, { ETag: "\"same\"" });
+      res.end();
+      return;
+    }
+    getCalls++;
+    res.writeHead(200);
+    res.end("should-not-fetch");
+  });
+  const dir = makeTempDir();
+  const binaryPath = path.join(dir, "bin", "kimi-webbridge");
+  try {
+    fs.mkdirSync(path.dirname(binaryPath), { recursive: true });
+    fs.writeFileSync(binaryPath, "old-content");
+    writeCacheManifest(dir, {
+      version: "latest",
+      etag: "\"same\"",
+      lastModified: null,
+      contentLength: null,
+    });
+    const result = await installWebbridge({
+      dataDir: dir,
+      binaryPath,
+      platform: "darwin",
+      arch: "arm64",
+      cdnBaseUrl: url,
+    });
+    assert.equal(result.installed, false);
+    assert.equal(result.skipped, true);
+    assert.equal(getCalls, 0, "跳过时不应发起 GET");
+    assert.equal(fs.readFileSync(binaryPath, "utf-8"), "old-content");
+  } finally {
+    await close();
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("installWebbridge force=true 忽略 ETag 缓存", async () => {
+  const body = Buffer.from("fresh");
+  let getCalls = 0;
+  const { url, close } = await startTestServer((req, res) => {
+    if (req.method === "HEAD") {
+      res.writeHead(200, { ETag: "\"same\"" });
+      res.end();
+      return;
+    }
+    getCalls++;
+    res.writeHead(200, { "Content-Length": String(body.length) });
+    res.end(body);
+  });
+  const dir = makeTempDir();
+  const binaryPath = path.join(dir, "bin", "kimi-webbridge");
+  try {
+    writeCacheManifest(dir, {
+      version: "latest",
+      etag: "\"same\"",
+      lastModified: null,
+      contentLength: null,
+    });
+    fs.mkdirSync(path.dirname(binaryPath), { recursive: true });
+    fs.writeFileSync(binaryPath, "old");
+    const result = await installWebbridge({
+      dataDir: dir,
+      binaryPath,
+      platform: "darwin",
+      arch: "arm64",
+      cdnBaseUrl: url,
+      force: true,
+    });
+    assert.equal(result.installed, true);
+    assert.equal(getCalls, 1);
+    assert.equal(fs.readFileSync(binaryPath, "utf-8"), "fresh");
+  } finally {
+    await close();
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("installWebbridge 404 直接抛错不重试", async () => {
+  let getCalls = 0;
+  const { url, close } = await startTestServer((req, res) => {
+    if (req.method === "HEAD") {
+      res.writeHead(404);
+      res.end();
+      return;
+    }
+    getCalls++;
+    res.writeHead(404);
+    res.end();
+  });
+  const dir = makeTempDir();
+  const binaryPath = path.join(dir, "bin", "kimi-webbridge");
+  try {
+    await assert.rejects(
+      installWebbridge({
+        dataDir: dir,
+        binaryPath,
+        platform: "darwin",
+        arch: "arm64",
+        cdnBaseUrl: url,
+      }),
+      /HTTP 404/,
+    );
+    assert.equal(getCalls, 0, "404 应该在 HEAD 就拦住");
+  } finally {
+    await close();
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("installWebbridge 下载 transient 失败后重试成功", async () => {
+  const body = Buffer.from("got-it");
+  let attempts = 0;
+  const { url, close } = await startTestServer((req, res) => {
+    if (req.method === "HEAD") {
+      res.writeHead(200, {
+        ETag: "\"v1\"",
+        "Content-Length": String(body.length),
+      });
+      res.end();
+      return;
+    }
+    attempts++;
+    if (attempts === 1) {
+      res.destroy();
+      return;
+    }
+    res.writeHead(200, { "Content-Length": String(body.length) });
+    res.end(body);
+  });
+  const dir = makeTempDir();
+  const binaryPath = path.join(dir, "bin", "kimi-webbridge");
+  try {
+    const result = await installWebbridge({
+      dataDir: dir,
+      binaryPath,
+      platform: "darwin",
+      arch: "arm64",
+      cdnBaseUrl: url,
+      maxRetries: 2,
+    });
+    assert.equal(result.installed, true);
+    assert.equal(attempts, 2);
+    assert.equal(fs.readFileSync(binaryPath, "utf-8"), "got-it");
   } finally {
     await close();
     fs.rmSync(dir, { recursive: true, force: true });

@@ -279,3 +279,120 @@ export async function checkForUpdate(
   );
   return { upToDate, remoteEtag: head.etag };
 }
+
+export interface InstallOptions {
+  dataDir?: string;
+  binaryPath?: string;
+  version?: string;
+  platform?: NodeJS.Platform | string;
+  arch?: string;
+  cdnBaseUrl?: string;
+  onProgress?: ProgressHandler;
+  force?: boolean;
+  maxRetries?: number;
+}
+
+export interface InstallResult {
+  installed: boolean;
+  skipped: boolean;
+  version: string;
+  binaryPath: string;
+  etag: string | null;
+}
+
+const DEFAULT_MAX_RETRIES = 2;
+const RETRY_BASE_DELAY_MS = 500;
+
+function isTransientError(err: unknown): boolean {
+  const msg = err instanceof Error ? err.message : String(err);
+  return /ECONNRESET|ENOTFOUND|ETIMEDOUT|EAI_AGAIN|timed out|socket hang up/i.test(
+    msg,
+  );
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((r) => setTimeout(r, ms));
+}
+
+// 解析默认路径——延迟到调用时，避免 import 期就触碰 process.env
+function resolveDefaultDataDir(): string {
+  const home =
+    process.platform === "win32" ? process.env.USERPROFILE : process.env.HOME;
+  return path.join(home ?? "", ".kimi-webbridge");
+}
+
+function resolveDefaultBinaryPath(dataDir: string): string {
+  const exe = process.platform === "win32" ? "kimi-webbridge.exe" : "kimi-webbridge";
+  return path.join(dataDir, "bin", exe);
+}
+
+export async function installWebbridge(
+  options: InstallOptions = {},
+): Promise<InstallResult> {
+  const dataDir = options.dataDir ?? resolveDefaultDataDir();
+  const binaryPath = options.binaryPath ?? resolveDefaultBinaryPath(dataDir);
+  const platform = options.platform ?? process.platform;
+  const arch = options.arch ?? process.arch;
+  const version = resolveWebbridgeVersion(options.version);
+  const filename = resolvePlatformBinaryName(platform, arch);
+  const base = options.cdnBaseUrl ?? CDN_BASE_URL;
+  const url = `${base}/${version}/releases/${filename}`;
+  const maxRetries = options.maxRetries ?? DEFAULT_MAX_RETRIES;
+
+  // HEAD 拿 ETag（同时作为版本探测；404/403 会在这里直接抛出）
+  const head = await httpHead(url);
+
+  if (!options.force) {
+    const cache = readCacheManifest(dataDir);
+    if (
+      cache &&
+      head.etag &&
+      cache.etag === head.etag &&
+      fs.existsSync(binaryPath)
+    ) {
+      return {
+        installed: false,
+        skipped: true,
+        version,
+        binaryPath,
+        etag: head.etag,
+      };
+    }
+  }
+
+  // 下载（重试 transient 错误）
+  let lastErr: unknown = null;
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      await downloadToFile(url, binaryPath, options.onProgress);
+      lastErr = null;
+      break;
+    } catch (err) {
+      lastErr = err;
+      if (attempt === maxRetries || !isTransientError(err)) {
+        throw err;
+      }
+      await sleep(RETRY_BASE_DELAY_MS * Math.pow(3, attempt));
+    }
+  }
+  if (lastErr) throw lastErr;
+
+  if (process.platform !== "win32") {
+    fs.chmodSync(binaryPath, 0o755);
+  }
+
+  writeCacheManifest(dataDir, {
+    version,
+    etag: head.etag,
+    lastModified: head.lastModified,
+    contentLength: head.contentLength,
+  });
+
+  return {
+    installed: true,
+    skipped: false,
+    version,
+    binaryPath,
+    etag: head.etag,
+  };
+}
