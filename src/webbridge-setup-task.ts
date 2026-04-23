@@ -21,6 +21,10 @@ export interface WebbridgeSetupTaskDeps {
   extensionId: string;
   // 降级到 openclaw 模式重写 config 后，通知调用方（生产：gateway restart）
   onConfigRewritten?: () => void;
+  // binary 就绪后安装 skill 到各 AI runtime（失败只 log warning，不降级）
+  installSkill?: (
+    binaryPath: string,
+  ) => Promise<{ success: boolean; output: string; error?: string }>;
   logger?: WebbridgeSetupTaskLogger;
 }
 
@@ -79,6 +83,27 @@ export async function runWebbridgeSetupTask(
       extensionSummary: null,
       error: msg,
     };
+  }
+
+  // Step 1.5：安装 skill（失败不降级，跟 install.sh 对齐）
+  if (deps.installSkill) {
+    try {
+      const skillResult = await deps.installSkill(installResult.binaryPath);
+      if (skillResult.success) {
+        log.info(
+          `[webbridge-setup] skill 安装完成${
+            skillResult.output ? `\n${skillResult.output.trimEnd()}` : ""
+          }`,
+        );
+      } else {
+        log.info(
+          `[webbridge-setup] skill 安装警告: ${skillResult.error ?? "(unknown)"}`,
+        );
+      }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      log.info(`[webbridge-setup] skill 安装异常: ${msg}`);
+    }
   }
 
   // Step 2：extensionId 空 → 跳过浏览器扩展安装

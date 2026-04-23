@@ -13,6 +13,10 @@ export interface UpdateSchedulerDeps {
   checkForUpdate: () => Promise<CheckResult>;
   installWebbridge: () => Promise<InstallResult>;
   binaryExists: () => boolean;
+  // 下载到新 binary（installed=true && !skipped）后同步刷 skill
+  installSkill?: (
+    binaryPath: string,
+  ) => Promise<{ success: boolean; output: string; error?: string }>;
   intervalMs?: number;
   initialDelayMs?: number;
   logger?: UpdateSchedulerLogger;
@@ -62,6 +66,23 @@ export function startUpdateScheduler(
         log.info(
           `[webbridge-update] 更新完成: version=${installed.version} skipped=${installed.skipped}`,
         );
+        // 只在真的下载了新 binary 时同步刷 skill；skipped=true 说明 ETag 未变
+        if (installed.installed && !installed.skipped && deps.installSkill) {
+          try {
+            const skillResult = await deps.installSkill(installed.binaryPath);
+            if (skillResult.success) {
+              log.info(`[webbridge-update] skill 已同步更新`);
+            } else {
+              log.info(
+                `[webbridge-update] skill 更新警告: ${skillResult.error ?? "(unknown)"}`,
+              );
+            }
+          } catch (skillErr) {
+            const msg =
+              skillErr instanceof Error ? skillErr.message : String(skillErr);
+            log.info(`[webbridge-update] skill 更新异常: ${msg}`);
+          }
+        }
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
         log.error(`[webbridge-update] 下载新版失败: ${msg}`);

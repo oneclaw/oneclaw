@@ -42,6 +42,7 @@ import {
 } from "./constants";
 import { startUpdateScheduler, type UpdateSchedulerHandle } from "./webbridge-update-scheduler";
 import { checkForUpdate as webbridgeCheckForUpdate, installWebbridge } from "./webbridge-installer";
+import { installWebbridgeSkill } from "./webbridge-skill-installer";
 import { resolveGatewayAuthToken } from "./gateway-auth";
 import {
   getConfigRecoveryData,
@@ -1001,6 +1002,7 @@ app.whenReady().then(async () => {
         return false;
       }
     },
+    installSkill: (bp) => installWebbridgeSkill(bp),
     logger: {
       info: (m) => log.info(m),
       error: (m) => log.error(m),
