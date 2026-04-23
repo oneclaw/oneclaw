@@ -737,7 +737,11 @@ ipcMain.on("app:open-webui", () => {
 });
 ipcMain.handle("gateway:port", () => gateway.getPort());
 
-registerSetupIpc({ setupManager, onOAuthLoginSuccess: ensureOAuthTokenRefresh });
+registerSetupIpc({
+  setupManager,
+  onOAuthLoginSuccess: ensureOAuthTokenRefresh,
+  onBrowserModeChanged: () => requestGatewayRestart("setup:webbridge-fallback"),
+});
 registerSettingsIpc({
   requestGatewayRestart: () => requestGatewayRestart("settings:kimi-search"),
   getGatewayToken: () => gateway.getToken(),
