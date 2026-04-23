@@ -237,6 +237,18 @@ export function resolveUserBinDir(): string {
   return path.join(resolveUserStateDir(), "bin");
 }
 
+/** WebBridge 二进制和缓存根目录（~/.kimi-webbridge/） */
+export function resolveWebbridgeDataDir(): string {
+  const home = IS_WIN ? process.env.USERPROFILE : process.env.HOME;
+  return path.join(home ?? "", ".kimi-webbridge");
+}
+
+/** WebBridge daemon 二进制完整路径（~/.kimi-webbridge/bin/kimi-webbridge[.exe]） */
+export function resolveWebbridgeBinaryPath(): string {
+  const exe = IS_WIN ? "kimi-webbridge.exe" : "kimi-webbridge";
+  return path.join(resolveWebbridgeDataDir(), "bin", exe);
+}
+
 /** 用户状态目录（~/.openclaw/） */
 export function resolveUserStateDir(): string {
   if (process.env.OPENCLAW_STATE_DIR) return process.env.OPENCLAW_STATE_DIR;
