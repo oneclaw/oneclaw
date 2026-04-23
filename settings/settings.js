@@ -343,6 +343,30 @@
       "advanced.browserProfile": "Browser Profile",
       "advanced.browserOpenclaw": "Standalone browser instance",
       "advanced.browserChrome": "Chrome extension",
+      "advanced.browserMode": "Browser Mode",
+      "advanced.browserModeOpenclaw": "Standalone browser instance",
+      "advanced.browserModeChrome": "Chrome extension (advanced)",
+      "advanced.browserModeWebbridge": "kimi-webbridge (recommended)",
+      "advanced.wbBinary": "WebBridge binary",
+      "advanced.wbInstalled": "installed",
+      "advanced.wbNotInstalled": "Not installed",
+      "advanced.wbLoading": "Loading…",
+      "advanced.wbExtConfigured": "Configured",
+      "advanced.wbExtNotConfigured": "Not configured",
+      "advanced.wbRetryDownload": "Reinstall",
+      "advanced.wbCheckUpdate": "Check for update",
+      "advanced.wbReconfigureExt": "Reconfigure browser extensions",
+      "advanced.wbNoExtId": "This build does not include a WebBridge extension ID (dev build)",
+      "advanced.wbDownloading": "Downloading WebBridge…",
+      "advanced.wbDownloadDone": "Download complete",
+      "advanced.wbDownloadFailed": "Download failed",
+      "advanced.wbChecking": "Checking for updates…",
+      "advanced.wbUpToDate": "Already up to date",
+      "advanced.wbUpdated": "Updated to",
+      "advanced.wbCheckFailed": "Check failed",
+      "advanced.wbConfiguring": "Configuring browser extensions…",
+      "advanced.wbConfigured": "Browser extensions configured",
+      "advanced.wbConfigFailed": "Configuration failed",
       "advanced.imessage": "iMessage channel",
       "advanced.launchAtLogin": "Launch at login",
       "advanced.cliCommand": "Terminal command",
@@ -653,6 +677,30 @@
       "advanced.browserProfile": "浏览器配置",
       "advanced.browserOpenclaw": "独立浏览器(建议)",
       "advanced.browserChrome": "Chrome 扩展",
+      "advanced.browserMode": "浏览器操作模式",
+      "advanced.browserModeOpenclaw": "独立浏览器",
+      "advanced.browserModeChrome": "Chrome 拓展（高阶）",
+      "advanced.browserModeWebbridge": "kimi-webbridge（推荐）",
+      "advanced.wbBinary": "WebBridge 二进制",
+      "advanced.wbInstalled": "已安装",
+      "advanced.wbNotInstalled": "未安装",
+      "advanced.wbLoading": "加载中…",
+      "advanced.wbExtConfigured": "已配置",
+      "advanced.wbExtNotConfigured": "未配置",
+      "advanced.wbRetryDownload": "重新下载",
+      "advanced.wbCheckUpdate": "检查更新",
+      "advanced.wbReconfigureExt": "重新配置浏览器扩展",
+      "advanced.wbNoExtId": "本构建未注入 WebBridge 扩展 ID（dev 构建）",
+      "advanced.wbDownloading": "正在下载 WebBridge…",
+      "advanced.wbDownloadDone": "下载完成",
+      "advanced.wbDownloadFailed": "下载失败",
+      "advanced.wbChecking": "正在检查更新…",
+      "advanced.wbUpToDate": "已是最新版本",
+      "advanced.wbUpdated": "已更新到",
+      "advanced.wbCheckFailed": "检查更新失败",
+      "advanced.wbConfiguring": "正在配置浏览器扩展…",
+      "advanced.wbConfigured": "浏览器扩展配置完成",
+      "advanced.wbConfigFailed": "配置失败",
       "advanced.imessage": "iMessage 频道",
       "advanced.launchAtLogin": "开机启动",
       "advanced.cliCommand": "终端命令",
@@ -3135,8 +3183,9 @@
       if (els.clawHubRegistry) {
         els.clawHubRegistry.value = data.clawHubRegistry || "";
       }
-      // 回填 browser profile radio
-      var radio = document.querySelector('input[name="browserProfile"][value="' + data.browserProfile + '"]');
+      // 回填 browser mode radio（新前端三选；回退到老 browserProfile）
+      var mode = data.browserMode || data.browserProfile || "openclaw";
+      var radio = document.querySelector('input[name="browserMode"][value="' + mode + '"]');
       if (radio) radio.checked = true;
       // 回填 iMessage toggle
       els.imessageEnabled.checked = !!data.imessageEnabled;
@@ -3149,6 +3198,155 @@
       console.error("[Settings] loadAdvancedConfig failed:", err);
     } finally {
       await loadCliStatus();
+      attachWebbridgeRadioListeners();
+      await refreshWebbridgeCard();
+    }
+  }
+
+  // 绑定 browserMode radio 的切换事件（显示/隐藏 install card）；幂等
+  var webbridgeRadioBound = false;
+  function attachWebbridgeRadioListeners() {
+    if (webbridgeRadioBound) return;
+    var radios = document.querySelectorAll('input[name="browserMode"]');
+    radios.forEach(function (r) {
+      r.addEventListener("change", function () {
+        syncWebbridgeCardVisibility();
+        if (r.value === "webbridge" && r.checked) {
+          refreshWebbridgeCard();
+        }
+      });
+    });
+    syncWebbridgeCardVisibility();
+    webbridgeRadioBound = true;
+  }
+
+  function syncWebbridgeCardVisibility() {
+    var card = document.getElementById("webbridgeCard");
+    if (!card) return;
+    var selected = document.querySelector('input[name="browserMode"]:checked');
+    var show = selected && selected.value === "webbridge";
+    card.classList.toggle("hidden", !show);
+  }
+
+  async function refreshWebbridgeCard() {
+    var card = document.getElementById("webbridgeCard");
+    if (!card || card.classList.contains("hidden")) return;
+    if (!window.oneclaw || typeof window.oneclaw.settingsWebbridgeStatus !== "function") {
+      return;
+    }
+    try {
+      var res = await window.oneclaw.settingsWebbridgeStatus();
+      if (!res || !res.success || !res.data) return;
+      renderWebbridgeStatus(res.data);
+    } catch (err) {
+      console.error("[Settings] webbridge status load failed:", err);
+    }
+  }
+
+  function renderWebbridgeStatus(data) {
+    var statusText = document.getElementById("wbStatusText");
+    if (statusText) {
+      statusText.textContent = data.installed
+        ? (data.version
+            ? "v" + data.version + " " + t("advanced.wbInstalled")
+            : t("advanced.wbInstalled"))
+        : t("advanced.wbNotInstalled");
+      statusText.className = "wb-status-text " + (data.installed ? "ok" : "warn");
+    }
+
+    var list = document.getElementById("wbBrowserList");
+    if (list) {
+      list.innerHTML = "";
+      (data.browsers || []).forEach(function (row) {
+        if (!row.installed) return;
+        var div = document.createElement("div");
+        div.className = "wb-browser-row";
+        var name = document.createElement("span");
+        name.className = "wb-browser-name";
+        name.textContent = row.browserName;
+        var badge = document.createElement("span");
+        badge.className = "wb-status-badge " + (row.configured ? "ok" : "warn");
+        badge.textContent = row.configured
+          ? t("advanced.wbExtConfigured")
+          : t("advanced.wbExtNotConfigured");
+        div.appendChild(name);
+        div.appendChild(badge);
+        list.appendChild(div);
+      });
+    }
+
+    var btnExt = document.getElementById("btnWbReconfigureExt");
+    if (btnExt) {
+      btnExt.disabled = !data.extensionId;
+      btnExt.title = data.extensionId ? "" : t("advanced.wbNoExtId");
+    }
+  }
+
+  function showWebbridgeMsg(msg, type) {
+    var box = document.getElementById("wbMsg");
+    if (!box) return;
+    box.textContent = msg;
+    box.className = "wb-msg " + (type || "");
+    box.classList.remove("hidden");
+  }
+
+  function hideWebbridgeMsg() {
+    var box = document.getElementById("wbMsg");
+    if (box) box.classList.add("hidden");
+  }
+
+  async function handleWbRetryDownload() {
+    hideWebbridgeMsg();
+    if (!window.oneclaw || typeof window.oneclaw.settingsWebbridgeRetryDownload !== "function") return;
+    try {
+      showWebbridgeMsg(t("advanced.wbDownloading"), "info");
+      var res = await window.oneclaw.settingsWebbridgeRetryDownload();
+      if (res && res.success) {
+        showWebbridgeMsg(t("advanced.wbDownloadDone"), "success");
+        await refreshWebbridgeCard();
+      } else {
+        showWebbridgeMsg((res && res.message) || t("advanced.wbDownloadFailed"), "error");
+      }
+    } catch (err) {
+      showWebbridgeMsg(t("error.connection") + (err.message || ""), "error");
+    }
+  }
+
+  async function handleWbCheckUpdate() {
+    hideWebbridgeMsg();
+    if (!window.oneclaw || typeof window.oneclaw.settingsWebbridgeCheckUpdate !== "function") return;
+    try {
+      showWebbridgeMsg(t("advanced.wbChecking"), "info");
+      var res = await window.oneclaw.settingsWebbridgeCheckUpdate();
+      if (res && res.success && res.data) {
+        if (res.data.upToDate) {
+          showWebbridgeMsg(t("advanced.wbUpToDate"), "success");
+        } else {
+          showWebbridgeMsg(t("advanced.wbUpdated") + " v" + (res.data.version || ""), "success");
+          await refreshWebbridgeCard();
+        }
+      } else {
+        showWebbridgeMsg((res && res.message) || t("advanced.wbCheckFailed"), "error");
+      }
+    } catch (err) {
+      showWebbridgeMsg(t("error.connection") + (err.message || ""), "error");
+    }
+  }
+
+  async function handleWbReconfigureExt() {
+    hideWebbridgeMsg();
+    if (!window.oneclaw || typeof window.oneclaw.settingsWebbridgeInstallExtensions !== "function") return;
+    try {
+      showWebbridgeMsg(t("advanced.wbConfiguring"), "info");
+      var res = await window.oneclaw.settingsWebbridgeInstallExtensions();
+      if (res && res.success) {
+        showWebbridgeMsg(t("advanced.wbConfigured"), "success");
+        await refreshWebbridgeCard();
+      } else {
+        showWebbridgeMsg((res && res.message) || t("advanced.wbConfigFailed"), "error");
+      }
+    } catch (err) {
+      showWebbridgeMsg(t("error.connection") + (err.message || ""), "error");
     }
   }
 
@@ -3237,14 +3435,14 @@
     setAdvSaving(true);
     hideAdvMsg();
 
-    var browserProfile = document.querySelector('input[name="browserProfile"]:checked').value;
+    var browserMode = document.querySelector('input[name="browserMode"]:checked').value;
     var imessageEnabled = els.imessageEnabled.checked;
     var launchAtLogin = els.launchAtLoginEnabled ? !!els.launchAtLoginEnabled.checked : false;
     var clawHubRegistry = els.clawHubRegistry ? els.clawHubRegistry.value.trim() : "";
 
     try {
       var result = await window.oneclaw.settingsSaveAdvanced({
-        browserProfile: browserProfile,
+        browserMode: browserMode,
         imessageEnabled: imessageEnabled,
         launchAtLogin: launchAtLogin,
         clawHubRegistry: clawHubRegistry,
@@ -4907,6 +5105,14 @@
     if (els.cliEnabled) {
       els.cliEnabled.addEventListener("change", handleCliToggle);
     }
+
+    // Advanced → WebBridge install card
+    var btnWbRetry = document.getElementById("btnWbRetryDownload");
+    if (btnWbRetry) btnWbRetry.addEventListener("click", handleWbRetryDownload);
+    var btnWbCheck = document.getElementById("btnWbCheckUpdate");
+    if (btnWbCheck) btnWbCheck.addEventListener("click", handleWbCheckUpdate);
+    var btnWbExt = document.getElementById("btnWbReconfigureExt");
+    if (btnWbExt) btnWbExt.addEventListener("click", handleWbReconfigureExt);
 
     // Appearance
     els.btnAppearanceSave.addEventListener("click", handleAppearanceSave);
