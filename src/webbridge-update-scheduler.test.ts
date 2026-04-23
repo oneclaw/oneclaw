@@ -168,6 +168,87 @@ test("连续多轮 tick：binary 存在 → check 多次", async () => {
   assert.ok(log.checkCount >= 3, `应 >= 3 次 check, 实得 ${log.checkCount}`);
 });
 
+test("installed=true && skipped=false → installSkill 被调 1 次/轮", async () => {
+  const skillCalls: string[] = [];
+  const deps: UpdateSchedulerDeps = {
+    checkForUpdate: async () => ({ upToDate: false }),
+    installWebbridge: async () => ({
+      installed: true,
+      skipped: false,
+      version: "2.0.0",
+      binaryPath: "/fake/bin",
+      etag: "W/new",
+    }),
+    binaryExists: () => true,
+    installSkill: async (bp) => {
+      skillCalls.push(bp);
+      return { success: true, output: "✓" };
+    },
+    intervalMs: 50,
+    initialDelayMs: 10,
+    logger: { info: () => {}, error: () => {} },
+  };
+  const handle = startUpdateScheduler(deps);
+  await sleep(90);
+  handle.stop();
+  assert.ok(skillCalls.length >= 1, `应 >= 1 次，实得 ${skillCalls.length}`);
+  assert.equal(skillCalls[0], "/fake/bin");
+});
+
+test("installed=false 或 skipped=true → installSkill 不被调", async () => {
+  const skillCalls: string[] = [];
+  const deps: UpdateSchedulerDeps = {
+    checkForUpdate: async () => ({ upToDate: false }),
+    installWebbridge: async () => ({
+      installed: false,
+      skipped: true,
+      version: "1.0.0",
+      binaryPath: "/fake/bin",
+      etag: "W/old",
+    }),
+    binaryExists: () => true,
+    installSkill: async (bp) => {
+      skillCalls.push(bp);
+      return { success: true, output: "" };
+    },
+    intervalMs: 50,
+    initialDelayMs: 10,
+    logger: { info: () => {}, error: () => {} },
+  };
+  const handle = startUpdateScheduler(deps);
+  await sleep(150);
+  handle.stop();
+  assert.equal(skillCalls.length, 0, "skipped=true 时不该装 skill");
+});
+
+test("installSkill 抛错 → scheduler 不 crash，下轮继续", async () => {
+  let checkCount = 0;
+  const deps: UpdateSchedulerDeps = {
+    checkForUpdate: async () => {
+      checkCount++;
+      return { upToDate: false };
+    },
+    installWebbridge: async () => ({
+      installed: true,
+      skipped: false,
+      version: "2.0.0",
+      binaryPath: "/fake/bin",
+      etag: "W/new",
+    }),
+    binaryExists: () => true,
+    installSkill: async () => {
+      throw new Error("skill crashed");
+    },
+    intervalMs: 40,
+    initialDelayMs: 10,
+    logger: { info: () => {}, error: () => {} },
+  };
+  const handle = startUpdateScheduler(deps);
+  await sleep(200);
+  handle.stop();
+  assert.ok(checkCount >= 2, `应至少 2 轮，实得 ${checkCount}`);
+});
+
 test("长 tick 不重叠：上一轮未结束时不并发启动新轮", async () => {
   let concurrent = 0;
   let maxConcurrent = 0;

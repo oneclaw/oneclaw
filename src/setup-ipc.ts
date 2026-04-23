@@ -29,6 +29,7 @@ import { installWebbridge } from "./webbridge-installer";
 import { installForAllDetectedBrowsers } from "./browser-extension-installer";
 import { readBuildConfigWebbridgeExtensionId } from "./build-config";
 import { runWebbridgeSetupTask } from "./webbridge-setup-task";
+import { installWebbridgeSkill } from "./webbridge-skill-installer";
 
 interface SetupIpcDeps {
   setupManager: SetupManager;
@@ -346,6 +347,7 @@ export function registerSetupIpc(deps: SetupIpcDeps): void {
         applyMode: applyBrowserModeConfig,
         extensionId: readBuildConfigWebbridgeExtensionId(),
         onConfigRewritten: () => deps.onBrowserModeChanged?.(),
+        installSkill: (bp) => installWebbridgeSkill(bp),
         logger: {
           info: (msg) => log.info(msg),
           error: (msg) => log.error(msg),
