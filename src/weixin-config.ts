@@ -1,7 +1,7 @@
 import * as fs from "fs";
 import * as https from "https";
 import * as path from "path";
-import { resolveGatewayPackageDir, resolveUserStateDir } from "./constants";
+import { resolveGatewayPackageDir, resolveUserExtensionsDir, resolveUserStateDir } from "./constants";
 
 export const WEIXIN_PLUGIN_ID = "openclaw-weixin";
 export const WEIXIN_CHANNEL_ID = "openclaw-weixin";
@@ -18,12 +18,14 @@ export interface SaveWeixinConfigParams {
   enabled: boolean;
 }
 
-// 统一解析微信插件目录，兼容 dev / packaged 环境。
+// 统一解析微信插件目录。微信插件已迁出 gateway.asar，由 extension-mirror reconcile
+// 到 ~/.openclaw/extensions/openclaw-weixin/ 后由 openclaw external-plugin scan 加载。
 export function resolveWeixinPluginDir(): string {
-  return path.join(resolveGatewayPackageDir(), "dist", "extensions", WEIXIN_PLUGIN_ID);
+  return path.join(resolveUserExtensionsDir(), WEIXIN_PLUGIN_ID);
 }
 
-// 检查微信插件是否已经随应用一起打包。
+// 检查微信插件是否已 reconcile 到用户目录。reconcile 在 main process 启动时执行，
+// 因此本函数被调用时插件应已就位；缺失通常意味着 mirror 也缺（打包异常）。
 export function isWeixinPluginBundled(): boolean {
   const pluginDir = resolveWeixinPluginDir();
   const hasEntry =
