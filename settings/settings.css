@@ -1871,3 +1871,89 @@ select option {
   color: var(--text-on-accent);
   vertical-align: middle;
 }
+
+/* ──────────── WebBridge install card (Settings → Advanced) ──────────── */
+.webbridge-install-card {
+  margin-top: 10px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg-secondary);
+}
+.webbridge-install-card.hidden {
+  display: none;
+}
+.wb-status-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 4px 0;
+}
+.wb-label {
+  font-weight: 500;
+  color: var(--text);
+}
+.wb-status-text {
+  font-weight: 500;
+}
+.wb-status-text.ok {
+  color: var(--success);
+}
+.wb-status-text.warn {
+  color: var(--warning);
+}
+.wb-browser-list {
+  margin: 8px 0;
+}
+.wb-browser-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 6px 0;
+  border-top: 1px dashed var(--border);
+}
+.wb-browser-name {
+  color: var(--text);
+}
+.wb-status-badge {
+  padding: 2px 10px;
+  border-radius: 10px;
+  font-size: 0.85em;
+  font-weight: 500;
+}
+.wb-status-badge.ok {
+  background: var(--success-bg);
+  color: var(--success);
+}
+.wb-status-badge.warn {
+  background: var(--warning-bg);
+  color: var(--warning);
+}
+.wb-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+.wb-msg {
+  margin-top: 8px;
+  padding: 6px 10px;
+  border-radius: 4px;
+  font-size: 0.9em;
+}
+.wb-msg.hidden {
+  display: none;
+}
+.wb-msg.info {
+  background: var(--bg-hover);
+  color: var(--text-secondary);
+}
+.wb-msg.success {
+  background: var(--success-bg);
+  color: var(--success);
+}
+.wb-msg.error {
+  background: var(--error-bg);
+  color: var(--error);
+}

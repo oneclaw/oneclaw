@@ -97,6 +97,13 @@ contextBridge.exposeInMainWorld("oneclaw", {
   settingsGetAdvanced: () => ipcRenderer.invoke("settings:get-advanced"),
   settingsSaveAdvanced: (params: Record<string, unknown>) =>
     ipcRenderer.invoke("settings:save-advanced", params),
+  settingsWebbridgeStatus: () => ipcRenderer.invoke("settings:webbridge-status"),
+  settingsWebbridgeRetryDownload: () =>
+    ipcRenderer.invoke("settings:webbridge-retry-download"),
+  settingsWebbridgeCheckUpdate: () =>
+    ipcRenderer.invoke("settings:webbridge-check-update"),
+  settingsWebbridgeInstallExtensions: () =>
+    ipcRenderer.invoke("settings:webbridge-install-extensions"),
   settingsGetCliStatus: () => ipcRenderer.invoke("settings:get-cli-status"),
   settingsInstallCli: () => ipcRenderer.invoke("settings:install-cli"),
   settingsUninstallCli: () => ipcRenderer.invoke("settings:uninstall-cli"),

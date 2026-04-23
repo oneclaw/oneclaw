@@ -9,7 +9,25 @@ import {
   resolveResourcesPath,
   resolveUserConfigPath,
   resolveUserStateDir,
+  resolveWebbridgeBinaryPath,
+  resolveWebbridgeDataDir,
 } from "./constants";
+import {
+  applyBrowserModeConfig,
+  detectBrowserMode,
+  isBrowserMode,
+} from "./browser-mode-config";
+import {
+  installWebbridge,
+  checkForUpdate,
+  readCacheManifest,
+} from "./webbridge-installer";
+import {
+  installForAllDetectedBrowsers,
+  getExtensionStates,
+} from "./browser-extension-installer";
+import { readBuildConfigWebbridgeExtensionId } from "./build-config";
+import { getWebbridgeInstallState } from "./webbridge-status";
 import { resolveOneclawConfigPath } from "./oneclaw-config";
 import {
   getConfigRecoveryData,
@@ -1511,6 +1529,9 @@ export function registerSettingsIpc(opts: SettingsIpcOptions = {}): void {
       return {
         success: true,
         data: {
+          // 新字段：Settings UI 的三选 radio 用
+          browserMode: detectBrowserMode(config),
+          // 旧字段：向后兼容（值是 gateway defaultProfile，非 UI mode）
           browserProfile: config?.browser?.defaultProfile ?? "openclaw",
           imessageEnabled: config?.channels?.imessage?.enabled !== false,
           launchAtLoginSupported: launchAtLoginState.supported,
@@ -1526,19 +1547,30 @@ export function registerSettingsIpc(opts: SettingsIpcOptions = {}): void {
 
   // ── 保存高级配置 ──
   ipcMain.handle("settings:save-advanced", async (_event, params) => {
-    const { browserProfile, imessageEnabled } = params;
+    const { browserProfile, browserMode, imessageEnabled } = params;
     const launchAtLogin = typeof params?.launchAtLogin === "boolean" ? params.launchAtLogin : undefined;
     const sessionMemoryEnabled = typeof params?.sessionMemoryEnabled === "boolean" ? params.sessionMemoryEnabled : undefined;
     const clawHubRegistry = typeof params?.clawHubRegistry === "string" ? params.clawHubRegistry.trim() : undefined;
     return runTrackedSettingsAction(
       "save_advanced",
-      { browser_profile: browserProfile, imessage_enabled: imessageEnabled, launch_at_login: launchAtLogin, session_memory: sessionMemoryEnabled },
+      {
+        browser_mode: browserMode ?? null,
+        browser_profile: browserProfile ?? null,
+        imessage_enabled: imessageEnabled,
+        launch_at_login: launchAtLogin,
+        session_memory: sessionMemoryEnabled,
+      },
       async () => {
         try {
           const config = readUserConfig();
 
-          config.browser ??= {};
-          config.browser.defaultProfile = browserProfile;
+          // 优先 browserMode（新前端）；回退 browserProfile（老前端兼容）
+          if (isBrowserMode(browserMode)) {
+            Object.assign(config, applyBrowserModeConfig(config, browserMode));
+          } else if (typeof browserProfile === "string" && browserProfile) {
+            config.browser ??= {};
+            config.browser.defaultProfile = browserProfile;
+          }
 
           config.channels ??= {};
           config.channels.imessage ??= {};
@@ -1569,6 +1601,82 @@ export function registerSettingsIpc(opts: SettingsIpcOptions = {}): void {
         }
       }
     );
+  });
+
+  // ── WebBridge 安装状态（只读，不调 CLI） ──
+  ipcMain.handle("settings:webbridge-status", async () => {
+    try {
+      const state = await getWebbridgeInstallState({
+        binaryPath: resolveWebbridgeBinaryPath(),
+        dataDir: resolveWebbridgeDataDir(),
+        fileExists: fs.existsSync,
+        readManifest: readCacheManifest,
+        readExtensionStates: (extId) => getExtensionStates(extId),
+        extensionId: readBuildConfigWebbridgeExtensionId(),
+      });
+      return { success: true, data: state };
+    } catch (err: any) {
+      return { success: false, message: err.message || String(err) };
+    }
+  });
+
+  // ── 重新下载 WebBridge 二进制（force=true 覆盖 cache） ──
+  ipcMain.handle("settings:webbridge-retry-download", async () => {
+    try {
+      const result = await installWebbridge({ force: true });
+      return {
+        success: true,
+        data: {
+          installed: result.installed,
+          skipped: result.skipped,
+          version: result.version,
+          binaryPath: result.binaryPath,
+          etag: result.etag,
+        },
+      };
+    } catch (err: any) {
+      return { success: false, message: err.message || String(err) };
+    }
+  });
+
+  // ── 检查更新（HEAD + ETag 对比；发现新版自动下载） ──
+  ipcMain.handle("settings:webbridge-check-update", async () => {
+    try {
+      const dataDir = resolveWebbridgeDataDir();
+      const head = await checkForUpdate({ dataDir });
+      if (head.upToDate) {
+        return { success: true, data: { upToDate: true, updated: false } };
+      }
+      const install = await installWebbridge({ force: true });
+      return {
+        success: true,
+        data: {
+          upToDate: false,
+          updated: install.installed,
+          version: install.version,
+          etag: install.etag,
+        },
+      };
+    } catch (err: any) {
+      return { success: false, message: err.message || String(err) };
+    }
+  });
+
+  // ── 重新配置浏览器扩展（幂等；用户手动删了 External Extensions 时的恢复入口） ──
+  ipcMain.handle("settings:webbridge-install-extensions", async () => {
+    try {
+      const extId = readBuildConfigWebbridgeExtensionId();
+      if (!extId) {
+        return {
+          success: false,
+          message: "本构建未注入 WebBridge 扩展 ID（dev 构建）",
+        };
+      }
+      const summary = await installForAllDetectedBrowsers(extId);
+      return { success: true, data: summary };
+    } catch (err: any) {
+      return { success: false, message: err.message || String(err) };
+    }
   });
 
   // ── 读取 CLI 状态（enabled=用户偏好，installed=当前/旧版 wrapper 足迹） ──
