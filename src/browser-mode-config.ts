@@ -38,12 +38,27 @@ export function applyBrowserModeConfig(
 ): any {
   switch (mode) {
     case "openclaw":
-      return applyOpenclawOrChromeMode(config, "openclaw");
     case "chrome":
-      return applyOpenclawOrChromeMode(config, "chrome");
-    default:
-      throw new Error(`mode not yet implemented: ${mode}`);
+      return applyOpenclawOrChromeMode(config, mode);
+    case "webbridge":
+      return applyWebbridgeMode(config);
   }
+}
+
+function applyWebbridgeMode(config: OneclawConfigShape): any {
+  return {
+    ...config,
+    plugins: {
+      ...(config.plugins ?? {}),
+      entries: {
+        ...(config.plugins?.entries ?? {}),
+        browser: {
+          ...(config.plugins?.entries?.browser ?? {}),
+          enabled: false,
+        },
+      },
+    },
+  };
 }
 
 function applyOpenclawOrChromeMode(

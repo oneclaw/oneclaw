@@ -130,3 +130,63 @@ test("applyBrowserModeConfig(chrome) 保留用户自定义 browser.profiles.chro
     chrome: { driver: "existing-session", attachOnly: true },
   });
 });
+
+test("applyBrowserModeConfig(webbridge) 空 config 只写 plugins.entries.browser.enabled=false", () => {
+  const result = applyBrowserModeConfig({}, "webbridge");
+  assert.deepEqual(result, {
+    plugins: { entries: { browser: { enabled: false } } },
+  });
+  assert.equal(
+    result.browser,
+    undefined,
+    "不应写 browser.defaultProfile（保留默认或老值）",
+  );
+  assert.equal(
+    result.skills,
+    undefined,
+    "不应写 skills.entries.kimi-webbridge（默认启用）",
+  );
+});
+
+test("applyBrowserModeConfig(webbridge) 保留原有 browser.defaultProfile", () => {
+  const before = {
+    browser: { defaultProfile: "openclaw" },
+  };
+  const after = applyBrowserModeConfig(before, "webbridge");
+  assert.equal(
+    after.browser.defaultProfile,
+    "openclaw",
+    "原有 defaultProfile 应保留（插件关了反正不 resolve）",
+  );
+  assert.equal(after.plugins.entries.browser.enabled, false);
+});
+
+test("applyBrowserModeConfig(webbridge) 从 openclaw 切过来：只翻 browser.enabled", () => {
+  const before = applyBrowserModeConfig({}, "openclaw");
+  const after = applyBrowserModeConfig(before, "webbridge");
+  assert.equal(after.plugins.entries.browser.enabled, false);
+  assert.equal(after.browser.defaultProfile, "openclaw");
+  // skills.kimi-webbridge.enabled 不动，原值 = false（openclaw 模式留下的"遗留值"）
+  assert.equal(after.skills.entries["kimi-webbridge"].enabled, false);
+});
+
+test("applyBrowserModeConfig(webbridge) 保留其他字段", () => {
+  const before = {
+    providers: { moonshot: { apiKey: "sk-xxx" } },
+    plugins: {
+      entries: {
+        matrix: { enabled: true },
+      },
+    },
+    skills: {
+      entries: {
+        "some-other-skill": { enabled: true },
+      },
+    },
+  };
+  const after = applyBrowserModeConfig(before, "webbridge");
+  assert.deepEqual(after.providers, { moonshot: { apiKey: "sk-xxx" } });
+  assert.deepEqual(after.plugins.entries.matrix, { enabled: true });
+  assert.deepEqual(after.skills.entries["some-other-skill"], { enabled: true });
+  assert.equal(after.plugins.entries.browser.enabled, false);
+});
