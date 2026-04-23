@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import * as fs from "fs";
 import * as os from "os";
 import * as path from "path";
+import * as http from "http";
 import {
   resolvePlatformBinaryName,
   buildDownloadUrl,
@@ -10,10 +11,31 @@ import {
   CDN_BASE_URL,
   readCacheManifest,
   writeCacheManifest,
+  httpHead,
 } from "./webbridge-installer";
 
 function makeTempDir(): string {
   return fs.mkdtempSync(path.join(os.tmpdir(), "webbridge-test-"));
+}
+
+function startTestServer(
+  handler: http.RequestListener,
+): Promise<{ url: string; close: () => Promise<void> }> {
+  return new Promise((resolve) => {
+    const server = http.createServer(handler);
+    server.listen(0, "127.0.0.1", () => {
+      const addr = server.address();
+      if (!addr || typeof addr === "string") throw new Error("no address");
+      const url = `http://127.0.0.1:${addr.port}`;
+      resolve({
+        url,
+        close: () =>
+          new Promise<void>((r) => {
+            server.close(() => r());
+          }),
+      });
+    });
+  });
 }
 
 test("resolvePlatformBinaryName 映射 darwin-arm64", () => {
@@ -146,5 +168,68 @@ test("writeCacheManifest 自动创建不存在的目录", () => {
     assert.ok(fs.existsSync(path.join(dir, ".download-cache.json")));
   } finally {
     fs.rmSync(parent, { recursive: true, force: true });
+  }
+});
+
+test("httpHead 返回 ETag / Last-Modified / Content-Length", async () => {
+  const { url, close } = await startTestServer((req, res) => {
+    assert.equal(req.method, "HEAD");
+    res.writeHead(200, {
+      ETag: "\"abc\"",
+      "Last-Modified": "Mon, 23 Apr 2026 10:00:00 GMT",
+      "Content-Length": "7345678",
+    });
+    res.end();
+  });
+  try {
+    const head = await httpHead(`${url}/file`);
+    assert.equal(head.etag, "\"abc\"");
+    assert.equal(head.lastModified, "Mon, 23 Apr 2026 10:00:00 GMT");
+    assert.equal(head.contentLength, 7345678);
+  } finally {
+    await close();
+  }
+});
+
+test("httpHead 跟随 301 重定向", async () => {
+  const { url, close } = await startTestServer((req, res) => {
+    if (req.url === "/old") {
+      res.writeHead(301, { Location: `${url}/new` });
+      res.end();
+      return;
+    }
+    res.writeHead(200, { ETag: "\"x\"" });
+    res.end();
+  });
+  try {
+    const head = await httpHead(`${url}/old`);
+    assert.equal(head.etag, "\"x\"");
+  } finally {
+    await close();
+  }
+});
+
+test("httpHead 对非 200 抛错", async () => {
+  const { url, close } = await startTestServer((_req, res) => {
+    res.writeHead(404);
+    res.end();
+  });
+  try {
+    await assert.rejects(httpHead(`${url}/missing`), /HTTP 404/);
+  } finally {
+    await close();
+  }
+});
+
+test("httpHead 超过 5 次重定向抛错", async () => {
+  const { url, close } = await startTestServer((req, res) => {
+    const n = parseInt((req.url || "/0").slice(1), 10) || 0;
+    res.writeHead(302, { Location: `${url}/${n + 1}` });
+    res.end();
+  });
+  try {
+    await assert.rejects(httpHead(`${url}/0`), /Too many redirects/);
+  } finally {
+    await close();
   }
 });
