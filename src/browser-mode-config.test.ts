@@ -98,3 +98,35 @@ test("applyBrowserModeConfig(openclaw) 保留其他字段", () => {
   assert.equal(after.plugins.entries.browser.enabled, true);
   assert.equal(after.skills.entries["kimi-webbridge"].enabled, false);
 });
+
+test("applyBrowserModeConfig(chrome) 写三字段到空 config", () => {
+  const result = applyBrowserModeConfig({}, "chrome");
+  assert.deepEqual(result, {
+    browser: { defaultProfile: "chrome" },
+    plugins: { entries: { browser: { enabled: true } } },
+    skills: { entries: { "kimi-webbridge": { enabled: false } } },
+  });
+});
+
+test("applyBrowserModeConfig(chrome) 从 openclaw 切换：只改 defaultProfile", () => {
+  const before = applyBrowserModeConfig({}, "openclaw");
+  const after = applyBrowserModeConfig(before, "chrome");
+  assert.equal(after.browser.defaultProfile, "chrome");
+  assert.equal(after.plugins.entries.browser.enabled, true);
+  assert.equal(after.skills.entries["kimi-webbridge"].enabled, false);
+});
+
+test("applyBrowserModeConfig(chrome) 保留用户自定义 browser.profiles.chrome", () => {
+  const before = {
+    browser: {
+      profiles: {
+        chrome: { driver: "existing-session", attachOnly: true },
+      },
+    },
+  };
+  const after = applyBrowserModeConfig(before, "chrome");
+  assert.equal(after.browser.defaultProfile, "chrome");
+  assert.deepEqual(after.browser.profiles, {
+    chrome: { driver: "existing-session", attachOnly: true },
+  });
+});
