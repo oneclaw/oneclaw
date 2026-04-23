@@ -38,18 +38,23 @@ export function applyBrowserModeConfig(
 ): any {
   switch (mode) {
     case "openclaw":
-      return applyOpenclawMode(config);
+      return applyOpenclawOrChromeMode(config, "openclaw");
+    case "chrome":
+      return applyOpenclawOrChromeMode(config, "chrome");
     default:
       throw new Error(`mode not yet implemented: ${mode}`);
   }
 }
 
-function applyOpenclawMode(config: OneclawConfigShape): any {
+function applyOpenclawOrChromeMode(
+  config: OneclawConfigShape,
+  profile: "openclaw" | "chrome",
+): any {
   return {
     ...config,
     browser: {
       ...(config.browser ?? {}),
-      defaultProfile: "openclaw",
+      defaultProfile: profile,
     },
     plugins: {
       ...(config.plugins ?? {}),
