@@ -517,9 +517,14 @@ function buildAnalyticsConfig() {
 function writeBuildConfig(configPath) {
   const analytics = buildAnalyticsConfig();
   const clawhubRegistry = readEnvText("ONECLAW_CLAWHUB_REGISTRY");
-  const config = { analytics, clawhubRegistry };
+  const webbridgeExtensionId = readEnvText("ONECLAW_WEBBRIDGE_EXT_ID");
+  const config = { analytics, clawhubRegistry, webbridgeExtensionId };
   fs.writeFileSync(configPath, JSON.stringify(config, null, 2));
-  log(`已生成 build-config.json（analytics.enabled=${analytics.enabled ? "true" : "false"}, clawhubRegistry=${clawhubRegistry || "(空)"}）`);
+  log(
+    `已生成 build-config.json（analytics.enabled=${analytics.enabled ? "true" : "false"}, ` +
+      `clawhubRegistry=${clawhubRegistry || "(空)"}, ` +
+      `webbridgeExtensionId=${webbridgeExtensionId || "(空)"}）`,
+  );
 }
 
 // ─── Step 2: 安装 openclaw 生产依赖 ───

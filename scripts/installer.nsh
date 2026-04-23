@@ -2,6 +2,12 @@
 ; 功能：安装前杀进程、更新时跳过多余页面（只显示进度条）、卸载时提供 CLI 清理和用户数据删除选项
 
 ; ============================================================
+; 编译时读取 WebBridge 扩展 ID（env var 未设则为空串，相关 Section 编译掉）
+; ============================================================
+
+!define /ifndef WEBBRIDGE_EXT_ID "$%ONECLAW_WEBBRIDGE_EXT_ID%"
+
+; ============================================================
 ; 自定义 Welcome 页：更新时自动跳过，首次安装正常显示
 ; ============================================================
 
@@ -147,6 +153,23 @@
     nsExec::ExecToLog 'powershell.exe -NoProfile -ExecutionPolicy Bypass -File "$TEMP\oneclaw-uninstall-path.ps1"'
     Delete "$TEMP\oneclaw-uninstall-path.ps1"
   SectionEnd
+
+  ; 默认不勾选：删除 WebBridge 二进制、缓存、日志
+  Section /o "un.删除 WebBridge 二进制和缓存 (~/.kimi-webbridge)"
+    RMDir /r "$PROFILE\.kimi-webbridge"
+  SectionEnd
+
+  ; 默认不勾选：清理 External Extensions registry（让浏览器下次启动时不再"发现"扩展）
+  ; 仅当构建注入了 WEBBRIDGE_EXT_ID 时才编译该 Section（空 ID 相关 Key 没意义）
+  !if "${WEBBRIDGE_EXT_ID}" != ""
+    Section /o "un.清理 WebBridge 浏览器扩展 registry"
+      DeleteRegKey HKCU "Software\Google\Chrome\Extensions\${WEBBRIDGE_EXT_ID}"
+      DeleteRegKey HKCU "Software\Microsoft\Edge\Extensions\${WEBBRIDGE_EXT_ID}"
+      DeleteRegKey HKCU "Software\BraveSoftware\Brave-Browser\Extensions\${WEBBRIDGE_EXT_ID}"
+      DeleteRegKey HKCU "Software\Vivaldi\Extensions\${WEBBRIDGE_EXT_ID}"
+      DeleteRegKey HKCU "Software\Opera Software\Opera Stable\Extensions\${WEBBRIDGE_EXT_ID}"
+    SectionEnd
+  !endif
 
   ; 默认不勾选（/o）：删除用户数据和配置，防止误删
   Section /o "un.删除所有用户数据和配置 (~/.openclaw)"
