@@ -57,10 +57,30 @@ function copyDirSync(src: string, dest: string): void {
 
 interface ReconcileOutcome {
   pluginId: string;
-  action: "installed" | "upgraded" | "skipped" | "failed";
+  action: "installed" | "upgraded" | "skipped" | "failed" | "removed";
   fromVersion?: string | null;
   toVersion?: string | null;
   error?: string;
+}
+
+// 曾经被 OneClaw mirror，但已经迁移到 openclaw 内置 vendor 的 plugin id。
+// 旧用户的 ~/.openclaw/extensions/<id>/ 仍残留旧版本，与 openclaw stock 同时存在
+// 会触发 duplicate plugin id 警告，启动时静默删除一次即可。
+const RETIRED_USER_PLUGIN_IDS: readonly string[] = ["qqbot"];
+
+function removeRetiredOrphans(userDir: string): ReconcileOutcome[] {
+  const outcomes: ReconcileOutcome[] = [];
+  for (const id of RETIRED_USER_PLUGIN_IDS) {
+    const orphan = path.join(userDir, id);
+    if (!fs.existsSync(orphan)) continue;
+    try {
+      fs.rmSync(orphan, { recursive: true, force: true });
+      outcomes.push({ pluginId: id, action: "removed" });
+    } catch (err) {
+      outcomes.push({ pluginId: id, action: "failed", error: (err as Error).message });
+    }
+  }
+  return outcomes;
 }
 
 /** 同步单个 plugin（mirror → user dir） */
@@ -135,6 +155,7 @@ export async function reconcileExtensionsOnAppLaunch(): Promise<void> {
     if (!entry.isDirectory()) continue;
     outcomes.push(reconcileOne(entry.name, mirrorDir, userDir));
   }
+  outcomes.push(...removeRetiredOrphans(userDir));
 
   // 汇总日志：成功的精简一行，失败的单独 warn
   const summary = outcomes
@@ -142,6 +163,7 @@ export async function reconcileExtensionsOnAppLaunch(): Promise<void> {
     .map((o) => {
       if (o.action === "skipped") return `${o.pluginId}=skip(${o.toVersion ?? "?"})`;
       if (o.action === "upgraded") return `${o.pluginId}=${o.fromVersion ?? "?"}→${o.toVersion ?? "?"}`;
+      if (o.action === "removed") return `${o.pluginId}=removed(retired)`;
       return `${o.pluginId}=install(${o.toVersion ?? "?"})`;
     })
     .join(" ");

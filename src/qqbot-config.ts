@@ -1,6 +1,6 @@
 import * as fs from "fs";
 import * as path from "path";
-import { resolveUserExtensionsDir } from "./constants";
+import { resolveGatewayPackageDir } from "./constants";
 
 export const QQBOT_PLUGIN_ID = "qqbot";
 
@@ -18,19 +18,17 @@ export interface SaveQqbotConfigParams {
   markdownSupport?: boolean;
 }
 
-// 统一解析 QQ Bot 插件目录。已迁出 gateway.asar，由 extension-mirror reconcile
-// 到 ~/.openclaw/extensions/qqbot/ 后由 openclaw external-plugin scan 加载。
+// 统一解析 QQ Bot 插件目录。openclaw 自 2026.4.5 起将 @openclaw/qqbot 作为内置
+// extension vendor 在自身 dist/extensions/ 下，OneClaw 不再单独 ship 也不需要
+// reconcile 到 ~/.openclaw/extensions/。
 export function resolveQqbotPluginDir(): string {
-  return path.join(resolveUserExtensionsDir(), QQBOT_PLUGIN_ID);
+  return path.join(resolveGatewayPackageDir(), "dist", "extensions", QQBOT_PLUGIN_ID);
 }
 
 // 检查 QQ Bot 插件是否已经随应用一起打包。
 export function isQqbotPluginBundled(): boolean {
   const pluginDir = resolveQqbotPluginDir();
-  const hasEntry =
-    fs.existsSync(path.join(pluginDir, "index.ts")) ||
-    fs.existsSync(path.join(pluginDir, "dist", "index.js"));
-  return hasEntry && fs.existsSync(path.join(pluginDir, "openclaw.plugin.json"));
+  return fs.existsSync(path.join(pluginDir, "openclaw.plugin.json"));
 }
 
 // 从当前用户配置中提取 QQ Bot 配置，供设置页回显。

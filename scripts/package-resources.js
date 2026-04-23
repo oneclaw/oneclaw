@@ -26,7 +26,6 @@ const KIMI_CLAW_DEFAULT_TGZ_URL = `${KIMI_CLAW_BASE_URL}/kimi-claw-latest.tgz`;
 const KIMI_CLAW_CACHE_FILE = "kimi-claw-latest.tgz";
 const KIMI_SEARCH_DEFAULT_TGZ_URL = `${KIMI_CLAW_BASE_URL}/openclaw-kimi-search-0.1.2.tgz`;
 const KIMI_SEARCH_CACHE_FILE = "openclaw-kimi-search-0.1.2.tgz";
-const QQBOT_PACKAGE_NAME = "@sliverp/qqbot";
 const DINGTALK_CONNECTOR_PACKAGE_NAME = "@dingtalk-real-ai/dingtalk-connector";
 const WECOM_PLUGIN_PACKAGE_NAME = "@wecom/wecom-openclaw-plugin";
 const WEIXIN_PLUGIN_PACKAGE_NAME = "@tencent-weixin/openclaw-weixin";
@@ -597,9 +596,6 @@ function resolveBundledPluginSource({ packageName, envKey, pkgJsonKey }) {
   return { source: latestVersion, stampSource: `remote:${packageName}@${latestVersion}` };
 }
 
-function getQqbotPackageSource() {
-  return resolveBundledPluginSource({ packageName: QQBOT_PACKAGE_NAME, envKey: "ONECLAW_QQBOT_PACKAGE_SOURCE", pkgJsonKey: "qqbot" });
-}
 function getDingtalkConnectorPackageSource() {
   return resolveBundledPluginSource({ packageName: DINGTALK_CONNECTOR_PACKAGE_NAME, envKey: "ONECLAW_DINGTALK_CONNECTOR_PACKAGE_SOURCE", pkgJsonKey: "dingtalkConnector" });
 }
@@ -1110,7 +1106,7 @@ function patchAsarBoundaryCheck(gatewayDir) {
   }
 }
 
-// ─── Step 2.5: 注入 bundled 插件（kimi-claw + kimi-search + qqbot + dingtalk） ───
+// ─── Step 2.5: 注入 bundled 插件（kimi-claw + kimi-search） ───
 
 // 插件定义（id → 下载/缓存参数）
 const BUNDLED_PLUGINS = [
@@ -1141,12 +1137,6 @@ const BUNDLED_PLUGINS = [
 // The openclaw host then loads them via its standard external-plugin scan path —
 // no shim, no bundled-channel-entry contract, no jiti module-identity split.
 const CHANNEL_MIRROR_PLUGINS = [
-  {
-    id: "qqbot",
-    packageName: QQBOT_PACKAGE_NAME,
-    requiredFiles: ["package.json", "openclaw.plugin.json"],
-    getSource: getQqbotPackageSource,
-  },
   {
     id: "dingtalk-connector",
     packageName: DINGTALK_CONNECTOR_PACKAGE_NAME,
@@ -1195,9 +1185,11 @@ const OPENCLAW_SKILLS_DARWIN_ONLY = new Set([
 ]);
 
 // openclaw/extensions 只保留 OneClaw 当前产品面和运行时基础插件。
-// 4 个第三方 channel plugin（qqbot / dingtalk-connector / wecom-openclaw-plugin /
+// 3 个第三方 channel plugin（dingtalk-connector / wecom-openclaw-plugin /
 // openclaw-weixin）已迁出 gateway.asar，改为 extensions-mirror/<id>/，运行时再
 // reconcile 到 ~/.openclaw/extensions/，因此不在此 allowlist 中。
+// qqbot 自 openclaw 2026.4.5 起被官方作为 @openclaw/qqbot 内置 vendor，保留在
+// stock 列表里即可，OneClaw 不再自行 ship。
 const OPENCLAW_EXTENSION_ALLOWLIST = new Set([
   "shared",
   "memory-core",
@@ -1207,6 +1199,7 @@ const OPENCLAW_EXTENSION_ALLOWLIST = new Set([
   "telegram",
   "kimi-claw",
   "kimi-search",
+  "qqbot",
 ]);
 
 // openclaw 的 bundled extension 在 2026.3.x 位于顶层 extensions/，在 2026.4.x 迁到 dist/extensions/。
@@ -1228,7 +1221,6 @@ const REQUIRED_OPENCLAW_INJECTED_EXTENSIONS = [
 
 // External mirror: validates extensions-mirror/<id>/ exists with manifest.
 const REQUIRED_CHANNEL_MIRROR_PLUGINS = [
-  path.join("qqbot", "openclaw.plugin.json"),
   path.join("dingtalk-connector", "openclaw.plugin.json"),
   path.join("wecom-openclaw-plugin", "openclaw.plugin.json"),
   path.join("openclaw-weixin", "openclaw.plugin.json"),
@@ -2215,7 +2207,7 @@ async function main() {
 
   console.log();
 
-  // Step 2.5: 注入 bundled 插件（kimi-claw + kimi-search + qqbot + dingtalk）
+  // Step 2.5: 注入 bundled 插件（kimi-claw + kimi-search）
   log("Step 2.5: 注入 bundled 插件");
   await bundleAllPlugins(targetPaths, opts);
 
