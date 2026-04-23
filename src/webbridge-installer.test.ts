@@ -13,6 +13,7 @@ import {
   writeCacheManifest,
   httpHead,
   downloadToFile,
+  checkForUpdate,
 } from "./webbridge-installer";
 
 function makeTempDir(): string {
@@ -313,6 +314,81 @@ test("downloadToFile 覆盖已存在目标文件（原子替换）", async () =>
   try {
     await downloadToFile(`${url}/x`, dest);
     assert.equal(fs.readFileSync(dest, "utf-8"), "new");
+  } finally {
+    await close();
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("checkForUpdate 无缓存 → upToDate=false", async () => {
+  const { url, close } = await startTestServer((_req, res) => {
+    res.writeHead(200, { ETag: "\"remote-v1\"" });
+    res.end();
+  });
+  const dir = makeTempDir();
+  try {
+    const result = await checkForUpdate({
+      dataDir: dir,
+      platform: "darwin",
+      arch: "arm64",
+      cdnBaseUrl: url,
+    });
+    assert.equal(result.upToDate, false);
+    assert.equal(result.remoteEtag, "\"remote-v1\"");
+  } finally {
+    await close();
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("checkForUpdate ETag 匹配 → upToDate=true", async () => {
+  const { url, close } = await startTestServer((_req, res) => {
+    res.writeHead(200, { ETag: "\"same-etag\"" });
+    res.end();
+  });
+  const dir = makeTempDir();
+  try {
+    writeCacheManifest(dir, {
+      version: "latest",
+      etag: "\"same-etag\"",
+      lastModified: null,
+      contentLength: null,
+    });
+    const result = await checkForUpdate({
+      dataDir: dir,
+      platform: "darwin",
+      arch: "arm64",
+      cdnBaseUrl: url,
+    });
+    assert.equal(result.upToDate, true);
+    assert.equal(result.remoteEtag, "\"same-etag\"");
+  } finally {
+    await close();
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("checkForUpdate ETag 不同 → upToDate=false", async () => {
+  const { url, close } = await startTestServer((_req, res) => {
+    res.writeHead(200, { ETag: "\"remote-v2\"" });
+    res.end();
+  });
+  const dir = makeTempDir();
+  try {
+    writeCacheManifest(dir, {
+      version: "latest",
+      etag: "\"remote-v1\"",
+      lastModified: null,
+      contentLength: null,
+    });
+    const result = await checkForUpdate({
+      dataDir: dir,
+      platform: "darwin",
+      arch: "arm64",
+      cdnBaseUrl: url,
+    });
+    assert.equal(result.upToDate, false);
+    assert.equal(result.remoteEtag, "\"remote-v2\"");
   } finally {
     await close();
     fs.rmSync(dir, { recursive: true, force: true });
