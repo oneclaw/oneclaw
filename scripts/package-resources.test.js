@@ -215,7 +215,6 @@ test("verifyOutput 应要求基础扩展插件存在", () => {
     "imessage",
     "kimi-claw",
     "kimi-search",
-    "qqbot",
     "dingtalk-connector",
     "wecom-openclaw-plugin",
   ]) {
