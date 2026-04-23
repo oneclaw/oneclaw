@@ -61,6 +61,19 @@ function applyWebbridgeMode(config: OneclawConfigShape): any {
   };
 }
 
+export function detectBrowserMode(config: OneclawConfigShape): BrowserMode {
+  // webbridge 优先：插件被显式关掉 → 用户在 webbridge 模式
+  if (config?.plugins?.entries?.browser?.enabled === false) {
+    return "webbridge";
+  }
+  // 否则看 defaultProfile
+  if (config?.browser?.defaultProfile === "chrome") {
+    return "chrome";
+  }
+  // 其余（"openclaw" / "user" / 未设置 / 自定义）统一回落到 openclaw
+  return "openclaw";
+}
+
 function applyOpenclawOrChromeMode(
   config: OneclawConfigShape,
   profile: "openclaw" | "chrome",
