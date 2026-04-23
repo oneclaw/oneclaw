@@ -72,7 +72,7 @@ import {
   isWeixinPluginBundled,
   startWeixinQrLogin,
   pollWeixinQrStatus,
-  saveWeixinLoginResult,
+  persistWeixinLoginSuccess,
   listWeixinAccountIds,
   clearWeixinAccounts,
 } from "./weixin-config";
@@ -1145,8 +1145,9 @@ export function registerSettingsIpc(opts: SettingsIpcOptions = {}): void {
 
       // 扫码确认成功 → 保存凭据并重启 Gateway
       if (result.status === "confirmed" && result.accountId && result.botToken) {
-        const normalizedId = saveWeixinLoginResult(result);
-        opts.requestGatewayRestart?.();
+        const config = readUserConfig();
+        const normalizedId = persistWeixinLoginSuccess(config, result);
+        writeUserConfigAndRestart(config);
         return {
           success: true,
           data: {
