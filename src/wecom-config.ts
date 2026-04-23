@@ -2,7 +2,7 @@ import * as crypto from "crypto";
 import * as fs from "fs";
 import * as https from "https";
 import * as path from "path";
-import { resolveGatewayPackageDir } from "./constants";
+import { resolveUserExtensionsDir } from "./constants";
 
 export const WECOM_PLUGIN_ID = "wecom-openclaw-plugin";
 export const WECOM_CHANNEL_ID = "wecom";
@@ -28,9 +28,10 @@ export interface SaveWecomConfigParams {
   groupAllowFrom?: unknown;
 }
 
-// 统一解析企业微信插件目录，兼容 dev / packaged 环境。
+// 统一解析企业微信插件目录。已迁出 gateway.asar，由 extension-mirror reconcile
+// 到 ~/.openclaw/extensions/wecom-openclaw-plugin/ 后由 openclaw external-plugin scan 加载。
 export function resolveWecomPluginDir(): string {
-  return path.join(resolveGatewayPackageDir(), "dist", "extensions", WECOM_PLUGIN_ID);
+  return path.join(resolveUserExtensionsDir(), WECOM_PLUGIN_ID);
 }
 
 // 检查企业微信插件是否已经随应用一起打包。
