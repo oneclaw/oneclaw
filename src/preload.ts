@@ -187,6 +187,34 @@ contextBridge.exposeInMainWorld("oneclaw", {
     ipcRenderer.invoke("feedback:reply", id, content, files),
   // 从 .openclaw 目录选择文件
   feedbackPickFiles: () => ipcRenderer.invoke("feedback:pick-files"),
+  // 弹出原生错误对话框
+  feedbackShowErrorDialog: (params: { title: string; message: string; detail?: string }) =>
+    ipcRenderer.invoke("feedback:show-error-dialog", params),
+  // SSE 订阅：建连 / 断开
+  feedbackSubscribe: () => ipcRenderer.invoke("feedback:subscribe"),
+  feedbackUnsubscribe: () => ipcRenderer.invoke("feedback:unsubscribe"),
+
+  // SSE 事件监听（返回 unsubscribe 函数，遵循项目既有 onGatewayReady / onAppNavigate 模式）
+  onFeedbackEvent: (cb: (evt: unknown) => void) => {
+    const listener = (_e: unknown, evt: unknown) => cb(evt);
+    ipcRenderer.on("feedback:event", listener);
+    return () => ipcRenderer.removeListener("feedback:event", listener);
+  },
+  onFeedbackReconnecting: (cb: () => void) => {
+    const listener = () => cb();
+    ipcRenderer.on("feedback:reconnecting", listener);
+    return () => ipcRenderer.removeListener("feedback:reconnecting", listener);
+  },
+  onFeedbackReconnected: (cb: () => void) => {
+    const listener = () => cb();
+    ipcRenderer.on("feedback:reconnected", listener);
+    return () => ipcRenderer.removeListener("feedback:reconnected", listener);
+  },
+  onFeedbackOpen: (cb: () => void) => {
+    const listener = () => cb();
+    ipcRenderer.on("feedback:open", listener);
+    return () => ipcRenderer.removeListener("feedback:open", listener);
+  },
   onNavigate: (cb: (payload: { view: "settings" }) => void) => {
     const listener = (_event: Electron.IpcRendererEvent, payload: { view: "settings" }) => {
       cb(payload);

@@ -185,12 +185,20 @@ const dict: Record<Locale, Record<string, string>> = {
     "feedback.newThread": "新建反馈",
     "feedback.noThreads": "暂无反馈",
     "feedback.hasReply": "有回复",
+    "feedback.sendFailed": "发送失败",
+    "feedback.aiThinking": "AI 正在思考…",
+    "feedback.manualPending": "人工客服已接管",
+    "feedback.agentOnline": "智能客服已上线",
+    "feedback.sseConnected": "已连接",
+    "feedback.sseReconnecting": "重连中…",
+    "feedback.sseDisconnected": "未连接",
     "feedback.closed": "已关闭",
     "feedback.open": "处理中",
     "feedback.back": "返回",
     "feedback.replyPlaceholder": "输入追问内容...",
     "feedback.send": "发送",
     "feedback.official": "官方",
+    "feedback.newMessagesBelow": "有新消息",
     "feedback.emailPlaceholder": "填写邮箱以接收回复通知（选填）",
 
     // OneClaw settings page
@@ -433,12 +441,20 @@ const dict: Record<Locale, Record<string, string>> = {
     "feedback.newThread": "New Feedback",
     "feedback.noThreads": "No feedback yet",
     "feedback.hasReply": "Has reply",
+    "feedback.sendFailed": "Send failed",
+    "feedback.aiThinking": "AI is thinking…",
+    "feedback.manualPending": "Manual support has taken over",
+    "feedback.agentOnline": "AI is back online",
+    "feedback.sseConnected": "Connected",
+    "feedback.sseReconnecting": "Reconnecting…",
+    "feedback.sseDisconnected": "Offline",
     "feedback.closed": "Closed",
     "feedback.open": "Open",
     "feedback.back": "Back",
     "feedback.replyPlaceholder": "Type your follow-up...",
     "feedback.send": "Send",
     "feedback.official": "Official",
+    "feedback.newMessagesBelow": "New messages",
     "feedback.emailPlaceholder": "Email for reply notifications (optional)",
 
     // OneClaw settings page
@@ -541,4 +557,26 @@ export function getLocale(): Locale {
 /** Set the locale explicitly. */
 export function setLocale(locale: Locale): void {
   currentLocale = locale;
+}
+
+/** "AI 思考中" 轮播短语，按当前 locale 返回。 */
+const thinkingPhrasesDict: Record<Locale, string[]> = {
+  zh: [
+    "AI 正在思考…",
+    "正在查询日志…",
+    "正在分析问题…",
+    "正在搜索知识库…",
+    "正在整理回复…",
+  ],
+  en: [
+    "AI is thinking…",
+    "Checking logs…",
+    "Analyzing the issue…",
+    "Searching knowledge base…",
+    "Preparing a reply…",
+  ],
+};
+
+export function getThinkingPhrases(): string[] {
+  return thinkingPhrasesDict[currentLocale] ?? thinkingPhrasesDict.en;
 }

@@ -8630,6 +8630,27 @@ img.chat-avatar {
   stroke-linejoin: round;
 }
 
+/* 未读红点：套在图标右上角，与系统通知徽章保持一致的 destructive 色 */
+.feedback-trigger-icon-wrap {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.feedback-trigger-dot {
+  position: absolute;
+  top: -2px;
+  right: -2px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--destructive);
+  /* 用页面背景色做一圈描边，让红点在 hover/active 状态下都不糊在图标边上 */
+  box-shadow: 0 0 0 1.5px var(--bg);
+  pointer-events: none;
+}
+
 /* ── 反馈弹窗 ── */
 
 .feedback-card {
@@ -8996,6 +9017,48 @@ img.chat-avatar {
 .feedback-layout__sidebar-header {
   padding: 4px 8px 12px;
   margin-top: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+/* 反馈服务器 SSE 连接状态徽章：小圆点 + 文案 */
+.feedback-sse-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--muted);
+  user-select: none;
+}
+
+.feedback-sse-status__dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--muted);
+  flex-shrink: 0;
+}
+
+.feedback-sse-status--connected .feedback-sse-status__dot {
+  background: #2ecc71; /* 健康绿，区别于主题红 */
+  box-shadow: 0 0 0 3px rgba(46, 204, 113, 0.16);
+}
+
+.feedback-sse-status--reconnecting .feedback-sse-status__dot {
+  background: #f39c12; /* 重连用 amber 警示色 */
+  animation: feedback-sse-status-pulse 1.2s infinite ease-in-out;
+}
+
+.feedback-sse-status--disconnected .feedback-sse-status__dot {
+  background: var(--muted);
+  opacity: 0.6;
+}
+
+@keyframes feedback-sse-status-pulse {
+  0%, 100% { opacity: 0.5; }
+  50%      { opacity: 1; }
 }
 
 .feedback-layout__sidebar-title {
@@ -9304,6 +9367,14 @@ img.chat-avatar {
 
 /* Detail messages */
 
+.feedback-panel__messages-wrap {
+  position: relative;
+  flex: 1;
+  overflow: hidden;           /* 子元素 messages 独立滚动 */
+  display: flex;
+  flex-direction: column;
+}
+
 .feedback-panel__messages {
   flex: 1;
   overflow-y: auto;
@@ -9311,6 +9382,33 @@ img.chat-avatar {
   flex-direction: column;
   gap: 12px;
   padding: 8px 0;
+}
+
+/* "有新消息 ↓" 浮动按钮，锚定在消息区域右下角 */
+.feedback-panel__new-msg-btn {
+  position: absolute;
+  bottom: 8px;
+  right: 16px;
+  padding: 6px 14px;
+  border: none;
+  border-radius: var(--radius-md);
+  background: var(--accent);
+  color: var(--accent-foreground, #fff);
+  font-size: 12px;
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  animation: feedback-new-msg-slide-in 0.2s ease-out;
+  z-index: 10;
+  user-select: none;
+}
+
+.feedback-panel__new-msg-btn:hover {
+  opacity: 0.9;
+}
+
+@keyframes feedback-new-msg-slide-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
 }
 
 .feedback-msg {
@@ -9355,6 +9453,80 @@ img.chat-avatar {
   background: var(--card);
   border: 1px solid var(--border);
   color: var(--text);
+}
+
+/* 乐观更新：pending 占位灰度；failed 加红框并带状态标签 */
+.feedback-msg--pending {
+  opacity: 0.55;
+}
+
+.feedback-msg--failed {
+  opacity: 0.9;
+}
+
+.feedback-msg--failed .feedback-msg__bubble {
+  border: 1px solid #c0392b;
+}
+
+.feedback-msg__failed-hint {
+  color: #c0392b;
+  font-size: 11px;
+  margin-top: 4px;
+  padding-left: 4px;
+}
+
+/* AI 思考中：三点跳动动画，沿用 admin 气泡的视觉，气泡内嵌点 + 文案 */
+.feedback-msg--thinking .feedback-msg__bubble--thinking {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.feedback-thinking-dots {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.feedback-thinking-dots > span {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent);
+  opacity: 0.4;
+  animation: feedback-thinking-blink 1.2s infinite ease-in-out;
+}
+
+.feedback-thinking-dots > span:nth-child(2) {
+  animation-delay: 0.15s;
+}
+
+.feedback-thinking-dots > span:nth-child(3) {
+  animation-delay: 0.30s;
+}
+
+.feedback-thinking-text {
+  color: var(--muted);
+  font-size: 13px;
+  animation: feedback-thinking-fade 3s infinite ease-in-out;
+}
+
+@keyframes feedback-thinking-fade {
+  0%, 100% { opacity: 0.4; }
+  10%, 90% { opacity: 1; }
+}
+
+@keyframes feedback-thinking-blink {
+  0%, 80%, 100% { opacity: 0.3; transform: scale(0.85); }
+  40%           { opacity: 1;   transform: scale(1);    }
+}
+
+/* 人工回复模式提示：居中小字，无气泡 */
+.feedback-manual-pending {
+  text-align: center;
+  font-size: 12px;
+  color: var(--muted);
+  padding: 2px 0;
 }
 
 .feedback-msg__attachments {

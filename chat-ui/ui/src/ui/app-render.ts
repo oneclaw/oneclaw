@@ -9,7 +9,7 @@ import { parseAgentSessionKey } from "../../../src/routing/session-key.js";
 import { refreshChat, refreshChatAvatar, pendingSessionLabels } from "./app-chat.ts";
 import { syncUrlWithSessionKey } from "./app-settings.ts";
 import { loadChatHistory } from "./controllers/chat.ts";
-import { getLocale, t } from "./i18n.ts";
+import { getLocale, getThinkingPhrases, t } from "./i18n.ts";
 import { icons } from "./icons.ts";
 import { renderSidebar } from "./sidebar.ts";
 import { renderChat } from "./views/chat.ts";
@@ -26,7 +26,10 @@ import {
   renderFeedbackPanel,
   createFeedbackPanelState,
   type FeedbackPanelState,
+  type FeedbackMessage,
+  type FeedbackThread,
 } from "./views/feedback-dialog.ts";
+import { isThreadUnread, loadFeedbackSeenMap, markFeedbackThreadSeen } from "./feedback-seen.ts";
 import { patchSession, loadSessions } from "./controllers/sessions.ts";
 import { renderSkillStoreView, type SkillStoreState } from "./skill-store-view.ts";
 import { renderWorkspaceView, initWorkspace } from "./views/workspace.ts";
@@ -67,7 +70,7 @@ declare global {
       submitFeedback?: (params: { content: string; screenshots: string[]; fileNames?: string[]; includeLogs: boolean; email?: string }) => Promise<{ ok: boolean; id?: number; error?: string }>;
       feedbackThreads?: () => Promise<{ ok: boolean; data?: any; error?: string }>;
       feedbackThread?: (id: number) => Promise<{ ok: boolean; data?: any; error?: string }>;
-      feedbackReply?: (id: number, content: string, files?: Array<{name: string; base64: string}>) => Promise<{ ok: boolean; id?: number; error?: string }>;
+      feedbackReply?: (id: number, content: string, files?: Array<{name: string; base64: string}>) => Promise<{ ok: boolean; id?: number; message?: unknown; error?: string }>;
       feedbackPickFiles?: () => Promise<{ files: Array<{name: string; base64: string}> } | null>;
     };
   }
@@ -240,18 +243,45 @@ async function deleteSessionFromSidebar(state: AppViewState, key: string) {
 }
 
 function setOneClawView(state: AppViewState, next: "chat" | "settings" | "skills" | "workspace" | "cron" | "feedback") {
-  if ((state.settings.oneclawView ?? "chat") === next) {
+  const prev = state.settings.oneclawView ?? "chat";
+  if (prev === next) {
     return;
   }
-  // 离开反馈视图时释放截图数据，避免内存泄漏
-  const prev = state.settings.oneclawView ?? "chat";
+  // 离开反馈视图：释放截图缓存 + 暂停思考定时器（保留 thinkingThreadIds）+ 断 SSE
   if (prev === "feedback" && next !== "feedback") {
     feedbackPanelState = { ...feedbackPanelState, newScreenshots: [], newScreenshotPreviews: [], newFileNames: [] };
+    pauseThinking();
+    unsubscribeFeedbackSse(state);
+  }
+  // 进入反馈视图：建立 SSE 长连接（实时推送）+ 恢复思考动画
+  if (prev !== "feedback" && next === "feedback") {
+    subscribeFeedbackSse(state);
+    resumeThinking(state);
   }
   state.applySettings({
     ...state.settings,
     oneclawView: next,
   });
+}
+
+// 后台轮询拉取 thread 列表的间隔。SSE 仅在用户进入反馈视图时建立，
+// 平时通过 5 分钟一次的 HTTP 拉取检测"过去未读"，让反馈入口的红点
+// 可以及时反映服务端推送，而不必一直占着 SSE 长连接。
+const FEEDBACK_BACKGROUND_POLL_MS = 5 * 60 * 1000;
+let feedbackBackgroundPollTimer: ReturnType<typeof setInterval> | null = null;
+
+/**
+ * 应用启动时调用一次：立刻拉一次 thread 列表（识别启动前后端推送的"过去未读"），
+ * 并启动一个 5 分钟一次的后台轮询。SSE 不在这里建立，只在用户实际打开反馈视图时建立。
+ */
+export function initFeedbackBackground(state: AppViewState) {
+  void loadFeedbackThreads(state);
+  if (feedbackBackgroundPollTimer) return; // 幂等，防热更新重复挂表
+  feedbackBackgroundPollTimer = setInterval(() => {
+    // 用户已经在反馈视图：SSE 在推实时事件，轮询纯属浪费一次 HTTP；跳过。
+    if ((state.settings.oneclawView ?? "chat") === "feedback") return;
+    void loadFeedbackThreads(state);
+  }, FEEDBACK_BACKGROUND_POLL_MS);
 }
 
 // 打开内嵌设置页时可携带目标 tab 提示，减少用户二次定位成本。
@@ -304,8 +334,24 @@ async function loadFeedbackThreads(state: AppViewState) {
     const result = await window.oneclaw?.feedbackThreads?.();
     if (result?.ok && result.data) {
       const threads = Array.isArray(result.data) ? result.data : (result.data.items ?? result.data.threads ?? []);
-      feedbackPanelState = { ...feedbackPanelState, threads, threadsLoading: false };
-      feedbackHasReplyGlobal = threads.some((th: any) => th.has_reply);
+      // 合并"过去未读"：客户端不在线期间后端推送的回复，对照本地 seenMap 标红
+      const seenMap = loadFeedbackSeenMap();
+      // 排除"用户当前正在看"的 thread：即使 last_reply_at > seen，也不算未读，
+      // 避免 thread.updated 事件和 message.created 时间戳分歧导致误标红
+      const viewingId = feedbackPanelState.view === "detail" ? feedbackPanelState.detailThread?.id ?? null : null;
+      const pastUnread = threads
+        .filter((t: FeedbackThread) => t.id !== viewingId && isThreadUnread(t, seenMap))
+        .map((t: FeedbackThread) => t.id);
+      const mergedUnread = Array.from(new Set([
+        ...feedbackPanelState.unreadThreadIds.filter((id) => id !== viewingId),
+        ...pastUnread,
+      ]));
+      feedbackPanelState = {
+        ...feedbackPanelState,
+        threads,
+        threadsLoading: false,
+        unreadThreadIds: mergedUnread,
+      };
     } else {
       feedbackPanelState = { ...feedbackPanelState, threadsLoading: false, threadsError: result?.error || "Failed to load" };
     }
@@ -333,7 +379,398 @@ async function loadFeedbackThreadDetail(state: AppViewState, id: number) {
   } catch {
     feedbackPanelState = { ...feedbackPanelState, detailLoading: false };
   }
+  // 加载完成后，对账 thinking 状态：若 Agent 在用户不在时已经回复，隐藏思考气泡。
+  // 判据：消息列表中最后一条是非 user 消息 → Agent 已回复，thinking 无意义。
+  if (feedbackPanelState.thinkingThreadIds.includes(id)) {
+    const msgs = feedbackPanelState.detailMessages;
+    const last = msgs.length > 0 ? msgs[msgs.length - 1] : null;
+    if (last && last.role !== "user") {
+      hideThinking(state, id);
+    }
+  }
   state.requestUpdate();
+  // 首屏直接落到底（instant，避免刚打开 thread 就看到滚动动画）
+  scrollFeedbackMessagesToBottom("auto");
+}
+
+// 详情页消息列表自动滚动：若用户当前在底部附近则跟随新消息，
+// 否则尊重手动滚动位置（例如在读历史），不强制下拉。
+const FEEDBACK_SCROLL_NEAR_BOTTOM_PX = 120;
+
+function getFeedbackMessagesScrollEl(): HTMLElement | null {
+  return document.querySelector<HTMLElement>(".feedback-panel__messages");
+}
+
+function isFeedbackMessagesNearBottom(): boolean {
+  const el = getFeedbackMessagesScrollEl();
+  // 没找到容器通常意味着详情页刚打开尚未挂载 → 当作 near-bottom，让首屏直接落到底
+  if (!el) return true;
+  return el.scrollHeight - el.scrollTop - el.clientHeight < FEEDBACK_SCROLL_NEAR_BOTTOM_PX;
+}
+
+function scrollFeedbackMessagesToBottom(behavior: ScrollBehavior = "smooth") {
+  // 双 rAF：第一帧等 Lit 调度的 DOM 更新落盘，第二帧等浏览器 layout 完成
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => {
+      const el = getFeedbackMessagesScrollEl();
+      if (!el) return;
+      el.scrollTo({ top: el.scrollHeight, behavior });
+    });
+  });
+}
+
+/** 把后端原始错误码映射成用户友好的中英文文案 */
+function translateFeedbackError(err: string | undefined): { title: string; message: string; detail: string } {
+  const raw = err || "";
+  const isZh = getLocale() === "zh";
+  // 已知错误码：消息数量超限
+  if (/message limit reached/i.test(raw)) {
+    return {
+      title: isZh ? "发送失败" : "Send failed",
+      message: isZh ? "此对话的消息已达上限" : "Message limit reached",
+      detail: isZh
+        ? "这个反馈会话的消息数量已经达到上限（50 条），无法继续发送。\n如需继续咨询，请新建一个反馈。"
+        : "This feedback thread has reached its 50-message limit.\nPlease create a new feedback to continue.",
+    };
+  }
+  // 网络超时
+  if (/timeout/i.test(raw)) {
+    return {
+      title: isZh ? "发送失败" : "Send failed",
+      message: isZh ? "请求超时" : "Request timeout",
+      detail: isZh ? "请检查网络连接后重试。" : "Please check your network connection and try again.",
+    };
+  }
+  // HTTP 状态码
+  const httpMatch = raw.match(/^HTTP (\d+)/);
+  if (httpMatch) {
+    return {
+      title: isZh ? "发送失败" : "Send failed",
+      message: isZh ? `服务器返回错误 (${httpMatch[1]})` : `Server error (${httpMatch[1]})`,
+      detail: raw,
+    };
+  }
+  // 兜底
+  return {
+    title: isZh ? "发送失败" : "Send failed",
+    message: isZh ? "消息发送失败" : "Failed to send message",
+    detail: raw || (isZh ? "未知错误" : "Unknown error"),
+  };
+}
+
+/** 弹出原生错误对话框（通过 IPC 调用主进程的 dialog.showMessageBox） */
+function showFeedbackReplyErrorDialog(err: string | undefined): Promise<void> | void {
+  const payload = translateFeedbackError(err);
+  return (window as any).oneclaw?.feedbackShowErrorDialog?.(payload);
+}
+
+/** 详情页 scroll 事件回调：用户滚到底部时清除"有新消息"提示 */
+function handleFeedbackDetailScroll(state: AppViewState) {
+  if (isFeedbackMessagesNearBottom() && feedbackPanelState.hasNewMessagesBelow) {
+    feedbackPanelState = { ...feedbackPanelState, hasNewMessagesBelow: false };
+    state.requestUpdate();
+  }
+}
+
+type FeedbackSseEvent =
+  | { type: "message.created"; thread_id: number; message: FeedbackMessage & { feedback_id: number } }
+  | { type: "thread.updated"; thread_id: number; thread: Partial<FeedbackThread> & { id: number } }
+  | { type: "agent.thinking"; thread_id: number }
+  | { type: "agent.done"; thread_id: number }
+  | { type: "agent.manual_pending"; thread_id: number }
+  | { type: "agent.online"; thread_id: number };
+
+// thread_id → 5 分钟自动隐藏定时器；防 agent.done 丢失导致动画卡死
+const thinkingSafetyTimers = new Map<number, ReturnType<typeof setTimeout>>();
+const THINKING_SAFETY_TIMEOUT_MS = 300_000; // 5 分钟，对齐设计文档 §3.3 的客户端建议
+
+// ── "AI 思考中" 轮播短语 ──
+let thinkingPhraseIndex = 0;
+let thinkingPhraseTimer: ReturnType<typeof setInterval> | null = null;
+const THINKING_PHRASE_INTERVAL_MS = 3_000; // 每 3 秒切换一条
+
+/** 有任意 thread 在 thinking 时启动轮播定时器 */
+function startPhraseRotation(state: AppViewState) {
+  if (thinkingPhraseTimer) return; // 已在运行
+  const phrases = getThinkingPhrases();
+  thinkingPhraseIndex = 0;
+  feedbackPanelState = { ...feedbackPanelState, thinkingPhrase: phrases[0] };
+  thinkingPhraseTimer = setInterval(() => {
+    const p = getThinkingPhrases();
+    thinkingPhraseIndex = (thinkingPhraseIndex + 1) % p.length;
+    feedbackPanelState = { ...feedbackPanelState, thinkingPhrase: p[thinkingPhraseIndex] };
+    state.requestUpdate();
+  }, THINKING_PHRASE_INTERVAL_MS);
+}
+
+/** 所有 thinking 结束后停止轮播 */
+function stopPhraseRotation() {
+  if (thinkingPhraseTimer) {
+    clearInterval(thinkingPhraseTimer);
+    thinkingPhraseTimer = null;
+  }
+  thinkingPhraseIndex = 0;
+  feedbackPanelState = { ...feedbackPanelState, thinkingPhrase: "" };
+}
+
+function showThinking(state: AppViewState, threadId: number) {
+  // 重置 5 分钟兜底（同一 thread 收到二次 thinking 不应延长，但收到 done 后再来新 thinking 需重启）
+  const existing = thinkingSafetyTimers.get(threadId);
+  if (existing) clearTimeout(existing);
+  thinkingSafetyTimers.set(
+    threadId,
+    setTimeout(() => hideThinking(state, threadId), THINKING_SAFETY_TIMEOUT_MS),
+  );
+  if (feedbackPanelState.thinkingThreadIds.includes(threadId)) return;
+  const wasEmpty = feedbackPanelState.thinkingThreadIds.length === 0;
+  feedbackPanelState = {
+    ...feedbackPanelState,
+    thinkingThreadIds: [...feedbackPanelState.thinkingThreadIds, threadId],
+  };
+  if (wasEmpty) startPhraseRotation(state);
+}
+
+function hideThinking(state: AppViewState, threadId: number) {
+  const timer = thinkingSafetyTimers.get(threadId);
+  if (timer) {
+    clearTimeout(timer);
+    thinkingSafetyTimers.delete(threadId);
+  }
+  if (!feedbackPanelState.thinkingThreadIds.includes(threadId)) return;
+  feedbackPanelState = {
+    ...feedbackPanelState,
+    thinkingThreadIds: feedbackPanelState.thinkingThreadIds.filter((x) => x !== threadId),
+  };
+  if (feedbackPanelState.thinkingThreadIds.length === 0) stopPhraseRotation();
+  state.requestUpdate();
+}
+
+/** 暂停定时器和轮播，但保留 thinkingThreadIds，用户回来时可恢复。 */
+function pauseThinking() {
+  for (const t of thinkingSafetyTimers.values()) clearTimeout(t);
+  thinkingSafetyTimers.clear();
+  stopPhraseRotation();
+}
+
+/** 进入反馈视图时，为保留的 thinkingThreadIds 重启安全定时器和轮播。 */
+function resumeThinking(state: AppViewState) {
+  if (feedbackPanelState.thinkingThreadIds.length === 0) return;
+  for (const tid of feedbackPanelState.thinkingThreadIds) {
+    thinkingSafetyTimers.set(tid, setTimeout(() => hideThinking(state, tid), THINKING_SAFETY_TIMEOUT_MS));
+  }
+  startPhraseRotation(state);
+}
+
+/** 清除某 thread 的"人工回复模式"提示 */
+function clearManualPending(threadId: number) {
+  if (!feedbackPanelState.manualPendingThreadIds.includes(threadId)) return;
+  feedbackPanelState = {
+    ...feedbackPanelState,
+    manualPendingThreadIds: feedbackPanelState.manualPendingThreadIds.filter((x) => x !== threadId),
+  };
+}
+
+// thread_id → "智能客服已上线"短暂提示的自动清除定时器
+const agentOnlineTimers = new Map<number, ReturnType<typeof setTimeout>>();
+const AGENT_ONLINE_DISPLAY_MS = 5_000; // 5 秒后自动隐藏
+
+/** 清除某 thread 的"智能客服已上线"短暂提示 */
+function clearAgentOnline(threadId: number) {
+  const timer = agentOnlineTimers.get(threadId);
+  if (timer) {
+    clearTimeout(timer);
+    agentOnlineTimers.delete(threadId);
+  }
+  if (!feedbackPanelState.agentOnlineThreadIds.includes(threadId)) return;
+  feedbackPanelState = {
+    ...feedbackPanelState,
+    agentOnlineThreadIds: feedbackPanelState.agentOnlineThreadIds.filter((x) => x !== threadId),
+  };
+}
+
+function appendDetailMessageDedup(msg: FeedbackMessage) {
+  const list = feedbackPanelState.detailMessages ?? [];
+  // 以 id 为主键去重；id <= 0 表示乐观占位，不参与去重判定
+  if (msg.id > 0 && list.some((m) => m.id === msg.id)) return;
+  // 只移除"最早"一条匹配的占位，避免用户连发同样内容时把后续占位也吞掉
+  const placeholderIdx = list.findIndex(
+    (m) => m._pending && m._tempKey && msg.role === "user" && m.content === msg.content,
+  );
+  const filtered = placeholderIdx >= 0
+    ? [...list.slice(0, placeholderIdx), ...list.slice(placeholderIdx + 1)]
+    : list;
+  const merged = [...filtered, msg].sort((a, b) => a.created_at.localeCompare(b.created_at));
+  feedbackPanelState = { ...feedbackPanelState, detailMessages: merged };
+}
+
+function handleFeedbackEvent(state: AppViewState, evt: FeedbackSseEvent) {
+  // 只有 view=detail 时才视为"正在看"；list/new 视图下 detailThread 可能是上次残留
+  const openId = feedbackPanelState.view === "detail"
+    ? feedbackPanelState.detailThread?.id ?? null
+    : null;
+  // 在 state 变化之前拍一次"是否已滚到底部附近"快照，用于决定是否跟随新内容滚动
+  const wasNearBottom = openId === evt.thread_id ? isFeedbackMessagesNearBottom() : false;
+
+  if (evt.type === "message.created") {
+    const incoming: FeedbackMessage = {
+      id: evt.message.id,
+      thread_id: evt.message.feedback_id ?? evt.thread_id,
+      role: evt.message.role,
+      content: evt.message.content,
+      file_keys: evt.message.file_keys ?? [],
+      created_at: evt.message.created_at,
+    };
+    if (openId === evt.thread_id) {
+      // 当前正在看这个 thread → 去重 append + 推进 seen 时间戳，
+      // 避免"边看边来新消息，关掉重开又被算未读"
+      appendDetailMessageDedup(incoming);
+      markFeedbackThreadSeen(evt.thread_id, incoming.created_at);
+    } else if (incoming.role !== "user") {
+      // 其他 thread 且不是自己发的 → 标记未读
+      if (!feedbackPanelState.unreadThreadIds.includes(evt.thread_id)) {
+        feedbackPanelState = {
+          ...feedbackPanelState,
+          unreadThreadIds: [...feedbackPanelState.unreadThreadIds, evt.thread_id],
+        };
+      }
+    }
+    // 非 user 消息到达 → 清除所有状态提示（thinking + manualPending + agentOnline）
+    if (incoming.role !== "user") {
+      hideThinking(state, evt.thread_id);
+      clearManualPending(evt.thread_id);
+      clearAgentOnline(evt.thread_id);
+    }
+    state.requestUpdate();
+    // 当前打开的 thread 新增气泡
+    if (openId === evt.thread_id) {
+      if (wasNearBottom) {
+        // 用户在底部 → 跟随滚动
+        scrollFeedbackMessagesToBottom("smooth");
+      } else if (incoming.role !== "user") {
+        // 用户不在底部 + 官方回复 → 显示"有新消息"浮动提示
+        feedbackPanelState = { ...feedbackPanelState, hasNewMessagesBelow: true };
+        state.requestUpdate();
+      }
+    }
+  } else if (evt.type === "thread.updated") {
+    const idx = feedbackPanelState.threads.findIndex((t) => t.id === evt.thread_id);
+    if (idx >= 0) {
+      const prev = feedbackPanelState.threads[idx];
+      const next = { ...prev, ...evt.thread } as FeedbackThread;
+      const threads = [...feedbackPanelState.threads];
+      threads[idx] = next;
+      // last_reply_at 变化 + 非当前打开的 thread → 标记未读（设计文档 §3.3：thread.updated 用于列表页红点）
+      const replyChanged = evt.thread.last_reply_at && evt.thread.last_reply_at !== prev.last_reply_at;
+      const unread = replyChanged && openId !== evt.thread_id
+        && !feedbackPanelState.unreadThreadIds.includes(evt.thread_id);
+      feedbackPanelState = {
+        ...feedbackPanelState,
+        threads,
+        ...(unread ? { unreadThreadIds: [...feedbackPanelState.unreadThreadIds, evt.thread_id] } : {}),
+      };
+      // 用户正在看该 thread → 同步推进 seen 时间戳，避免后续 loadFeedbackThreads
+      // 用旧 seen 对比新 last_reply_at 误标未读（即使没收到 message.created 也能兜住）
+      if (openId === evt.thread_id && evt.thread.last_reply_at) {
+        markFeedbackThreadSeen(evt.thread_id, evt.thread.last_reply_at);
+      }
+      state.requestUpdate();
+    }
+  } else if (evt.type === "agent.thinking") {
+    showThinking(state, evt.thread_id);
+    // 收到 thinking 说明 agent 已开始跑 → 清除人工回复和"AI 已上线"提示
+    clearManualPending(evt.thread_id);
+    clearAgentOnline(evt.thread_id);
+    state.requestUpdate();
+    // 思考动画出现在消息列表底部 → 用户原本贴底就跟着滚下来
+    if (openId === evt.thread_id && wasNearBottom) {
+      scrollFeedbackMessagesToBottom("smooth");
+    }
+  } else if (evt.type === "agent.manual_pending") {
+    // 人工回复模式 → 显示提示（同时清除 "AI 已上线"，避免旧提示残留）
+    clearAgentOnline(evt.thread_id);
+    if (!feedbackPanelState.manualPendingThreadIds.includes(evt.thread_id)) {
+      feedbackPanelState = {
+        ...feedbackPanelState,
+        manualPendingThreadIds: [...feedbackPanelState.manualPendingThreadIds, evt.thread_id],
+      };
+    }
+    state.requestUpdate();
+    if (openId === evt.thread_id && wasNearBottom) {
+      scrollFeedbackMessagesToBottom("smooth");
+    }
+  } else if (evt.type === "agent.online") {
+    // /auto on → 仅当当前正在显示"人工客服已接管"时，才替换为"智能客服已上线"短暂提示。
+    // 如果用户此前没看到过人工回复提示，就静默切换（不打扰）。
+    const wasManualPending = feedbackPanelState.manualPendingThreadIds.includes(evt.thread_id);
+    clearManualPending(evt.thread_id);
+    if (wasManualPending) {
+      // 已有定时器则重置
+      const existing = agentOnlineTimers.get(evt.thread_id);
+      if (existing) clearTimeout(existing);
+      if (!feedbackPanelState.agentOnlineThreadIds.includes(evt.thread_id)) {
+        feedbackPanelState = {
+          ...feedbackPanelState,
+          agentOnlineThreadIds: [...feedbackPanelState.agentOnlineThreadIds, evt.thread_id],
+        };
+      }
+      agentOnlineTimers.set(
+        evt.thread_id,
+        setTimeout(() => {
+          clearAgentOnline(evt.thread_id);
+          state.requestUpdate();
+        }, AGENT_ONLINE_DISPLAY_MS),
+      );
+    }
+    state.requestUpdate();
+  } else if (evt.type === "agent.done") {
+    // 静默隐藏思考动画，不向用户暴露 Agent 成功/失败状态
+    hideThinking(state, evt.thread_id);
+  }
+  // 未知 type 默认忽略，符合设计文档 §3.1 约定
+}
+
+function subscribeFeedbackSse(state: AppViewState) {
+  if (feedbackSseUnsub) return; // 幂等
+  // 重置连接状态：握手完成（onFeedbackOpen）后才置 true
+  feedbackPanelState = { ...feedbackPanelState, sseConnected: false, sseReconnecting: false };
+  state.requestUpdate();
+  void (window as any).oneclaw?.feedbackSubscribe?.();
+  feedbackSseUnsub = (window as any).oneclaw?.onFeedbackEvent?.((evt: FeedbackSseEvent) => {
+    handleFeedbackEvent(state, evt);
+  }) ?? null;
+  feedbackOpenUnsub = (window as any).oneclaw?.onFeedbackOpen?.(() => {
+    feedbackPanelState = { ...feedbackPanelState, sseConnected: true, sseReconnecting: false };
+    state.requestUpdate();
+  }) ?? null;
+  feedbackReconnectUnsub = (window as any).oneclaw?.onFeedbackReconnecting?.(() => {
+    // 仅切换 UI 状态；refetch 等到 reconnected 才触发，避免在 outage 期间反复打空炮
+    feedbackPanelState = { ...feedbackPanelState, sseConnected: false, sseReconnecting: true };
+    state.requestUpdate();
+  }) ?? null;
+  feedbackReconnectedUnsub = (window as any).oneclaw?.onFeedbackReconnected?.(() => {
+    // 重连成功（首字节到达）→ 兜底刷新列表 + 打开的详情
+    feedbackPanelState = { ...feedbackPanelState, sseConnected: true, sseReconnecting: false };
+    state.requestUpdate();
+    loadFeedbackThreads(state);
+    const openId = feedbackPanelState.detailThread?.id ?? null;
+    if (openId) void loadFeedbackThreadDetail(state, openId);
+  }) ?? null;
+}
+
+function unsubscribeFeedbackSse(state: AppViewState) {
+  feedbackSseUnsub?.();
+  feedbackOpenUnsub?.();
+  feedbackReconnectUnsub?.();
+  feedbackReconnectedUnsub?.();
+  feedbackSseUnsub = null;
+  feedbackOpenUnsub = null;
+  feedbackReconnectUnsub = null;
+  feedbackReconnectedUnsub = null;
+  void (window as any).oneclaw?.feedbackUnsubscribe?.();
+  feedbackPanelState = { ...feedbackPanelState, sseConnected: false, sseReconnecting: false };
+  state.requestUpdate();
+  // 注意：不在这里清 thinkingThreadIds —— 由 setOneClawView 调用 pauseThinking 保留状态，
+  // 用户重新进入时通过 resumeThinking 恢复。clearAllThinking 仅在应用退出等场景使用。
 }
 
 function buildFeedbackPanelCallbacks(state: AppViewState) {
@@ -356,9 +793,31 @@ function buildFeedbackPanelCallbacks(state: AppViewState) {
       state.requestUpdate();
     },
     onOpenDetail: (id: number) => {
+      // 清除该 thread 的未读标记 + 持久化"已读到现在"，
+      // 这样下次重启 OneClaw 时这个 thread 不会被算成"过去未读"
+      feedbackPanelState = {
+        ...feedbackPanelState,
+        unreadThreadIds: feedbackPanelState.unreadThreadIds.filter((x) => x !== id),
+        hasNewMessagesBelow: false,
+      };
+      markFeedbackThreadSeen(id);
       void loadFeedbackThreadDetail(state, id);
     },
     onBackToList: () => {
+      // 离开 detail 前，用所有已知时间戳的最大值刷新 seenMap，
+      // 确保 loadFeedbackThreads 拉到的 last_reply_at 不会大于 seen
+      const thread = feedbackPanelState.detailThread;
+      if (thread) {
+        const msgs = feedbackPanelState.detailMessages;
+        const candidates = [
+          new Date().toISOString(),
+          thread.last_reply_at || "",
+          thread.updated_at || "",
+          msgs.length > 0 ? msgs[msgs.length - 1].created_at : "",
+        ];
+        const latest = candidates.sort().pop()!;
+        markFeedbackThreadSeen(thread.id, latest);
+      }
       feedbackPanelState = { ...feedbackPanelState, view: "list" };
       loadFeedbackThreads(state);
     },
@@ -454,9 +913,17 @@ function buildFeedbackPanelCallbacks(state: AppViewState) {
           email: feedbackPanelState.newEmail || undefined,
         });
         if (result?.ok) {
-          feedbackPanelState = { ...feedbackPanelState, view: "list", newSubmitting: false };
+          feedbackPanelState = { ...feedbackPanelState, newSubmitting: false };
           showToast(state, t("feedback.success"));
-          loadFeedbackThreads(state);
+          if (result.id) {
+            // 有 id → 直接跳转新建的 thread 详情
+            loadFeedbackThreads(state);
+            void loadFeedbackThreadDetail(state, result.id);
+          } else {
+            // 无 id → 回退到列表
+            feedbackPanelState = { ...feedbackPanelState, view: "list" };
+            loadFeedbackThreads(state);
+          }
         } else {
           feedbackPanelState = { ...feedbackPanelState, newSubmitting: false, newError: result?.error || t("feedback.error") };
         }
@@ -510,30 +977,93 @@ function buildFeedbackPanelCallbacks(state: AppViewState) {
       };
       state.requestUpdate();
     },
+    onDetailScroll: () => handleFeedbackDetailScroll(state),
+    onScrollToBottom: () => {
+      feedbackPanelState = { ...feedbackPanelState, hasNewMessagesBelow: false };
+      state.requestUpdate();
+      scrollFeedbackMessagesToBottom("smooth");
+    },
     onReplySend: async () => {
       if (!feedbackPanelState.detailThread || (!feedbackPanelState.detailReplyContent.trim() && feedbackPanelState.detailReplyFiles.length === 0)) return;
-      feedbackPanelState = { ...feedbackPanelState, detailReplySending: true };
+      const threadId = feedbackPanelState.detailThread.id;
+      const content = feedbackPanelState.detailReplyContent;
+      const files = feedbackPanelState.detailReplyFiles.length > 0
+        ? feedbackPanelState.detailReplyFiles.map((base64, i) => ({ name: feedbackPanelState.detailReplyFileNames[i] || `file-${i + 1}`, base64 }))
+        : undefined;
+
+      // 1. 本地先插入临时 pending 气泡
+      const tempKey = `tmp-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+      const tempMsg: FeedbackMessage = {
+        id: 0,
+        thread_id: threadId,
+        role: "user",
+        content,
+        file_keys: [],
+        created_at: new Date().toISOString(),
+        _pending: true,
+        _tempKey: tempKey,
+      };
+      // 乐观更新：本地立刻插入 pending 气泡并清空输入框，不把 detailReplySending 置 true，
+      // 这样 POST 期间（后端可能要 10+ 秒）用户仍可继续输入和发送下一条。
+      feedbackPanelState = {
+        ...feedbackPanelState,
+        detailMessages: [...feedbackPanelState.detailMessages, tempMsg],
+        detailReplyContent: "",
+        detailReplyFiles: [],
+        detailReplyFilePreviews: [],
+        detailReplyFileNames: [],
+      };
       state.requestUpdate();
-      try {
-        const files = feedbackPanelState.detailReplyFiles.length > 0
-          ? feedbackPanelState.detailReplyFiles.map((base64, i) => ({ name: feedbackPanelState.detailReplyFileNames[i] || `file-${i + 1}`, base64 }))
-          : undefined;
-        const result = await window.oneclaw?.feedbackReply?.(
-          feedbackPanelState.detailThread.id,
-          feedbackPanelState.detailReplyContent,
-          files,
-        );
-        if (result?.ok) {
-          const id = feedbackPanelState.detailThread.id;
-          feedbackPanelState = { ...feedbackPanelState, detailReplyContent: "", detailReplyFiles: [], detailReplyFilePreviews: [], detailReplyFileNames: [], detailReplySending: false };
-          void loadFeedbackThreadDetail(state, id);
-        } else {
-          feedbackPanelState = { ...feedbackPanelState, detailReplySending: false };
+      // 用户主动发消息 → 总是滚到底（不判 near-bottom），让用户看到自己的气泡
+      scrollFeedbackMessagesToBottom("smooth");
+
+      // 2. 后台异步发 POST（不阻塞输入）
+      void (async () => {
+        let result: any;
+        try {
+          result = await window.oneclaw?.feedbackReply?.(threadId, content, files);
+        } catch (err) {
+          feedbackPanelState = {
+            ...feedbackPanelState,
+            detailMessages: feedbackPanelState.detailMessages.map((msg) =>
+              msg._tempKey === tempKey ? { ...msg, _pending: false, _failed: true } : msg,
+            ),
+          };
+          state.requestUpdate();
+          void showFeedbackReplyErrorDialog(String(err));
+          return;
         }
-      } catch {
-        feedbackPanelState = { ...feedbackPanelState, detailReplySending: false };
-      }
-      state.requestUpdate();
+        if (result?.ok && result.message) {
+          // 3a. 用真实 message 替换临时占位
+          const m = result.message as any;
+          const real: FeedbackMessage = {
+            id: m.id,
+            thread_id: m.feedback_id ?? threadId,
+            role: m.role ?? "user",
+            content: m.content ?? content,
+            file_keys: m.file_keys ?? [],
+            created_at: m.created_at ?? tempMsg.created_at,
+          };
+          // 移除临时占位 + 追加真实消息；若 SSE echo 已先到，按 id 去重
+          const withoutTemp = feedbackPanelState.detailMessages.filter((msg) => msg._tempKey !== tempKey);
+          const alreadyHasReal = real.id > 0 && withoutTemp.some((msg) => msg.id === real.id);
+          const merged = alreadyHasReal ? withoutTemp : [...withoutTemp, real];
+          merged.sort((a, b) => a.created_at.localeCompare(b.created_at));
+          feedbackPanelState = { ...feedbackPanelState, detailMessages: merged };
+        } else if (result?.ok) {
+          // 3b. 后端 200 但没回 message（兼容老版本）：保留临时占位，依赖 SSE echo 替换；无需改 state
+        } else {
+          // 3c. 失败：把临时气泡标红（保留给用户，避免丢字）+ 弹原生错误对话框
+          feedbackPanelState = {
+            ...feedbackPanelState,
+            detailMessages: feedbackPanelState.detailMessages.map((msg) =>
+              msg._tempKey === tempKey ? { ...msg, _pending: false, _failed: true } : msg,
+            ),
+          };
+          void showFeedbackReplyErrorDialog(result?.error);
+        }
+        state.requestUpdate();
+      })();
     },
     requestUpdate: () => state.requestUpdate(),
   };
@@ -575,7 +1105,10 @@ let feedbackState: FeedbackDialogState = createFeedbackDialogState();
 // ── 反馈面板状态 ──
 
 let feedbackPanelState: FeedbackPanelState = createFeedbackPanelState();
-let feedbackHasReplyGlobal = false;
+let feedbackSseUnsub: (() => void) | null = null;
+let feedbackReconnectUnsub: (() => void) | null = null;
+let feedbackReconnectedUnsub: (() => void) | null = null;
+let feedbackOpenUnsub: (() => void) | null = null;
 
 // toast 定时器句柄
 let toastTimer: ReturnType<typeof setTimeout> | null = null;
@@ -1184,7 +1717,8 @@ export function renderApp(state: AppViewState) {
             cronJobCount: state.cronJobs.filter((j) => !isExpiredOneShot(j)).length,
             onOpenCron: () => setOneClawView(state, "cron"),
             feedbackActive,
-            feedbackHasReply: feedbackHasReplyGlobal,
+            // 全局红点派生自当前会话内的未读 thread 集合；点开 thread 自动清除
+            feedbackHasReply: feedbackPanelState.unreadThreadIds.length > 0,
             onOpenFeedback: () => openFeedbackView(state),
             updateStatus: updateBannerState.status,
             updateVersion: updateBannerState.version,
@@ -1278,7 +1812,10 @@ export function renderApp(state: AppViewState) {
                 : nothing
           }
           <div class="oneclaw-titlebar-right">
-            ${renderFeedbackButton(() => openFeedbackView(state))}
+            ${renderFeedbackButton(
+              () => openFeedbackView(state),
+              feedbackPanelState.unreadThreadIds.length > 0,
+            )}
           </div>
         </div>
 
