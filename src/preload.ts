@@ -104,6 +104,8 @@ contextBridge.exposeInMainWorld("oneclaw", {
     ipcRenderer.invoke("settings:webbridge-check-update"),
   settingsWebbridgeInstallExtensions: () =>
     ipcRenderer.invoke("settings:webbridge-install-extensions"),
+  settingsWebbridgeCleanBlocklist: (browserId: string) =>
+    ipcRenderer.invoke("settings:webbridge-clean-blocklist", browserId),
   settingsGetCliStatus: () => ipcRenderer.invoke("settings:get-cli-status"),
   settingsInstallCli: () => ipcRenderer.invoke("settings:install-cli"),
   settingsUninstallCli: () => ipcRenderer.invoke("settings:uninstall-cli"),

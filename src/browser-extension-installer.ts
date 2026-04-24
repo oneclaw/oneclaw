@@ -236,6 +236,7 @@ export interface BrowserState {
   browserName: string;
   installed: boolean;
   configured: boolean;
+  blocklisted: boolean;
 }
 
 export async function installForAllDetectedBrowsers(
@@ -290,12 +291,71 @@ export async function getExtensionStates(
     const configured = installed
       ? await isExtensionConfigured(target, extId, options)
       : false;
+    // 已 configured = 装上了，不可能在黑名单；只在「装了浏览器 + 未 configured」时查
+    const blocklisted =
+      installed && !configured
+        ? await isExtensionBlocklisted(target, extId)
+        : false;
     out.push({
       browserId: target.id,
       browserName: target.name,
       installed,
       configured,
+      blocklisted,
     });
   }
   return out;
+}
+
+// ---------- Blocklist 检测 + 清理 ----------
+
+export type BlocklistCleanResult =
+  | "cleaned"
+  | "not-blocklisted"
+  | "preferences-missing";
+
+function preferencesPath(target: BrowserTarget): string {
+  return path.join(
+    resolveUserDataDir(target),
+    target.profileSubdir,
+    "Preferences",
+  );
+}
+
+function readPreferencesIfValid(target: BrowserTarget): any | null {
+  const p = preferencesPath(target);
+  if (!fs.existsSync(p)) return null;
+  try {
+    return JSON.parse(fs.readFileSync(p, "utf-8"));
+  } catch {
+    return null;
+  }
+}
+
+export async function isExtensionBlocklisted(
+  target: BrowserTarget,
+  extId: string,
+): Promise<boolean> {
+  const prefs = readPreferencesIfValid(target);
+  if (!prefs) return false;
+  const list = prefs?.extensions?.external_uninstalls;
+  if (!Array.isArray(list)) return false;
+  return list.includes(extId);
+}
+
+export async function cleanExtensionBlocklist(
+  target: BrowserTarget,
+  extId: string,
+): Promise<BlocklistCleanResult> {
+  const p = preferencesPath(target);
+  if (!fs.existsSync(p)) return "preferences-missing";
+  const prefs = readPreferencesIfValid(target);
+  if (!prefs) return "preferences-missing";
+  const list = prefs?.extensions?.external_uninstalls;
+  if (!Array.isArray(list) || !list.includes(extId)) return "not-blocklisted";
+  prefs.extensions.external_uninstalls = list.filter(
+    (x: unknown) => x !== extId,
+  );
+  fs.writeFileSync(p, JSON.stringify(prefs), "utf-8");
+  return "cleaned";
 }

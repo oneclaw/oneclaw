@@ -25,7 +25,11 @@ import {
 import {
   installForAllDetectedBrowsers,
   getExtensionStates,
+  isExtensionBlocklisted,
+  cleanExtensionBlocklist,
 } from "./browser-extension-installer";
+import { BROWSER_TARGETS } from "./browser-detector";
+import { isBrowserProcessRunning } from "./browser-process-detector";
 import { readBuildConfigWebbridgeExtensionId } from "./build-config";
 import { getWebbridgeInstallState } from "./webbridge-status";
 import { resolveOneclawConfigPath } from "./oneclaw-config";
@@ -1678,6 +1682,43 @@ export function registerSettingsIpc(opts: SettingsIpcOptions = {}): void {
       return { success: false, message: err.message || String(err) };
     }
   });
+
+  // ── 清理 Chrome external_uninstalls 黑名单（用户 UI 卸载过 → 阻断 External Extensions JSON 安装） ──
+  ipcMain.handle(
+    "settings:webbridge-clean-blocklist",
+    async (_evt, browserId: string) => {
+      try {
+        const target = BROWSER_TARGETS.find((t) => t.id === browserId);
+        if (!target) {
+          return { success: false, message: `Unknown browser: ${browserId}` };
+        }
+        const extId = readBuildConfigWebbridgeExtensionId();
+        if (!extId) {
+          return {
+            success: false,
+            message: "本构建未注入 WebBridge 扩展 ID（dev 构建）",
+          };
+        }
+        // 1. 浏览器在跑 → 拒绝（Chrome 启动时会用内存 Preferences 覆盖磁盘改动）
+        if (await isBrowserProcessRunning(target)) {
+          return {
+            success: false,
+            code: "BROWSER_RUNNING",
+            message: `${target.name} 正在运行；请先完全退出后再点清理。`,
+          };
+        }
+        // 2. 双检：UI 状态可能过期，实际已不在 blocklist
+        if (!(await isExtensionBlocklisted(target, extId))) {
+          return { success: true, code: "NOT_BLOCKLISTED" };
+        }
+        // 3. 改 Preferences
+        const result = await cleanExtensionBlocklist(target, extId);
+        return { success: true, code: result };
+      } catch (err: any) {
+        return { success: false, message: err.message || String(err) };
+      }
+    },
+  );
 
   // ── 读取 CLI 状态（enabled=用户偏好，installed=当前/旧版 wrapper 足迹） ──
   ipcMain.handle("settings:get-cli-status", async () => {
