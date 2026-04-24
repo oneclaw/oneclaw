@@ -8,10 +8,19 @@ import * as ipc from "../../data/ipc-bridge.ts";
 import "../../components/toggle-switch.ts";
 import "../../components/message-box.ts";
 
-// IPC persists "openclaw"/"chrome"; UI displays as "dedicated"/"chrome" for clarity.
-// Map at the boundary to keep the stored enum stable.
-function profileToUi(stored: string): string { return stored === "openclaw" ? "dedicated" : stored; }
-function profileToStored(ui: string): string { return ui === "dedicated" ? "openclaw" : ui; }
+// Gateway 内置 profile：openclaw（独立浏览器）/ chrome-relay（Chrome 扩展）/ user。
+// UI 用 "dedicated" / "chrome" 这两个简短词展示给用户。两端命名错位会让 browser 工具
+// 报 BrowserProfileNotFoundError，所以 stored 必须是 gateway 认识的名字。
+function profileToUi(stored: string): string {
+  if (stored === "openclaw") return "dedicated";
+  if (stored === "chrome-relay") return "chrome";
+  return stored;
+}
+function profileToStored(ui: string): string {
+  if (ui === "dedicated") return "openclaw";
+  if (ui === "chrome") return "chrome-relay";
+  return ui;
+}
 
 // Advanced 页状态必须可整体回滚，避免切换 CLI/登录项后的脏状态跨会话残留。
 function createAdvancedState() {
