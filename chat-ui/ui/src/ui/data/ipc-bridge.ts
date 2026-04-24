@@ -212,22 +212,6 @@ export interface ApprovedEntry {
   name: string;
 }
 
-export interface PairingState {
-  pendingCount: number;
-  requests: Array<PairingRequest & { channel: string }>;
-  updatedAt: number;
-  channels: Record<string, ChannelPairingState>;
-}
-
-export interface ChannelPairingState {
-  channel: string;
-  pendingCount: number;
-  requests: PairingRequest[];
-  updatedAt: number;
-  lastAutoApprovedAt: number | null;
-  lastAutoApprovedName: string | null;
-}
-
 export interface SaveResult {
   success: boolean;
   error?: string;
@@ -340,10 +324,6 @@ interface OneClawBridgeExtended {
       onNavigate?: (cb: (payload: any) => void) => () => void;
       onSettingsNavigate?: (cb: (payload: any) => void) => () => void;
       openSettings?: () => void;
-      // Pairing
-      getPairingState?: () => Promise<any>;
-      refreshPairingState?: () => void;
-      onPairingState?: (cb: (payload: any) => void) => () => void;
       // System
       openExternal?: (url: string) => Promise<any>;
       openPath?: (path: string) => Promise<any>;
@@ -741,22 +721,6 @@ export function onSettingsNavigate(cb: (payload: { tab: string; notice: string }
 
 export function openSettings(): void {
   oc().openSettings();
-}
-
-// ---------------------------------------------------------------------------
-// Pairing (3)
-// ---------------------------------------------------------------------------
-
-export function getPairingState(): Promise<PairingState> {
-  return oc().getPairingState() as Promise<PairingState>;
-}
-
-export function refreshPairingState(): void {
-  oc().refreshPairingState();
-}
-
-export function onPairingState(cb: (payload: PairingState) => void): () => void {
-  return oc().onPairingState(cb);
 }
 
 // ---------------------------------------------------------------------------

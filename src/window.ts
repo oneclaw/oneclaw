@@ -4,7 +4,6 @@ import * as log from "./logger";
 import { buildChatUiEntryUrl } from "./chat-ui-entry-url";
 import { shouldHideWindowOnClose } from "./window-close-policy";
 import * as analytics from "./analytics";
-import type { PairingState } from "./channel-pairing-monitor";
 import type { UpdateBannerState } from "./update-banner-state";
 import {
   WINDOW_WIDTH,
@@ -215,18 +214,6 @@ export class WindowManager {
       return;
     }
     this.win.webContents.send("app:update-state", state);
-  }
-
-  // 向渲染层广播聊天渠道待审批状态（若窗口存在）。
-  pushPairingState(state: PairingState): void {
-    if (!this.win || this.win.isDestroyed()) {
-      return;
-    }
-    this.win.webContents.send("app:pairing-state", state);
-    const feishuState = state.channels.feishu;
-    if (feishuState) {
-      this.win.webContents.send("app:feishu-pairing-state", feishuState);
-    }
   }
 
   // 销毁窗口（应用退出前调用）

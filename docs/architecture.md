@@ -79,25 +79,13 @@ Tabs:
 
 ## Multi-Channel Chat Integration
 
-### Channel Pairing Monitor (`channel-pairing-monitor.ts`)
+### DM Policy
 
-Unified multi-channel pairing request polling and state management:
+New installs default `channels.feishu.dmPolicy = "open"` + `allowFrom = ["*"]` (any user can DM the bot). Advanced users can switch to `dmPolicy = "pairing"` from Settings, in which case only IDs in `allowFrom` respond. There is no background polling for pending pairing requests — approved users are managed via the sidecar (below). Gateway enforces the policy server-side based on `openclaw.json`.
 
-- Aggregates pairing requests from Feishu, WeCom, and other channels
-- Polling intervals: 10s foreground, 60s background
-- Per-channel state tracking with auto-approval (oldest request first)
-- Real-time state subscriptions via `onPairingState()` IPC listener
+### Channel Allow-From Sidecar (`channel-pairing-store.ts`)
 
-### Channel Pairing Store (`channel-pairing-store.ts`)
-
-Persistent storage for channel-specific pairing approvals and allowlists:
-
-- Per-channel `allowFrom` entries with normalization and dedup
-- Backward-compatible with legacy single-channel files
-
-### Feishu (`feishu-pairing-monitor.ts`)
-
-Legacy Feishu-specific pairing monitor, still active alongside the unified monitor.
+Persistent storage for per-channel `allowFrom` entries (the "approved users" list rendered in Settings → Channels → Feishu / WeCom). Normalized and deduped. Backward-compatible with legacy single-channel files.
 
 ### WeCom (`wecom-config.ts`)
 
@@ -310,9 +298,7 @@ Custom NSIS assisted installer with:
 │     ├── skill-store.ts (clawhub marketplace integration)     │
 │     ├── cli-integration.ts (CLI wrapper + PATH injection)    │
 │     ├── launch-at-login.ts (system startup toggle)           │
-│     ├── channel-pairing-monitor.ts (unified multi-channel)   │
-│     │     ├── channel-pairing-store.ts (persistent storage)  │
-│     │     ├── feishu-pairing-monitor.ts (Feishu channel)     │
+│     ├── channel-pairing-store.ts (allowFrom sidecar)         │
 │     │     ├── wecom-config.ts (WeCom channel)                │
 │     │     ├── dingtalk-config.ts (DingTalk channel)          │
 │     │     └── qqbot-config.ts (QQ Bot channel)               │

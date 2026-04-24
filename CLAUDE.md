@@ -55,9 +55,7 @@ oneclaw/
 │   ├── build-config.ts     # Build-time injected config reader (PostHog, registry URL)
 │   ├── cli-integration.ts  # CLI wrapper generation, PATH injection (POSIX + Windows)
 │   ├── launch-at-login.ts  # macOS/Windows launch at login toggle
-│   ├── channel-pairing-monitor.ts  # Unified multi-channel pairing polling + state
-│   ├── channel-pairing-store.ts    # Per-channel pairing approval persistence
-│   ├── feishu-pairing-monitor.ts   # Feishu-specific pairing monitor
+│   ├── channel-pairing-store.ts    # Per-channel approved-user sidecar (allowFrom storage)
 │   ├── wecom-config.ts     # WeCom (企业微信) plugin config
 │   ├── weixin-config.ts    # WeChat (微信) plugin config
 │   ├── dingtalk-config.ts  # DingTalk connector plugin config
@@ -164,7 +162,7 @@ rm -rf .dev-state && npm run clean && rm -rf chat-ui/dist tsconfig.tsbuildinfo
 - **Kimi OAuth** — Device code flow via `auth.kimi.com`, 60s refresh interval, 300s refresh threshold.
 - **Setup wizard** — Step 0 (conflict detection) → Step 1 (welcome) → Step 2 (provider) → Step 3 (done + CLI + login toggle).
 - **Settings** — 7 tabs: Provider, Search, Channels, KimiClaw, Appearance, Advanced, Backup.
-- **Multi-channel integration** — Unified pairing monitor aggregates Feishu, WeCom, DingTalk, QQ Bot with per-channel state tracking and auto-approval.
+- **Multi-channel integration** — Feishu / WeCom / DingTalk / QQ Bot / WeChat share a common plugin-enable + channel-config schema. New installs default `dmPolicy: "open"` (with `allowFrom: ["*"]`). Users can opt into `dmPolicy: "pairing"` per channel; approved-user list is maintained via an allowFrom sidecar (no background polling).
 - **Skill store** — clawhub CLI integration, skills at `~/.openclaw/workspace/skills/`, registry config in `~/.openclaw/skill-store.json`.
 - **Config backup** — Rolling 10 backups + last-known-good snapshot + factory reset.
 - **Multi-model management** — IPC handlers for listing, deleting, setting default, and aliasing models across providers.
