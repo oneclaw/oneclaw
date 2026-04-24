@@ -487,6 +487,44 @@ test(
   }
 });
 
+test(
+  "[macOS] getExtensionStates: JSON 在 + blocklist 在 → blocklisted=true 不被 configured 短路",
+  { skip: process.platform === "win32" },
+  async () => {
+    const home = makeTempHome();
+    const restore = setupFakeHome(home);
+    try {
+      const chrome = BROWSER_TARGETS.find((t) => t.id === "chrome")!;
+      markBrowserInstalled(home, chrome.userDataDirMac);
+      // 写 External Extensions JSON → configured=true
+      const extDir = path.join(home, chrome.userDataDirMac, "External Extensions");
+      fs.mkdirSync(extDir, { recursive: true });
+      fs.writeFileSync(
+        path.join(extDir, `${FAKE_EXT_ID}.json`),
+        JSON.stringify({ external_update_url: "https://clients2.google.com/service/update2/crx" }),
+      );
+      // 同时把 ID 写进 Preferences 黑名单（模拟用户从 Chrome UI 卸过）
+      const profileDir = path.join(home, chrome.userDataDirMac, chrome.profileSubdir);
+      fs.mkdirSync(profileDir, { recursive: true });
+      fs.writeFileSync(
+        path.join(profileDir, "Preferences"),
+        JSON.stringify({ extensions: { external_uninstalls: [FAKE_EXT_ID] } }),
+      );
+      const states = await getExtensionStates(FAKE_EXT_ID);
+      const chromeState = states.find((s) => s.browserId === "chrome")!;
+      assert.equal(chromeState.installed, true);
+      assert.equal(chromeState.configured, true, "JSON 在 → configured=true");
+      assert.equal(
+        chromeState.blocklisted,
+        true,
+        "blocklist 含 ID → blocklisted=true，不应被 configured=true 短路掉",
+      );
+    } finally {
+      restore();
+    }
+  },
+);
+
 // ===== blocklist 检测 + 清理 =====
 
 import {

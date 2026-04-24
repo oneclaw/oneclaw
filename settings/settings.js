@@ -3280,12 +3280,14 @@
         div.appendChild(name);
 
         var badge = document.createElement("span");
-        if (row.configured) {
-          badge.className = "wb-status-badge ok";
-          badge.textContent = t("advanced.wbExtConfigured");
-        } else if (row.blocklisted) {
+        // blocklisted 优先于 configured：JSON 写好了但被黑名单阻断时，Chrome 实际啥也没装，
+        // 此时显示「已配置」会误导用户；阻断状态才是真实情况。
+        if (row.blocklisted) {
           badge.className = "wb-status-badge warn wb-blocklist-warn";
           badge.textContent = "⚠ " + t("advanced.wbExtBlocklisted");
+        } else if (row.configured) {
+          badge.className = "wb-status-badge ok";
+          badge.textContent = t("advanced.wbExtConfigured");
         } else {
           badge.className = "wb-status-badge warn";
           badge.textContent = t("advanced.wbExtNotConfigured");
