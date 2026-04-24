@@ -285,11 +285,12 @@ export async function getExtensionStates(
     const configured = installed
       ? await isExtensionConfigured(target, extId, options)
       : false;
-    // 已 configured = 装上了，不可能在黑名单；只在「装了浏览器 + 未 configured」时查
-    const blocklisted =
-      installed && !configured
-        ? await isExtensionBlocklisted(target, extId)
-        : false;
+    // configured 只代表「JSON 在」，不代表 Chrome 真装上了。
+    // 真实组合：JSON 在 + blocklist 在 → Chrome 启动时读 JSON 但被 blocklist 跳过 → 啥也没装。
+    // 所以 blocklist 检查必须独立于 configured，只要浏览器装了就要查。
+    const blocklisted = installed
+      ? await isExtensionBlocklisted(target, extId)
+      : false;
     out.push({
       browserId: target.id,
       browserName: target.name,
