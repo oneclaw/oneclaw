@@ -1,6 +1,6 @@
 import * as fs from "fs";
 import * as path from "path";
-import { resolveUserExtensionsDir } from "./constants";
+import { resolveGatewayPackageDir } from "./constants";
 import { ensureGatewayAuthTokenInConfig } from "./gateway-auth";
 
 export const DINGTALK_CONNECTOR_PLUGIN_ID = "dingtalk-connector";
@@ -20,10 +20,14 @@ export interface SaveDingtalkConfigParams {
   sessionTimeout?: number;
 }
 
-// 统一解析钉钉插件目录。已迁出 gateway.asar，由 extension-mirror reconcile 到
-// ~/.openclaw/extensions/dingtalk-connector/ 后由 openclaw external-plugin scan 加载。
+// 统一解析钉钉插件目录。dingtalk-connector 走 channel-entry shim 留在 bundled
+// 路径（gateway.asar/node_modules/openclaw/dist/extensions/dingtalk-connector）——
+// Windows 下 shouldPreferNativeJiti=false 会把 extensions-mirror 外部加载路径
+// 的 bundle 反复 jiti 重入，导致 DWS register() 多次新建 stream 共用同 clientId
+// 被钉钉服务器互踢，回滚到 bundled 路径 + createRequire shim 才是稳态。
+// 见 docs/gotchas.md 与 PR #79。
 export function resolveDingtalkPluginDir(): string {
-  return path.join(resolveUserExtensionsDir(), DINGTALK_CONNECTOR_PLUGIN_ID);
+  return path.join(resolveGatewayPackageDir(), "dist", "extensions", DINGTALK_CONNECTOR_PLUGIN_ID);
 }
 
 // 检查钉钉插件是否已经随应用一起打包。
