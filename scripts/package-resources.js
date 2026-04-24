@@ -1114,6 +1114,16 @@ function patchAsarBoundaryCheck(gatewayDir) {
 // ─── Step 2.5: 注入 bundled 插件（kimi-claw + kimi-search） ───
 
 // 插件定义（id → 下载/缓存参数）
+//
+// 注：dingtalk-connector 由 extensions-mirror（外部插件扫描路径）回滚到 bundled
+// 路径（`gateway/node_modules/openclaw/dist/extensions/`）——见
+// docs/gotchas.md 与 learning notes：外部 mirror 路径在 Windows 上会被
+// `shouldPreferNativeJiti=false` 强制走 jiti transform，ESM cache 失效导致
+// plugin bundle 每次调用被重新 eval，register() 重入在 dingtalk 上会不断新建
+// DWSClient 流、共用同 clientId 被钉钉服务器互踢，手机端永远收不到回复。
+// 旧 shim 路径（`writeChannelEntryShim` + createRequire）仍然生效，且只会让
+// shim 自己被 jiti 重入，底下的 legacyModule 由 Node require 单例化，register
+// 只跑一次。这是 PR #79 已经在线上验证过的闭环。
 const BUNDLED_PLUGINS = [
   {
     id: "kimi-claw",
@@ -1135,19 +1145,22 @@ const BUNDLED_PLUGINS = [
     cacheFile: KIMI_SEARCH_CACHE_FILE,
     requiredFiles: ["package.json", "openclaw.plugin.json"],
   },
-];
-
-// Third-party channel plugins are mirrored to resources/<target>/extensions-mirror/<id>/
-// (outside gateway.asar) and copied to ~/.openclaw/extensions/ at first launch.
-// The openclaw host then loads them via its standard external-plugin scan path —
-// no shim, no bundled-channel-entry contract, no jiti module-identity split.
-const CHANNEL_MIRROR_PLUGINS = [
   {
     id: "dingtalk-connector",
     packageName: DINGTALK_CONNECTOR_PACKAGE_NAME,
     requiredFiles: ["package.json", "openclaw.plugin.json"],
     getSource: getDingtalkConnectorPackageSource,
+    channelShim: { name: "DingTalk" },
   },
+];
+
+// Third-party channel plugins that still live outside gateway.asar — mirrored to
+// resources/<target>/extensions-mirror/<id>/ and copied to ~/.openclaw/extensions/
+// at first launch. openclaw host loads them via its external-plugin scan path.
+//
+// 注：dingtalk-connector 因 Windows 侧 DWS register 重入问题（见 BUNDLED_PLUGINS
+// 上方注释）已从此列表迁回 BUNDLED_PLUGINS，改走 channel-entry shim。
+const CHANNEL_MIRROR_PLUGINS = [
   {
     id: "wecom-openclaw-plugin",
     packageName: WECOM_PLUGIN_PACKAGE_NAME,
@@ -1190,9 +1203,11 @@ const OPENCLAW_SKILLS_DARWIN_ONLY = new Set([
 ]);
 
 // openclaw/extensions 只保留 OneClaw 当前产品面和运行时基础插件。
-// 3 个第三方 channel plugin（dingtalk-connector / wecom-openclaw-plugin /
-// openclaw-weixin）已迁出 gateway.asar，改为 extensions-mirror/<id>/，运行时再
-// reconcile 到 ~/.openclaw/extensions/，因此不在此 allowlist 中。
+// 2 个第三方 channel plugin（wecom-openclaw-plugin / openclaw-weixin）已迁出
+// gateway.asar，改为 extensions-mirror/<id>/，运行时再 reconcile 到
+// ~/.openclaw/extensions/，因此不在此 allowlist 中。
+// dingtalk-connector 走 channel-entry shim 仍然在 bundled 路径下（见
+// BUNDLED_PLUGINS 上方注释）。
 // qqbot 自 openclaw 2026.4.5 起被官方作为 @openclaw/qqbot 内置 vendor，保留在
 // stock 列表里即可，OneClaw 不再自行 ship。
 const OPENCLAW_EXTENSION_ALLOWLIST = new Set([
@@ -1205,6 +1220,7 @@ const OPENCLAW_EXTENSION_ALLOWLIST = new Set([
   "kimi-claw",
   "kimi-search",
   "qqbot",
+  "dingtalk-connector",
 ]);
 
 // openclaw 的 bundled extension 在 2026.3.x 位于顶层 extensions/，在 2026.4.x 迁到 dist/extensions/。
@@ -1217,16 +1233,17 @@ const REQUIRED_OPENCLAW_BUNDLED_EXTENSIONS = [
   path.join("imessage", "openclaw.plugin.json"),
 ];
 
-// In-asar injection: only kimi-claw + kimi-search remain. The 4 third-party
-// channel plugins have moved to extensions-mirror/ (see CHANNEL_MIRROR_PLUGINS).
+// In-asar injection: kimi-claw + kimi-search + dingtalk-connector (channel shim).
+// wecom-openclaw-plugin / openclaw-weixin live in extensions-mirror/ (see
+// CHANNEL_MIRROR_PLUGINS).
 const REQUIRED_OPENCLAW_INJECTED_EXTENSIONS = [
   path.join("kimi-claw", "openclaw.plugin.json"),
   path.join("kimi-search", "openclaw.plugin.json"),
+  path.join("dingtalk-connector", "openclaw.plugin.json"),
 ];
 
 // External mirror: validates extensions-mirror/<id>/ exists with manifest.
 const REQUIRED_CHANNEL_MIRROR_PLUGINS = [
-  path.join("dingtalk-connector", "openclaw.plugin.json"),
   path.join("wecom-openclaw-plugin", "openclaw.plugin.json"),
   path.join("openclaw-weixin", "openclaw.plugin.json"),
 ];
@@ -1311,6 +1328,154 @@ function assertPluginDir(plugin, dirPath, missingLabel) {
   }
 }
 
+// openclaw >= 2026.4.5 要求 bundled channel 插件的 default export 带上 `kind: "bundled-channel-entry"`
+// 标记，并提供 `loadChannelPlugin()` 方法（见 bootstrap-registry 的 resolveChannelPluginModuleEntry）。
+// 旧版 channel 插件导出 `{ id, name, register }` 或直接 `register` 函数，
+// 这里给每个插件旁边生成一个 wrapper 入口 `oneclaw-bundled-entry.mjs`，复用原 `register` 实现，
+// 并通过把原 register 跑一遍 stub api 来截获 channel plugin 对象给 `loadChannelPlugin()` 返回。
+// 同时把插件的 `package.json#openclaw.extensions` 改成指向 wrapper；原始入口路径保存在 shim meta 文件
+// 里，方便后续缓存命中时也能重新生成 shim 而不丢源入口引用。
+//
+// Why createRequire（见 PR #79 d58c0be）：openclaw 4.x 会用两个独立 jiti 实例加载同一个
+// shim，各自 cache 一份 legacyModule → runtime store 分裂，`api.setRuntime(runtime)` 写入
+// 其中一份，而 gateway dispatch 读另一份 → 永远拿不到 runtime。改用 Node 进程级 module
+// cache 绕开这条路。仅 `.mjs/.js/.cjs` 入口启用。
+function writeChannelEntryShim(plugin, pluginDir) {
+  const pkgPath = path.join(pluginDir, "package.json");
+  if (!fs.existsSync(pkgPath)) {
+    die(`${plugin.id}: channel shim 生成失败，缺少 package.json: ${pkgPath}`);
+  }
+  let pkg;
+  try { pkg = JSON.parse(fs.readFileSync(pkgPath, "utf-8")); } catch (err) {
+    die(`${plugin.id}: 解析 package.json 失败: ${err.message || String(err)}`);
+  }
+  const originalExtensions = Array.isArray(pkg.openclaw?.extensions) ? pkg.openclaw.extensions.slice() : [];
+  const shimMetaPath = path.join(pluginDir, ".oneclaw-channel-shim.json");
+  let originalEntry = originalExtensions.find((entry) => typeof entry === "string" && !entry.includes("oneclaw-bundled-entry"));
+  if (!originalEntry && fs.existsSync(shimMetaPath)) {
+    // 缓存命中场景：shim 已存在，original entry 从 meta 文件恢复
+    try { originalEntry = JSON.parse(fs.readFileSync(shimMetaPath, "utf-8")).originalEntry; } catch {}
+  }
+  if (!originalEntry) {
+    die(`${plugin.id}: 未在 package.json 的 openclaw.extensions 或 shim meta 中找到原始入口`);
+  }
+  fs.writeFileSync(shimMetaPath, JSON.stringify({ originalEntry }, null, 2), "utf-8");
+
+  const shimName = "oneclaw-bundled-entry.mjs";
+  const shimPath = path.join(pluginDir, shimName);
+  const originalEntryExt = path.extname(originalEntry).toLowerCase();
+  const useCreateRequire = [".mjs", ".js", ".cjs"].includes(originalEntryExt);
+  const loaderLines = useCreateRequire
+    ? [
+        "//",
+        "// Why createRequire instead of `import * as`:",
+        "// openclaw 4.x loads this shim through two independent jiti instances",
+        "// (bootstrap-registry + loader-BkajlJCF). Each jiti caches the legacy module",
+        "// separately, splitting the plugin's runtime store — one copy receives",
+        "// setChannelRuntime(runtime), the other is read during dispatch and returns",
+        "// null. createRequire routes through Node's process-wide module cache, so",
+        "// both jiti instances resolve to the same legacy module instance.",
+        'import { createRequire as __oneclawCreateRequire } from "node:module";',
+        "const __oneclawRequire = __oneclawCreateRequire(import.meta.url);",
+        `const legacyModule = __oneclawRequire(${JSON.stringify(originalEntry)});`,
+      ]
+    : [
+        `import * as legacyModule from ${JSON.stringify(originalEntry)};`,
+      ];
+  const shimSource = [
+    "// OneClaw auto-generated shim — adapts legacy channel plugins to openclaw >= 2026.4.5",
+    '// "bundled-channel-entry" contract. Regenerated every `npm run package:resources`;',
+    "// do not hand-edit.",
+    ...loaderLines,
+    "",
+    'const legacyDefault = (legacyModule && typeof legacyModule === "object" && "default" in legacyModule)',
+    "  ? legacyModule.default",
+    "  : legacyModule;",
+    "",
+    'const normalized = typeof legacyDefault === "function"',
+    `  ? { id: ${JSON.stringify(plugin.id)}, name: ${JSON.stringify(plugin.channelShim?.name ?? plugin.id)}, description: "", configSchema: { type: "object", additionalProperties: true }, register: legacyDefault }`,
+    "  : legacyDefault;",
+    "",
+    "let cachedChannelPlugin = null;",
+    "let lastRuntime = null;",
+    'const runtimeSetter = typeof normalized.setChannelRuntime === "function"',
+    "  ? normalized.setChannelRuntime.bind(normalized)",
+    '  : Object.entries(legacyModule).find(([key, value]) => /^set.*Runtime$/.test(key) && typeof value === "function")?.[1];',
+    "function applyRuntime(runtime) {",
+    "  if (!runtime) return;",
+    "  if (typeof runtimeSetter === \"function\") {",
+    "    runtimeSetter(runtime);",
+    "    return;",
+    "  }",
+    "  const stubApi = {",
+    "    runtime,",
+    '    registrationMode: "probe",',
+    "    registerChannel({ plugin }) { if (!cachedChannelPlugin) cachedChannelPlugin = plugin; },",
+    "    registerTool() {},",
+    "    registerHttpRoute() {},",
+    "    registerAgentTool() {},",
+    "    registerHook() {},",
+    "    on() {},",
+    "  };",
+    "  try { normalized.register(stubApi); } catch { /* stub api is lossy; swallow */ }",
+    "}",
+    "function findNamedChannelPlugin() {",
+    "  for (const value of Object.values(legacyModule)) {",
+    '    if (!value || typeof value !== "object") continue;',
+    '    if (typeof value.register === "function") continue;',
+    '    if (typeof value.id === "string" && value.id === (normalized.id ?? ' + JSON.stringify(plugin.id) + ')) return value;',
+    "  }",
+    "  return null;",
+    "}",
+    "function captureChannelPlugin() {",
+    "  if (cachedChannelPlugin) return cachedChannelPlugin;",
+    "  cachedChannelPlugin = findNamedChannelPlugin();",
+    "  if (cachedChannelPlugin) {",
+    "    applyRuntime(lastRuntime);",
+    "    return cachedChannelPlugin;",
+    "  }",
+    "  const stubApi = {",
+    "    runtime: {},",
+    '    registrationMode: "probe",',
+    "    registerChannel({ plugin }) { cachedChannelPlugin = plugin; },",
+    "    registerTool() {},",
+    "    registerHttpRoute() {},",
+    "    registerAgentTool() {},",
+    "    registerHook() {},",
+    "    on() {},",
+    "  };",
+    "  try { normalized.register(stubApi); } catch { /* stub api is lossy; swallow */ }",
+    "  return cachedChannelPlugin;",
+    "}",
+    "",
+    "export default {",
+    '  kind: "bundled-channel-entry",',
+    `  id: normalized.id ?? ${JSON.stringify(plugin.id)},`,
+    `  name: normalized.name ?? ${JSON.stringify(plugin.channelShim?.name ?? plugin.id)},`,
+    '  description: normalized.description ?? "",',
+    '  configSchema: normalized.configSchema ?? { type: "object", additionalProperties: true },',
+    "  setChannelRuntime(runtime) {",
+    "    lastRuntime = runtime;",
+    "    applyRuntime(runtime);",
+    "  },",
+    "  register(api) {",
+    '    if (api && typeof api === "object" && api.runtime) lastRuntime = api.runtime;',
+    "    return normalized.register(api);",
+    "  },",
+    "  loadChannelPlugin() {",
+    "    return captureChannelPlugin();",
+    "  },",
+    "};",
+    "",
+  ].join("\n");
+  fs.writeFileSync(shimPath, shimSource, "utf-8");
+
+  pkg.openclaw = pkg.openclaw && typeof pkg.openclaw === "object" ? pkg.openclaw : {};
+  pkg.openclaw.extensions = [`./${shimName}`];
+  fs.writeFileSync(pkgPath, JSON.stringify(pkg, null, 2), "utf-8");
+  log(`已为 ${plugin.id} 生成 channel shim (${shimName})`);
+}
+
 // 在独立临时目录中安装 npm 包插件，避免传递依赖和 peerDep 污染 gateway node_modules
 async function bundleNpmPackagePlugin(plugin, gatewayDir, targetId, opts) {
   const openclawDir = path.join(gatewayDir, "node_modules", "openclaw");
@@ -1354,6 +1519,10 @@ async function installNpmPackagePluginInto(plugin, pluginDir, hostNm, targetId, 
       const stamp = JSON.parse(fs.readFileSync(stampPath, "utf-8"));
       if (stamp.source === sourceInfo.stampSource) {
         assertPluginDir(plugin, pluginDir, "");
+        // channel shim 依赖脚本版本，缓存命中时也要重新生成以确保 shim 和脚本同步
+        if (plugin.channelShim) {
+          writeChannelEntryShim(plugin, pluginDir);
+        }
         log(`复用已注入的 ${plugin.id} 插件 (${sourceInfo.stampSource})`);
         return;
       }
@@ -1455,6 +1624,11 @@ async function installNpmPackagePluginInto(plugin, pluginDir, hostNm, targetId, 
 
   // 清理临时目录
   rmDir(tmpDir);
+
+  // channel 插件需要适配 openclaw >= 2026.4.5 的 bundled-channel-entry 契约
+  if (plugin.channelShim) {
+    writeChannelEntryShim(plugin, pluginDir);
+  }
 
   // 写入版本戳
   fs.writeFileSync(
@@ -1690,6 +1864,20 @@ async function bundleAllPlugins(targetPaths, opts) {
     }
   }
 
+  // (2.5) 清理 extensions-mirror/ 下不再属于 CHANNEL_MIRROR_PLUGINS 的残留目录
+  //       （例如 dingtalk-connector 从 mirror 回滚到 bundled 后的旧残留）。
+  //       afterPack 会整个目录 copy 进 app，不清就会把废插件带进发行包。
+  if (fs.existsSync(channelMirrorDir)) {
+    const allowedMirrorIds = new Set(CHANNEL_MIRROR_PLUGINS.map((p) => p.id));
+    for (const entry of fs.readdirSync(channelMirrorDir, { withFileTypes: true })) {
+      if (!entry.isDirectory()) continue;
+      if (allowedMirrorIds.has(entry.name)) continue;
+      const orphan = path.join(channelMirrorDir, entry.name);
+      log(`清理 extensions-mirror 中的废弃插件 ${entry.name}`);
+      rmDir(orphan);
+    }
+  }
+
   // (3) 入口标准化：把所有 OneClaw 打包的插件入口强制转成 native (.mjs/.js/.cjs)。
   //     .ts 入口会走 jiti transpile，openclaw 内部 10+ 份 jitiLoaders Map 会各
   //     instantiate 一次，模块级变量（如 setWeixinRuntime 的闭包）互相不可见。
@@ -1700,6 +1888,10 @@ async function bundleAllPlugins(targetPaths, opts) {
   for (const plugin of BUNDLED_PLUGINS) {
     const pluginDir = path.join(bundledDir, plugin.id);
     if (!fs.existsSync(pluginDir)) continue; // 被 winArm64Cross 跳过的插件
+    // channel-shim 插件（dingtalk-connector）已经把 extensions[0] 指向 shim
+    // `./oneclaw-bundled-entry.mjs`，shim 自身就是 native；不跑 normalize，
+    // 避免 ensurePluginNativeEntry 再 rewrite 指向某个 bundle 产物。
+    if (plugin.channelShim) continue;
     // 内置 plugin 住在 gateway/node_modules/openclaw/dist/extensions/，openclaw
     // 的 plugin loader 对它们走的是内置 resolve 路径，native `.mjs` 入口能直接
     // 访问 `openclaw` peer——跳过即可，无需重 bundle。
