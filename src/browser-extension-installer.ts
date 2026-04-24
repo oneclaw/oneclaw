@@ -168,10 +168,7 @@ export async function installExtension(
   options: CommonOptions = {},
 ): Promise<InstallResult> {
   const platform = options.platform ?? process.platform;
-  if (
-    !options.skipUserDataCheck &&
-    !fs.existsSync(resolveUserDataDir(target))
-  ) {
+  if (!options.skipUserDataCheck && !isBrowserInstalled(target)) {
     return "browser-not-installed";
   }
   if (platform === "win32") {
@@ -201,10 +198,7 @@ export async function uninstallExtension(
   options: CommonOptions = {},
 ): Promise<UninstallResult> {
   const platform = options.platform ?? process.platform;
-  if (
-    !options.skipUserDataCheck &&
-    !fs.existsSync(resolveUserDataDir(target))
-  ) {
+  if (!options.skipUserDataCheck && !isBrowserInstalled(target)) {
     return "browser-not-installed";
   }
   if (platform === "win32") {

@@ -3,12 +3,13 @@ import assert from "node:assert/strict";
 import * as fs from "fs";
 import * as os from "os";
 import * as path from "path";
-import { BROWSER_TARGETS } from "./browser-detector";
+import { BROWSER_TARGETS, isBrowserInstalled } from "./browser-detector";
 import {
   EXTERNAL_UPDATE_URL,
   installExtension,
   uninstallExtension,
   isExtensionConfigured,
+  getExtensionStates,
   type InstallResult,
 } from "./browser-extension-installer";
 
@@ -19,12 +20,26 @@ function makeTempHome(): string {
 function setupFakeHome(home: string): () => void {
   const oh = process.env.HOME;
   const ou = process.env.USERPROFILE;
+  const oa = process.env.ONECLAW_BROWSER_APPS_DIRS;
   process.env.HOME = home;
   process.env.USERPROFILE = home;
+  // 把 macOS app 搜索路径限制到 fake HOME 下的空目录，避免宿主机 /Applications 污染测试
+  process.env.ONECLAW_BROWSER_APPS_DIRS = path.join(home, "Applications-fake");
   return () => {
     process.env.HOME = oh;
     process.env.USERPROFILE = ou;
+    if (oa === undefined) delete process.env.ONECLAW_BROWSER_APPS_DIRS;
+    else process.env.ONECLAW_BROWSER_APPS_DIRS = oa;
   };
+}
+
+// 让测试构造的"浏览器装了"状态被 isBrowserInstalled 识别。
+// OneClaw 写 External Extensions JSON 不会创建 Local State，
+// 所以测试要显式 touch 这个文件来代表"用户启动过 Chrome"。
+function markBrowserInstalled(home: string, userDataRel: string): void {
+  const userDataDir = path.join(home, userDataRel);
+  fs.mkdirSync(userDataDir, { recursive: true });
+  fs.writeFileSync(path.join(userDataDir, "Local State"), "{}", "utf-8");
 }
 
 const FAKE_EXT_ID = "aaaabbbbccccddddeeeeffffgggghhhh";
@@ -45,7 +60,7 @@ test(
     try {
       const chrome = BROWSER_TARGETS.find((t) => t.id === "chrome")!;
       const userDataDir = path.join(home, chrome.userDataDirMac);
-      fs.mkdirSync(userDataDir, { recursive: true });
+      markBrowserInstalled(home, chrome.userDataDirMac);
       const result = await installExtension(chrome, FAKE_EXT_ID);
       assert.equal(result, "installed");
       const jsonPath = path.join(
@@ -70,7 +85,7 @@ test(
     const restore = setupFakeHome(home);
     try {
       const chrome = BROWSER_TARGETS.find((t) => t.id === "chrome")!;
-      fs.mkdirSync(path.join(home, chrome.userDataDirMac), { recursive: true });
+      markBrowserInstalled(home, chrome.userDataDirMac);
       await installExtension(chrome, FAKE_EXT_ID);
       const result = await installExtension(chrome, FAKE_EXT_ID);
       assert.equal(result, "skipped");
@@ -88,6 +103,7 @@ test(
     const restore = setupFakeHome(home);
     try {
       const chrome = BROWSER_TARGETS.find((t) => t.id === "chrome")!;
+      markBrowserInstalled(home, chrome.userDataDirMac);
       const extDir = path.join(
         home,
         chrome.userDataDirMac,
@@ -115,7 +131,7 @@ test(
     try {
       const chrome = BROWSER_TARGETS.find((t) => t.id === "chrome")!;
       const userDataDir = path.join(home, chrome.userDataDirMac);
-      fs.mkdirSync(userDataDir, { recursive: true });
+      markBrowserInstalled(home, chrome.userDataDirMac);
 
       assert.equal(await isExtensionConfigured(chrome, FAKE_EXT_ID), false);
 
@@ -143,7 +159,7 @@ test(
     const restore = setupFakeHome(home);
     try {
       const chrome = BROWSER_TARGETS.find((t) => t.id === "chrome")!;
-      fs.mkdirSync(path.join(home, chrome.userDataDirMac), { recursive: true });
+      markBrowserInstalled(home, chrome.userDataDirMac);
       await installExtension(chrome, FAKE_EXT_ID);
       const result = await uninstallExtension(chrome, FAKE_EXT_ID);
       assert.equal(result, "removed");
@@ -162,7 +178,7 @@ test(
     const restore = setupFakeHome(home);
     try {
       const chrome = BROWSER_TARGETS.find((t) => t.id === "chrome")!;
-      fs.mkdirSync(path.join(home, chrome.userDataDirMac), { recursive: true });
+      markBrowserInstalled(home, chrome.userDataDirMac);
       const result = await uninstallExtension(chrome, FAKE_EXT_ID);
       assert.equal(result, "not-installed");
     } finally {
@@ -371,7 +387,7 @@ test(
     const restore = setupFakeHome(home);
     try {
       const chrome = BROWSER_TARGETS.find((t) => t.id === "chrome")!;
-      fs.mkdirSync(path.join(home, chrome.userDataDirMac), { recursive: true });
+      markBrowserInstalled(home, chrome.userDataDirMac);
       const summary: BrowserInstallSummary[] =
         await installForAllDetectedBrowsers(FAKE_EXT_ID);
       const chromeRow = summary.find((r) => r.browserId === "chrome");
@@ -392,7 +408,7 @@ test(
     const restore = setupFakeHome(home);
     try {
       const chrome = BROWSER_TARGETS.find((t) => t.id === "chrome")!;
-      fs.mkdirSync(path.join(home, chrome.userDataDirMac), { recursive: true });
+      markBrowserInstalled(home, chrome.userDataDirMac);
       await installExtension(chrome, FAKE_EXT_ID);
       const states: BrowserState[] = await getExtensionStates(FAKE_EXT_ID);
       const chromeState = states.find((s) => s.browserId === "chrome");
@@ -415,7 +431,7 @@ test(
     const restore = setupFakeHome(home);
     try {
       const chrome = BROWSER_TARGETS.find((t) => t.id === "chrome")!;
-      fs.mkdirSync(path.join(home, chrome.userDataDirMac), { recursive: true });
+      markBrowserInstalled(home, chrome.userDataDirMac);
       await installExtension(chrome, FAKE_EXT_ID);
       const summary = await uninstallForAllDetectedBrowsers(FAKE_EXT_ID);
       const chromeRow = summary.find((r) => r.browserId === "chrome");
@@ -440,6 +456,33 @@ test("installForAllDetectedBrowsers 全部未装 → 全部 browser-not-installe
       );
     }
   } finally {
+    restore();
+  }
+});
+
+test(
+  "[ghost] OneClaw 之前写过的 user data dir + External Extensions 残留，但 Local State 不在 → installed=false",
+  { skip: process.platform === "win32" },
+  async () => {
+    const home = makeTempHome();
+    const restore = setupFakeHome(home);
+    try {
+      // 模拟 OneClaw 过去（按旧逻辑）给 Edge 写过 ext JSON 后留下的"幽灵目录"：
+      //   <userData>/External Extensions/<id>.json 在
+      //   但没有 Local State（用户压根没装 Edge）
+      const edge = BROWSER_TARGETS.find((t) => t.id === "edge")!;
+      const extDir = path.join(home, edge.userDataDirMac, "External Extensions");
+      fs.mkdirSync(extDir, { recursive: true });
+      fs.writeFileSync(
+        path.join(extDir, `${FAKE_EXT_ID}.json`),
+        '{"external_update_url":"x"}',
+      );
+      // 不做 markBrowserInstalled — 模拟 Edge 真的没装
+      assert.equal(isBrowserInstalled(edge), false, "ghost dir 不算已装");
+      const states = await getExtensionStates(FAKE_EXT_ID);
+      const edgeState = states.find((s) => s.browserId === "edge")!;
+      assert.equal(edgeState.installed, false);
+    } finally {
     restore();
   }
 });

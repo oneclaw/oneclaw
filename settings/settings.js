@@ -347,8 +347,8 @@
       "advanced.browserModeOpenclaw": "Standalone browser instance",
       "advanced.browserModeChrome": "Chrome extension (advanced)",
       "advanced.browserModeWebbridge": "kimi-webbridge (recommended)",
-      "advanced.wbBinary": "WebBridge binary",
-      "advanced.wbInstalled": "installed",
+      "advanced.wbBinary": "WebBridge plugin",
+      "advanced.wbInstalled": "Up to date",
       "advanced.wbNotInstalled": "Not installed",
       "advanced.wbLoading": "Loading…",
       "advanced.wbExtConfigured": "Configured",
@@ -688,8 +688,8 @@
       "advanced.browserModeOpenclaw": "独立浏览器",
       "advanced.browserModeChrome": "Chrome 拓展（高阶）",
       "advanced.browserModeWebbridge": "kimi-webbridge（推荐）",
-      "advanced.wbBinary": "WebBridge 二进制",
-      "advanced.wbInstalled": "已安装",
+      "advanced.wbBinary": "webbridge 插件",
+      "advanced.wbInstalled": "已是最新版",
       "advanced.wbNotInstalled": "未安装",
       "advanced.wbLoading": "加载中…",
       "advanced.wbExtConfigured": "已配置",
@@ -3261,9 +3261,7 @@
     var statusText = document.getElementById("wbStatusText");
     if (statusText) {
       statusText.textContent = data.installed
-        ? (data.version
-            ? "v" + data.version + " " + t("advanced.wbInstalled")
-            : t("advanced.wbInstalled"))
+        ? t("advanced.wbInstalled")
         : t("advanced.wbNotInstalled");
       statusText.className = "wb-status-text " + (data.installed ? "ok" : "warn");
     }
