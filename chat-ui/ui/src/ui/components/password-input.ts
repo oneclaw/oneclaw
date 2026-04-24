@@ -24,6 +24,9 @@ export class PasswordInput extends LitElement {
   }
 
   private handleInput(e: Event) {
+    // Light DOM 下需阻止原生 input 冒泡：否则它会在我们的 CustomEvent 之后到达消费者，
+    // 而原生事件没有 detail.value，导致读取到 undefined（粘贴时尤其明显）
+    e.stopPropagation();
     this.value = (e.target as HTMLInputElement).value;
     this.dispatchEvent(new CustomEvent("input", { detail: { value: this.value }, bubbles: true, composed: true }));
   }
