@@ -1,5 +1,12 @@
 [
   {
+    "version": "2026.424.0",
+    "notes": {
+      "zh": "升级了 openclaw 4.5 内核",
+      "en": "Upgrade openclaw kernel to 4.5"
+    }
+  },
+  {
     "version": "2026.408.0",
     "notes": {
       "zh": "定时任务支持创建、编辑和删除\n修复若干稳定性和界面问题\n整体视觉体验优化",
