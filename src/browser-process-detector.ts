@@ -14,7 +14,7 @@ export interface ProcessDetectorDeps {
 
 const execFileAsync = promisify(execFile);
 
-const DEFAULT_EXEC: ProcessExecutor = async (cmd, args) => {
+export const DEFAULT_PROCESS_EXEC: ProcessExecutor = async (cmd, args) => {
   try {
     const { stdout } = await execFileAsync(cmd, args);
     return { stdout: String(stdout ?? ""), code: 0 };
@@ -30,7 +30,7 @@ export async function isBrowserProcessRunning(
   target: BrowserTarget,
   deps: ProcessDetectorDeps = {},
 ): Promise<boolean> {
-  const exec = deps.exec ?? DEFAULT_EXEC;
+  const exec = deps.exec ?? DEFAULT_PROCESS_EXEC;
   const platform = deps.platform ?? process.platform;
   try {
     if (platform === "win32") {

@@ -1,4 +1,5 @@
 import { app, BrowserWindow, ipcMain } from "electron";
+import * as path from "path";
 import { ensureGatewayAuthTokenInConfig } from "./gateway-auth";
 import { SetupManager } from "./setup-manager";
 import * as analytics from "./analytics";
@@ -26,7 +27,16 @@ import {
 } from "./install-detector";
 import { applyBrowserModeConfig } from "./browser-mode-config";
 import { installWebbridge } from "./webbridge-installer";
-import { installForAllDetectedBrowsers } from "./browser-extension-installer";
+import {
+  installForAllDetectedBrowsers,
+  isExtensionBlocklisted,
+  cleanExtensionBlocklist,
+} from "./browser-extension-installer";
+import { BROWSER_TARGETS, isBrowserInstalled } from "./browser-detector";
+import {
+  isBrowserProcessRunning,
+  DEFAULT_PROCESS_EXEC,
+} from "./browser-process-detector";
 import { readBuildConfigWebbridgeExtensionId } from "./build-config";
 import { runWebbridgeSetupTask } from "./webbridge-setup-task";
 import { installWebbridgeSkill } from "./webbridge-skill-installer";
@@ -39,6 +49,53 @@ interface SetupIpcDeps {
 }
 
 let latestSetupCompletedProps: Record<string, string> | null = null;
+
+// WebBridge 安装失败时弹的小窗（复用 setup.css 主题），单例
+let webbridgeFailedWindow: BrowserWindow | null = null;
+
+function openWebbridgeFailedDialog(reason: string): void {
+  // 已开就刷新内容（罕见），关掉重开
+  if (webbridgeFailedWindow && !webbridgeFailedWindow.isDestroyed()) {
+    try {
+      webbridgeFailedWindow.close();
+    } catch {}
+    webbridgeFailedWindow = null;
+  }
+  const win = new BrowserWindow({
+    width: 420,
+    height: 200,
+    show: false,
+    frame: false,
+    resizable: false,
+    minimizable: false,
+    maximizable: false,
+    fullscreenable: false,
+    transparent: true,
+    backgroundColor: "#00000000",
+    hasShadow: true,
+    webPreferences: {
+      contextIsolation: true,
+      nodeIntegration: false,
+      preload: path.join(__dirname, "preload.js"),
+    },
+  });
+  webbridgeFailedWindow = win;
+  win.setMenuBarVisibility(false);
+  win.removeMenu();
+  win.on("closed", () => {
+    if (webbridgeFailedWindow === win) webbridgeFailedWindow = null;
+  });
+  const htmlPath = path.join(app.getAppPath(), "setup", "webbridge-failed.html");
+  // reason 通过 URL hash 传，避免 query 触发 file:// CSP / 缓存问题
+  const url = `file://${htmlPath}#reason=${encodeURIComponent(reason)}`;
+  win.loadURL(url).catch((err) => {
+    log.error(`[webbridge-failed-dialog] loadURL 失败: ${err?.message ?? err}`);
+  });
+  win.once("ready-to-show", () => {
+    win.show();
+    win.focus();
+  });
+}
 
 type SetupActionResult = {
   success: boolean;
@@ -96,6 +153,13 @@ async function runTrackedSetupAction<T extends SetupActionResult>(
 // 注册 Setup 相关 IPC
 export function registerSetupIpc(deps: SetupIpcDeps): void {
   const { setupManager } = deps;
+
+  // WebBridge 失败弹窗的自关闭通道
+  ipcMain.on("webbridge-failed-dialog:close", () => {
+    if (webbridgeFailedWindow && !webbridgeFailedWindow.isDestroyed()) {
+      webbridgeFailedWindow.close();
+    }
+  });
 
   // ── 环境检测：检查已有 OpenClaw 安装 ──
   ipcMain.handle("setup:detect-installation", async () => {
@@ -341,7 +405,30 @@ export function registerSetupIpc(deps: SetupIpcDeps): void {
       // 下载失败时会降级到 openclaw 模式并通过 onBrowserModeChanged 触发 gateway 重启。
       runWebbridgeSetupTask({
         installer: () => installWebbridge(),
-        installExtensions: (extId) => installForAllDetectedBrowsers(extId),
+        // Pre-step：用户之前从 chrome://extensions UI 删过扩展时，extId 会落到
+        // Preferences.extensions.external_uninstalls 黑名单，之后写 External Extensions JSON
+        // Chrome 启动会"读 JSON → 查黑名单 → 命中 → 静默跳过安装"，导致 setup 看起来全部成功
+        // 但扩展永远装不上。这里在装扩展前做一次"清黑名单或 fail"：
+        //   - 浏览器没在跑 → 清黑名单（best effort）
+        //   - 浏览器在跑   → throw → setup 走 fallback openclaw，让用户后续手动走 Settings 修复
+        installExtensions: async (extId) => {
+          for (const target of BROWSER_TARGETS) {
+            if (!isBrowserInstalled(target)) continue;
+            if (!(await isExtensionBlocklisted(target, extId))) continue;
+            if (
+              await isBrowserProcessRunning(target, {
+                exec: DEFAULT_PROCESS_EXEC,
+              })
+            ) {
+              throw new Error(
+                `${target.name} 正在运行且扩展在 external_uninstalls 黑名单——请退出 ${target.name} 后从 Settings → 高级 → 修复并启用 重试`,
+              );
+            }
+            const r = await cleanExtensionBlocklist(target, extId);
+            log.info(`[setup] ${target.name} blocklist cleanup: ${r}`);
+          }
+          return installForAllDetectedBrowsers(extId);
+        },
         readConfig: readUserConfig,
         writeConfig: writeUserConfig,
         applyMode: applyBrowserModeConfig,
@@ -359,6 +446,10 @@ export function registerSetupIpc(deps: SetupIpcDeps): void {
             webbridge_installed: summary.webbridgeInstalled,
             has_error: Boolean(summary.error),
           });
+          // 失败 → fallback openclaw + 弹自绘小窗（复用 setup.css 主题，与 app 风格一致）
+          if (summary.outcome !== "webbridge-ready") {
+            openWebbridgeFailedDialog(summary.error ?? "未知原因");
+          }
         })
         .catch((err) => {
           log.error(

@@ -912,3 +912,57 @@ select option {
   color: var(--text-on-accent);
   vertical-align: middle;
 }
+
+/* ============================================
+   Step 3 完成前提示 modal — 提醒用户重启浏览器激活扩展
+   ============================================ */
+.browser-restart-modal {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+.browser-restart-modal.hidden { display: none; }
+
+.browser-restart-card {
+  background: var(--bg-secondary);
+  border: 1px solid var(--bg-input);
+  border-radius: 10px;
+  padding: 28px;
+  min-width: 380px;
+  max-width: 460px;
+  box-shadow: 0 12px 48px rgba(0, 0, 0, 0.4);
+}
+
+.browser-restart-title {
+  margin: 0 0 12px;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-strong);
+}
+
+.browser-restart-desc {
+  margin: 0 0 16px;
+  color: var(--text-secondary);
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.browser-restart-steps {
+  margin: 0 0 22px 22px;
+  padding: 0;
+  color: var(--text);
+  font-size: 13px;
+  line-height: 1.7;
+}
+
+.browser-restart-steps li {
+  margin-bottom: 4px;
+}
+
+.browser-restart-confirm {
+  width: 100%;
+}

@@ -906,33 +906,21 @@
           <label data-i18n="advanced.browserMode">Browser Mode</label>
           <div class="radio-group">
             <label class="radio-item">
+              <input type="radio" name="browserMode" value="webbridge">
+              <span data-i18n="advanced.browserModeWebbridge">kimi-webbridge (recommended)</span>
+            </label>
+            <label class="radio-item">
               <input type="radio" name="browserMode" value="openclaw" checked>
               <span data-i18n="advanced.browserModeOpenclaw">Standalone browser instance</span>
             </label>
             <label class="radio-item">
               <input type="radio" name="browserMode" value="chrome">
-              <span data-i18n="advanced.browserModeChrome">Chrome extension (advanced)</span>
-            </label>
-            <label class="radio-item">
-              <input type="radio" name="browserMode" value="webbridge">
-              <span data-i18n="advanced.browserModeWebbridge">kimi-webbridge (recommended)</span>
+              <span data-i18n="advanced.browserModeChrome">Chrome extension</span>
             </label>
           </div>
+          <!-- 当 mode=webbridge 且 precheck 不通过时才显示：红色小链接 → 点开弹 RepairModal -->
+          <a href="#" class="wb-health-link hidden" id="webbridgeHealthLink" data-i18n="advanced.wbHealthBroken">⚠ WebBridge 需要修复</a>
 
-          <!-- WebBridge 安装状态卡；只在 browserMode=webbridge 时展开 -->
-          <div class="webbridge-install-card hidden" id="webbridgeCard">
-            <div class="wb-status-row">
-              <span class="wb-label" data-i18n="advanced.wbBinary">WebBridge plugin</span>
-              <span class="wb-status-text" id="wbStatusText" data-i18n="advanced.wbLoading">Loading…</span>
-            </div>
-            <div class="wb-browser-list" id="wbBrowserList"></div>
-            <div class="wb-actions">
-              <button type="button" class="btn-secondary" id="btnWbRetryDownload" data-i18n="advanced.wbRetryDownload">Reinstall</button>
-              <button type="button" class="btn-secondary" id="btnWbCheckUpdate" data-i18n="advanced.wbCheckUpdate">Check for update</button>
-              <button type="button" class="btn-secondary" id="btnWbReconfigureExt" data-i18n="advanced.wbReconfigureExt">Reconfigure browser extensions</button>
-            </div>
-            <div class="wb-msg hidden" id="wbMsg"></div>
-          </div>
         </div>
 
         <!-- iMessage 频道 -->
@@ -969,6 +957,20 @@
             <span class="btn-text" data-i18n="advanced.save">Save</span>
             <span class="btn-spinner hidden"></span>
           </button>
+        </div>
+
+        <!-- WebBridge 切换前修复 Modal -->
+        <div id="webbridgeRepairModal" class="wb-modal-overlay hidden">
+          <div class="wb-modal-card">
+            <h3 class="wb-modal-title" data-i18n="advanced.wbRepairTitle">WebBridge 需要修复</h3>
+            <p class="wb-modal-desc" data-i18n="advanced.wbRepairDesc">切换到 WebBridge 模式前需要先安装以下组件：</p>
+            <ul class="wb-repair-list" id="wbRepairList"></ul>
+            <div class="wb-modal-msg hidden" id="wbRepairMsg"></div>
+            <div class="wb-modal-actions">
+              <button type="button" class="btn-secondary" id="wbRepairCancel" data-i18n="common.cancel">取消</button>
+              <button type="button" class="btn-primary" id="wbRepairConfirm" data-i18n="advanced.wbRepairConfirm">修复并启用</button>
+            </div>
+          </div>
         </div>
       </section>
 

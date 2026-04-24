@@ -345,7 +345,7 @@
       "advanced.browserChrome": "Chrome extension",
       "advanced.browserMode": "Browser Mode",
       "advanced.browserModeOpenclaw": "Standalone browser instance",
-      "advanced.browserModeChrome": "Chrome extension (advanced)",
+      "advanced.browserModeChrome": "Chrome extension",
       "advanced.browserModeWebbridge": "kimi-webbridge (recommended)",
       "advanced.wbBinary": "WebBridge plugin",
       "advanced.wbInstalled": "Up to date",
@@ -364,16 +364,28 @@
       "advanced.wbUpToDate": "Already up to date",
       "advanced.wbUpdated": "Updated to",
       "advanced.wbCheckFailed": "Check failed",
+      "advanced.wbDownloadNow": "Download WebBridge",
+      "advanced.wbReconfigureSingle": "Configure",
       "advanced.wbConfiguring": "Configuring browser extensions…",
       "advanced.wbConfigured": "Browser extensions configured",
       "advanced.wbConfigFailed": "Configuration failed",
-      "advanced.wbExtBlocklisted": "Blocklisted (you uninstalled it via browser UI)",
-      "advanced.wbCleanBlocklist": "Clear blocklist",
-      "advanced.wbCleanConfirm": "This will modify {browser}'s Preferences file to remove the extension from the uninstall blocklist. {browser} must be fully closed first. Have you quit {browser}?",
+      "advanced.wbExtBlocklisted": "Needs repair",
+      "advanced.wbCleanBlocklist": "Repair extension",
+      "advanced.wbCleanConfirm": "This will repair the kimi-webbridge extension. {browser} must be fully closed first. Have you quit {browser}?",
       "advanced.wbCleanRunning": "{browser} is still running. Please fully quit {browser} first.",
-      "advanced.wbCleanDone": "Blocklist cleared. Launch {browser} now to install the extension.",
-      "advanced.wbCleanNotBlocklisted": "Not in blocklist anymore (already cleaned).",
-      "advanced.wbCleanFailed": "Clean failed",
+      "advanced.wbCleanDone": "Repaired. Launch {browser} to complete the installation.",
+      "advanced.wbCleanNotBlocklisted": "Extension is healthy.",
+      "advanced.wbCleanFailed": "Repair failed",
+      "advanced.wbRepairTitle": "WebBridge needs setup",
+      "advanced.wbRepairDesc": "Before switching to WebBridge mode, the following must be installed:",
+      "advanced.wbRepairConfirm": "Repair & Enable",
+      "advanced.wbRepairing": "Installing components, please wait…",
+      "advanced.wbRepairFailed": "Repair failed",
+      "advanced.wbRepairBrowserRunning": "{browser} is still running. Please fully quit {browser} before retrying.",
+      "advanced.wbHealthBroken": "⚠ WebBridge needs repair",
+      "advanced.wbRepairItemBinary": "WebBridge plugin",
+      "advanced.wbRepairItemSkill": "AI runtime skill",
+      "advanced.wbRepairItemExtension": "Browser extension",
       "advanced.imessage": "iMessage channel",
       "advanced.launchAtLogin": "Launch at login",
       "advanced.cliCommand": "Terminal command",
@@ -686,9 +698,9 @@
       "advanced.browserChrome": "Chrome 扩展",
       "advanced.browserMode": "浏览器操作模式",
       "advanced.browserModeOpenclaw": "独立浏览器",
-      "advanced.browserModeChrome": "Chrome 拓展（高阶）",
+      "advanced.browserModeChrome": "Chrome 拓展",
       "advanced.browserModeWebbridge": "kimi-webbridge（推荐）",
-      "advanced.wbBinary": "webbridge 插件",
+      "advanced.wbBinary": "WebBridge 插件",
       "advanced.wbInstalled": "已是最新版",
       "advanced.wbNotInstalled": "未安装",
       "advanced.wbLoading": "加载中…",
@@ -705,16 +717,28 @@
       "advanced.wbUpToDate": "已是最新版本",
       "advanced.wbUpdated": "已更新到",
       "advanced.wbCheckFailed": "检查更新失败",
+      "advanced.wbDownloadNow": "下载 WebBridge",
+      "advanced.wbReconfigureSingle": "配置扩展",
       "advanced.wbConfiguring": "正在配置浏览器扩展…",
       "advanced.wbConfigured": "浏览器扩展配置完成",
       "advanced.wbConfigFailed": "配置失败",
-      "advanced.wbExtBlocklisted": "已被你手动卸载（Chrome 静默忽略再装）",
-      "advanced.wbCleanBlocklist": "清理黑名单",
-      "advanced.wbCleanConfirm": "将修改 {browser} 的 Preferences 文件移除卸载黑名单。{browser} 必须完全退出。已经退出 {browser} 了吗？",
+      "advanced.wbExtBlocklisted": "插件需修复",
+      "advanced.wbCleanBlocklist": "修复插件",
+      "advanced.wbCleanConfirm": "将修复 kimi-webbridge 插件。{browser} 必须完全退出后才能修复。已经退出 {browser} 了吗？",
       "advanced.wbCleanRunning": "{browser} 仍在运行，请完全退出后再试。",
-      "advanced.wbCleanDone": "黑名单已清理。启动 {browser} 即可装扩展。",
-      "advanced.wbCleanNotBlocklisted": "已不在黑名单（之前清理过）。",
-      "advanced.wbCleanFailed": "清理失败",
+      "advanced.wbCleanDone": "已修复。启动 {browser} 完成安装。",
+      "advanced.wbCleanNotBlocklisted": "插件状态正常。",
+      "advanced.wbCleanFailed": "修复失败",
+      "advanced.wbRepairTitle": "WebBridge 需要修复",
+      "advanced.wbRepairDesc": "切换到 WebBridge 模式前需要先安装以下组件：",
+      "advanced.wbRepairConfirm": "修复并启用",
+      "advanced.wbRepairing": "正在安装组件，请稍候…",
+      "advanced.wbRepairFailed": "修复失败",
+      "advanced.wbRepairBrowserRunning": "{browser} 仍在运行；请先完全退出 {browser} 再点修复。",
+      "advanced.wbHealthBroken": "⚠ WebBridge 需要修复",
+      "advanced.wbRepairItemBinary": "WebBridge 插件",
+      "advanced.wbRepairItemSkill": "AI 运行时 skill",
+      "advanced.wbRepairItemExtension": "浏览器扩展",
       "advanced.imessage": "iMessage 频道",
       "advanced.launchAtLogin": "开机启动",
       "advanced.cliCommand": "终端命令",
@@ -3201,6 +3225,7 @@
       var mode = data.browserMode || data.browserProfile || "openclaw";
       var radio = document.querySelector('input[name="browserMode"][value="' + mode + '"]');
       if (radio) radio.checked = true;
+      lastValidBrowserMode = mode;
       // 回填 iMessage toggle
       els.imessageEnabled.checked = !!data.imessageEnabled;
       // 按平台能力展示并回填开机启动开关
@@ -3213,205 +3238,167 @@
     } finally {
       await loadCliStatus();
       attachWebbridgeRadioListeners();
-      await refreshWebbridgeCard();
+      refreshWebbridgeHealth();
     }
   }
 
-  // 绑定 browserMode radio 的切换事件（显示/隐藏 install card）；幂等
+  // 绑定 browserMode radio 切换事件：切到 webbridge 时跑 precheck，不通过弹修复 modal。
+  var lastValidBrowserMode = "openclaw"; // loadAdvancedConfig 会覆盖
+  var precheckInflight = false;
   var webbridgeRadioBound = false;
+  var lastPrecheckMissing = null; // 缓存最近一次 precheck 结果的 missing 对象，供 health link 点击复用
+
+  // 健康检查：当前 mode=webbridge 时主动跑 precheck，更新 radio 组下方的「⚠ 需要修复」链接
+  async function refreshWebbridgeHealth() {
+    var link = document.getElementById("webbridgeHealthLink");
+    if (!link) return;
+    var currentRadio = document.querySelector('input[name="browserMode"]:checked');
+    var isWebbridge = currentRadio && currentRadio.value === "webbridge";
+    if (!isWebbridge) {
+      link.classList.add("hidden");
+      lastPrecheckMissing = null;
+      return;
+    }
+    if (!window.oneclaw || typeof window.oneclaw.settingsWebbridgePrecheck !== "function") {
+      link.classList.add("hidden");
+      return;
+    }
+    try {
+      var pre = await window.oneclaw.settingsWebbridgePrecheck();
+      if (pre && pre.success && pre.data && pre.data.ok) {
+        link.classList.add("hidden");
+        lastPrecheckMissing = null;
+      } else if (pre && pre.success && pre.data) {
+        link.classList.remove("hidden");
+        lastPrecheckMissing = pre.data.missing;
+      } else {
+        link.classList.add("hidden");
+      }
+    } catch (err) {
+      link.classList.add("hidden");
+    }
+  }
   function attachWebbridgeRadioListeners() {
     if (webbridgeRadioBound) return;
     var radios = document.querySelectorAll('input[name="browserMode"]');
     radios.forEach(function (r) {
-      r.addEventListener("change", function () {
-        syncWebbridgeCardVisibility();
-        if (r.value === "webbridge" && r.checked) {
-          refreshWebbridgeCard();
+      r.addEventListener("change", async function () {
+        if (r.value !== "webbridge" || !r.checked) {
+          if (r.checked) lastValidBrowserMode = r.value;
+          refreshWebbridgeHealth(); // 切到非 webbridge → 隐藏 health link
+          return;
+        }
+        // 切到 webbridge：跑 precheck，三项全过才接受
+        if (precheckInflight) return;
+        if (!window.oneclaw || typeof window.oneclaw.settingsWebbridgePrecheck !== "function") {
+          lastValidBrowserMode = "webbridge";
+          refreshWebbridgeHealth();
+          return;
+        }
+        precheckInflight = true;
+        try {
+          var pre = await window.oneclaw.settingsWebbridgePrecheck();
+          if (pre && pre.success && pre.data && pre.data.ok) {
+            lastValidBrowserMode = "webbridge";
+          } else if (pre && pre.success && pre.data) {
+            revertBrowserModeRadio(lastValidBrowserMode);
+            showRepairModal(pre.data.missing);
+          } else {
+            revertBrowserModeRadio(lastValidBrowserMode);
+            showAdvMsg((pre && pre.message) || "Precheck failed", "error");
+          }
+        } catch (err) {
+          revertBrowserModeRadio(lastValidBrowserMode);
+          showAdvMsg(t("error.connection") + (err.message || ""), "error");
+        } finally {
+          precheckInflight = false;
+          refreshWebbridgeHealth();
         }
       });
     });
-    syncWebbridgeCardVisibility();
     webbridgeRadioBound = true;
   }
 
-  function syncWebbridgeCardVisibility() {
-    var card = document.getElementById("webbridgeCard");
-    if (!card) return;
-    var selected = document.querySelector('input[name="browserMode"]:checked');
-    var show = selected && selected.value === "webbridge";
-    card.classList.toggle("hidden", !show);
+  function revertBrowserModeRadio(mode) {
+    var radio = document.querySelector('input[name="browserMode"][value="' + mode + '"]');
+    if (radio) radio.checked = true;
   }
 
-  async function refreshWebbridgeCard() {
-    var card = document.getElementById("webbridgeCard");
-    if (!card || card.classList.contains("hidden")) return;
-    if (!window.oneclaw || typeof window.oneclaw.settingsWebbridgeStatus !== "function") {
-      return;
+  function showRepairModal(missing) {
+    var modal = document.getElementById("webbridgeRepairModal");
+    var list = document.getElementById("wbRepairList");
+    var msg = document.getElementById("wbRepairMsg");
+    if (!modal || !list) return;
+    list.innerHTML = "";
+    var items = [
+      { key: "binary", labelKey: "advanced.wbRepairItemBinary" },
+      { key: "skill", labelKey: "advanced.wbRepairItemSkill" },
+      { key: "extension", labelKey: "advanced.wbRepairItemExtension" },
+    ];
+    items.forEach(function (it) {
+      var li = document.createElement("li");
+      li.className = "wb-repair-item " + (missing[it.key] ? "missing" : "ok");
+      li.textContent = (missing[it.key] ? "✗ " : "✓ ") + t(it.labelKey);
+      list.appendChild(li);
+    });
+    if (msg) {
+      msg.classList.add("hidden");
+      msg.textContent = "";
+      msg.className = "wb-modal-msg hidden";
+    }
+    modal.classList.remove("hidden");
+  }
+
+  function hideRepairModal() {
+    var modal = document.getElementById("webbridgeRepairModal");
+    if (modal) modal.classList.add("hidden");
+  }
+
+  async function handleWbRepairConfirm() {
+    var btn = document.getElementById("wbRepairConfirm");
+    var msg = document.getElementById("wbRepairMsg");
+    if (!btn || !window.oneclaw || typeof window.oneclaw.settingsWebbridgeRepairAndEnable !== "function") return;
+    btn.disabled = true;
+    if (msg) {
+      msg.textContent = t("advanced.wbRepairing");
+      msg.className = "wb-modal-msg info";
+      msg.classList.remove("hidden");
     }
     try {
-      var res = await window.oneclaw.settingsWebbridgeStatus();
-      if (!res || !res.success || !res.data) return;
-      renderWebbridgeStatus(res.data);
-    } catch (err) {
-      console.error("[Settings] webbridge status load failed:", err);
-    }
-  }
-
-  function renderWebbridgeStatus(data) {
-    var statusText = document.getElementById("wbStatusText");
-    if (statusText) {
-      statusText.textContent = data.installed
-        ? t("advanced.wbInstalled")
-        : t("advanced.wbNotInstalled");
-      statusText.className = "wb-status-text " + (data.installed ? "ok" : "warn");
-    }
-
-    var list = document.getElementById("wbBrowserList");
-    if (list) {
-      list.innerHTML = "";
-      (data.browsers || []).forEach(function (row) {
-        if (!row.installed) return;
-        var div = document.createElement("div");
-        div.className = "wb-browser-row";
-
-        var name = document.createElement("span");
-        name.className = "wb-browser-name";
-        name.textContent = row.browserName;
-        div.appendChild(name);
-
-        var badge = document.createElement("span");
-        // blocklisted 优先于 configured：JSON 写好了但被黑名单阻断时，Chrome 实际啥也没装，
-        // 此时显示「已配置」会误导用户；阻断状态才是真实情况。
-        if (row.blocklisted) {
-          badge.className = "wb-status-badge warn wb-blocklist-warn";
-          badge.textContent = "⚠ " + t("advanced.wbExtBlocklisted");
-        } else if (row.configured) {
-          badge.className = "wb-status-badge ok";
-          badge.textContent = t("advanced.wbExtConfigured");
-        } else {
-          badge.className = "wb-status-badge warn";
-          badge.textContent = t("advanced.wbExtNotConfigured");
-        }
-        div.appendChild(badge);
-
-        if (row.blocklisted) {
-          var btn = document.createElement("button");
-          btn.type = "button";
-          btn.className = "wb-cleanup-btn";
-          btn.textContent = t("advanced.wbCleanBlocklist");
-          btn.addEventListener("click", function () {
-            handleCleanBlocklist(row.browserId, row.browserName);
-          });
-          div.appendChild(btn);
-        }
-
-        list.appendChild(div);
-      });
-    }
-
-    var btnExt = document.getElementById("btnWbReconfigureExt");
-    if (btnExt) {
-      btnExt.disabled = !data.extensionId;
-      btnExt.title = data.extensionId ? "" : t("advanced.wbNoExtId");
-    }
-  }
-
-  function showWebbridgeMsg(msg, type) {
-    var box = document.getElementById("wbMsg");
-    if (!box) return;
-    box.textContent = msg;
-    box.className = "wb-msg " + (type || "");
-    box.classList.remove("hidden");
-  }
-
-  function hideWebbridgeMsg() {
-    var box = document.getElementById("wbMsg");
-    if (box) box.classList.add("hidden");
-  }
-
-  async function handleWbRetryDownload() {
-    hideWebbridgeMsg();
-    if (!window.oneclaw || typeof window.oneclaw.settingsWebbridgeRetryDownload !== "function") return;
-    try {
-      showWebbridgeMsg(t("advanced.wbDownloading"), "info");
-      var res = await window.oneclaw.settingsWebbridgeRetryDownload();
+      var res = await window.oneclaw.settingsWebbridgeRepairAndEnable();
       if (res && res.success) {
-        showWebbridgeMsg(t("advanced.wbDownloadDone"), "success");
-        await refreshWebbridgeCard();
-      } else {
-        showWebbridgeMsg((res && res.message) || t("advanced.wbDownloadFailed"), "error");
-      }
-    } catch (err) {
-      showWebbridgeMsg(t("error.connection") + (err.message || ""), "error");
-    }
-  }
-
-  async function handleWbCheckUpdate() {
-    hideWebbridgeMsg();
-    if (!window.oneclaw || typeof window.oneclaw.settingsWebbridgeCheckUpdate !== "function") return;
-    try {
-      showWebbridgeMsg(t("advanced.wbChecking"), "info");
-      var res = await window.oneclaw.settingsWebbridgeCheckUpdate();
-      if (res && res.success && res.data) {
-        if (res.data.upToDate) {
-          showWebbridgeMsg(t("advanced.wbUpToDate"), "success");
-        } else {
-          showWebbridgeMsg(t("advanced.wbUpdated") + " v" + (res.data.version || ""), "success");
-          await refreshWebbridgeCard();
-        }
-      } else {
-        showWebbridgeMsg((res && res.message) || t("advanced.wbCheckFailed"), "error");
-      }
-    } catch (err) {
-      showWebbridgeMsg(t("error.connection") + (err.message || ""), "error");
-    }
-  }
-
-  async function handleWbReconfigureExt() {
-    hideWebbridgeMsg();
-    if (!window.oneclaw || typeof window.oneclaw.settingsWebbridgeInstallExtensions !== "function") return;
-    try {
-      showWebbridgeMsg(t("advanced.wbConfiguring"), "info");
-      var res = await window.oneclaw.settingsWebbridgeInstallExtensions();
-      if (res && res.success) {
-        showWebbridgeMsg(t("advanced.wbConfigured"), "success");
-        await refreshWebbridgeCard();
-      } else {
-        showWebbridgeMsg((res && res.message) || t("advanced.wbConfigFailed"), "error");
-      }
-    } catch (err) {
-      showWebbridgeMsg(t("error.connection") + (err.message || ""), "error");
-    }
-  }
-
-  async function handleCleanBlocklist(browserId, browserName) {
-    hideWebbridgeMsg();
-    if (!window.oneclaw || typeof window.oneclaw.settingsWebbridgeCleanBlocklist !== "function") {
-      return;
-    }
-    var msg = t("advanced.wbCleanConfirm").replace(/{browser}/g, browserName);
-    if (!window.confirm(msg)) return;
-
-    try {
-      var res = await window.oneclaw.settingsWebbridgeCleanBlocklist(browserId);
-      if (res && res.success) {
-        if (res.code === "NOT_BLOCKLISTED") {
-          showWebbridgeMsg(t("advanced.wbCleanNotBlocklisted"), "info");
-        } else {
-          var doneMsg = t("advanced.wbCleanDone").replace(/{browser}/g, browserName);
-          showWebbridgeMsg(doneMsg, "success");
-        }
-        await refreshWebbridgeCard();
+        lastValidBrowserMode = "webbridge";
+        var wbRadio = document.querySelector('input[name="browserMode"][value="webbridge"]');
+        if (wbRadio) wbRadio.checked = true;
+        hideRepairModal();
+        refreshWebbridgeHealth();
       } else if (res && res.code === "BROWSER_RUNNING") {
-        var runMsg = t("advanced.wbCleanRunning").replace(/{browser}/g, browserName);
-        showWebbridgeMsg(runMsg, "error");
+        if (msg) {
+          var bn = res.browserName || "browser";
+          msg.textContent = t("advanced.wbRepairBrowserRunning").replace(/{browser}/g, bn);
+          msg.className = "wb-modal-msg error";
+          msg.classList.remove("hidden");
+        }
       } else {
-        showWebbridgeMsg(t("advanced.wbCleanFailed") + ": " + ((res && res.message) || ""), "error");
+        if (msg) {
+          msg.textContent = t("advanced.wbRepairFailed") + ": " + ((res && res.message) || "");
+          msg.className = "wb-modal-msg error";
+          msg.classList.remove("hidden");
+        }
       }
     } catch (err) {
-      showWebbridgeMsg(t("error.connection") + (err.message || ""), "error");
+      if (msg) {
+        msg.textContent = t("error.connection") + (err.message || "");
+        msg.className = "wb-modal-msg error";
+        msg.classList.remove("hidden");
+      }
+    } finally {
+      btn.disabled = false;
     }
   }
+
+  // WebBridge 状态卡已删除（极简 UI 原则）。
+  // 切换前 precheck + 修复 modal 是 webbridge 模式的唯一可见交互。
 
   // 同步开关状态到 CLI 偏好，操作中禁用开关。
   function renderCliControls() {
@@ -3513,6 +3500,10 @@
       setAdvSaving(false);
       if (result.success) {
         showToast(t("common.saved"));
+      } else if (result.code === "WEBBRIDGE_PRECHECK_FAILED" && result.missing) {
+        // 服务端兜底拦下：还原 radio + 弹修复 modal
+        revertBrowserModeRadio(lastValidBrowserMode);
+        showRepairModal(result.missing);
       } else {
         showAdvMsg(result.message || "Save failed", "error");
       }
@@ -5169,13 +5160,24 @@
       els.cliEnabled.addEventListener("change", handleCliToggle);
     }
 
-    // Advanced → WebBridge install card
-    var btnWbRetry = document.getElementById("btnWbRetryDownload");
-    if (btnWbRetry) btnWbRetry.addEventListener("click", handleWbRetryDownload);
-    var btnWbCheck = document.getElementById("btnWbCheckUpdate");
-    if (btnWbCheck) btnWbCheck.addEventListener("click", handleWbCheckUpdate);
-    var btnWbExt = document.getElementById("btnWbReconfigureExt");
-    if (btnWbExt) btnWbExt.addEventListener("click", handleWbReconfigureExt);
+    // Advanced → WebBridge 切换前 RepairModal 按钮
+    var btnRepairCancel = document.getElementById("wbRepairCancel");
+    if (btnRepairCancel) btnRepairCancel.addEventListener("click", hideRepairModal);
+    var btnRepairConfirm = document.getElementById("wbRepairConfirm");
+    if (btnRepairConfirm) btnRepairConfirm.addEventListener("click", handleWbRepairConfirm);
+
+    // Advanced → WebBridge 健康状态链接（仅 mode=webbridge 且 precheck fail 时显示）
+    var healthLink = document.getElementById("webbridgeHealthLink");
+    if (healthLink) {
+      healthLink.addEventListener("click", function (e) {
+        e.preventDefault();
+        // 用缓存的 missing 先显示；然后再跑一次 precheck 刷新准确性（防止缓存过期）
+        if (lastPrecheckMissing) showRepairModal(lastPrecheckMissing);
+        refreshWebbridgeHealth().then(function () {
+          if (lastPrecheckMissing) showRepairModal(lastPrecheckMissing);
+        });
+      });
+    }
 
     // Appearance
     els.btnAppearanceSave.addEventListener("click", handleAppearanceSave);

@@ -19,7 +19,6 @@ import {
 } from "./browser-mode-config";
 import {
   installWebbridge,
-  checkForUpdate,
   readCacheManifest,
 } from "./webbridge-installer";
 import {
@@ -28,10 +27,16 @@ import {
   isExtensionBlocklisted,
   cleanExtensionBlocklist,
 } from "./browser-extension-installer";
-import { BROWSER_TARGETS } from "./browser-detector";
-import { isBrowserProcessRunning } from "./browser-process-detector";
+import { BROWSER_TARGETS, isBrowserInstalled } from "./browser-detector";
+import {
+  isBrowserProcessRunning,
+  DEFAULT_PROCESS_EXEC,
+} from "./browser-process-detector";
 import { readBuildConfigWebbridgeExtensionId } from "./build-config";
 import { getWebbridgeInstallState } from "./webbridge-status";
+import { getWebbridgePrecheck } from "./webbridge-precheck";
+import { runWebbridgeSetupTask } from "./webbridge-setup-task";
+import { installWebbridgeSkill } from "./webbridge-skill-installer";
 import { resolveOneclawConfigPath } from "./oneclaw-config";
 import {
   getConfigRecoveryData,
@@ -109,6 +114,7 @@ import { callGatewayRpc } from "./gateway-rpc";
 import { getLaunchAtLoginState, setLaunchAtLoginEnabled } from "./launch-at-login";
 import { installCli, uninstallCli, getCliStatus } from "./cli-integration";
 import * as analytics from "./analytics";
+import * as log from "./logger";
 import * as path from "path";
 import * as fs from "fs";
 
@@ -1570,6 +1576,24 @@ export function registerSettingsIpc(opts: SettingsIpcOptions = {}): void {
 
           // 优先 browserMode（新前端）；回退 browserProfile（老前端兼容）
           if (isBrowserMode(browserMode)) {
+            // webbridge 模式服务端兜底：三项都过才能切（防前端被绕过 / 条件在选中到保存之间变化）
+            if (browserMode === "webbridge") {
+              const pre = await getWebbridgePrecheck({
+                binaryPath: resolveWebbridgeBinaryPath(),
+                extensionId: readBuildConfigWebbridgeExtensionId(),
+                fileExists: fs.existsSync,
+                readExtensionStates: (extId) =>
+                getExtensionStates(extId, { processExec: DEFAULT_PROCESS_EXEC }),
+              });
+              if (!pre.ok) {
+                return {
+                  success: false,
+                  code: "WEBBRIDGE_PRECHECK_FAILED",
+                  missing: pre.missing,
+                  message: "WebBridge 条件未满足；请先点[修复并启用]",
+                };
+              }
+            }
             Object.assign(config, applyBrowserModeConfig(config, browserMode));
           } else if (typeof browserProfile === "string" && browserProfile) {
             config.browser ??= {};
@@ -1615,7 +1639,8 @@ export function registerSettingsIpc(opts: SettingsIpcOptions = {}): void {
         dataDir: resolveWebbridgeDataDir(),
         fileExists: fs.existsSync,
         readManifest: readCacheManifest,
-        readExtensionStates: (extId) => getExtensionStates(extId),
+        readExtensionStates: (extId) =>
+                getExtensionStates(extId, { processExec: DEFAULT_PROCESS_EXEC }),
         extensionId: readBuildConfigWebbridgeExtensionId(),
       });
       return { success: true, data: state };
@@ -1624,43 +1649,84 @@ export function registerSettingsIpc(opts: SettingsIpcOptions = {}): void {
     }
   });
 
-  // ── 重新下载 WebBridge 二进制（force=true 覆盖 cache） ──
-  ipcMain.handle("settings:webbridge-retry-download", async () => {
+  // ── WebBridge 切换前置 precheck（read-only；binary/skill/extension 三项） ──
+  ipcMain.handle("settings:webbridge-precheck", async () => {
     try {
-      const result = await installWebbridge({ force: true });
-      return {
-        success: true,
-        data: {
-          installed: result.installed,
-          skipped: result.skipped,
-          version: result.version,
-          binaryPath: result.binaryPath,
-          etag: result.etag,
-        },
-      };
+      const result = await getWebbridgePrecheck({
+        binaryPath: resolveWebbridgeBinaryPath(),
+        extensionId: readBuildConfigWebbridgeExtensionId(),
+        fileExists: fs.existsSync,
+        readExtensionStates: (extId) =>
+                getExtensionStates(extId, { processExec: DEFAULT_PROCESS_EXEC }),
+      });
+      return { success: true, data: result };
     } catch (err: any) {
       return { success: false, message: err.message || String(err) };
     }
   });
 
-  // ── 检查更新（HEAD + ETag 对比；发现新版自动下载） ──
-  ipcMain.handle("settings:webbridge-check-update", async () => {
+  // ── WebBridge 修复并启用：先清浏览器黑名单 → 跑 install 流程 → 三项全过才写 config + 重启 gateway ──
+  ipcMain.handle("settings:webbridge-repair-and-enable", async () => {
     try {
-      const dataDir = resolveWebbridgeDataDir();
-      const head = await checkForUpdate({ dataDir });
-      if (head.upToDate) {
-        return { success: true, data: { upToDate: true, updated: false } };
+      const extId = readBuildConfigWebbridgeExtensionId();
+
+      // Pre-step 1：任何检测到的已装浏览器在跑 → 直接拒绝。
+      // 原因：① 清 blocklist 写 Preferences，浏览器在跑会被内存覆盖
+      //      ② 写 External Extensions JSON 后 Chrome 不重启不读
+      //      ③ precheck 的 presentInChrome 读 Secure Preferences，Chrome 不重启不刷
+      // 上面三点都要求浏览器完全退出，否则 repair "成功" 也无法验证 + 用户看不到效果。
+      for (const target of BROWSER_TARGETS) {
+        if (!isBrowserInstalled(target)) continue;
+        if (await isBrowserProcessRunning(target)) {
+          return {
+            success: false,
+            code: "BROWSER_RUNNING",
+            browserName: target.name,
+            message: `${target.name} 正在运行；请先完全退出 ${target.name} 后再点修复。`,
+          };
+        }
       }
-      const install = await installWebbridge({ force: true });
-      return {
-        success: true,
-        data: {
-          upToDate: false,
-          updated: install.installed,
-          version: install.version,
-          etag: install.etag,
+
+      // Pre-step 2：用户从 Chrome UI 卸过扩展会进 Preferences.extensions.external_uninstalls
+      // 黑名单，之后写 External Extensions JSON 静默无效。这里清掉。
+      if (extId) {
+        for (const target of BROWSER_TARGETS) {
+          if (!isBrowserInstalled(target)) continue;
+          if (!(await isExtensionBlocklisted(target, extId))) continue;
+          const cleanResult = await cleanExtensionBlocklist(target, extId);
+          log.info(
+            `[webbridge-repair] ${target.name} blocklist cleanup: ${cleanResult}`,
+          );
+        }
+      }
+
+      const summary = await runWebbridgeSetupTask({
+        installer: () => installWebbridge({ force: false }),
+        installExtensions: (extId) => installForAllDetectedBrowsers(extId),
+        readConfig: readUserConfig,
+        writeConfig: writeUserConfig, // fallbackOnFailure:false 下不会被调
+        applyMode: applyBrowserModeConfig,
+        extensionId: extId,
+        installSkill: (bp) => installWebbridgeSkill(bp),
+        fallbackOnFailure: false,
+        logger: {
+          info: (m) => log.info(m),
+          error: (m) => log.error(m),
         },
-      };
+      });
+      if (summary.outcome !== "webbridge-ready") {
+        return {
+          success: false,
+          code: "REPAIR_FAILED",
+          message: summary.error ?? "unknown",
+          summary,
+        };
+      }
+      // 三项全过 → 写 webbridge config + 重启 gateway
+      const config = readUserConfig();
+      Object.assign(config, applyBrowserModeConfig(config, "webbridge"));
+      writeUserConfigAndRestart(config);
+      return { success: true, data: summary };
     } catch (err: any) {
       return { success: false, message: err.message || String(err) };
     }

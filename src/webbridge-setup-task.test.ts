@@ -70,23 +70,46 @@ test("runWebbridgeSetupTask 下载成功 + extId 非空 → webbridge-ready + in
   );
 });
 
-test("runWebbridgeSetupTask 下载成功 + extId 空 → extension-skipped + installSkill 依然被调", async () => {
-  let extensionsCalled = false;
+test("runWebbridgeSetupTask 下载成功 + extId 空 → fell-back-to-openclaw + 改写 config（严格）", async () => {
   const skill = trackSkillInstall();
-  const deps = makeDeps({
-    extensionId: "",
+  const counter = trackCalls();
+  const writes: any[] = [];
+  const applyModeCalls: string[] = [];
+  let extensionsCalled = false;
+  const deps: WebbridgeSetupTaskDeps = {
+    installer: async () => ({
+      installed: true,
+      skipped: false,
+      version: "1.0.0",
+      binaryPath: "/fake/bin/kimi-webbridge",
+      etag: "W/fake",
+    }),
     installExtensions: async () => {
       extensionsCalled = true;
       return [];
     },
+    readConfig: () => ({}),
+    writeConfig: (c) => {
+      writes.push(c);
+    },
+    applyMode: (c, mode) => {
+      applyModeCalls.push(mode);
+      return { ...c, _mode: mode };
+    },
+    extensionId: "",
+    onConfigRewritten: counter.inc,
     installSkill: skill.fake,
-  });
+    logger: { info: () => {}, error: () => {} },
+  };
   const summary = await runWebbridgeSetupTask(deps);
-  assert.equal(summary.outcome, "extension-skipped");
-  assert.equal(summary.webbridgeInstalled, true);
-  assert.equal(summary.extensionSummary, null);
+  assert.equal(summary.outcome, "fell-back-to-openclaw");
+  assert.equal(summary.webbridgeInstalled, false);
   assert.equal(extensionsCalled, false, "extId 空时不该调 installExtensions");
-  assert.equal(skill.calls.length, 1, "extId 空也得装 skill（binary 已就绪）");
+  assert.equal(skill.calls.length, 1, "skill 阶段在 extensionId 检查之前 → 仍被调一次");
+  assert.equal(counter.get(), 1, "onConfigRewritten 被调一次（降级通知）");
+  assert.deepEqual(applyModeCalls, ["openclaw"]);
+  assert.equal(writes.length, 1);
+  assert.equal(writes[0]._mode, "openclaw");
 });
 
 test("runWebbridgeSetupTask 下载失败 → fell-back-to-openclaw + 改写 config + 通知 + installSkill 不被调", async () => {
@@ -144,17 +167,40 @@ test("runWebbridgeSetupTask 下载失败 + 未提供 onConfigRewritten → 不�
   assert.equal(summary.outcome, "fell-back-to-openclaw");
 });
 
-test("runWebbridgeSetupTask 下载成功但 extension 安装抛错 → webbridge-ready + error", async () => {
-  const deps = makeDeps({
+test("runWebbridgeSetupTask 下载成功但 extension 安装抛错 → fell-back-to-openclaw + error（严格）", async () => {
+  const counter = trackCalls();
+  const writes: any[] = [];
+  const applyModeCalls: string[] = [];
+  const deps: WebbridgeSetupTaskDeps = {
+    installer: async () => ({
+      installed: true,
+      skipped: false,
+      version: "1.0.0",
+      binaryPath: "/fake/bin/kimi-webbridge",
+      etag: "W/fake",
+    }),
     installExtensions: async () => {
       throw new Error("reg access denied");
     },
-  });
+    readConfig: () => ({}),
+    writeConfig: (c) => writes.push(c),
+    applyMode: (c, mode) => {
+      applyModeCalls.push(mode);
+      return { ...c, _mode: mode };
+    },
+    extensionId: "abcdef0123456789abcdef0123456789",
+    onConfigRewritten: counter.inc,
+    installSkill: async () => ({ success: true, output: "✓ fake" }),
+    logger: { info: () => {}, error: () => {} },
+  };
   const summary = await runWebbridgeSetupTask(deps);
-  assert.equal(summary.outcome, "webbridge-ready");
-  assert.equal(summary.webbridgeInstalled, true);
+  assert.equal(summary.outcome, "fell-back-to-openclaw");
+  assert.equal(summary.webbridgeInstalled, false);
   assert.equal(summary.extensionSummary, null);
   assert.match(summary.error ?? "", /reg access denied/);
+  assert.equal(counter.get(), 1);
+  assert.deepEqual(applyModeCalls, ["openclaw"]);
+  assert.equal(writes.length, 1);
 });
 
 test("runWebbridgeSetupTask installer 返 skipped（cache 命中）→ webbridge-ready", async () => {
@@ -173,28 +219,157 @@ test("runWebbridgeSetupTask installer 返 skipped（cache 命中）→ webbridge
   assert.equal(summary.binaryPath, "/fake/bin");
 });
 
-test("runWebbridgeSetupTask installSkill 抛错 → outcome 不降级 + 不改 summary.error", async () => {
-  const deps = makeDeps({
+test("runWebbridgeSetupTask installSkill 抛错 → fell-back-to-openclaw（严格）", async () => {
+  const counter = trackCalls();
+  const writes: any[] = [];
+  const applyModeCalls: string[] = [];
+  const deps: WebbridgeSetupTaskDeps = {
+    installer: async () => ({
+      installed: true,
+      skipped: false,
+      version: "1.0.0",
+      binaryPath: "/fake/bin/kimi-webbridge",
+      etag: "W/fake",
+    }),
+    installExtensions: async () => [
+      { browserId: "chrome", browserName: "Chrome", result: "installed" },
+    ],
+    readConfig: () => ({}),
+    writeConfig: (c) => writes.push(c),
+    applyMode: (c, mode) => {
+      applyModeCalls.push(mode);
+      return { ...c, _mode: mode };
+    },
+    extensionId: "abcdef0123456789abcdef0123456789",
+    onConfigRewritten: counter.inc,
     installSkill: async () => {
       throw new Error("skill write fail");
     },
-  });
+    logger: { info: () => {}, error: () => {} },
+  };
   const summary = await runWebbridgeSetupTask(deps);
-  assert.equal(summary.outcome, "webbridge-ready", "skill 失败不阻断主流程");
-  assert.equal(summary.webbridgeInstalled, true);
-  assert.equal(summary.error, undefined, "skill 错误不写进 summary.error");
-  assert.ok(summary.extensionSummary, "主流程继续到 installExtensions");
+  assert.equal(summary.outcome, "fell-back-to-openclaw");
+  assert.equal(summary.webbridgeInstalled, false);
+  assert.match(summary.error ?? "", /skill write fail/);
+  assert.equal(counter.get(), 1);
+  assert.deepEqual(applyModeCalls, ["openclaw"]);
 });
 
-test("runWebbridgeSetupTask installSkill 返 success=false → outcome 不降级", async () => {
-  const deps = makeDeps({
+test("runWebbridgeSetupTask installSkill 返 success=false → fell-back-to-openclaw（严格）", async () => {
+  const counter = trackCalls();
+  const writes: any[] = [];
+  const applyModeCalls: string[] = [];
+  const deps: WebbridgeSetupTaskDeps = {
+    installer: async () => ({
+      installed: true,
+      skipped: false,
+      version: "1.0.0",
+      binaryPath: "/fake/bin/kimi-webbridge",
+      etag: "W/fake",
+    }),
+    installExtensions: async () => [
+      { browserId: "chrome", browserName: "Chrome", result: "installed" },
+    ],
+    readConfig: () => ({}),
+    writeConfig: (c) => writes.push(c),
+    applyMode: (c, mode) => {
+      applyModeCalls.push(mode);
+      return { ...c, _mode: mode };
+    },
+    extensionId: "abcdef0123456789abcdef0123456789",
+    onConfigRewritten: counter.inc,
     installSkill: async () => ({
       success: false,
       output: "",
       error: "partial failure",
     }),
-  });
+    logger: { info: () => {}, error: () => {} },
+  };
+  const summary = await runWebbridgeSetupTask(deps);
+  assert.equal(summary.outcome, "fell-back-to-openclaw");
+  assert.equal(summary.webbridgeInstalled, false);
+  assert.match(summary.error ?? "", /partial failure/);
+  assert.equal(counter.get(), 1);
+  assert.deepEqual(applyModeCalls, ["openclaw"]);
+});
+
+// ===== fallbackOnFailure:false 路径（Settings repair 用） =====
+
+test("fallbackOnFailure:false + 下载失败 → outcome=fell-back-to-openclaw，但不改 config、不通知", async () => {
+  const counter = trackCalls();
+  const writes: any[] = [];
+  const deps: WebbridgeSetupTaskDeps = {
+    installer: async () => {
+      throw new Error("net");
+    },
+    installExtensions: async () => [],
+    readConfig: () => ({}),
+    writeConfig: (c) => writes.push(c),
+    applyMode: (c, mode) => ({ ...c, _mode: mode }),
+    extensionId: "abcdef0123456789abcdef0123456789",
+    onConfigRewritten: counter.inc,
+    installSkill: async () => ({ success: true, output: "" }),
+    fallbackOnFailure: false,
+    logger: { info: () => {}, error: () => {} },
+  };
+  const summary = await runWebbridgeSetupTask(deps);
+  assert.equal(summary.outcome, "fell-back-to-openclaw");
+  assert.equal(writes.length, 0, "关键：不写 config");
+  assert.equal(counter.get(), 0, "不触发 onConfigRewritten");
+});
+
+test("fallbackOnFailure:false + skill 失败 → 不改 config", async () => {
+  const writes: any[] = [];
+  const deps: WebbridgeSetupTaskDeps = {
+    installer: async () => ({
+      installed: true,
+      skipped: false,
+      version: "1",
+      binaryPath: "/x",
+      etag: null,
+    }),
+    installExtensions: async () => [
+      { browserId: "chrome", browserName: "Chrome", result: "installed" },
+    ],
+    readConfig: () => ({}),
+    writeConfig: (c) => writes.push(c),
+    applyMode: (c) => c,
+    extensionId: "abcdef0123456789abcdef0123456789",
+    installSkill: async () => ({
+      success: false,
+      output: "",
+      error: "boom",
+    }),
+    fallbackOnFailure: false,
+    logger: { info: () => {}, error: () => {} },
+  };
+  const summary = await runWebbridgeSetupTask(deps);
+  assert.equal(summary.outcome, "fell-back-to-openclaw");
+  assert.equal(writes.length, 0);
+});
+
+test("fallbackOnFailure:false + 全 OK → outcome=webbridge-ready，仍不写 config（调用方职责）", async () => {
+  const writes: any[] = [];
+  const deps: WebbridgeSetupTaskDeps = {
+    installer: async () => ({
+      installed: true,
+      skipped: false,
+      version: "1",
+      binaryPath: "/x",
+      etag: null,
+    }),
+    installExtensions: async () => [
+      { browserId: "chrome", browserName: "Chrome", result: "installed" },
+    ],
+    readConfig: () => ({}),
+    writeConfig: (c) => writes.push(c),
+    applyMode: (c) => c,
+    extensionId: "abcdef0123456789abcdef0123456789",
+    installSkill: async () => ({ success: true, output: "" }),
+    fallbackOnFailure: false,
+    logger: { info: () => {}, error: () => {} },
+  };
   const summary = await runWebbridgeSetupTask(deps);
   assert.equal(summary.outcome, "webbridge-ready");
-  assert.equal(summary.error, undefined);
+  assert.equal(writes.length, 0, "webbridge-ready 路径也不写 config（留给调用方）");
 });
