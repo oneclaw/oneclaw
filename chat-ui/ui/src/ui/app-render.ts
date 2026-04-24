@@ -1014,48 +1014,6 @@ function updateFileDropState(state: AppViewState) {
   (window as any).__oneclawFileDropState?.update(state);
 }
 
-// 在聊天页顶部展示待审批卡片，把“去设置里找批准”改成主流程内的一步动作。
-function renderPairingNotice(state: AppViewState) {
-  if (!state.shouldShowPairingNotice()) {
-    return nothing;
-  }
-  const first = state.pairingState.requests[0];
-  const peerLabel = first?.name?.trim() || first?.id?.trim() || t("pairing.pendingUnknown");
-  const channelLabel = state.getPendingPairingChannelLabel();
-  return html`
-    <section class="oneclaw-pairing-notice">
-      <div class="oneclaw-pairing-notice__main">
-        <div class="oneclaw-pairing-notice__title">${t("pairing.pendingTitle").replace("{channel}", channelLabel)}</div>
-        <div class="oneclaw-pairing-notice__desc">
-          ${t("pairing.pendingDesc").replace("{name}", peerLabel)}
-        </div>
-      </div>
-      <div class="oneclaw-pairing-notice__actions">
-        <button
-          class="oneclaw-pairing-notice__icon-btn is-approve"
-          type="button"
-          ?disabled=${state.pairingApproving || state.pairingRejecting}
-          data-tooltip=${t("pairing.approveNow")}
-          aria-label=${t("pairing.approveNow")}
-          @click=${() => void state.approveFirstPairing()}
-        >
-          ${icons.check}
-        </button>
-        <button
-          class="oneclaw-pairing-notice__icon-btn is-reject"
-          type="button"
-          ?disabled=${state.pairingApproving || state.pairingRejecting}
-          data-tooltip=${t("pairing.rejectNow")}
-          aria-label=${t("pairing.rejectNow")}
-          @click=${() => void state.rejectFirstPairing()}
-        >
-          ${icons.x}
-        </button>
-      </div>
-    </section>
-  `;
-}
-
 export function renderApp(state: AppViewState) {
   ensureFileDropBridge(state);
   updateFileDropState(state);
@@ -1118,10 +1076,7 @@ export function renderApp(state: AppViewState) {
             settingsBadge: !localStorage.getItem("oneclaw:weixin-badge-seen"),
             onOpenSettings: () => {
               localStorage.setItem("oneclaw:weixin-badge-seen", "1");
-              openSettingsView(
-                state,
-                state.pairingState.pendingCount > 0 ? "channels" : null,
-              );
+              openSettingsView(state, null);
             },
             onOpenSkillStore: () => openSkillsView(state),
             onOpenWorkspace: () => openWorkspaceView(state),
@@ -1196,7 +1151,6 @@ export function renderApp(state: AppViewState) {
         </div>
 
         <main class="oneclaw-content">
-          ${renderPairingNotice(state)}
           ${setupActive
             ? renderSetupView(state)
             : settingsActive

@@ -6,22 +6,10 @@ import { WindowManager } from "./window";
 import { TrayManager } from "./tray";
 // SetupManager removed: Setup is now a Lit view inside the main window
 import { registerSetupIpc } from "./setup-ipc";
-import {
-  approveFeishuPairingRequest,
-  approveWecomPairingRequest,
-  closeFeishuFirstPairingWindow,
-  consumeFeishuFirstPairingWindow,
-  getFeishuPairingModeState,
-  getWecomPairingModeState,
-  isFeishuFirstPairingWindowActive,
-  listFeishuPairingRequests,
-  listWecomPairingRequests,
-  registerSettingsIpc,
-} from "./settings-ipc";
+import { registerSettingsIpc } from "./settings-ipc";
 import { registerSkillStoreIpc } from "./skill-store";
 import { registerWorkspaceIpc } from "./workspace-ipc";
 import { registerFeedbackIpc } from "./feedback-ipc";
-import { ChannelPairingMonitor } from "./channel-pairing-monitor";
 import {
   setupAutoUpdater,
   checkForUpdates,
@@ -125,13 +113,11 @@ process.on("unhandledRejection", (reason) => {
 // ── 核心组件 ──
 
 const appStartTime = Date.now();
-let pairingMonitor: ChannelPairingMonitor | null = null;
 const gateway = new GatewayProcess({
   port: resolveGatewayPort(),
   token: resolveGatewayAuthToken({ persist: false }),
   onStateChange: (state) => {
     tray.updateMenu();
-    pairingMonitor?.triggerNow();
     // gateway 就绪后立即通知 Chat UI 重连，避免盲等指数退避
     if (state === "running") {
       for (const w of BrowserWindow.getAllWindows()) {
@@ -143,41 +129,6 @@ const gateway = new GatewayProcess({
 const windowManager = new WindowManager();
 const tray = new TrayManager();
 // Setup view state tracked via windowManager.inSetupView (set by IPC from renderer)
-
-// 应用前台判定：任一窗口拿到系统焦点即视为前台；否则视为后台。
-function isAppInForeground(): boolean {
-  return BrowserWindow.getAllWindows().some(
-    (w) => !w.isDestroyed() && w.isFocused(),
-  );
-}
-
-pairingMonitor = new ChannelPairingMonitor({
-  gateway,
-  isAppInForeground,
-  adapters: [
-    {
-      channel: "feishu",
-      getModeState: () => getFeishuPairingModeState(),
-      listRequests: () => listFeishuPairingRequests(),
-      approveRequest: (params) => approveFeishuPairingRequest(params),
-      autoApproveFirst: {
-        isActive: () => isFeishuFirstPairingWindowActive(),
-        consume: (userId) => consumeFeishuFirstPairingWindow(userId),
-        reset: () => closeFeishuFirstPairingWindow(),
-      },
-      onInactive: () => closeFeishuFirstPairingWindow(),
-    },
-    {
-      channel: "wecom",
-      getModeState: () => getWecomPairingModeState(),
-      listRequests: () => listWecomPairingRequests(),
-      approveRequest: (params) => approveWecomPairingRequest(params),
-    },
-  ],
-  onStateChange: (state) => {
-    windowManager.pushPairingState(state);
-  },
-});
 
 // ── 显示主窗口的统一入口 ──
 
@@ -614,8 +565,6 @@ ipcMain.on("app:quit", () => app.quit());
 ipcMain.on("app:check-updates", () => checkForUpdates(true));
 ipcMain.handle("app:get-update-state", () => getUpdateBannerState());
 ipcMain.handle("app:download-and-install-update", () => downloadAndInstallUpdate());
-ipcMain.handle("app:get-pairing-state", () => pairingMonitor?.getState());
-ipcMain.on("app:refresh-pairing-state", () => pairingMonitor?.triggerNow());
 ipcMain.handle("app:open-external", (_e, url: string) => shell.openExternal(appendChannelUtm(url)));
 ipcMain.handle("app:open-path", (_e, filePath: string) => shell.openPath(filePath));
 
@@ -768,7 +717,6 @@ async function quit(): Promise<void> {
   stopTokenRefresh();
   await stopAuthProxy();
   stopAutoCheckSchedule();
-  pairingMonitor?.stop();
   analytics.track("app_closed");
   await analytics.shutdown();
   windowManager.destroy();
@@ -901,7 +849,6 @@ app.whenReady().then(async () => {
     onQuit: quit,
     onCheckUpdates: () => checkForUpdates(true),
   });
-  pairingMonitor?.start();
 
   const configHealth = inspectUserConfigHealth();
   if (configHealth.exists && !configHealth.validJson) {
@@ -1004,7 +951,6 @@ app.on("window-all-closed", () => {
 app.on("before-quit", () => {
   // 先放行窗口关闭，避免 close handler 拦截 WM_CLOSE 导致 NSIS 安装器报"无法关闭"
   windowManager.prepareForAppQuit();
-  pairingMonitor?.stop();
   windowManager.destroy();
   stopAuthProxy();
   gateway.stop().catch(() => {});

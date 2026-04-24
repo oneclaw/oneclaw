@@ -20,15 +20,6 @@
 | `getUpdateState()` | `app:get-update-state` | invoke |
 | `downloadAndInstallUpdate()` | `app:download-and-install-update` | invoke |
 
-## 配对状态（统一多渠道）
-
-| 方法 | IPC 通道 | 方向 |
-|---|---|---|
-| `getPairingState()` | `app:get-pairing-state` | invoke |
-| `refreshPairingState()` | `app:refresh-pairing-state` | send |
-| `getFeishuPairingState()` | `app:get-feishu-pairing-state` | invoke |
-| `refreshFeishuPairingState()` | `app:refresh-feishu-pairing-state` | send |
-
 ## Setup
 
 | 方法 | IPC 通道 | 方向 |
@@ -65,10 +56,7 @@
 |---|---|---|
 | `settingsGetChannelConfig()` | `settings:get-channel-config` | invoke |
 | `settingsSaveChannel(params)` | `settings:save-channel` | invoke |
-| `settingsListFeishuPairing()` | `settings:list-feishu-pairing` | invoke |
 | `settingsListFeishuApproved()` | `settings:list-feishu-approved` | invoke |
-| `settingsApproveFeishuPairing(params)` | `settings:approve-feishu-pairing` | invoke |
-| `settingsRejectFeishuPairing(params)` | `settings:reject-feishu-pairing` | invoke |
 | `settingsAddFeishuGroupAllowFrom(params)` | `settings:add-feishu-group-allow-from` | invoke |
 | `settingsRemoveFeishuApproved(params)` | `settings:remove-feishu-approved` | invoke |
 
@@ -78,10 +66,7 @@
 |---|---|---|
 | `settingsGetWecomConfig()` | `settings:get-wecom-config` | invoke |
 | `settingsSaveWecomConfig(params)` | `settings:save-wecom-config` | invoke |
-| `settingsListWecomPairing()` | `settings:list-wecom-pairing` | invoke |
 | `settingsListWecomApproved()` | `settings:list-wecom-approved` | invoke |
-| `settingsApproveWecomPairing(params)` | `settings:approve-wecom-pairing` | invoke |
-| `settingsRejectWecomPairing(params)` | `settings:reject-wecom-pairing` | invoke |
 | `settingsRemoveWecomApproved(params)` | `settings:remove-wecom-approved` | invoke |
 
 ## Settings — Channels (QQ Bot)
@@ -191,5 +176,3 @@
 | `onSettingsNavigate(cb)` | `settings:navigate` | Settings tab 导航（含 notice） |
 | `onNavigate(cb)` | `app:navigate` | Chat UI 视图切换（返回 unsubscribe 函数） |
 | `onUpdateState(cb)` | `app:update-state` | 更新状态推送（返回 unsubscribe 函数） |
-| `onPairingState(cb)` | `app:pairing-state` | 统一多渠道配对状态推送（返回 unsubscribe 函数） |
-| `onFeishuPairingState(cb)` | `app:feishu-pairing-state` | 飞书配对状态推送（返回 unsubscribe 函数） |
