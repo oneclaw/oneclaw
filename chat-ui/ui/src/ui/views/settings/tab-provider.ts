@@ -357,6 +357,10 @@ function enterAddMode(state: AppViewState) {
   const saved = lookupSavedProvider(s.currentProvider);
   if (saved?.apiKey && saved.apiKey !== "proxy-managed") s.apiKey = saved.apiKey;
 
+  s.modelId = "";
+  s.customModelId = "";
+  s.showCustomModelInput = false;
+
   const models = getModels();
   if (models.length && !s.modelId) s.modelId = models[0];
 
@@ -442,7 +446,7 @@ async function handleSave(state: AppViewState) {
 
     await refreshModelList(state);
   } catch (e: any) {
-    s.error = t("setup.error.connection") + (e?.message ?? "");
+    s.error = e?.message ?? t("setup.error.connection");
     s.saving = false;
     state.requestUpdate();
   }

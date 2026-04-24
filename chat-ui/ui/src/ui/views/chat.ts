@@ -548,7 +548,7 @@ export function renderChat(props: ChatProps) {
                 `
               : nothing
             }
-            ${props.configuredModels && props.configuredModels.length > 1
+            ${props.configuredModels && props.configuredModels.length >= 2
               ? html`
                 <select
                   class="chat-compose__model-select"
@@ -566,7 +566,13 @@ export function renderChat(props: ChatProps) {
                   `)}
                 </select>
               `
-              : nothing
+              : props.configuredModels && props.configuredModels.length === 1
+                ? html`
+                  <select class="chat-compose__model-select" disabled>
+                    <option selected>${props.configuredModels[0].name}</option>
+                  </select>
+                `
+                : nothing
             }
           </div>
           <div class="chat-compose__toolbar-right">

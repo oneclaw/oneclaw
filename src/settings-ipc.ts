@@ -488,8 +488,14 @@ export function registerSettingsIpc(opts: SettingsIpcOptions = {}): void {
             const existingProv = config.models.providers[provKey];
 
             if (existingProv) {
-              // provider 已存在 → 追加模型
-              // keepProxyAuth 时不覆写 apiKey/baseUrl（OAuth 代理已就绪）
+              const existingModels = Array.isArray(existingProv.models) ? existingProv.models : [];
+              const hasModel = existingModels.some((m: any) => {
+                const id = typeof m === "string" ? m : m?.id;
+                return id === modelID;
+              });
+              if (hasModel) {
+                return { success: false, message: `模型已存在: ${provKey}/${modelID}` };
+              }
               if (!keepProxyAuth) {
                 existingProv.apiKey = apiKey;
                 if (sub) {
@@ -497,15 +503,8 @@ export function registerSettingsIpc(opts: SettingsIpcOptions = {}): void {
                   existingProv.api = sub.api;
                 }
               }
-              // 追加模型（如果不存在）
               if (!Array.isArray(existingProv.models)) existingProv.models = [];
-              const hasModel = existingProv.models.some((m: any) => {
-                const id = typeof m === "string" ? m : m?.id;
-                return id === modelID;
-              });
-              if (!hasModel) {
-                existingProv.models.push({ id: modelID, name: modelID, input: ["text", "image"] });
-              }
+              existingProv.models.push({ id: modelID, name: modelID, input: ["text", "image"] });
             } else {
               // provider 不存在 → 用 saveMoonshotConfig 创建
               const prevPrimary = config.agents.defaults.model.primary;
@@ -544,17 +543,18 @@ export function registerSettingsIpc(opts: SettingsIpcOptions = {}): void {
             const existingProv = config.models.providers[configKey];
 
             if (existingProv) {
-              // provider 已存在 → 更新 apiKey，追加模型
-              existingProv.apiKey = apiKey;
-              if (!Array.isArray(existingProv.models)) existingProv.models = [];
-              const hasModel = existingProv.models.some((m: any) => {
+              const existingModels = Array.isArray(existingProv.models) ? existingProv.models : [];
+              const hasModel = existingModels.some((m: any) => {
                 const id = typeof m === "string" ? m : m?.id;
                 return id === modelID;
               });
-              if (!hasModel) {
-                const input = supportImage !== false ? ["text", "image"] : ["text"];
-                existingProv.models.push({ id: modelID, name: modelID, input });
+              if (hasModel) {
+                return { success: false, message: `模型已存在: ${configKey}/${modelID}` };
               }
+              existingProv.apiKey = apiKey;
+              if (!Array.isArray(existingProv.models)) existingProv.models = [];
+              const input = supportImage !== false ? ["text", "image"] : ["text"];
+              existingProv.models.push({ id: modelID, name: modelID, input });
             } else {
               // provider 不存在 → 创建新 provider entry
               config.models.providers[configKey] = buildProviderConfig(provider, apiKey, modelID, baseURL, api, supportImage, customPreset);
