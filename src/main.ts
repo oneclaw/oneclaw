@@ -37,12 +37,7 @@ import {
   isSetupComplete,
   resolveGatewayPort,
   resolveGatewayLogPath,
-  resolveWebbridgeBinaryPath,
-  resolveWebbridgeDataDir,
 } from "./constants";
-import { startUpdateScheduler, type UpdateSchedulerHandle } from "./webbridge-update-scheduler";
-import { checkForUpdate as webbridgeCheckForUpdate, installWebbridge } from "./webbridge-installer";
-import { installWebbridgeSkill } from "./webbridge-skill-installer";
 import { resolveGatewayAuthToken } from "./gateway-auth";
 import {
   getConfigRecoveryData,
@@ -989,29 +984,7 @@ app.whenReady().then(async () => {
       setupManager.showSetup();
       break;
   }
-
-  // WebBridge 24h 自更新（binary 不存在时自动跳过；异常全部吞到 log）
-  webbridgeUpdateHandle = startUpdateScheduler({
-    checkForUpdate: () =>
-      webbridgeCheckForUpdate({ dataDir: resolveWebbridgeDataDir() }),
-    installWebbridge: () => installWebbridge({ force: true }),
-    binaryExists: () => {
-      try {
-        return fs.existsSync(resolveWebbridgeBinaryPath());
-      } catch {
-        return false;
-      }
-    },
-    installSkill: (bp) => installWebbridgeSkill(bp),
-    logger: {
-      info: (m) => log.info(m),
-      error: (m) => log.error(m),
-    },
-  });
 });
-
-// 由 whenReady 中赋值；before-quit 里 stop
-let webbridgeUpdateHandle: UpdateSchedulerHandle | null = null;
 
 // ── 二次启动 → 聚焦已有窗口 ──
 
@@ -1056,7 +1029,6 @@ app.on("before-quit", () => {
   // 先放行窗口关闭，避免 close handler 拦截 WM_CLOSE 导致 NSIS 安装器报"无法关闭"
   windowManager.prepareForAppQuit();
   pairingMonitor?.stop();
-  try { webbridgeUpdateHandle?.stop(); } catch {}
   windowManager.destroy();
   stopAuthProxy();
   gateway.stop().catch(() => {});

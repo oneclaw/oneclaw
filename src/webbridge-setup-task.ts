@@ -17,15 +17,22 @@ export interface WebbridgeSetupTaskDeps {
   writeConfig: (config: any) => void;
   // Phase 2：applyBrowserModeConfig 的直接注入
   applyMode: (config: any, mode: BrowserMode) => any;
-  // build-config.json 里的 ext ID；空字符串 → 跳过浏览器扩展安装
+  // build-config.json 里的 ext ID；空字符串 → 严格判失败（走降级）
   extensionId: string;
   // 降级到 openclaw 模式重写 config 后，通知调用方（生产：gateway restart）
   onConfigRewritten?: () => void;
-  // binary 就绪后安装 skill 到各 AI runtime（失败只 log warning，不降级）
+  // binary 就绪后安装 skill 到各 AI runtime
   installSkill?: (
     binaryPath: string,
   ) => Promise<{ success: boolean; output: string; error?: string }>;
   logger?: WebbridgeSetupTaskLogger;
+  /**
+   * true（默认）= 任何步骤失败时自动改写 config 到 openclaw 模式 + onConfigRewritten 通知。
+   *               适合 Setup 完成后的 fire-and-forget 路径。
+   * false = 失败只返回 outcome=fell-back-to-openclaw + error，不动 config 不通知。
+   *         适合 Settings repair-and-enable 路径，由调用方决定是否写 config。
+   */
+  fallbackOnFailure?: boolean;
 }
 
 export type SetupTaskOutcome =
@@ -50,6 +57,34 @@ export async function runWebbridgeSetupTask(
   deps: WebbridgeSetupTaskDeps,
 ): Promise<SetupTaskSummary> {
   const log = deps.logger ?? NOOP_LOGGER;
+  const shouldFallback = deps.fallbackOnFailure !== false;
+
+  const fail = (
+    reason: string,
+    error: string,
+    binaryPath: string | null,
+  ): SetupTaskSummary => {
+    log.error(`[webbridge-setup] ${reason}: ${error}`);
+    if (shouldFallback) {
+      try {
+        const current = deps.readConfig();
+        const next = deps.applyMode(current, "openclaw");
+        deps.writeConfig(next);
+        deps.onConfigRewritten?.();
+      } catch (rewriteErr) {
+        const m =
+          rewriteErr instanceof Error ? rewriteErr.message : String(rewriteErr);
+        log.error(`[webbridge-setup] 降级改写 config 失败: ${m}`);
+      }
+    }
+    return {
+      outcome: "fell-back-to-openclaw",
+      webbridgeInstalled: false,
+      binaryPath,
+      extensionSummary: null,
+      error,
+    };
+  };
 
   // Step 1：下载 webbridge 二进制
   let installResult: WebbridgeInstallResult;
@@ -59,91 +94,68 @@ export async function runWebbridgeSetupTask(
       `[webbridge-setup] 二进制就绪: version=${installResult.version} skipped=${installResult.skipped} path=${installResult.binaryPath}`,
     );
   } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    log.error(
-      `[webbridge-setup] 二进制下载失败，降级到 openclaw 模式: ${msg}`,
+    return fail(
+      "二进制下载失败",
+      err instanceof Error ? err.message : String(err),
+      null,
     );
-    // 降级：改写 config 到 openclaw 模式
-    try {
-      const current = deps.readConfig();
-      const next = deps.applyMode(current, "openclaw");
-      deps.writeConfig(next);
-      deps.onConfigRewritten?.();
-    } catch (rewriteErr) {
-      const rewriteMsg =
-        rewriteErr instanceof Error ? rewriteErr.message : String(rewriteErr);
-      log.error(
-        `[webbridge-setup] 降级改写 config 失败: ${rewriteMsg}`,
-      );
-    }
-    return {
-      outcome: "fell-back-to-openclaw",
-      webbridgeInstalled: false,
-      binaryPath: null,
-      extensionSummary: null,
-      error: msg,
-    };
   }
 
-  // Step 1.5：安装 skill（失败不降级，跟 install.sh 对齐）
+  // Step 1.5：安装 skill（严格：失败/抛错都降级）
   if (deps.installSkill) {
     try {
       const skillResult = await deps.installSkill(installResult.binaryPath);
-      if (skillResult.success) {
-        log.info(
-          `[webbridge-setup] skill 安装完成${
-            skillResult.output ? `\n${skillResult.output.trimEnd()}` : ""
-          }`,
-        );
-      } else {
-        log.info(
-          `[webbridge-setup] skill 安装警告: ${skillResult.error ?? "(unknown)"}`,
+      if (!skillResult.success) {
+        return fail(
+          "skill 安装失败",
+          skillResult.error ?? "(unknown)",
+          installResult.binaryPath,
         );
       }
+      log.info(
+        `[webbridge-setup] skill 安装完成${
+          skillResult.output ? `\n${skillResult.output.trimEnd()}` : ""
+        }`,
+      );
     } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      log.info(`[webbridge-setup] skill 安装异常: ${msg}`);
+      return fail(
+        "skill 安装异常",
+        err instanceof Error ? err.message : String(err),
+        installResult.binaryPath,
+      );
     }
   }
 
-  // Step 2：extensionId 空 → 跳过浏览器扩展安装
+  // Step 2：extensionId（严格：缺失也降级）
   if (!deps.extensionId) {
-    log.info(
-      "[webbridge-setup] 未注入 webbridgeExtensionId，跳过浏览器扩展安装（dev 构建常见）",
+    return fail(
+      "未注入 webbridgeExtensionId（dev 构建无法装浏览器扩展，严格判失败）",
+      "no extension id",
+      installResult.binaryPath,
     );
-    return {
-      outcome: "extension-skipped",
-      webbridgeInstalled: true,
-      binaryPath: installResult.binaryPath,
-      extensionSummary: null,
-    };
   }
 
-  // Step 3：安装浏览器扩展
+  // Step 3：安装浏览器扩展（严格：抛错也降级）
+  let extensionSummary: BrowserInstallSummary[];
   try {
-    const extensionSummary = await deps.installExtensions(deps.extensionId);
+    extensionSummary = await deps.installExtensions(deps.extensionId);
     log.info(
       `[webbridge-setup] 浏览器扩展安装完成: ${extensionSummary
         .map((r) => `${r.browserId}=${r.result}`)
         .join(" ")}`,
     );
-    return {
-      outcome: "webbridge-ready",
-      webbridgeInstalled: true,
-      binaryPath: installResult.binaryPath,
-      extensionSummary,
-    };
   } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    log.error(
-      `[webbridge-setup] 浏览器扩展批量安装失败（不回退 config）: ${msg}`,
+    return fail(
+      "浏览器扩展批量安装失败",
+      err instanceof Error ? err.message : String(err),
+      installResult.binaryPath,
     );
-    return {
-      outcome: "webbridge-ready",
-      webbridgeInstalled: true,
-      binaryPath: installResult.binaryPath,
-      extensionSummary: null,
-      error: msg,
-    };
   }
+
+  return {
+    outcome: "webbridge-ready",
+    webbridgeInstalled: true,
+    binaryPath: installResult.binaryPath,
+    extensionSummary,
+  };
 }

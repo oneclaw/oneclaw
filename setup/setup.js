@@ -157,6 +157,12 @@
       "done.start": "Start OneClaw",
       "done.starting": "Starting Gateway…",
       "done.startFailed": "Gateway failed to start — please click Start OneClaw to retry",
+      "done.modalTitle": "Restart your browser to enable the extension",
+      "done.modalDesc": "OneClaw has prepared the WebBridge extension for your browser. Please activate it:",
+      "done.modalStep1": "Fully quit Chrome (or your current browser)",
+      "done.modalStep2": "Reopen the browser",
+      "done.modalStep3": "Click \"Enable\" in the \"Extension added\" prompt",
+      "done.modalConfirm": "Got it, start OneClaw",
       "conflict.title": "Existing OpenClaw Detected",
       "conflict.subtitle": "OneClaw will take over this installation automatically",
       "conflict.reassure": "Your personas and chat history will be preserved",
@@ -222,6 +228,12 @@
       "done.installCli": "将 openclaw 命令添加到终端 PATH",
       "done.start": "启动 OneClaw",
       "done.starting": "正在启动 Gateway…",
+      "done.modalTitle": "重启浏览器以启用扩展",
+      "done.modalDesc": "OneClaw 已为你的浏览器准备 WebBridge 扩展。请按以下步骤激活：",
+      "done.modalStep1": "完全退出 Chrome（或当前浏览器）",
+      "done.modalStep2": "重新打开浏览器",
+      "done.modalStep3": "在弹出的「已添加扩展」提示中点击「启用」",
+      "done.modalConfirm": "我知道了，启动 OneClaw",
       "done.startFailed": 'Gateway 启动失败 请点击"启动 OneClaw"重试',
       "conflict.title": "检测到已安装的 OpenClaw",
       "conflict.subtitle": "OneClaw 将自动接管此安装",
@@ -820,6 +832,21 @@
   }
 
   // ---- 完成 Setup ----
+  function handleStartClick() {
+    if (starting) return;
+    showBrowserRestartModal();
+  }
+
+  function showBrowserRestartModal() {
+    const modal = document.getElementById("browserRestartModal");
+    if (modal) modal.classList.remove("hidden");
+  }
+
+  function hideBrowserRestartModal() {
+    const modal = document.getElementById("browserRestartModal");
+    if (modal) modal.classList.add("hidden");
+  }
+
   async function handleComplete() {
     if (starting) return;
     setStarting(true);
@@ -992,7 +1019,14 @@
     });
 
     // Step 3 — 完成
-    els.btnStart.addEventListener("click", handleComplete);
+    els.btnStart.addEventListener("click", handleStartClick);
+    const btnRestartConfirm = document.getElementById("btnBrowserRestartConfirm");
+    if (btnRestartConfirm) {
+      btnRestartConfirm.addEventListener("click", () => {
+        hideBrowserRestartModal();
+        handleComplete();
+      });
+    }
   }
 
   // ---- 初始化 ----

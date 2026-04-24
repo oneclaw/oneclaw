@@ -98,14 +98,14 @@ contextBridge.exposeInMainWorld("oneclaw", {
   settingsSaveAdvanced: (params: Record<string, unknown>) =>
     ipcRenderer.invoke("settings:save-advanced", params),
   settingsWebbridgeStatus: () => ipcRenderer.invoke("settings:webbridge-status"),
-  settingsWebbridgeRetryDownload: () =>
-    ipcRenderer.invoke("settings:webbridge-retry-download"),
-  settingsWebbridgeCheckUpdate: () =>
-    ipcRenderer.invoke("settings:webbridge-check-update"),
   settingsWebbridgeInstallExtensions: () =>
     ipcRenderer.invoke("settings:webbridge-install-extensions"),
   settingsWebbridgeCleanBlocklist: (browserId: string) =>
     ipcRenderer.invoke("settings:webbridge-clean-blocklist", browserId),
+  settingsWebbridgePrecheck: () =>
+    ipcRenderer.invoke("settings:webbridge-precheck"),
+  settingsWebbridgeRepairAndEnable: () =>
+    ipcRenderer.invoke("settings:webbridge-repair-and-enable"),
   settingsGetCliStatus: () => ipcRenderer.invoke("settings:get-cli-status"),
   settingsInstallCli: () => ipcRenderer.invoke("settings:install-cli"),
   settingsUninstallCli: () => ipcRenderer.invoke("settings:uninstall-cli"),
@@ -173,6 +173,9 @@ contextBridge.exposeInMainWorld("oneclaw", {
 
   // Chat UI 侧边栏操作
   openSettings: () => ipcRenderer.send("app:open-settings"),
+  // 由 webbridge-failed 弹窗使用：关闭自身
+  closeWebbridgeFailedDialog: () =>
+    ipcRenderer.send("webbridge-failed-dialog:close"),
   openWebUI: () => ipcRenderer.send("app:open-webui"),
   getGatewayPort: () => ipcRenderer.invoke("gateway:port"),
   // 主进程通知 gateway 已就绪，Chat UI 可立即重连（跳过盲等指数退避）

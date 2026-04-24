@@ -58,6 +58,16 @@ function applyWebbridgeMode(config: OneclawConfigShape): any {
         },
       },
     },
+    skills: {
+      ...(config.skills ?? {}),
+      entries: {
+        ...(config.skills?.entries ?? {}),
+        "kimi-webbridge": {
+          ...(config.skills?.entries?.["kimi-webbridge"] ?? {}),
+          enabled: true,
+        },
+      },
+    },
   };
 }
 

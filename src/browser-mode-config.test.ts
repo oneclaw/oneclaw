@@ -132,20 +132,16 @@ test("applyBrowserModeConfig(chrome) 保留用户自定义 browser.profiles.chro
   });
 });
 
-test("applyBrowserModeConfig(webbridge) 空 config 只写 plugins.entries.browser.enabled=false", () => {
+test("applyBrowserModeConfig(webbridge) 空 config 写 browser.enabled=false + skill.enabled=true", () => {
   const result = applyBrowserModeConfig({}, "webbridge");
   assert.deepEqual(result, {
     plugins: { entries: { browser: { enabled: false } } },
+    skills: { entries: { "kimi-webbridge": { enabled: true } } },
   });
   assert.equal(
     result.browser,
     undefined,
     "不应写 browser.defaultProfile（保留默认或老值）",
-  );
-  assert.equal(
-    result.skills,
-    undefined,
-    "不应写 skills.entries.kimi-webbridge（默认启用）",
   );
 });
 
@@ -162,13 +158,13 @@ test("applyBrowserModeConfig(webbridge) 保留原有 browser.defaultProfile", ()
   assert.equal(after.plugins.entries.browser.enabled, false);
 });
 
-test("applyBrowserModeConfig(webbridge) 从 openclaw 切过来：只翻 browser.enabled", () => {
+test("applyBrowserModeConfig(webbridge) 从 openclaw 切过来：browser 关 + skill 翻回 true", () => {
   const before = applyBrowserModeConfig({}, "openclaw");
   const after = applyBrowserModeConfig(before, "webbridge");
   assert.equal(after.plugins.entries.browser.enabled, false);
   assert.equal(after.browser.defaultProfile, "openclaw");
-  // skills.kimi-webbridge.enabled 不动，原值 = false（openclaw 模式留下的"遗留值"）
-  assert.equal(after.skills.entries["kimi-webbridge"].enabled, false);
+  // openclaw 模式把 skill 关了；切到 webbridge 必须翻回 true，否则 webbridge skill 不会启动
+  assert.equal(after.skills.entries["kimi-webbridge"].enabled, true);
 });
 
 test("applyBrowserModeConfig(webbridge) 保留其他字段", () => {
@@ -190,6 +186,7 @@ test("applyBrowserModeConfig(webbridge) 保留其他字段", () => {
   assert.deepEqual(after.plugins.entries.matrix, { enabled: true });
   assert.deepEqual(after.skills.entries["some-other-skill"], { enabled: true });
   assert.equal(after.plugins.entries.browser.enabled, false);
+  assert.equal(after.skills.entries["kimi-webbridge"].enabled, true);
 });
 
 test("detectBrowserMode 空 config → openclaw", () => {

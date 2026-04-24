@@ -1946,12 +1946,47 @@ select option {
 .wb-cleanup-btn:hover {
   background: rgba(192, 57, 43, 0.08);
 }
-.wb-actions {
+/* 顶部状态区：要么文字要么 [下载] 按钮 */
+.wb-status-area {
   display: flex;
+  align-items: center;
   gap: 8px;
-  margin-top: 10px;
-  flex-wrap: wrap;
+}
+/* 通用按需修复按钮（下载 / 配置扩展）— 中性灰色调，不喧宾夺主 */
+.wb-fix-btn {
+  margin-left: 8px;
+  padding: 2px 10px;
+  font-size: 12px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text);
+  border-radius: 4px;
+  cursor: pointer;
+}
+.wb-fix-btn:hover {
+  background: var(--bg-hover);
+}
+/* 底部小字 link：「检查更新」等弱呈现操作 */
+.wb-footer {
+  margin-top: 12px;
+  display: flex;
   justify-content: flex-end;
+}
+.wb-action-link {
+  font-size: 12px;
+  color: var(--text-muted);
+  text-decoration: none;
+  cursor: pointer;
+}
+.wb-action-link:hover {
+  color: var(--text);
+  text-decoration: underline;
+}
+.wb-action-link.disabled {
+  color: var(--text-muted);
+  opacity: 0.4;
+  cursor: not-allowed;
+  pointer-events: none;
 }
 .wb-msg {
   margin-top: 8px;
@@ -1967,10 +2002,56 @@ select option {
   color: var(--text-secondary);
 }
 .wb-msg.success {
-  background: var(--success-bg);
-  color: var(--success);
+  background: rgba(22, 160, 133, 0.12);
+  color: #16a085;
 }
 .wb-msg.error {
   background: var(--error-bg);
   color: var(--error);
+}
+
+/* WebBridge 切换前 RepairModal */
+.wb-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+.wb-modal-overlay.hidden { display: none; }
+.wb-modal-card {
+  background: var(--bg-card, var(--bg-primary, #fff));
+  border-radius: 8px;
+  padding: 24px;
+  min-width: 360px;
+  max-width: 480px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.18);
+}
+.wb-modal-title { margin: 0 0 8px; font-size: 16px; font-weight: 600; }
+.wb-modal-desc { margin: 0 0 12px; color: var(--text-secondary, #666); font-size: 13px; }
+.wb-repair-list { list-style: none; padding: 0; margin: 0 0 16px; }
+.wb-repair-item { padding: 6px 0; font-size: 14px; }
+.wb-repair-item.missing { color: #c0392b; }
+.wb-repair-item.ok { color: #16a085; }
+.wb-modal-msg { margin: 0 0 12px; padding: 8px 12px; border-radius: 4px; font-size: 13px; }
+.wb-modal-msg.hidden { display: none; }
+.wb-modal-msg.info { background: rgba(52, 152, 219, 0.1); color: #2980b9; }
+.wb-modal-msg.error { background: rgba(192, 57, 43, 0.1); color: #c0392b; }
+.wb-modal-actions { display: flex; justify-content: flex-end; gap: 8px; }
+
+.wb-health-link {
+  display: inline-block;
+  margin-top: 8px;
+  font-size: 13px;
+  color: #c0392b;
+  text-decoration: none;
+  cursor: pointer;
+}
+.wb-health-link:hover {
+  text-decoration: underline;
+}
+.wb-health-link.hidden {
+  display: none;
 }

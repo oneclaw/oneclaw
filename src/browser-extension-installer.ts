@@ -8,6 +8,10 @@ import {
   isBrowserInstalled,
   resolveUserDataDir,
 } from "./browser-detector";
+import {
+  isBrowserProcessRunning,
+  type ProcessExecutor,
+} from "./browser-process-detector";
 
 export const EXTERNAL_UPDATE_URL =
   "https://clients2.google.com/service/update2/crx";
@@ -35,6 +39,9 @@ export interface CommonOptions {
   exec?: RegExecutor;
   platform?: NodeJS.Platform | string;
   skipUserDataCheck?: boolean;
+  // 进程探测器（pgrep / tasklist 抽象）。未提供时 getExtensionStates 默认 running=false，
+  // 避免测试在开发机上意外命中宿主机的真实 Chrome 进程。生产路径需要显式传入真实 exec。
+  processExec?: ProcessExecutor;
 }
 
 const execFileAsync = promisify(execFile);
@@ -231,6 +238,8 @@ export interface BrowserState {
   installed: boolean;
   configured: boolean;
   blocklisted: boolean;
+  presentInChrome: boolean;
+  running: boolean;
 }
 
 export async function installForAllDetectedBrowsers(
@@ -291,12 +300,24 @@ export async function getExtensionStates(
     const blocklisted = installed
       ? await isExtensionBlocklisted(target, extId)
       : false;
+    const presentInChrome = installed
+      ? await isExtensionPresentInChrome(target, extId)
+      : false;
+    const running =
+      installed && options.processExec
+        ? await isBrowserProcessRunning(target, {
+            exec: options.processExec,
+            platform: options.platform,
+          })
+        : false;
     out.push({
       browserId: target.id,
       browserName: target.name,
       installed,
       configured,
       blocklisted,
+      presentInChrome,
+      running,
     });
   }
   return out;
@@ -317,6 +338,14 @@ function preferencesPath(target: BrowserTarget): string {
   );
 }
 
+function securePreferencesPath(target: BrowserTarget): string {
+  return path.join(
+    resolveUserDataDir(target),
+    target.profileSubdir,
+    "Secure Preferences",
+  );
+}
+
 function readPreferencesIfValid(target: BrowserTarget): any | null {
   const p = preferencesPath(target);
   if (!fs.existsSync(p)) return null;
@@ -325,6 +354,31 @@ function readPreferencesIfValid(target: BrowserTarget): any | null {
   } catch {
     return null;
   }
+}
+
+function readSecurePreferencesIfValid(target: BrowserTarget): any | null {
+  const p = securePreferencesPath(target);
+  if (!fs.existsSync(p)) return null;
+  try {
+    return JSON.parse(fs.readFileSync(p, "utf-8"));
+  } catch {
+    return null;
+  }
+}
+
+// Chrome 自己维护的"真实已装扩展"列表。比 External Extensions JSON 更权威——
+// 后者只是 OneClaw 写给 Chrome 的"建议"，前者反映 Chrome 是否真的把扩展加载进来了。
+// 用户从 chrome://extensions UI 卸载后会被移出 settings；如果没同时进 external_uninstalls
+// 黑名单（不同 Chrome 版本/卸载入口行为不一致），blocklist 检查会漏报。
+export async function isExtensionPresentInChrome(
+  target: BrowserTarget,
+  extId: string,
+): Promise<boolean> {
+  const sp = readSecurePreferencesIfValid(target);
+  if (!sp) return false;
+  const settings = sp?.extensions?.settings;
+  if (!settings || typeof settings !== "object") return false;
+  return Object.prototype.hasOwnProperty.call(settings, extId);
 }
 
 export async function isExtensionBlocklisted(

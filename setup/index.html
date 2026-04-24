@@ -277,6 +277,22 @@
 
   </div>
 
+  <!-- Step 3 完成前提示：重启浏览器以激活扩展 -->
+  <div id="browserRestartModal" class="browser-restart-modal hidden">
+    <div class="browser-restart-card">
+      <h3 class="browser-restart-title" data-i18n="done.modalTitle">重启浏览器以启用扩展</h3>
+      <p class="browser-restart-desc" data-i18n="done.modalDesc">OneClaw 已为你的浏览器准备 WebBridge 扩展。请按以下步骤激活：</p>
+      <ol class="browser-restart-steps">
+        <li data-i18n="done.modalStep1">完全退出 Chrome（或当前浏览器）</li>
+        <li data-i18n="done.modalStep2">重新打开浏览器</li>
+        <li data-i18n="done.modalStep3">在弹出的「已添加扩展」提示中点击「启用」</li>
+      </ol>
+      <button type="button" class="btn-primary browser-restart-confirm" id="btnBrowserRestartConfirm">
+        <span data-i18n="done.modalConfirm">我知道了，启动 OneClaw</span>
+      </button>
+    </div>
+  </div>
+
   <script src="setup.js"></script>
 </body>
 </html>

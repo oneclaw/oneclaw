@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self'; img-src 'self' data:" />
+    <title>WebBridge 未启用</title>
+    <link rel="stylesheet" href="../shared/design-tokens.css" />
+    <style>
+      *, *::before, *::after {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
+      html, body {
+        height: 100%;
+        overflow: hidden;
+        font-family: var(--font-body);
+        font-size: 14px;
+        line-height: 1.5;
+        color: var(--text);
+        background: transparent;
+        -webkit-font-smoothing: antialiased;
+        -webkit-app-region: drag;  /* 整个窗口可拖动 */
+      }
+      .wbf-root {
+        height: 100%;
+        background: var(--bg-secondary);
+        border-radius: 12px;
+        padding: 22px 24px 18px;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+        box-shadow: var(--shadow-lg);
+      }
+      .wbf-title {
+        font-size: 15px;
+        font-weight: 600;
+        color: var(--text-strong);
+        margin: 0;
+      }
+      .wbf-reason {
+        font-size: 13px;
+        color: var(--text-secondary);
+        margin: 0;
+        white-space: pre-wrap;
+        word-break: break-word;
+      }
+      .wbf-tip {
+        font-size: 12px;
+        color: var(--text-muted);
+        margin: 0 0 4px;
+      }
+      .wbf-actions {
+        margin-top: auto;
+        display: flex;
+        justify-content: flex-end;
+        gap: 8px;
+        -webkit-app-region: no-drag;  /* 按钮区不拖 */
+      }
+      .wbf-btn {
+        appearance: none;
+        border: none;
+        cursor: pointer;
+        font-family: inherit;
+        font-size: 13px;
+        font-weight: 500;
+        padding: 7px 18px;
+        border-radius: var(--radius-pill);
+        transition: var(--transition);
+      }
+      .wbf-btn-secondary {
+        background: transparent;
+        color: var(--text);
+        border: 1px solid var(--border);
+      }
+      .wbf-btn-secondary:hover {
+        background: var(--bg-hover);
+        border-color: var(--border-hover);
+      }
+      .wbf-btn-primary {
+        background: var(--accent);
+        color: var(--text-on-accent);
+      }
+      .wbf-btn-primary:hover {
+        background: var(--accent-hover);
+      }
+    </style>
+  </head>
+  <body>
+    <div class="wbf-root">
+      <h3 class="wbf-title">WebBridge 未启用</h3>
+      <p class="wbf-reason" id="wbfReason">已暂时切换到独立浏览器模式。</p>
+      <p class="wbf-tip">稍后可在「设置 → 高级」选择 kimi-webbridge 重新启用。</p>
+      <div class="wbf-actions">
+        <button type="button" class="wbf-btn wbf-btn-secondary" id="wbfClose">关闭</button>
+        <button type="button" class="wbf-btn wbf-btn-primary" id="wbfOpen">打开设置</button>
+      </div>
+    </div>
+    <script src="webbridge-failed.js"></script>
+  </body>
+</html>

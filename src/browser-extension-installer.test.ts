@@ -694,3 +694,155 @@ test(
     }
   },
 );
+
+// ===== presentInChrome 检测（Secure Preferences 真实扩展列表） =====
+
+import { isExtensionPresentInChrome } from "./browser-extension-installer";
+
+function writeChromeSecurePrefs(home: string, body: object): string {
+  const chrome = BROWSER_TARGETS.find((t) => t.id === "chrome")!;
+  const profileDir = path.join(
+    home,
+    chrome.userDataDirMac,
+    chrome.profileSubdir,
+  );
+  fs.mkdirSync(profileDir, { recursive: true });
+  const p = path.join(profileDir, "Secure Preferences");
+  fs.writeFileSync(p, JSON.stringify(body), "utf-8");
+  return p;
+}
+
+test(
+  "[macOS] isExtensionPresentInChrome: Secure Preferences 不存在 → false",
+  { skip: process.platform === "win32" },
+  async () => {
+    const home = makeTempHome();
+    const restore = setupFakeHome(home);
+    try {
+      const chrome = BROWSER_TARGETS.find((t) => t.id === "chrome")!;
+      assert.equal(await isExtensionPresentInChrome(chrome, FAKE_EXT_ID), false);
+    } finally {
+      restore();
+    }
+  },
+);
+
+test(
+  "[macOS] isExtensionPresentInChrome: extensions.settings 含 ID → true",
+  { skip: process.platform === "win32" },
+  async () => {
+    const home = makeTempHome();
+    const restore = setupFakeHome(home);
+    try {
+      const chrome = BROWSER_TARGETS.find((t) => t.id === "chrome")!;
+      writeChromeSecurePrefs(home, {
+        extensions: { settings: { [FAKE_EXT_ID]: { state: 1 } } },
+      });
+      assert.equal(await isExtensionPresentInChrome(chrome, FAKE_EXT_ID), true);
+    } finally {
+      restore();
+    }
+  },
+);
+
+test(
+  "[macOS] isExtensionPresentInChrome: extensions.settings 不含 ID → false",
+  { skip: process.platform === "win32" },
+  async () => {
+    const home = makeTempHome();
+    const restore = setupFakeHome(home);
+    try {
+      const chrome = BROWSER_TARGETS.find((t) => t.id === "chrome")!;
+      writeChromeSecurePrefs(home, {
+        extensions: { settings: { otherid: { state: 1 } } },
+      });
+      assert.equal(await isExtensionPresentInChrome(chrome, FAKE_EXT_ID), false);
+    } finally {
+      restore();
+    }
+  },
+);
+
+test(
+  "[macOS] isExtensionPresentInChrome: Secure Preferences 损坏 JSON → false",
+  { skip: process.platform === "win32" },
+  async () => {
+    const home = makeTempHome();
+    const restore = setupFakeHome(home);
+    try {
+      const chrome = BROWSER_TARGETS.find((t) => t.id === "chrome")!;
+      const profileDir = path.join(
+        home,
+        chrome.userDataDirMac,
+        chrome.profileSubdir,
+      );
+      fs.mkdirSync(profileDir, { recursive: true });
+      fs.writeFileSync(
+        path.join(profileDir, "Secure Preferences"),
+        "{not json",
+        "utf-8",
+      );
+      assert.equal(await isExtensionPresentInChrome(chrome, FAKE_EXT_ID), false);
+    } finally {
+      restore();
+    }
+  },
+);
+
+test(
+  "[macOS] getExtensionStates 暴露 presentInChrome 字段；JSON 在但 Chrome 真实列表无 → presentInChrome=false",
+  { skip: process.platform === "win32" },
+  async () => {
+    const home = makeTempHome();
+    const restore = setupFakeHome(home);
+    try {
+      const chrome = BROWSER_TARGETS.find((t) => t.id === "chrome")!;
+      markBrowserInstalled(home, chrome.userDataDirMac);
+      // 写 OneClaw 的 External Extensions JSON → configured=true
+      const extDir = path.join(home, chrome.userDataDirMac, "External Extensions");
+      fs.mkdirSync(extDir, { recursive: true });
+      fs.writeFileSync(
+        path.join(extDir, `${FAKE_EXT_ID}.json`),
+        JSON.stringify({ external_update_url: "https://clients2.google.com/service/update2/crx" }),
+      );
+      // 不写 Secure Preferences 的 settings → presentInChrome=false
+      const states = await getExtensionStates(FAKE_EXT_ID);
+      const chromeState = states.find((s) => s.browserId === "chrome")!;
+      assert.equal(chromeState.configured, true);
+      assert.equal(
+        chromeState.presentInChrome,
+        false,
+        "Chrome Secure Preferences 没记录这个扩展 → presentInChrome 必须 false",
+      );
+    } finally {
+      restore();
+    }
+  },
+);
+
+test(
+  "[macOS] getExtensionStates: JSON 在 + Chrome 真实列表也在 → presentInChrome=true",
+  { skip: process.platform === "win32" },
+  async () => {
+    const home = makeTempHome();
+    const restore = setupFakeHome(home);
+    try {
+      const chrome = BROWSER_TARGETS.find((t) => t.id === "chrome")!;
+      markBrowserInstalled(home, chrome.userDataDirMac);
+      const extDir = path.join(home, chrome.userDataDirMac, "External Extensions");
+      fs.mkdirSync(extDir, { recursive: true });
+      fs.writeFileSync(
+        path.join(extDir, `${FAKE_EXT_ID}.json`),
+        JSON.stringify({ external_update_url: "https://clients2.google.com/service/update2/crx" }),
+      );
+      writeChromeSecurePrefs(home, {
+        extensions: { settings: { [FAKE_EXT_ID]: { state: 1 } } },
+      });
+      const states = await getExtensionStates(FAKE_EXT_ID);
+      const chromeState = states.find((s) => s.browserId === "chrome")!;
+      assert.equal(chromeState.presentInChrome, true);
+    } finally {
+      restore();
+    }
+  },
+);
