@@ -148,7 +148,6 @@
       "provider.model": "Model",
       "provider.modelId": "Model ID",
       "provider.apiType": "API Type",
-      "provider.supportImage": "Supports image input",
       "provider.oauthLogin": "Log in with Kimi",
       "provider.oauthCancel": "Cancel",
       "provider.oauthLogout": "Log out",
@@ -458,7 +457,6 @@
       "provider.model": "模型",
       "provider.modelId": "模型 ID",
       "provider.apiType": "接口类型",
-      "provider.supportImage": "支持图像输入",
       "provider.oauthLogin": "Kimi 会员登录",
       "provider.oauthCancel": "取消",
       "provider.oauthLogout": "退出登录",
@@ -765,8 +763,6 @@
     modelInputGroup: $("#modelInputGroup"),
     modelInput: $("#modelInput"),
     apiTypeGroup: $("#apiTypeGroup"),
-    imageSupportGroup: $("#imageSupportGroup"),
-    supportImageCheckbox: $("#supportImage"),
     customPresetGroup: $("#customPresetGroup"),
     customPreset: $("#customPreset"),
     customModelInputGroup: $("#customModelInputGroup"),
@@ -1235,13 +1231,11 @@
 
     if (isCustom) {
       els.customPreset.value = "__placeholder__";
-      els.supportImageCheckbox.checked = true;
       applyCustomPreset("__placeholder__");
     } else {
       toggleEl(els.baseURLGroup, false);
       toggleEl(els.modelInputGroup, false);
       toggleEl(els.apiTypeGroup, false);
-      toggleEl(els.imageSupportGroup, false);
       toggleEl(els.customModelInputGroup, false);
       toggleEl(els.modelSelectGroup, true);
       els.btnSave.disabled = false;
@@ -1268,7 +1262,7 @@
       // 占位状态：隐藏所有字段，禁用保存按钮
       toggleEl(els.baseURLGroup, false);
       toggleEl(els.apiTypeGroup, false);
-      toggleEl(els.imageSupportGroup, false);
+
       toggleEl(els.modelInputGroup, false);
       toggleEl(els.modelSelectGroup, false);
       toggleEl(els.customModelInputGroup, false);
@@ -1278,7 +1272,7 @@
     } else if (preset) {
       // 预设模式：隐藏手动字段
       toggleEl(els.apiTypeGroup, false);
-      toggleEl(els.imageSupportGroup, false);
+
       toggleEl(els.modelInputGroup, false);
       toggleEl(els.baseURLGroup, false);
       toggleEl(els.apiKeyGroup, true);
@@ -1297,7 +1291,7 @@
       // 手动模式：恢复原始 Custom 行为
       toggleEl(els.baseURLGroup, true);
       toggleEl(els.apiTypeGroup, true);
-      toggleEl(els.imageSupportGroup, true);
+
       toggleEl(els.modelInputGroup, true);
       toggleEl(els.modelSelectGroup, false);
       toggleEl(els.customModelInputGroup, false);
@@ -1733,6 +1727,9 @@
         return;
       }
 
+      // 使用后端探测到的图片能力
+      params.supportImage = verifyResult.supportsImage ?? true;
+
       // 构造保存 payload，注入 action / modelKey / 别名
       var payload = buildSavePayload(params);
       var alias = (els.modelAlias.value || "").trim();
@@ -1798,7 +1795,6 @@
         params.baseURL = baseURL;
         params.modelID = modelID;
         params.apiType = document.querySelector('input[name="apiType"]:checked').value;
-        params.supportImage = els.supportImageCheckbox.checked;
       }
     } else {
       // 非 custom provider：支持自定义模型输入
@@ -4112,7 +4108,6 @@
           var apiRadio = document.querySelector('input[name="apiType"][value="' + data.api + '"]');
           if (apiRadio) apiRadio.checked = true;
         }
-        els.supportImageCheckbox.checked = data.supportsImage !== false;
       }
 
       // 更新当前 provider 状态指示

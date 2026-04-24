@@ -135,7 +135,6 @@
       "config.docsLink": "Tutorial Docs →",
       "config.back": "Back",
       "config.verify": "Verify & Continue",
-      "config.imageSupport": "Model supports image input",
       "config.oauthLogin": "Log in with Kimi",
       "config.oauthCancel": "Cancel",
       "config.oauthWaiting": "Waiting for authorization in browser…",
@@ -201,7 +200,6 @@
       "config.docsLink": "教程文档 →",
       "config.back": "返回",
       "config.verify": "验证并继续",
-      "config.imageSupport": "模型支持图片输入",
       "config.oauthLogin": "Kimi 会员登录",
       "config.oauthCancel": "取消",
       "config.oauthWaiting": "请在浏览器中完成授权…",
@@ -262,8 +260,6 @@
     modelInputGroup: $("#modelInputGroup"),
     modelInput: $("#modelInput"),
     apiTypeGroup: $("#apiTypeGroup"),
-    imageSupportGroup: $("#imageSupportGroup"),
-    imageSupport: $("#imageSupport"),
     customPresetGroup: $("#customPresetGroup"),
     customPreset: $("#customPreset"),
     customModelInputGroup: $("#customModelInputGroup"),
@@ -470,7 +466,6 @@
       toggleEl(els.baseURLGroup, false);
       toggleEl(els.modelInputGroup, false);
       toggleEl(els.apiTypeGroup, false);
-      toggleEl(els.imageSupportGroup, false);
       toggleEl(els.customModelInputGroup, false);
       toggleEl(els.modelSelectGroup, true);
       els.btnVerify.disabled = false;
@@ -490,7 +485,6 @@
       // 占位状态：隐藏所有字段，禁用验证按钮
       toggleEl(els.baseURLGroup, false);
       toggleEl(els.apiTypeGroup, false);
-      toggleEl(els.imageSupportGroup, false);
       toggleEl(els.modelInputGroup, false);
       toggleEl(els.modelSelectGroup, false);
       toggleEl(els.customModelInputGroup, false);
@@ -500,7 +494,6 @@
     } else if (preset) {
       // 预设模式：隐藏手动字段
       toggleEl(els.apiTypeGroup, false);
-      toggleEl(els.imageSupportGroup, false);
       toggleEl(els.modelInputGroup, false);
       toggleEl(els.baseURLGroup, false);
       toggleEl(els.apiKeyGroup, true);
@@ -519,7 +512,6 @@
       // 手动模式：恢复原始 Custom 行为
       toggleEl(els.baseURLGroup, true);
       toggleEl(els.apiTypeGroup, true);
-      toggleEl(els.imageSupportGroup, true);
       toggleEl(els.modelInputGroup, true);
       toggleEl(els.modelSelectGroup, false);
       toggleEl(els.customModelInputGroup, false);
@@ -669,7 +661,7 @@
         baseURL: "",
         api: "",
         subPlatform: "kimi-code",
-        supportImage: true,
+        supportImage: verifyResult.supportsImage ?? true,
         customPreset: "",
       });
 
@@ -733,6 +725,8 @@
         return;
       }
 
+      // 使用后端探测到的图片能力
+      params.supportImage = result.supportsImage ?? true;
       await window.oneclaw.saveConfig(buildSavePayload(params));
       setVerifying(false);
       goToStep(3);
@@ -780,7 +774,6 @@
         params.baseURL = baseURL;
         params.modelID = modelID;
         params.apiType = document.querySelector('input[name="apiType"]:checked').value;
-        params.supportImage = els.imageSupport.checked;
       }
     } else {
       // 非 custom provider：支持自定义模型输入

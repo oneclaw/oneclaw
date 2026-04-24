@@ -4,6 +4,7 @@ import * as fs from "fs";
 import { resolveUserConfigPath, resolveUserStateDir } from "./constants";
 import { syncOpenClawStateAfterWrite } from "./openclaw-health-state";
 import { backupCurrentUserConfig } from "./config-backup";
+import { getModelInput } from "./model-catalog";
 
 // ── Provider 配置预设（与 kimiclaw ProviderSetupView.swift 对齐） ──
 
@@ -133,29 +134,36 @@ export function buildProviderConfig(
 ): Record<string, unknown> {
   const preset = PROVIDER_PRESETS[provider];
 
-  // 预设 provider（Anthropic/OpenAI/Google）一律声明图片能力
+  // 解析 configKey（用于 catalog 查询）
+  const customPre = customPreset ? CUSTOM_PROVIDER_PRESETS[customPreset] : undefined;
+  const configKey = customPre
+    ? customPre.providerKey
+    : preset ? provider : (baseURL ? deriveCustomConfigKey(baseURL) : "custom");
+
+  // 优先查询 openclaw 权威模型目录；未命中时回退到 supportImage 参数
+  const catalogInput = getModelInput(configKey, modelID);
+  const input = catalogInput ?? (supportImage !== false ? ["text", "image"] : ["text"]);
+
   if (preset) {
     return {
       apiKey,
       baseUrl: preset.baseUrl,
       api: preset.api,
-      models: [{ id: modelID, name: modelID, input: ["text", "image"] }],
+      models: [{ id: modelID, name: modelID, input }],
     };
   }
 
   // Custom 内置预设命中时，使用预设的 baseUrl 和 api（前端传了 baseURL 时优先用前端值）
-  const customPre = customPreset ? CUSTOM_PROVIDER_PRESETS[customPreset] : undefined;
   if (customPre) {
     return {
       apiKey,
       baseUrl: baseURL || customPre.baseUrl,
       api: customPre.api,
-      models: [{ id: modelID, name: modelID, input: ["text", "image"] }],
+      models: [{ id: modelID, name: modelID, input }],
     };
   }
 
-  // Custom provider — 根据用户勾选决定是否声明图片能力
-  const input = supportImage !== false ? ["text", "image"] : ["text"];
+  // Custom manual provider
   return {
     apiKey,
     baseUrl: baseURL,
@@ -175,12 +183,16 @@ export function saveMoonshotConfig(
   const sub = MOONSHOT_SUB_PLATFORMS[subPlatform] || MOONSHOT_SUB_PLATFORMS["moonshot-cn"];
   const providerKey = sub.providerKey;
 
+  // 优先查询 openclaw 权威模型目录
+  const catalogInput = getModelInput(providerKey, modelID);
+  const input = catalogInput ?? ["text", "image"];
+
   // 所有子平台统一写法：apiKey + baseUrl + api + models 写入 providers
   config.models.providers[providerKey] = {
     apiKey,
     baseUrl: sub.baseUrl,
     api: sub.api,
-    models: [{ id: modelID, name: modelID, input: ["text", "image"], reasoning: true }],
+    models: [{ id: modelID, name: modelID, input, reasoning: true }],
   };
 
   config.agents.defaults.model.primary = `${providerKey}/${modelID}`;
@@ -506,6 +518,7 @@ export async function verifyProvider(params: {
       default:
         return { success: false, message: `未知 Provider: ${provider}` };
     }
+
     return { success: true };
   } catch (err: any) {
     return { success: false, message: err.message || String(err) };
