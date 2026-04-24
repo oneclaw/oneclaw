@@ -90,10 +90,16 @@ interface ReconcileOutcome {
   error?: string;
 }
 
-// 曾经被 OneClaw mirror，但已经迁移到 openclaw 内置 vendor 的 plugin id。
-// 旧用户的 ~/.openclaw/extensions/<id>/ 仍残留旧版本，与 openclaw stock 同时存在
-// 会触发 duplicate plugin id 警告，启动时静默删除一次即可。
-const RETIRED_USER_PLUGIN_IDS: readonly string[] = ["qqbot"];
+// 曾经被 OneClaw mirror，但已经迁移到 openclaw 内置 vendor / bundled 路径的
+// plugin id。旧用户的 ~/.openclaw/extensions/<id>/ 仍残留旧版本，与 openclaw
+// stock / bundled 同时存在会触发 duplicate plugin id 警告，启动时静默删除一次
+// 即可。
+//
+//   - qqbot：2026.4.5 起由 openclaw 官方 vendor，OneClaw 不再 ship
+//   - dingtalk-connector：external-channel-loader 短暂放进过 mirror，
+//     Windows 上 jiti register 重入导致 DWS clientId 互踢，已回滚到 bundled
+//     路径（gateway.asar/.../dist/extensions/dingtalk-connector）走 shim。
+const RETIRED_USER_PLUGIN_IDS: readonly string[] = ["qqbot", "dingtalk-connector"];
 
 function removeRetiredOrphans(userDir: string): ReconcileOutcome[] {
   const outcomes: ReconcileOutcome[] = [];
