@@ -51,35 +51,37 @@ function handleQuit() {
 export function renderStep0(state: AppViewState, conflict: DetectionResult, goToStep: (step: number) => void) {
   return html`
     <div class="oc-setup-step">
-      <div class="oc-setup-icon oc-setup-icon--warning">
-        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/>
-          <path d="M12 9v4"/><path d="M12 17h.01"/>
-        </svg>
+      <div class="oc-setup-step-body">
+        <div class="oc-setup-icon oc-setup-icon--warning">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/>
+            <path d="M12 9v4"/><path d="M12 17h.01"/>
+          </svg>
+        </div>
+
+        <h2 class="oc-setup-title">${t("setup.conflict.title")}</h2>
+        <p class="oc-setup-subtitle">${t("setup.conflict.subtitle")}</p>
+        <p class="oc-setup-reassure">${t("setup.conflict.reassure")}</p>
+
+        <div class="oc-setup-conflict-details">
+          ${conflict.portInUse ? html`
+            <div class="oc-setup-conflict-item">
+              ${tpl("setup.conflict.portInUse", {
+                port: 18789,
+                process: conflict.portProcess ?? "unknown",
+                pid: conflict.portPid ?? "",
+              })}
+            </div>
+          ` : nothing}
+          ${conflict.globalInstalled ? html`
+            <div class="oc-setup-conflict-item">
+              ${tpl("setup.conflict.globalInstalled", { path: conflict.globalPath ?? "" })}
+            </div>
+          ` : nothing}
+        </div>
+
+        <oc-message-box .message=${s.error ?? ""} .type=${"error"} .visible=${!!s.error}></oc-message-box>
       </div>
-
-      <h2 class="oc-setup-title">${t("setup.conflict.title")}</h2>
-      <p class="oc-setup-subtitle">${t("setup.conflict.subtitle")}</p>
-      <p class="oc-setup-reassure">${t("setup.conflict.reassure")}</p>
-
-      <div class="oc-setup-conflict-details">
-        ${conflict.portInUse ? html`
-          <div class="oc-setup-conflict-item">
-            ${tpl("setup.conflict.portInUse", {
-              port: 18789,
-              process: conflict.portProcess ?? "unknown",
-              pid: conflict.portPid ?? "",
-            })}
-          </div>
-        ` : nothing}
-        ${conflict.globalInstalled ? html`
-          <div class="oc-setup-conflict-item">
-            ${tpl("setup.conflict.globalInstalled", { path: conflict.globalPath ?? "" })}
-          </div>
-        ` : nothing}
-      </div>
-
-      <oc-message-box .message=${s.error ?? ""} .type=${"error"} .visible=${!!s.error}></oc-message-box>
 
       <div class="oc-setup-btn-row">
         <button class="oc-setup-btn oc-setup-btn--secondary" @click=${handleQuit}>

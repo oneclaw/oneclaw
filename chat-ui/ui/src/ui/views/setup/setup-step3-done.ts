@@ -64,20 +64,21 @@ export function renderStep3(state: AppViewState) {
 
   return html`
     <div class="oc-setup-step">
+      <div class="oc-setup-step-body">
+        <h2 class="oc-setup-title">${t("setup.done.title")}</h2>
+        <p class="oc-setup-subtitle">${t("setup.done.subtitle")}</p>
 
-      <h2 class="oc-setup-title">${t("setup.done.title")}</h2>
-      <p class="oc-setup-subtitle">${t("setup.done.subtitle")}</p>
+        <div class="oc-setup-options">
+          ${s.launchAtLoginSupported ? html`
+            <oc-toggle-switch .label=${t("setup.done.launchAtLogin")} .checked=${s.launchAtLogin}
+              @change=${(e: CustomEvent) => { s.launchAtLogin = e.detail.checked; state.requestUpdate(); }}
+            ></oc-toggle-switch>
+          ` : nothing}
+        </div>
 
-      <div class="oc-setup-options">
-        ${s.launchAtLoginSupported ? html`
-          <oc-toggle-switch .label=${t("setup.done.launchAtLogin")} .checked=${s.launchAtLogin}
-            @change=${(e: CustomEvent) => { s.launchAtLogin = e.detail.checked; state.requestUpdate(); }}
-          ></oc-toggle-switch>
-        ` : nothing}
+        <oc-message-box .message=${s.error ?? ""} .type=${"error"} .visible=${!!s.error}></oc-message-box>
+        <oc-message-box .message=${s.statusMsg ?? ""} .type=${"info"} .visible=${!!s.statusMsg && !s.error}></oc-message-box>
       </div>
-
-      <oc-message-box .message=${s.error ?? ""} .type=${"error"} .visible=${!!s.error}></oc-message-box>
-      <oc-message-box .message=${s.statusMsg ?? ""} .type=${"info"} .visible=${!!s.statusMsg && !s.error}></oc-message-box>
 
       <div class="oc-setup-btn-row">
         <button class="oc-setup-btn oc-setup-btn--primary" ?disabled=${s.starting}

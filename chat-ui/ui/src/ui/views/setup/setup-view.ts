@@ -56,16 +56,19 @@ function injectStyles() {
     .oc-setup-container {
       width: 65%;
       margin: 0 auto;
-      padding: 72px 32px 32px;
-      height: 100%;
+      /* 顶部 padding 为固定定位的 progress dots 让位；底部留一点呼吸空间。
+         真正的滚动委托给内部 .oc-setup-step-body，因此这里 overflow:hidden
+         保证按钮条（sibling of step-body）永远停在视口底部、不会被内容推下去。 */
+      padding: 72px 32px 0;
+      flex: 1 1 0%;
+      min-height: 0;
       display: flex;
       flex-direction: column;
       align-items: stretch;
-      overflow-y: auto;
+      overflow: hidden;
     }
     .oc-setup-container--step2 {
       padding-top: 48px;
-      padding-bottom: 48px;
     }
 
     .oc-setup-progress {
@@ -98,7 +101,20 @@ function injectStyles() {
       flex-direction: column;
       align-items: stretch;
       text-align: left;
-      flex: 1;
+      flex: 1 1 0%;
+      min-height: 0;
+      overflow: hidden;
+    }
+    /* 可滚动正文区：step 里除按钮条外的一切都放在这里。
+       flex:1 + min-height:0 让它严格受 step 剩余高度约束，而 overflow-y:auto
+       使内容超过视口时出现滚动条，绝不会把按钮条挤出可视区。 */
+    .oc-setup-step-body {
+      flex: 1 1 0%;
+      min-height: 0;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      align-items: stretch;
     }
 
     .oc-setup-icon {
@@ -348,13 +364,16 @@ function injectStyles() {
       justify-content: flex-end;
       align-items: center;
       gap: 12px;
-      margin-top: auto;
       padding-top: 24px;
       padding-bottom: 16px;
       width: 100%;
-      position: sticky;
-      bottom: 48px;
+      flex-shrink: 0;
       background: var(--bg, #fff);
+    }
+    /* 作为 .oc-setup-step 直接子级的 footer 需要额外的底部呼吸空间。
+       用子组合选择器只影响 step 级 footer，不影响 oauth <details> 内嵌 btn-row。 */
+    .oc-setup-step > .oc-setup-btn-row {
+      padding-bottom: 32px;
     }
 
     .oc-setup-btn {

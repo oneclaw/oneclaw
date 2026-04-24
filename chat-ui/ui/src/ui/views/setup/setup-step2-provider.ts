@@ -130,7 +130,7 @@ async function handleVerify(state: AppViewState, goToStep: (step: number) => voi
   try {
     const result = await ipc.verifyKey(params);
     if (!result.success) {
-      s.error = result.error ?? t("setup.error.verifyFailed");
+      s.error = result.message ?? t("setup.error.verifyFailed");
       s.verifying = false;
       state.requestUpdate();
       return;
@@ -275,6 +275,7 @@ export function renderStep2(state: AppViewState, goToStep: (step: number) => voi
 
   return html`
     <div class="oc-setup-step">
+      <div class="oc-setup-step-body">
       <h2 class="oc-setup-title">${t("setup.provider.title")}</h2>
 
       <oc-provider-segment
@@ -396,6 +397,7 @@ export function renderStep2(state: AppViewState, goToStep: (step: number) => voi
           </a>
         </div>
       ` : nothing}
+      </div>
 
       <div class="oc-setup-btn-row">
         <button class="oc-setup-btn oc-setup-btn--secondary" @click=${() => goToStep(1)}>
