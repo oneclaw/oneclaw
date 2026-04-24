@@ -146,11 +146,13 @@ export function renderMessageGroup(
   opts: {
     onOpenSidebar?: (content: string) => void;
     showReasoning: boolean;
+    showThinking?: boolean;
     assistantName?: string;
     assistantAvatar?: string | null;
     isHydrating?: boolean;
   },
 ) {
+  const showThinking = opts.showThinking !== false;
   const normalizedRole = normalizeRoleForGrouping(group.role);
   const assistantName = opts.assistantName ?? "Assistant";
   const who =
@@ -179,6 +181,7 @@ export function renderMessageGroup(
             {
               isStreaming: group.isStreaming && index === group.messages.length - 1,
               showReasoning: opts.showReasoning,
+              showThinking,
               isHydrating: opts.isHydrating,
             },
             opts.onOpenSidebar,
@@ -285,7 +288,7 @@ function renderCollapsedToolCards(
 
 function renderGroupedMessage(
   message: unknown,
-  opts: { isStreaming: boolean; showReasoning: boolean; isHydrating?: boolean },
+  opts: { isStreaming: boolean; showReasoning: boolean; showThinking?: boolean; isHydrating?: boolean },
   onOpenSidebar?: (content: string) => void,
 ) {
   const m = message as Record<string, unknown>;
@@ -298,7 +301,8 @@ function renderGroupedMessage(
     typeof m.toolCallId === "string" ||
     typeof m.tool_call_id === "string";
 
-  const toolCards = extractToolCards(message);
+  const showThinking = opts.showThinking !== false;
+  const toolCards = showThinking ? extractToolCards(message) : [];
   const hasToolCards = toolCards.length > 0;
   const images = extractImages(message);
   const hasImages = images.length > 0;
