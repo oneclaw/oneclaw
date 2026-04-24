@@ -121,36 +121,6 @@ type OneClawUpdateState = {
   showBadge: boolean;
 };
 
-type OneClawPairingRequest = {
-  channel: string;
-  code: string;
-  id: string;
-  name: string;
-  createdAt: string;
-  lastSeenAt: string;
-};
-
-type OneClawPairingChannelState = {
-  channel: string;
-  pendingCount: number;
-  requests: OneClawPairingRequest[];
-  updatedAt: number;
-  lastAutoApprovedAt: number | null;
-  lastAutoApprovedName: string | null;
-};
-
-type OneClawIpcResult = {
-  success?: boolean;
-  message?: string;
-};
-
-type OneClawPairingState = {
-  pendingCount: number;
-  requests: OneClawPairingRequest[];
-  updatedAt: number;
-  channels: Record<string, OneClawPairingChannelState>;
-};
-
 type ReleaseNotesData = {
   currentVersion: string;
   entries: Array<{ version: string; notes: { zh?: string; en?: string } }>;
@@ -165,25 +135,8 @@ type OneClawBridge = {
   reportSetupViewState?: (active: boolean) => void;
   onUpdateState?: (cb: (payload: OneClawUpdateState) => void) => (() => void) | void;
   getUpdateState?: () => Promise<OneClawUpdateState>;
-  onPairingState?: (
-    cb: (payload: OneClawPairingState) => void,
-  ) => (() => void) | void;
-  getPairingState?: () => Promise<OneClawPairingState>;
-  refreshPairingState?: () => void;
   getReleaseNotes?: () => Promise<ReleaseNotesData | null>;
   dismissReleaseNotes?: (version: string) => Promise<void>;
-  settingsApproveFeishuPairing?: (
-    params: { code: string; id?: string; name?: string },
-  ) => Promise<OneClawIpcResult>;
-  settingsRejectFeishuPairing?: (
-    params: { code: string; id?: string; name?: string },
-  ) => Promise<OneClawIpcResult>;
-  settingsApproveWecomPairing?: (
-    params: { code: string; id?: string; name?: string },
-  ) => Promise<OneClawIpcResult>;
-  settingsRejectWecomPairing?: (
-    params: { code: string; id?: string; name?: string },
-  ) => Promise<OneClawIpcResult>;
 };
 
 const SHARE_PROMPT_STORE_KEY = "openclaw.share.prompt.v1";
@@ -401,9 +354,6 @@ export class OpenClawApp extends LitElement {
     sharePromptText: { state: true },
     sharePromptVersion: { state: true },
     updateBannerState: { state: true },
-    pairingState: { state: true },
-    pairingApproving: { state: true },
-    pairingRejecting: { state: true },
     settingsTabHint: { state: true },
     settingsNotice: { state: true },
     showReleaseNotesModal: { state: true },
@@ -680,14 +630,6 @@ export class OpenClawApp extends LitElement {
     percent: null,
     showBadge: false,
   };
-  pairingState: OneClawPairingState = {
-    pendingCount: 0,
-    requests: [],
-    updatedAt: Date.now(),
-    channels: {},
-  };
-  pairingApproving = false;
-  pairingRejecting = false;
   settingsTabHint: string | null = null;
   settingsNotice: string | null = null;
   showReleaseNotesModal = false;
@@ -710,7 +652,6 @@ export class OpenClawApp extends LitElement {
   private topbarObserver: ResizeObserver | null = null;
   private appNavigateCleanup: (() => void) | null = null;
   private updateStateCleanup: (() => void) | null = null;
-  private pairingStateCleanup: (() => void) | null = null;
   private gatewayReadyCleanup: (() => void) | null = null;
 
   createRenderRoot() {
@@ -722,7 +663,6 @@ export class OpenClawApp extends LitElement {
     handleConnected(this as unknown as Parameters<typeof handleConnected>[0]);
     this.bindAppNavigation();
     this.bindUpdateState();
-    this.bindPairingState();
     this.bindGatewayReady();
     this.fetchReleaseNotes();
   }
@@ -747,8 +687,6 @@ export class OpenClawApp extends LitElement {
     this.appNavigateCleanup = null;
     this.updateStateCleanup?.();
     this.updateStateCleanup = null;
-    this.pairingStateCleanup?.();
-    this.pairingStateCleanup = null;
     this.gatewayReadyCleanup?.();
     this.gatewayReadyCleanup = null;
     handleDisconnected(this as unknown as Parameters<typeof handleDisconnected>[0]);
@@ -833,74 +771,6 @@ export class OpenClawApp extends LitElement {
     };
   }
 
-  // 规范化渠道配对状态，避免渲染层处理空值或脏数据。
-  private applyPairingState(payload: OneClawPairingState | null | undefined) {
-    const rawRequests = Array.isArray(payload?.requests) ? payload.requests : [];
-    const requests: OneClawPairingRequest[] = rawRequests
-      .map((item) => ({
-        channel: String(item?.channel ?? "").trim().toLowerCase(),
-        code: String(item?.code ?? "").trim(),
-        id: String(item?.id ?? "").trim(),
-        name: String(item?.name ?? "").trim(),
-        createdAt: String(item?.createdAt ?? ""),
-        lastSeenAt: String(item?.lastSeenAt ?? ""),
-      }))
-      .filter((item) => item.channel.length > 0 && item.code.length > 0);
-    const pendingCountRaw = Number(payload?.pendingCount ?? requests.length);
-    const pendingCount = Number.isFinite(pendingCountRaw) && pendingCountRaw >= 0
-      ? Math.floor(pendingCountRaw)
-      : requests.length;
-    const updatedAtRaw = Number(payload?.updatedAt ?? Date.now());
-    const updatedAt = Number.isFinite(updatedAtRaw) ? updatedAtRaw : Date.now();
-    const rawChannels = payload?.channels && typeof payload.channels === "object"
-      ? payload.channels
-      : {};
-    const channels = Object.fromEntries(
-      Object.entries(rawChannels).map(([channel, item]) => {
-        const channelRequests = Array.isArray(item?.requests) ? item.requests : [];
-        const normalizedRequests: OneClawPairingRequest[] = channelRequests
-          .map((request) => ({
-            channel,
-            code: String(request?.code ?? "").trim(),
-            id: String(request?.id ?? "").trim(),
-            name: String(request?.name ?? "").trim(),
-            createdAt: String(request?.createdAt ?? ""),
-            lastSeenAt: String(request?.lastSeenAt ?? ""),
-          }))
-          .filter((request) => request.code.length > 0);
-        const channelPendingRaw = Number(item?.pendingCount ?? normalizedRequests.length);
-        const channelPendingCount = Number.isFinite(channelPendingRaw) && channelPendingRaw >= 0
-          ? Math.floor(channelPendingRaw)
-          : normalizedRequests.length;
-        const channelUpdatedAtRaw = Number(item?.updatedAt ?? updatedAt);
-        const channelUpdatedAt = Number.isFinite(channelUpdatedAtRaw) ? channelUpdatedAtRaw : updatedAt;
-        const lastAutoApprovedAt = typeof item?.lastAutoApprovedAt === "number" &&
-          Number.isFinite(item.lastAutoApprovedAt)
-          ? item.lastAutoApprovedAt
-          : null;
-        const lastAutoApprovedName = typeof item?.lastAutoApprovedName === "string" &&
-          item.lastAutoApprovedName.trim().length > 0
-          ? item.lastAutoApprovedName.trim()
-          : null;
-        return [channel, {
-          channel,
-          pendingCount: Math.max(channelPendingCount, normalizedRequests.length),
-          requests: normalizedRequests,
-          updatedAt: channelUpdatedAt,
-          lastAutoApprovedAt,
-          lastAutoApprovedName,
-        }];
-      })
-    ) as Record<string, OneClawPairingChannelState>;
-
-    this.pairingState = {
-      pendingCount: Math.max(pendingCount, requests.length),
-      requests,
-      updatedAt,
-      channels,
-    };
-  }
-
   // 订阅主进程更新状态事件，并在首屏主动拉取一次当前状态。
   private bindUpdateState() {
     if (this.updateStateCleanup) {
@@ -932,114 +802,6 @@ export class OpenClawApp extends LitElement {
       });
       this.gatewayReadyCleanup = typeof unsubscribe === "function" ? unsubscribe : null;
     }
-  }
-
-  // 订阅聊天渠道待审批状态，并在首屏拉取一次快照用于渲染红点与快捷批准入口。
-  private bindPairingState() {
-    if (this.pairingStateCleanup) {
-      return;
-    }
-    const bridge = this.getOneClawBridge();
-    if (bridge?.onPairingState) {
-      const unsubscribe = bridge.onPairingState((payload) => this.applyPairingState(payload));
-      this.pairingStateCleanup = typeof unsubscribe === "function" ? unsubscribe : null;
-    }
-    if (bridge?.getPairingState) {
-      void bridge.getPairingState()
-        .then((payload) => this.applyPairingState(payload))
-        .catch(() => {
-          // ignore preload bridge fetch errors
-        });
-    }
-  }
-
-  // 返回当前首条待审批请求，供快捷批准/拒绝入口复用。
-  private getFirstPendingPairing(): OneClawPairingRequest | null {
-    return this.pairingState.requests[0] ?? null;
-  }
-
-  // 统一根据渠道调用批准 API，并请求主进程立即刷新状态快照。
-  async approveFirstPairing() {
-    if (this.pairingApproving) {
-      return;
-    }
-    const target = this.getFirstPendingPairing();
-    if (!target?.code) {
-      return;
-    }
-    const bridge = this.getOneClawBridge();
-    const approve = target.channel === "wecom"
-      ? bridge?.settingsApproveWecomPairing
-      : bridge?.settingsApproveFeishuPairing;
-    if (!approve) {
-      return;
-    }
-
-    this.pairingApproving = true;
-    try {
-      const result = await approve({
-        code: target.code,
-        id: target.id,
-        name: target.name,
-      });
-      if (!result?.success) {
-        this.lastError = result?.message || t("pairing.approveFailed");
-        return;
-      }
-      bridge.refreshPairingState?.();
-    } catch (err: any) {
-      this.lastError = t("pairing.approveFailed") + (err?.message ? `: ${err.message}` : "");
-    } finally {
-      this.pairingApproving = false;
-    }
-  }
-
-  // 统一根据渠道调用拒绝 API（本地忽略该配对码），并请求主进程刷新状态。
-  async rejectFirstPairing() {
-    if (this.pairingRejecting) {
-      return;
-    }
-    const target = this.getFirstPendingPairing();
-    if (!target?.code) {
-      return;
-    }
-    const bridge = this.getOneClawBridge();
-    const reject = target.channel === "wecom"
-      ? bridge?.settingsRejectWecomPairing
-      : bridge?.settingsRejectFeishuPairing;
-    if (!reject) {
-      return;
-    }
-
-    this.pairingRejecting = true;
-    try {
-      const result = await reject({
-        code: target.code,
-        id: target.id,
-        name: target.name,
-      });
-      if (!result?.success) {
-        this.lastError = result?.message || t("pairing.rejectFailed");
-        return;
-      }
-      bridge.refreshPairingState?.();
-    } catch (err: any) {
-      this.lastError = t("pairing.rejectFailed") + (err?.message ? `: ${err.message}` : "");
-    } finally {
-      this.pairingRejecting = false;
-    }
-  }
-
-  // 通知可见性：只要还有待审批请求就持续显示。
-  shouldShowPairingNotice(): boolean {
-    return this.pairingState.pendingCount > 0;
-  }
-
-  // 返回当前待审批来源的可读渠道名。
-  getPendingPairingChannelLabel(): string {
-    const first = this.getFirstPendingPairing();
-    const channel = first?.channel === "wecom" ? "wecom" : "feishu";
-    return t(`pairing.channel.${channel}`);
   }
 
   private bindAppNavigation() {
@@ -1082,10 +844,8 @@ export class OpenClawApp extends LitElement {
         return;
       }
       if (payload?.view === "settings") {
-        // 外部触发打开设置时，优先使用 payload 指定的 tab（如恢复流程 → backup），
-        // 否则若存在待审批请求则引导到聊天集成页。
-        this.settingsTabHint = payload.settingsTab
-          ?? (this.pairingState.pendingCount > 0 ? "channels" : null);
+        // 外部触发打开设置时，优先使用 payload 指定的 tab（如恢复流程 → backup）。
+        this.settingsTabHint = payload.settingsTab ?? null;
         this.settingsNotice = payload.settingsNotice ?? null;
         this.applySettings({
           ...this.settings,

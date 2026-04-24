@@ -45,9 +45,9 @@ export function isWecomPluginBundled(): boolean {
   return hasEntry && fs.existsSync(path.join(pluginDir, "openclaw.plugin.json"));
 }
 
-// 统一规整企业微信私聊策略，非法值回退到默认 pairing。
+// 统一规整企业微信私聊策略，非法值回退到默认 open（最宽松，任何人可直接发消息）。
 function normalizeWecomDmPolicy(value: unknown): WecomDmPolicy {
-  return value === "open" ? "open" : "pairing";
+  return value === "pairing" ? "pairing" : "open";
 }
 
 // 统一规整企业微信群策略，非法值回退到默认 open。

@@ -7,8 +7,8 @@ import { t } from "../../i18n.ts";
 import * as ipc from "../../data/ipc-bridge.ts";
 import { CHANNEL_PLATFORMS } from "./settings-constants.ts";
 import { renderChannelWeixin, cleanupWeixinTab } from "./tab-channels-weixin.ts";
-import { renderChannelFeishu, refreshFeishuPairing, resetFeishuTab } from "./tab-channels-feishu.ts";
-import { renderChannelWecom, refreshWecomPairing, resetWecomTab } from "./tab-channels-wecom.ts";
+import { renderChannelFeishu, resetFeishuTab } from "./tab-channels-feishu.ts";
+import { renderChannelWecom, resetWecomTab } from "./tab-channels-wecom.ts";
 import { renderChannelDingtalk, resetDingtalkTab } from "./tab-channels-dingtalk.ts";
 import { renderChannelKimiclaw, resetKimiclawTab } from "./tab-channels-kimiclaw.ts";
 import { renderChannelQqbot, resetQqbotTab } from "./tab-channels-qqbot.ts";
@@ -18,7 +18,6 @@ function createChannelsState() {
   return {
     activePlatform: "weixin",
     enabledMap: {} as Record<string, boolean>,
-    pairingCleanup: null as (() => void) | null,
     initialized: false,
   };
 }
@@ -28,12 +27,6 @@ const s = createChannelsState();
 async function init(state: AppViewState) {
   if (s.initialized) return;
   s.initialized = true;
-  s.pairingCleanup = ipc.onPairingState(() => {
-    // Refresh pairing data for the active platform when push arrives
-    if (s.activePlatform === "feishu") refreshFeishuPairing(state);
-    else if (s.activePlatform === "wecom") refreshWecomPairing(state);
-    state.requestUpdate();
-  });
   // Load enabled states for all channels
   try {
     const [weixin, feishu, wecom, dingtalk, qqbot, kimi] = await Promise.all([
@@ -69,9 +62,6 @@ function switchPlatform(newPlatform: string) {
 }
 
 export function cleanupChannelsTab() {
-  if (s.pairingCleanup) {
-    s.pairingCleanup();
-  }
   cleanupWeixinTab();
   resetFeishuTab();
   resetWecomTab();
