@@ -21,6 +21,7 @@
       placeholder: "sk-ant-...",
       platformUrl: "https://console.anthropic.com?utm_source=oneclaw",
       models: [
+        "claude-opus-4-7",
         "claude-sonnet-4-6",
         "claude-opus-4-6",
         "claude-sonnet-4-5-20250929",
@@ -30,13 +31,13 @@
     },
     moonshot: {
       placeholder: "sk-...",
-      models: ["kimi-k2.5", "kimi-k2-0905-preview"],
+      models: ["kimi-k2.6", "kimi-k2.5", "kimi-k2-0905-preview"],
       hasSubPlatform: true,
     },
     openai: {
       placeholder: "sk-...",
       platformUrl: "https://platform.openai.com?utm_source=oneclaw",
-      models: ["gpt-5.4", "gpt-5.2", "gpt-5.2-codex"],
+      models: ["gpt-5.4", "gpt-5.4-mini", "gpt-5.2", "gpt-5.2-codex"],
     },
     google: {
       placeholder: "AI...",
@@ -55,34 +56,34 @@
     "kimi-code": "https://kimi.com/code?utm_source=oneclaw",
   };
 
-  const KIMI_CODE_MODELS = ["k2p5"];
+  const KIMI_CODE_MODELS = ["kimi-for-coding"];
 
   // Custom tab 内置预设
   const CUSTOM_PRESETS = {
     "minimax": {
       providerKey: "minimax",
       placeholder: "eyJ...",
-      models: ["MiniMax-M2.5", "MiniMax-M2.5-highspeed"],
+      models: ["MiniMax-M2.7", "MiniMax-M2.7-highspeed", "MiniMax-M2.5", "MiniMax-M2.5-highspeed"],
     },
     "minimax-cn": {
       providerKey: "minimax-cn",
       placeholder: "eyJ...",
-      models: ["MiniMax-M2.5", "MiniMax-M2.5-highspeed"],
+      models: ["MiniMax-M2.7", "MiniMax-M2.7-highspeed", "MiniMax-M2.5", "MiniMax-M2.5-highspeed"],
     },
     "zai-global": {
       providerKey: "zai-global",
       placeholder: "...",
-      models: ["glm-5", "glm-4.7", "glm-4.7-flash", "glm-4.7-flashx"],
+      models: ["glm-5.1", "glm-5", "glm-4.7", "glm-4.7-flash", "glm-4.7-flashx"],
     },
     "zai-cn": {
       providerKey: "zai-cn",
       placeholder: "...",
-      models: ["glm-5", "glm-4.7", "glm-4.7-flash", "glm-4.7-flashx"],
+      models: ["glm-5.1", "glm-5", "glm-4.7", "glm-4.7-flash", "glm-4.7-flashx"],
     },
     "zai-cn-coding": {
       providerKey: "zai-cn-coding",
       placeholder: "...",
-      models: ["glm-5", "glm-4.7", "glm-4.7-flash", "glm-4.7-flashx"],
+      models: ["glm-5.1", "glm-5", "glm-4.7", "glm-4.7-flash", "glm-4.7-flashx"],
     },
     "volcengine": {
       providerKey: "volcengine",
@@ -92,22 +93,22 @@
     "volcengine-coding": {
       providerKey: "volcengine-coding",
       placeholder: "...",
-      models: ["doubao-seed-2.0-code", "doubao-seed-2.0-pro", "doubao-seed-2.0-lite", "doubao-seed-code", "minimax-m2.5", "glm-4.7", "deepseek-v3.2", "kimi-k2.5", "ark-code-latest"],
+      models: ["doubao-seed-2.0-code", "doubao-seed-2.0-pro", "doubao-seed-2.0-lite", "doubao-seed-code", "minimax-m2.7", "glm-5.1", "deepseek-v3.2", "kimi-k2.6", "ark-code-latest"],
     },
     "qwen": {
       providerKey: "qwen",
       placeholder: "sk-...",
-      models: ["qwen-coder-plus-latest", "qwen-plus-latest", "qwen-max-latest", "qwen-turbo-latest"],
+      models: ["qwen3.6-max-preview", "qwen3.6-plus", "qwen-coder-plus-latest", "qwen-plus-latest", "qwen-max-latest", "qwen-turbo-latest"],
     },
     "qwen-coding": {
       providerKey: "qwen-coding",
       placeholder: "sk-sp-...",
-      models: ["qwen3.5-plus", "kimi-k2.5", "glm-5", "MiniMax-M2.5",],
+      models: ["qwen3.6-plus", "qwen3.5-plus", "kimi-k2.6", "glm-5.1", "MiniMax-M2.7"],
     },
     "deepseek": {
       providerKey: "deepseek",
       placeholder: "sk-...",
-      models: ["deepseek-chat", "deepseek-reasoner"],
+      models: ["deepseek-v4-flash", "deepseek-chat", "deepseek-reasoner"],
     },
   };
 
