@@ -367,6 +367,13 @@
       "advanced.wbConfiguring": "Configuring browser extensions…",
       "advanced.wbConfigured": "Browser extensions configured",
       "advanced.wbConfigFailed": "Configuration failed",
+      "advanced.wbExtBlocklisted": "Blocklisted (you uninstalled it via browser UI)",
+      "advanced.wbCleanBlocklist": "Clear blocklist",
+      "advanced.wbCleanConfirm": "This will modify {browser}'s Preferences file to remove the extension from the uninstall blocklist. {browser} must be fully closed first. Have you quit {browser}?",
+      "advanced.wbCleanRunning": "{browser} is still running. Please fully quit {browser} first.",
+      "advanced.wbCleanDone": "Blocklist cleared. Launch {browser} now to install the extension.",
+      "advanced.wbCleanNotBlocklisted": "Not in blocklist anymore (already cleaned).",
+      "advanced.wbCleanFailed": "Clean failed",
       "advanced.imessage": "iMessage channel",
       "advanced.launchAtLogin": "Launch at login",
       "advanced.cliCommand": "Terminal command",
@@ -701,6 +708,13 @@
       "advanced.wbConfiguring": "正在配置浏览器扩展…",
       "advanced.wbConfigured": "浏览器扩展配置完成",
       "advanced.wbConfigFailed": "配置失败",
+      "advanced.wbExtBlocklisted": "已被你手动卸载（Chrome 静默忽略再装）",
+      "advanced.wbCleanBlocklist": "清理黑名单",
+      "advanced.wbCleanConfirm": "将修改 {browser} 的 Preferences 文件移除卸载黑名单。{browser} 必须完全退出。已经退出 {browser} 了吗？",
+      "advanced.wbCleanRunning": "{browser} 仍在运行，请完全退出后再试。",
+      "advanced.wbCleanDone": "黑名单已清理。启动 {browser} 即可装扩展。",
+      "advanced.wbCleanNotBlocklisted": "已不在黑名单（之前清理过）。",
+      "advanced.wbCleanFailed": "清理失败",
       "advanced.imessage": "iMessage 频道",
       "advanced.launchAtLogin": "开机启动",
       "advanced.cliCommand": "终端命令",
@@ -3261,16 +3275,36 @@
         if (!row.installed) return;
         var div = document.createElement("div");
         div.className = "wb-browser-row";
+
         var name = document.createElement("span");
         name.className = "wb-browser-name";
         name.textContent = row.browserName;
-        var badge = document.createElement("span");
-        badge.className = "wb-status-badge " + (row.configured ? "ok" : "warn");
-        badge.textContent = row.configured
-          ? t("advanced.wbExtConfigured")
-          : t("advanced.wbExtNotConfigured");
         div.appendChild(name);
+
+        var badge = document.createElement("span");
+        if (row.configured) {
+          badge.className = "wb-status-badge ok";
+          badge.textContent = t("advanced.wbExtConfigured");
+        } else if (row.blocklisted) {
+          badge.className = "wb-status-badge warn wb-blocklist-warn";
+          badge.textContent = "⚠ " + t("advanced.wbExtBlocklisted");
+        } else {
+          badge.className = "wb-status-badge warn";
+          badge.textContent = t("advanced.wbExtNotConfigured");
+        }
         div.appendChild(badge);
+
+        if (row.blocklisted) {
+          var btn = document.createElement("button");
+          btn.type = "button";
+          btn.className = "wb-cleanup-btn";
+          btn.textContent = t("advanced.wbCleanBlocklist");
+          btn.addEventListener("click", function () {
+            handleCleanBlocklist(row.browserId, row.browserName);
+          });
+          div.appendChild(btn);
+        }
+
         list.appendChild(div);
       });
     }
@@ -3344,6 +3378,35 @@
         await refreshWebbridgeCard();
       } else {
         showWebbridgeMsg((res && res.message) || t("advanced.wbConfigFailed"), "error");
+      }
+    } catch (err) {
+      showWebbridgeMsg(t("error.connection") + (err.message || ""), "error");
+    }
+  }
+
+  async function handleCleanBlocklist(browserId, browserName) {
+    hideWebbridgeMsg();
+    if (!window.oneclaw || typeof window.oneclaw.settingsWebbridgeCleanBlocklist !== "function") {
+      return;
+    }
+    var msg = t("advanced.wbCleanConfirm").replace(/{browser}/g, browserName);
+    if (!window.confirm(msg)) return;
+
+    try {
+      var res = await window.oneclaw.settingsWebbridgeCleanBlocklist(browserId);
+      if (res && res.success) {
+        if (res.code === "NOT_BLOCKLISTED") {
+          showWebbridgeMsg(t("advanced.wbCleanNotBlocklisted"), "info");
+        } else {
+          var doneMsg = t("advanced.wbCleanDone").replace(/{browser}/g, browserName);
+          showWebbridgeMsg(doneMsg, "success");
+        }
+        await refreshWebbridgeCard();
+      } else if (res && res.code === "BROWSER_RUNNING") {
+        var runMsg = t("advanced.wbCleanRunning").replace(/{browser}/g, browserName);
+        showWebbridgeMsg(runMsg, "error");
+      } else {
+        showWebbridgeMsg(t("advanced.wbCleanFailed") + ": " + ((res && res.message) || ""), "error");
       }
     } catch (err) {
       showWebbridgeMsg(t("error.connection") + (err.message || ""), "error");

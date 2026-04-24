@@ -1929,6 +1929,23 @@ select option {
   background: var(--warning-bg);
   color: var(--warning);
 }
+.wb-blocklist-warn {
+  background: rgba(192, 57, 43, 0.12);
+  color: #c0392b;
+}
+.wb-cleanup-btn {
+  margin-left: 8px;
+  padding: 2px 10px;
+  font-size: 12px;
+  border: 1px solid #c0392b;
+  background: transparent;
+  color: #c0392b;
+  border-radius: 4px;
+  cursor: pointer;
+}
+.wb-cleanup-btn:hover {
+  background: rgba(192, 57, 43, 0.08);
+}
 .wb-actions {
   display: flex;
   gap: 8px;

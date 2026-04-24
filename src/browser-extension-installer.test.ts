@@ -443,3 +443,173 @@ test("installForAllDetectedBrowsers 全部未装 → 全部 browser-not-installe
     restore();
   }
 });
+
+// ===== blocklist 检测 + 清理 =====
+
+import {
+  isExtensionBlocklisted,
+  cleanExtensionBlocklist,
+  type BlocklistCleanResult,
+} from "./browser-extension-installer";
+
+function makeChromeWithPrefs(home: string, prefsBody: object): string {
+  const chrome = BROWSER_TARGETS.find((t) => t.id === "chrome")!;
+  const profileDir = path.join(
+    home,
+    chrome.userDataDirMac,
+    chrome.profileSubdir,
+  );
+  fs.mkdirSync(profileDir, { recursive: true });
+  fs.writeFileSync(
+    path.join(profileDir, "Preferences"),
+    JSON.stringify(prefsBody),
+    "utf-8",
+  );
+  return path.join(profileDir, "Preferences");
+}
+
+test(
+  "[macOS] isExtensionBlocklisted: Preferences 不存在 → false",
+  { skip: process.platform === "win32" },
+  async () => {
+    const home = makeTempHome();
+    const restore = setupFakeHome(home);
+    try {
+      const chrome = BROWSER_TARGETS.find((t) => t.id === "chrome")!;
+      const result = await isExtensionBlocklisted(chrome, FAKE_EXT_ID);
+      assert.equal(result, false);
+    } finally {
+      restore();
+    }
+  },
+);
+
+test(
+  "[macOS] isExtensionBlocklisted: external_uninstalls 含 ID → true",
+  { skip: process.platform === "win32" },
+  async () => {
+    const home = makeTempHome();
+    const restore = setupFakeHome(home);
+    try {
+      const chrome = BROWSER_TARGETS.find((t) => t.id === "chrome")!;
+      makeChromeWithPrefs(home, {
+        extensions: { external_uninstalls: [FAKE_EXT_ID, "otherid"] },
+      });
+      const result = await isExtensionBlocklisted(chrome, FAKE_EXT_ID);
+      assert.equal(result, true);
+    } finally {
+      restore();
+    }
+  },
+);
+
+test(
+  "[macOS] isExtensionBlocklisted: external_uninstalls 不含 ID → false",
+  { skip: process.platform === "win32" },
+  async () => {
+    const home = makeTempHome();
+    const restore = setupFakeHome(home);
+    try {
+      const chrome = BROWSER_TARGETS.find((t) => t.id === "chrome")!;
+      makeChromeWithPrefs(home, {
+        extensions: { external_uninstalls: ["unrelated_id"] },
+      });
+      const result = await isExtensionBlocklisted(chrome, FAKE_EXT_ID);
+      assert.equal(result, false);
+    } finally {
+      restore();
+    }
+  },
+);
+
+test(
+  "[macOS] isExtensionBlocklisted: Preferences 损坏 JSON → false（best-effort 不误报）",
+  { skip: process.platform === "win32" },
+  async () => {
+    const home = makeTempHome();
+    const restore = setupFakeHome(home);
+    try {
+      const chrome = BROWSER_TARGETS.find((t) => t.id === "chrome")!;
+      const profileDir = path.join(
+        home,
+        chrome.userDataDirMac,
+        chrome.profileSubdir,
+      );
+      fs.mkdirSync(profileDir, { recursive: true });
+      fs.writeFileSync(
+        path.join(profileDir, "Preferences"),
+        "{not valid json",
+        "utf-8",
+      );
+      const result = await isExtensionBlocklisted(chrome, FAKE_EXT_ID);
+      assert.equal(result, false);
+    } finally {
+      restore();
+    }
+  },
+);
+
+test(
+  "[macOS] cleanExtensionBlocklist: 移除 ID 但保留其它字段",
+  { skip: process.platform === "win32" },
+  async () => {
+    const home = makeTempHome();
+    const restore = setupFakeHome(home);
+    try {
+      const chrome = BROWSER_TARGETS.find((t) => t.id === "chrome")!;
+      const prefsPath = makeChromeWithPrefs(home, {
+        extensions: {
+          external_uninstalls: [FAKE_EXT_ID, "keep1", "keep2"],
+          some_other_field: { x: 1 },
+        },
+        unrelated_top: "preserve",
+      });
+      const result: BlocklistCleanResult = await cleanExtensionBlocklist(
+        chrome,
+        FAKE_EXT_ID,
+      );
+      assert.equal(result, "cleaned");
+      const after = JSON.parse(fs.readFileSync(prefsPath, "utf-8"));
+      assert.deepEqual(after.extensions.external_uninstalls, ["keep1", "keep2"]);
+      assert.deepEqual(after.extensions.some_other_field, { x: 1 });
+      assert.equal(after.unrelated_top, "preserve");
+    } finally {
+      restore();
+    }
+  },
+);
+
+test(
+  "[macOS] cleanExtensionBlocklist: ID 不在数组 → not-blocklisted",
+  { skip: process.platform === "win32" },
+  async () => {
+    const home = makeTempHome();
+    const restore = setupFakeHome(home);
+    try {
+      const chrome = BROWSER_TARGETS.find((t) => t.id === "chrome")!;
+      makeChromeWithPrefs(home, {
+        extensions: { external_uninstalls: ["other"] },
+      });
+      const result = await cleanExtensionBlocklist(chrome, FAKE_EXT_ID);
+      assert.equal(result, "not-blocklisted");
+    } finally {
+      restore();
+    }
+  },
+);
+
+test(
+  "[macOS] cleanExtensionBlocklist: Preferences 不存在 → preferences-missing",
+  { skip: process.platform === "win32" },
+  async () => {
+    const home = makeTempHome();
+    const restore = setupFakeHome(home);
+    try {
+      const chrome = BROWSER_TARGETS.find((t) => t.id === "chrome")!;
+      const result = await cleanExtensionBlocklist(chrome, FAKE_EXT_ID);
+      assert.equal(result, "preferences-missing");
+    } finally {
+      restore();
+    }
+  },
+);
