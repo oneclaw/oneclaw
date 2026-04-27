@@ -27,19 +27,28 @@ const s = {
 
 /* ── init ── */
 
-function init(state: AppViewState) {
-  // Always consume tab hint + notice on every entry (not just first init).
-  // These are set by the main process navigate payload so there is no race
-  // with the IPC listener below.
+function isKnownTab(tabId: string): boolean {
+  return SETTINGS_TABS.some(tab => tab.id === tabId);
+}
+
+function consumeNavigationHints(state: AppViewState) {
   if (state.settingsTabHint) {
-    s.activeTab = state.settingsTabHint;
+    if (isKnownTab(state.settingsTabHint) && state.settingsTabHint !== s.activeTab) {
+      cleanupTab(s.activeTab);
+      s.activeTab = state.settingsTabHint;
+    }
+    s.notice = state.settingsNotice ?? null;
     state.settingsTabHint = null;
+    state.settingsNotice = null;
+    return;
   }
   if (state.settingsNotice) {
     s.notice = state.settingsNotice;
     state.settingsNotice = null;
   }
+}
 
+function init(state: AppViewState) {
   if (s.initialized) return;
   s.initialized = true;
 
@@ -615,7 +624,8 @@ export function cleanupSettingsView() {
 
 export function renderSettingsView(state: AppViewState) {
   injectStyles();
-  if (!s.initialized) init(state);
+  init(state);
+  consumeNavigationHints(state);
 
   return html`
     <div class="oc-settings-container">

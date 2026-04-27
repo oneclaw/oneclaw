@@ -145,8 +145,12 @@ function getModels(): string[] {
   return PROVIDERS[s.currentProvider]?.models ?? [];
 }
 
-function isKimiCodeOAuth(): boolean {
+function isKimiCodeProvider(): boolean {
   return s.currentProvider === "moonshot" && s.subPlatform === "kimi-code";
+}
+
+function shouldKeepKimiProxyAuth(): boolean {
+  return isKimiCodeProvider() && s.oauthLoggedIn && !s.pendingOAuthToken;
 }
 
 function lookupSavedProvider(provider: string, subPlatform?: string | null, overrideKey?: string | null): any {
@@ -275,7 +279,7 @@ async function init(state: AppViewState) {
       if (config.supportImage !== undefined) s.imageSupport = !!config.supportImage;
     }
     if (models) s.configuredModels = models;
-    if (isKimiCodeOAuth()) await checkOAuthStatus(state);
+    if (isKimiCodeProvider()) await checkOAuthStatus(state);
     state.requestUpdate();
   } catch {}
 }
@@ -335,7 +339,7 @@ function selectModelInList(modelKey: string, state: AppViewState) {
   s.modelAlias = (entry && entry.name !== modelId) ? entry.name : "";
 
   // Kimi Code OAuth: restore login state
-  if (isKimiCodeOAuth()) checkOAuthStatus(state);
+  if (isKimiCodeProvider()) checkOAuthStatus(state);
 
   state.requestUpdate();
 }
@@ -395,10 +399,10 @@ async function handleSetDefault(modelKey: string, state: AppViewState) {
 
 async function handleSave(state: AppViewState) {
   if (s.saving) return;
-  const isOAuth = isKimiCodeOAuth();
+  const isKimiCode = isKimiCodeProvider();
   let apiKey = s.apiKey.trim();
-  if (isOAuth && s.pendingOAuthToken) apiKey = s.pendingOAuthToken;
-  if (!apiKey && !isOAuth) { s.error = t("setup.error.noKey"); state.requestUpdate(); return; }
+  if (isKimiCode && s.pendingOAuthToken) apiKey = s.pendingOAuthToken;
+  if (!apiKey && !shouldKeepKimiProxyAuth()) { s.error = t("setup.error.noKey"); state.requestUpdate(); return; }
 
   const params = buildParams(apiKey);
   if (!params) { state.requestUpdate(); return; }
@@ -408,11 +412,11 @@ async function handleSave(state: AppViewState) {
   state.requestUpdate();
 
   try {
-    const verifyParams = isOAuth ? { ...params, verifyViaProxy: true } : params;
+    const verifyParams = isKimiCode ? { ...params, verifyViaProxy: true } : params;
     const verifyResult = await ipc.settingsVerifyKey(verifyParams);
     if (!verifyResult.success) {
       const errMsg = verifyResult.message ?? verifyResult.error ?? "";
-      if (isOAuth && s.pendingOAuthToken && errMsg.includes("401")) {
+      if (isKimiCode && s.pendingOAuthToken && errMsg.includes("401")) {
         s.pendingOAuthToken = null;
         try { await ipc.kimiOAuthLogout(); } catch {}
         s.oauthNoMembership = true;
@@ -431,7 +435,7 @@ async function handleSave(state: AppViewState) {
     payload.action = s.editMode === "edit" ? "update" : "add";
     if (s.editMode === "edit") payload.modelKey = s.selectedModelKey;
     // edit 模式不默认改变默认模型，只有用户显式操作才发送 setAsDefault
-    if (isOAuth && !s.pendingOAuthToken) payload.keepProxyAuth = true;
+    if (shouldKeepKimiProxyAuth()) payload.keepProxyAuth = true;
 
     await ipc.settingsSaveProvider(payload);
     s.saving = false;
@@ -508,7 +512,7 @@ async function checkOAuthStatus(state: AppViewState) {
 }
 
 async function loadUsage(state: AppViewState) {
-  if (!isKimiCodeOAuth()) return;
+  if (!isKimiCodeProvider()) return;
   try {
     const result = await ipc.kimiGetUsage();
     if (result?.data) s.usageData = result.data;
@@ -533,7 +537,7 @@ function onProviderChange(provider: string, state: AppViewState) {
   // Fill from saved
   const saved = lookupSavedProvider(provider);
   fillSavedProviderFields(saved);
-  if (isKimiCodeOAuth()) checkOAuthStatus(state);
+  if (isKimiCodeProvider()) checkOAuthStatus(state);
   state.requestUpdate();
 }
 
@@ -552,7 +556,7 @@ function onSubPlatformChange(sp: string, state: AppViewState) {
   s.showCustomModelInput = false;
   const saved = lookupSavedProvider(s.currentProvider, sp);
   fillSavedProviderFields(saved);
-  if (isKimiCodeOAuth()) checkOAuthStatus(state);
+  if (isKimiCodeProvider()) checkOAuthStatus(state);
   state.requestUpdate();
 }
 
@@ -775,7 +779,7 @@ export function renderTabProvider(state: AppViewState) {
   if (!s.initialized) init(state);
 
   const models = s.editMode === "edit" ? getEditorModels() : getModels();
-  const isOAuth = isKimiCodeOAuth();
+  const isOAuth = isKimiCodeProvider();
   const isCustom = s.currentProvider === "custom";
   const isManualCustom = isCustom && !s.customPreset;
   const platformUrl = getPlatformUrl();
