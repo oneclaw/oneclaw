@@ -6394,11 +6394,10 @@ img.chat-avatar {
   color: var(--text);
 }
 
-/* 正在删除：强制展示按钮并让 loader 图标旋转，禁用 hover 高亮 */
+/* 正在删除：强制展示按钮并让 loader 图标旋转，禁用 hover 高亮（保留指针事件以便展示「正在归档」tooltip） */
 .oneclaw-sidebar__session-action.is-loading {
   display: flex;
   cursor: default;
-  pointer-events: none;
 }
 
 .oneclaw-sidebar__session-action.is-loading:hover {
