@@ -173,18 +173,20 @@ export function renderSidebar(props: SidebarProps) {
                     ? nothing
                     : (() => {
                         const deleting = props.isDeletingSession(s.key);
+                        const tooltip = deleting ? t("sidebar.archiving") : t("sidebar.delete");
                         return html`
                           <button
                             class="oneclaw-sidebar__session-action ${deleting ? "is-loading" : ""}"
                             type="button"
-                            ?disabled=${deleting}
+                            aria-disabled=${deleting ? "true" : "false"}
+                            aria-busy=${deleting ? "true" : "false"}
                             @click=${(e: Event) => {
                               e.stopPropagation();
                               if (deleting) return;
                               props.onDeleteSession(s.key);
                             }}
-                            data-tooltip=${t("sidebar.delete")}
-                            aria-label=${t("sidebar.delete")}
+                            data-tooltip=${tooltip}
+                            aria-label=${tooltip}
                           >
                             ${deleting ? icons.loader : icons.x}
                           </button>
