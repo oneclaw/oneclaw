@@ -131,7 +131,7 @@ export interface QqbotConfig {
 
 export interface WeixinConfig {
   enabled: boolean;
-  accounts: Array<{ id: string; name?: string }>;
+  accounts: string[];
 }
 
 export interface KimiConfig {
