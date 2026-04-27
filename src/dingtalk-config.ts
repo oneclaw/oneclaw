@@ -89,6 +89,15 @@ function ensureDingtalkGatewayHttpEndpoint(config: any): void {
   };
 }
 
+function stripDeprecatedDingtalkChannelFields(channel: Record<string, unknown>): Record<string, unknown> {
+  const next = { ...channel };
+  // openclaw 2026.4.x 的 dingtalk-connector schema 设置 additionalProperties: false，
+  // 拒绝旧版本遗留字段，启用和禁用保存路径都必须剥离。
+  delete next.gatewayToken;
+  delete next.sessionTimeout;
+  return next;
+}
+
 // 写入钉钉配置时保留高级字段，仅覆盖设置页可管理的核心字段。
 export function saveDingtalkConfig(config: any, params: SaveDingtalkConfigParams): void {
   config.plugins ??= {};
@@ -113,7 +122,7 @@ export function saveDingtalkConfig(config: any, params: SaveDingtalkConfigParams
 
   if (params.enabled !== true) {
     config.channels[DINGTALK_CONNECTOR_PLUGIN_ID] = {
-      ...existingChannel,
+      ...stripDeprecatedDingtalkChannelFields(existingChannel),
       enabled: false,
     };
     return;
@@ -126,16 +135,11 @@ export function saveDingtalkConfig(config: any, params: SaveDingtalkConfigParams
   // 用户首次启用钉钉时必须把 id 补进 allow，否则 channel 永远不 register。
   syncPluginAllowOnEnable(config, DINGTALK_CONNECTOR_PLUGIN_ID);
 
-  // openclaw 2026.4.x 的 dingtalk-connector 新 schema 设置 additionalProperties: false，
-  // 拒绝旧版本遗留的 gatewayToken / sessionTimeout 字段，存量配置或上次保存可能仍带着它们，
-  // 必须显式剥离，否则 gateway 启动 / reload 都会校验失败。
   const next: Record<string, unknown> = {
-    ...existingChannel,
+    ...stripDeprecatedDingtalkChannelFields(existingChannel),
     enabled: true,
     clientId: String(params.clientId ?? "").trim(),
     clientSecret: String(params.clientSecret ?? "").trim(),
   };
-  delete next.gatewayToken;
-  delete next.sessionTimeout;
   config.channels[DINGTALK_CONNECTOR_PLUGIN_ID] = next;
 }

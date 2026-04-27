@@ -21,8 +21,7 @@
     "clean": "rm -rf dist resources/runtime resources/gateway resources/targets out"
   },
   "dependencies": {
-    "electron-updater": "^6.3.9",
-    "playwright": "^1.59.1"
+    "electron-updater": "^6.3.9"
   },
   "devDependencies": {
     "@electron/asar": "^4.1.0",

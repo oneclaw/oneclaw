@@ -73,13 +73,44 @@ function parseInjectedOneclawView(raw: string | null | undefined): UiSettings["o
   }
 }
 
+function cleanInjectedOneclawViewFromUrl() {
+  if (typeof window === "undefined") {
+    return;
+  }
+  const url = new URL(window.location.href);
+  const params = new URLSearchParams(url.search);
+  const hashParams = new URLSearchParams(url.hash.startsWith("#") ? url.hash.slice(1) : url.hash);
+  let changed = false;
+
+  if (params.has("view")) {
+    params.delete("view");
+    changed = true;
+  }
+  if (hashParams.has("view")) {
+    hashParams.delete("view");
+    changed = true;
+  }
+  if (!changed) {
+    return;
+  }
+
+  url.search = params.toString();
+  const nextHash = hashParams.toString();
+  url.hash = nextHash ? `#${nextHash}` : "";
+  window.history.replaceState({}, "", url.toString());
+}
+
 export function applySettings(host: SettingsHost, next: UiSettings) {
+  const previousView = host.settings.oneclawView;
   const normalized = {
     ...next,
     lastActiveSessionKey: next.lastActiveSessionKey?.trim() || next.sessionKey.trim() || "main",
   };
   host.settings = normalized;
   saveSettings(normalized);
+  if (previousView === "setup" && normalized.oneclawView !== "setup") {
+    cleanInjectedOneclawViewFromUrl();
+  }
   if (next.theme !== host.theme) {
     host.theme = next.theme;
     applyResolvedTheme(host, resolveTheme(next.theme));
@@ -110,16 +141,20 @@ export function applySettingsFromUrl(host: SettingsHost) {
   const passwordRaw = params.get("password") ?? hashParams.get("password");
   const sessionRaw = params.get("session") ?? hashParams.get("session");
   const gatewayUrlRaw = params.get("gatewayUrl") ?? hashParams.get("gatewayUrl");
-  const view = parseInjectedOneclawView(hashParams.get("view") ?? params.get("view"));
+  const view = window.location.protocol === "file:"
+    ? parseInjectedOneclawView(hashParams.get("view") ?? params.get("view"))
+    : null;
   let shouldCleanUrl = false;
 
   if (view) {
     if (view !== host.settings.oneclawView) {
       applySettings(host, { ...host.settings, oneclawView: view });
     }
-    params.delete("view");
-    hashParams.delete("view");
-    shouldCleanUrl = true;
+    if (view !== "setup") {
+      params.delete("view");
+      hashParams.delete("view");
+      shouldCleanUrl = true;
+    }
   }
 
   if (tokenRaw != null) {

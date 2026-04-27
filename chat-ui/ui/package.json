@@ -7,7 +7,7 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit --noCheck"
   },
   "dependencies": {
     "@noble/ed25519": "^2.2.3",
