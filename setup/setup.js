@@ -100,7 +100,7 @@
     "deepseek": {
       providerKey: "deepseek",
       placeholder: "sk-...",
-      models: ["deepseek-v4-flash", "deepseek-chat", "deepseek-reasoner"],
+      models: ["deepseek-chat", "deepseek-reasoner"],
     },
   };
 
