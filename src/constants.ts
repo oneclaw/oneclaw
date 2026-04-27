@@ -101,6 +101,17 @@ function resolvePackagedWindowsNodeBin(): string {
   }
 }
 
+// macOS：使用 Helper binary（Info.plist 含 LSUIElement=true，不产生 Dock 弹跳图标）。
+function resolveDarwinHelperNodeBin(): string | null {
+  const contentsDir = path.resolve(path.dirname(process.execPath), "..");
+  const exeName = path.basename(process.execPath);
+  const helperName = `${exeName} Helper`;
+  const helperPath = path.join(
+    contentsDir, "Frameworks", `${helperName}.app`, "Contents", "MacOS", helperName,
+  );
+  return fs.existsSync(helperPath) ? helperPath : null;
+}
+
 /**
  * Node.js 二进制：dev 和 packaged 都走 Electron binary + ELECTRON_RUN_AS_NODE=1。
  * 原因：package-resources.js 按 Electron ABI 编译带 binding.gyp 的 native addon
@@ -108,21 +119,17 @@ function resolvePackagedWindowsNodeBin(): string {
  * "was compiled against a different Node.js version using NODE_MODULE_VERSION" 加载失败。
  * 让 dev 与 packaged 共用 Electron 的 Node ABI，保证带 native addon 的插件可加载、
  * 同时让 dev 更贴近生产运行环境。
+ * macOS dev/packaged 均优先走 Helper.app，避免子进程在 Dock 中弹跳。
  */
 export function resolveNodeBin(): string {
+  if (process.platform === "darwin") {
+    const helperPath = resolveDarwinHelperNodeBin();
+    if (helperPath) return helperPath;
+  }
   if (!app.isPackaged) {
     return process.execPath;
   }
-  // macOS：使用 Helper binary（Info.plist 含 LSUIElement=true，不产生 Dock 弹跳图标）
-  if (!IS_WIN) {
-    const contentsDir = path.resolve(path.dirname(process.execPath), "..");
-    const exeName = path.basename(process.execPath);
-    const helperName = `${exeName} Helper`;
-    const helperPath = path.join(
-      contentsDir, "Frameworks", `${helperName}.app`, "Contents", "MacOS", helperName,
-    );
-    if (fs.existsSync(helperPath)) return helperPath;
-  }
+  if (!IS_WIN) return process.execPath;
   return resolvePackagedWindowsNodeBin();
 }
 
