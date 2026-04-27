@@ -76,6 +76,11 @@ import {
   listWeixinAccountIds,
   clearWeixinAccounts,
 } from "./weixin-config";
+import {
+  FEISHU_CHANNEL_ID,
+  isFeishuEnabled,
+  setFeishuChannelEnabled,
+} from "./feishu-config";
 import { startAuthProxy, setProxyAccessToken, setProxySearchDedicatedKey, getProxyPort } from "./kimi-auth-proxy";
 import { ensureGatewayAuthTokenInConfig, resolveGatewayAuthToken } from "./gateway-auth";
 import { callGatewayRpc } from "./gateway-rpc";
@@ -113,7 +118,7 @@ type FeishuAliasStore = {
   groups: Record<string, string>;
 };
 
-const FEISHU_CHANNEL = "feishu";
+const FEISHU_CHANNEL = FEISHU_CHANNEL_ID;
 const WILDCARD_ALLOW_ENTRY = "*";
 const FEISHU_ALIAS_STORE_FILE = "feishu-allowFrom-aliases.json";
 const FEISHU_REJECTED_PAIRING_STORE_FILE = "feishu-rejected-pairing-codes.json";
@@ -625,7 +630,7 @@ export function registerSettingsIpc(opts: SettingsIpcOptions = {}): void {
     try {
       const config = readUserConfig();
       const feishu = config?.channels?.feishu ?? {};
-      const enabled = config?.plugins?.entries?.feishu?.enabled === true;
+      const enabled = isFeishuEnabled(config);
       const dmPolicy = normalizeDmPolicy(feishu?.dmPolicy, "pairing");
       const allowFrom = normalizeAllowFromEntries(feishu?.allowFrom);
       const dmPolicyOpen = dmPolicy === "open" || allowFrom.includes(WILDCARD_ALLOW_ENTRY);
@@ -681,12 +686,10 @@ export function registerSettingsIpc(opts: SettingsIpcOptions = {}): void {
           dmScopeInput,
           normalizeDmScope(config?.session?.dmScope, "main")
         );
-        config.plugins ??= {};
-        config.plugins.entries ??= {};
 
         // 仅禁用 → 不校验凭据
         if (enabled === false) {
-          config.plugins.entries.feishu = { ...(config.plugins.entries.feishu ?? {}), enabled: false };
+          setFeishuChannelEnabled(config, false);
           writeUserConfigAndRestart(config);
           // 禁用飞书时关闭“首配自动批准”窗口，但保留已消费标记，防止重复自动批准。
           closeFeishuFirstPairingWindow();
@@ -700,7 +703,6 @@ export function registerSettingsIpc(opts: SettingsIpcOptions = {}): void {
           return { success: false, message: err.message || "飞书凭据验证失败" };
         }
 
-        config.plugins.entries.feishu = { enabled: true };
         config.channels ??= {};
         // 保留已有飞书策略字段，避免每次保存凭据都把 dmPolicy/allowFrom 覆盖丢失
         const prevFeishu =
@@ -712,6 +714,7 @@ export function registerSettingsIpc(opts: SettingsIpcOptions = {}): void {
           appId,
           appSecret,
         };
+        setFeishuChannelEnabled(config, true);
 
         const currentAllowFrom = normalizeAllowFromEntries(config.channels.feishu.allowFrom);
         const allowFromWithoutWildcard = currentAllowFrom.filter((entry) => entry !== WILDCARD_ALLOW_ENTRY);
@@ -1702,7 +1705,7 @@ export function getFeishuPairingModeState(): {
 } {
   const config = readUserConfig();
   const feishu = config?.channels?.feishu ?? {};
-  const enabled = config?.plugins?.entries?.feishu?.enabled === true;
+  const enabled = isFeishuEnabled(config);
   const dmPolicy = normalizeDmPolicy(feishu?.dmPolicy, "pairing");
   const approvedUserIds = collectApprovedUserIds(FEISHU_CHANNEL, feishu?.allowFrom);
   return {
@@ -1998,7 +2001,7 @@ export function isFeishuFirstPairingWindowActive(nowMs = Date.now()): boolean {
 
 // 根据当前飞书配置与授权状态维护首配窗口，避免把窗口状态散落在多个调用点。
 function reconcileFeishuFirstPairingWindow(config: any): void {
-  const enabled = config?.plugins?.entries?.feishu?.enabled === true;
+  const enabled = isFeishuEnabled(config);
   if (!enabled) {
     closeFeishuFirstPairingWindow();
     return;

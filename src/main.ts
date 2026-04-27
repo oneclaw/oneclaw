@@ -46,6 +46,7 @@ import { readUserConfig, writeUserConfig } from "./provider-config";
 import { resolveKimiSearchApiKey, readKimiApiKey, readKimiSearchDedicatedApiKey, writeKimiApiKey, ensureMemorySearchProxyConfig, ensureKimiPluginDeviceId } from "./kimi-config";
 import { reconcileCliOnAppLaunch } from "./cli-integration";
 import { reconcileExtensionsOnAppLaunch } from "./extension-mirror";
+import { migrateLegacyFeishuPluginEntry } from "./feishu-config";
 import { uninstallGatewayDaemon, killPortProcess, getPortPid } from "./install-detector";
 import { detectOwnership, migrateFromLegacy, markSetupComplete, readOneclawConfig, writeOneclawConfig, appendChannelUtm } from "./oneclaw-config";
 import { startTokenRefresh, stopTokenRefresh, loadOAuthToken } from "./kimi-oauth";
@@ -374,6 +375,7 @@ function syncKimiSearchEnv(): void {
 
 // 启动 Gateway（最多尝试 3 次，覆盖 Windows 冷启动慢导致的前两次超时）
 async function ensureGatewayRunning(source: string): Promise<boolean> {
+  migrateLegacyFeishuConfigForGatewayStart();
   // 启动前从配置同步 token，避免 Setup 后仍使用旧内存 token。
   gateway.setToken(resolveGatewayAuthToken());
   syncKimiSearchEnv();
@@ -395,6 +397,19 @@ async function ensureGatewayRunning(source: string): Promise<boolean> {
   }
 
   return false;
+}
+
+function migrateLegacyFeishuConfigForGatewayStart(): void {
+  try {
+    const config = readUserConfig();
+    if (!migrateLegacyFeishuPluginEntry(config)) {
+      return;
+    }
+    writeUserConfig(config);
+    log.info("[startup] migrated legacy Feishu plugin entry to channels.feishu.enabled");
+  } catch (err: any) {
+    log.warn(`[startup] failed to migrate legacy Feishu config: ${err?.message ?? err}`);
+  }
 }
 
 // 外部 OpenClaw 接管：进 Setup 向导，Step 0 展示冲突并让用户决定
