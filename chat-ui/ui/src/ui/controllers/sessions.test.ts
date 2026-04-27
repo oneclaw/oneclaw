@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { pendingSessionLabels } from "../session-pending.ts";
 import { loadSessions } from "./sessions.ts";
 
 function deferred<T>() {
@@ -17,6 +18,7 @@ async function flushMicrotasks() {
 }
 
 async function testLoadSessionsQueuesRefreshBehindInFlightRequest() {
+  pendingSessionLabels.clear();
   const first = deferred<any>();
   const second = deferred<any>();
   const requests: Array<{ method: string; params: Record<string, unknown> }> = [];
@@ -61,8 +63,41 @@ async function testLoadSessionsQueuesRefreshBehindInFlightRequest() {
   assert.equal(state.sessionsResult?.sessions?.[0]?.key, "fresh-session");
 }
 
+async function testLoadSessionsKeepsPendingLocalRowsVisible() {
+  pendingSessionLabels.clear();
+  pendingSessionLabels.set("agent:main:local-draft", "New Chat");
+
+  const state = {
+    client: {
+      request() {
+        return Promise.resolve({
+          sessions: [{ key: "agent:main:existing", label: "Existing" }],
+        });
+      },
+    },
+    connected: true,
+    sessionsLoading: false,
+    sessionsResult: null,
+    sessionsError: null,
+    sessionsFilterActive: "",
+    sessionsFilterLimit: "120",
+    sessionsIncludeGlobal: true,
+    sessionsIncludeUnknown: false,
+  } as any;
+
+  await loadSessions(state);
+
+  assert.deepEqual(
+    state.sessionsResult?.sessions.map((row: any) => row.key),
+    ["agent:main:local-draft", "agent:main:existing"],
+  );
+  assert.equal(state.sessionsResult?.sessions[0]?.label, "New Chat");
+  pendingSessionLabels.clear();
+}
+
 async function main() {
   await testLoadSessionsQueuesRefreshBehindInFlightRequest();
+  await testLoadSessionsKeepsPendingLocalRowsVisible();
   console.log("sessions controller tests passed");
 }
 
