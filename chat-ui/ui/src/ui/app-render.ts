@@ -6,7 +6,7 @@
 import { html, nothing } from "lit";
 import type { AppViewState } from "./app-view-state.ts";
 import { parseAgentSessionKey } from "../../../src/routing/session-key.js";
-import { refreshChat, refreshChatAvatar, pendingSessionLabels } from "./app-chat.ts";
+import { refreshChat, refreshChatAvatar } from "./app-chat.ts";
 import { loadChatHistory } from "./controllers/chat.ts";
 import { t } from "./i18n.ts";
 import { icons } from "./icons.ts";
@@ -37,6 +37,7 @@ import { renderCronManage } from "./views/cron-manage.ts";
 import { loadCronRuns, loadCronJobs, loadCronStatus, removeCronJob, toggleCronJob, runCronJob, addCronJob, updateCronJob } from "./controllers/cron.ts";
 import { DEFAULT_CRON_FORM } from "./app-defaults.ts";
 import { isExpiredOneShot } from "./presenter.ts";
+import { pendingSessionLabels, removePendingSessionLabel } from "./session-pending.ts";
 import type { SkillStatusEntry } from "./types.ts";
 import {
   loadSkills,
@@ -223,6 +224,7 @@ async function deleteSessionFromSidebar(state: AppViewState, key: string) {
     }
 
     // 3) 成功：全量刷新侧边栏；reconcileVisibleSession 会在活跃会话被删时切到下一个可见会话。
+    removePendingSessionLabel(key);
     await loadSessions(s);
     reconcileVisibleSession(state);
   } finally {

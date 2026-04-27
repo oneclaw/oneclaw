@@ -9,6 +9,7 @@ import { abortChatRun, loadChatHistory, sendChatMessage } from "./controllers/ch
 import { loadSessions, patchSession } from "./controllers/sessions.ts";
 import { t } from "./i18n.ts";
 import { normalizeBasePath } from "./navigation.ts";
+import { pendingSessionLabels } from "./session-pending.ts";
 import { generateUUID } from "./uuid.ts";
 
 export type ChatHost = {
@@ -103,12 +104,6 @@ function enqueueChatMessage(
     },
   ];
 }
-
-// 待持久化的会话 label（session key → 期望的 label）。
-// agent runtime 处理消息时会用 { ...store[key], ...entry } 覆盖 sessions.json，
-// 其中 entry.label = undefined 会抹掉先前由 sessions.patch 写入的 label。
-// 因此必须延迟到 chat.event state="final"（agent runtime 写完后）再 patch。
-export const pendingSessionLabels = new Map<string, string>();
 
 const SESSION_NAME_MAX_LEN = 20;
 

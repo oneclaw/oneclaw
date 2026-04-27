@@ -1,4 +1,5 @@
 import type { GatewayBrowserClient } from "../gateway.ts";
+import { removePendingSessionLabel, withPendingSessionRows } from "../session-pending.ts";
 import type { SessionsListResult } from "../types.ts";
 
 export type SessionsState = {
@@ -85,7 +86,7 @@ export async function loadSessions(
         }
         const res = await state.client.request<SessionsListResult | undefined>("sessions.list", params);
         if (res) {
-          state.sessionsResult = res;
+          state.sessionsResult = withPendingSessionRows(res);
         }
       } catch (err) {
         state.sessionsError = String(err);
@@ -154,6 +155,7 @@ export async function deleteSession(state: SessionsState, key: string) {
   state.sessionsError = null;
   try {
     await state.client.request("sessions.delete", { key, deleteTranscript: true });
+    removePendingSessionLabel(key);
     await loadSessions(state);
   } catch (err) {
     state.sessionsError = String(err);
