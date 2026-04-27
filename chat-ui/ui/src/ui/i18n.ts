@@ -227,10 +227,10 @@ const dict: Record<Locale, Record<string, string>> = {
     "settings.search.title": "搜索配置",
     "settings.search.desc": "配置网页搜索和内容抓取工具",
     "settings.search.enable": "启用状态",
-    "settings.search.autoReuse": "使用 Kimi 订阅的 API Key",
+    "settings.search.autoReuse": "已检测到 Kimi 订阅，自动复用其授权",
     "settings.search.serviceBaseUrl": "服务地址",
-    "settings.search.getApiKey": "获取 API Key",
-    "settings.search.guide": "Kimi Search 为对话提供实时联网搜索能力。",
+    "settings.search.getApiKey": "前往 Kimi Code 控制台获取",
+    "settings.search.guide": "Kimi Search 为对话提供实时联网搜索能力。推荐通过 KimiClaw 的「Kimi 登录」自动授权；也可以前往 Kimi Code 控制台创建 API Key 后填入下方。",
 
     // Settings: Memory
     "settings.memory.title": "记忆",
@@ -744,10 +744,10 @@ const dict: Record<Locale, Record<string, string>> = {
     "settings.search.title": "Search Configuration",
     "settings.search.desc": "Configure web search and content fetch tools",
     "settings.search.enable": "Enable",
-    "settings.search.autoReuse": "Using your Kimi subscription key",
+    "settings.search.autoReuse": "Detected Kimi subscription — its credentials are reused automatically",
     "settings.search.serviceBaseUrl": "Service Base URL",
-    "settings.search.getApiKey": "Get API Key",
-    "settings.search.guide": "Kimi Search provides real-time web search for conversations.",
+    "settings.search.getApiKey": "Open Kimi Code console",
+    "settings.search.guide": "Kimi Search provides real-time web search for conversations. Recommended: sign in via KimiClaw for automatic authorization. Alternatively, create an API key in the Kimi Code console and paste it below.",
 
     // Settings: Memory
     "settings.memory.title": "Memory",

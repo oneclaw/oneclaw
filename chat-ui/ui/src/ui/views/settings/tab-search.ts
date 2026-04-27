@@ -71,7 +71,7 @@ export function resetSearchTab() { resetSearchState(); }
 
 export function renderTabSearch(state: AppViewState) {
   if (!s.initialized) init(state);
-  const autoReuse = !s.apiKey && s.isKimiCodeConfigured;
+  const autoReuseHint = !s.apiKey && s.isKimiCodeConfigured;
 
   return html`
     <div class="oc-settings__section">
@@ -89,19 +89,18 @@ export function renderTabSearch(state: AppViewState) {
       ></oc-provider-segment>
 
       <div class="oc-settings__hint" style="margin-bottom:12px">${t("settings.search.guide")}
-        <a class="oc-settings__link" href="#" @click=${(e: Event) => { e.preventDefault(); ipc.openExternal("https://platform.moonshot.cn/console/api-keys"); }}>${t("settings.search.getApiKey")}</a>
+        <a class="oc-settings__link" href="#" @click=${(e: Event) => { e.preventDefault(); ipc.openExternal("https://www.kimi.com/code/console"); }}>${t("settings.search.getApiKey")}</a>
       </div>
 
-      ${autoReuse ? html`
+      ${autoReuseHint ? html`
         <div class="oc-settings__hint" style="margin-bottom:12px;color:var(--accent, #c0392b)">${t("settings.search.autoReuse")}</div>
-      ` : html`
-        <div class="oc-settings__form-group">
-          <label class="oc-settings__label">${t("setup.provider.apiKey")}</label>
-          <oc-password-input .value=${s.apiKey} placeholder="sk-..."
-            @input=${(e: CustomEvent) => { s.apiKey = e.detail.value; state.requestUpdate(); }}
-          ></oc-password-input>
-        </div>
-      `}
+      ` : nothing}
+      <div class="oc-settings__form-group">
+        <label class="oc-settings__label">${t("setup.provider.apiKey")}</label>
+        <oc-password-input .value=${s.apiKey} placeholder="sk-kimi-..."
+          @input=${(e: CustomEvent) => { s.apiKey = e.detail.value; state.requestUpdate(); }}
+        ></oc-password-input>
+      </div>
 
       <details class="oc-settings__details-advanced">
         <summary>${t("setup.provider.oauth.advanced")}</summary>
