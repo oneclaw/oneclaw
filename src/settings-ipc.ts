@@ -1,11 +1,11 @@
 import { app, ipcMain, session } from "electron";
 import { spawn } from "child_process";
 import {
+  resolveGatewayCwd,
+  resolveGatewayEntry,
+  resolveGatewayPackageDir,
   resolveNodeBin,
   resolveNodeExtraEnv,
-  resolveGatewayEntry,
-  resolveGatewayCwd,
-  resolveGatewayPackageDir,
   resolveResourcesPath,
   resolveUserConfigPath,
   resolveUserStateDir,
@@ -986,6 +986,26 @@ export function registerSettingsIpc(opts: SettingsIpcOptions = {}): void {
   });
 
   // ── 列出企业微信已授权用户与群聊 ──
+  // ── 列出企业微信待审批配对请求（按需 spawn `openclaw pairing list`） ──
+  ipcMain.handle("settings:list-wecom-pairing", async () => {
+    const listed = await listWecomPairingRequests();
+    return {
+      success: listed.success,
+      data: listed.success ? { requests: listed.requests } : undefined,
+      message: listed.message,
+    };
+  });
+
+  // ── 批准企业微信配对请求 ──
+  ipcMain.handle("settings:approve-wecom-pairing", async (_event, params) => {
+    return approveWecomPairingRequest(params);
+  });
+
+  // ── 拒绝企业微信配对请求（本地 sidecar 忽略） ──
+  ipcMain.handle("settings:reject-wecom-pairing", async (_event, params) => {
+    return rejectWecomPairingRequest(params);
+  });
+
   ipcMain.handle("settings:list-wecom-approved", async () => {
     try {
       const config = readUserConfig();
@@ -999,6 +1019,58 @@ export function registerSettingsIpc(opts: SettingsIpcOptions = {}): void {
       const entries: FeishuAuthorizedEntryView[] = [...userEntries, ...groupEntries];
       entries.sort(compareAuthorizedEntry);
       return { success: true, data: { entries } };
+    } catch (err: any) {
+      return { success: false, message: err.message || String(err) };
+    }
+  });
+
+  // ── 添加企业微信用户白名单条目 ──
+  ipcMain.handle("settings:add-wecom-user-allow-from", async (_event, params) => {
+    const id = typeof params?.id === "string" ? params.id.trim() : "";
+    if (!id) {
+      return { success: false, message: "用户 ID 不能为空。" };
+    }
+
+    try {
+      const config = readUserConfig();
+      config.channels ??= {};
+      config.channels[WECOM_CHANNEL_ID] ??= {};
+      const currentAllowFrom = normalizeAllowFromEntries(config.channels[WECOM_CHANNEL_ID].allowFrom)
+        .filter((entry) => entry !== WILDCARD_ALLOW_ENTRY);
+      const nextAllowFrom = dedupeEntries([...currentAllowFrom, id]);
+      if (nextAllowFrom.length > 0) {
+        config.channels[WECOM_CHANNEL_ID].allowFrom = nextAllowFrom;
+      }
+      const nextStoreAllowFrom = dedupeEntries([
+        ...readChannelAllowFromStore(WECOM_CHANNEL_ID),
+        id,
+      ]);
+      writeChannelAllowFromStore(WECOM_CHANNEL_ID, nextStoreAllowFrom);
+      writeUserConfigAndRestart(config);
+      return { success: true };
+    } catch (err: any) {
+      return { success: false, message: err.message || String(err) };
+    }
+  });
+
+  // ── 添加企业微信群白名单条目 ──
+  ipcMain.handle("settings:add-wecom-group-allow-from", async (_event, params) => {
+    const id = typeof params?.id === "string" ? params.id.trim() : "";
+    if (!id) {
+      return { success: false, message: "群 ID 不能为空。" };
+    }
+
+    try {
+      const config = readUserConfig();
+      config.channels ??= {};
+      config.channels[WECOM_CHANNEL_ID] ??= {};
+      const nextGroupAllowFrom = dedupeEntries([
+        ...normalizeAllowFromEntries(config.channels[WECOM_CHANNEL_ID].groupAllowFrom),
+        id,
+      ]);
+      config.channels[WECOM_CHANNEL_ID].groupAllowFrom = nextGroupAllowFrom;
+      writeUserConfigAndRestart(config);
+      return { success: true };
     } catch (err: any) {
       return { success: false, message: err.message || String(err) };
     }
@@ -1148,6 +1220,26 @@ export function registerSettingsIpc(opts: SettingsIpcOptions = {}): void {
   });
 
   // ── 列出飞书已授权列表（用户 + 群聊，优先展示可读名称） ──
+  // ── 列出飞书待审批配对请求（按需 spawn `openclaw pairing list`） ──
+  ipcMain.handle("settings:list-feishu-pairing", async () => {
+    const listed = await listFeishuPairingRequests();
+    return {
+      success: listed.success,
+      data: listed.success ? { requests: listed.requests } : undefined,
+      message: listed.message,
+    };
+  });
+
+  // ── 批准飞书配对请求 ──
+  ipcMain.handle("settings:approve-feishu-pairing", async (_event, params) => {
+    return approveFeishuPairingRequest(params);
+  });
+
+  // ── 拒绝飞书配对请求（本地 sidecar 忽略） ──
+  ipcMain.handle("settings:reject-feishu-pairing", async (_event, params) => {
+    return rejectFeishuPairingRequest(params);
+  });
+
   ipcMain.handle("settings:list-feishu-approved", async () => {
     try {
       const config = readUserConfig();
@@ -1190,6 +1282,35 @@ export function registerSettingsIpc(opts: SettingsIpcOptions = {}): void {
         id,
       ]);
       config.channels.feishu.groupAllowFrom = nextGroupAllowFrom;
+      writeUserConfigAndRestart(config);
+      return { success: true };
+    } catch (err: any) {
+      return { success: false, message: err.message || String(err) };
+    }
+  });
+
+  // ── 添加用户白名单条目（飞书 open_id / union_id） ──
+  ipcMain.handle("settings:add-feishu-user-allow-from", async (_event, params) => {
+    const id = String(params?.id ?? "").trim();
+    if (!id) {
+      return { success: false, message: "用户 ID 不能为空。" };
+    }
+    if (!looksLikeFeishuUserId(id)) {
+      return { success: false, message: "仅允许填写以 ou_ 开头的飞书用户 open_id。" };
+    }
+
+    try {
+      const config = readUserConfig();
+      config.channels ??= {};
+      config.channels.feishu ??= {};
+      const currentAllowFrom = normalizeAllowFromEntries(config.channels.feishu.allowFrom)
+        .filter((entry) => entry !== WILDCARD_ALLOW_ENTRY);
+      const nextAllowFrom = dedupeEntries([...currentAllowFrom, id]);
+      if (nextAllowFrom.length > 0) {
+        config.channels.feishu.allowFrom = nextAllowFrom;
+      }
+      const nextStoreAllowFrom = dedupeEntries([...readFeishuAllowFromStore(), id]);
+      writeFeishuAllowFromStore(nextStoreAllowFrom);
       writeUserConfigAndRestart(config);
       return { success: true };
     } catch (err: any) {
@@ -2406,3 +2527,4 @@ function maskApiKey(key: string): string {
   if (!key || key.length <= 8) return key ? "••••••••" : "";
   return key.slice(0, 4) + "••••" + key.slice(-4);
 }
+
