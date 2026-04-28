@@ -101,7 +101,7 @@ export const CUSTOM_PROVIDER_PRESETS: Record<string, CustomProviderPreset> = {
     baseUrl: "https://api.deepseek.com",
     api: "openai-completions",
     placeholder: "sk-...",
-    models: ["deepseek-v4-flash", "deepseek-chat", "deepseek-reasoner"],
+    models: ["deepseek-chat", "deepseek-reasoner"],
   },
 };
 
