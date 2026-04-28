@@ -47,43 +47,24 @@ async function runTrackedSetupAction<T extends SetupActionResult>(
   run: () => Promise<T>,
 ): Promise<T> {
   const startedAt = Date.now();
-  const canTrackStructured =
-    typeof analytics.trackSetupActionStarted === "function" &&
-    typeof analytics.trackSetupActionResult === "function";
-  if (canTrackStructured) {
-    analytics.trackSetupActionStarted(action, props);
-  }
+  analytics.trackSetupActionStarted(action, props);
   try {
     const result = await run();
     const latencyMs = Date.now() - startedAt;
-    const errorType = result.success
-      ? undefined
-      : (typeof analytics.classifyErrorType === "function"
-        ? analytics.classifyErrorType(result.message)
-        : "unknown");
-    if (canTrackStructured) {
-      analytics.trackSetupActionResult(action, {
-        success: result.success,
-        latencyMs,
-        errorType,
-        props,
-      });
-    }
+    analytics.trackSetupActionResult(action, {
+      success: result.success,
+      latencyMs,
+      errorType: result.success ? undefined : analytics.classifyErrorType(result.message),
+      props,
+    });
     return result;
   } catch (err) {
-    const latencyMs = Date.now() - startedAt;
-    const errorType =
-      typeof analytics.classifyErrorType === "function"
-        ? analytics.classifyErrorType(err)
-        : "unknown";
-    if (canTrackStructured) {
-      analytics.trackSetupActionResult(action, {
-        success: false,
-        latencyMs,
-        errorType,
-        props,
-      });
-    }
+    analytics.trackSetupActionResult(action, {
+      success: false,
+      latencyMs: Date.now() - startedAt,
+      errorType: analytics.classifyErrorType(err),
+      props,
+    });
     throw err;
   }
 }
