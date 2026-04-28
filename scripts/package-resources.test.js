@@ -149,6 +149,53 @@ test("Windows 全局 windowsHide 补丁应覆盖 kimi-claw 插件", () => {
   fs.rmSync(tmpRoot, { recursive: true, force: true });
 });
 
+test("chat.history 补丁不应为缺失 thinkingLevel 加载模型目录", () => {
+  const sandbox = loadPackageResourcesSandbox();
+  const tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), "oneclaw-package-chat-history-"));
+  const distDir = path.join(tmpRoot, "node_modules", "openclaw", "dist");
+  fs.mkdirSync(distDir, { recursive: true });
+  const serverFile = path.join(distDir, "server-test.js");
+  fs.writeFileSync(serverFile, `const chatHandlers = {
+	"chat.history": async ({ params, respond, context }) => {
+		const { sessionKey, limit, maxChars: rpcMaxChars } = params;
+		const { cfg, storePath, entry } = loadSessionEntry(sessionKey);
+		const sessionId = entry?.sessionId;
+		const rawMessages = sessionId && storePath ? readSessionMessages(sessionId, storePath, entry?.sessionFile) : [];
+		const max = Math.min(1e3, typeof limit === "number" ? limit : 200);
+		const normalized = sanitizeChatHistoryMessages(stripEnvelopeFromMessages(rawMessages.length > max ? rawMessages.slice(-max) : rawMessages), effectiveMaxChars);
+		let thinkingLevel = entry?.thinkingLevel;
+		if (!thinkingLevel) {
+			const resolvedModel = resolveSessionModelRef(cfg, entry, resolveSessionAgentId({
+				sessionKey,
+				config: cfg
+			}));
+			const catalog = await context.loadGatewayModelCatalog();
+			thinkingLevel = resolveThinkingDefault({
+				cfg,
+				provider: resolvedModel.provider,
+				model: resolvedModel.model,
+				catalog
+			});
+		}
+		respond(true, { sessionKey, sessionId, messages: normalized, thinkingLevel });
+	},
+	"chat.abort": ({ params, respond }) => respond(true)
+};
+`);
+
+  const result = sandbox.patchChatHistoryNoCatalog(tmpRoot);
+  const patched = fs.readFileSync(serverFile, "utf-8");
+
+  assert.equal(result.scanned, 1);
+  assert.equal(result.patched, 1);
+  assert.equal(result.alreadyFixed, 0);
+  assert.match(patched, /chat-history-no-catalog/);
+  assert.doesNotMatch(patched, /await context\.loadGatewayModelCatalog/);
+  assert.match(patched, /catalog: \[\]/);
+
+  fs.rmSync(tmpRoot, { recursive: true, force: true });
+});
+
 // 白名单裁剪必须深入保留插件内部继续清垃圾，而不是把整个 extensions 目录豁免掉。
 test("pruneNodeModules 应按扩展白名单裁剪并清理保留插件内部垃圾", () => {
   const sandbox = loadPackageResourcesSandbox();

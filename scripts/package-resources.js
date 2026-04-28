@@ -876,6 +876,7 @@ function installDependencies(opts, gatewayDir) {
     pruneLlamaPackages(nmDir);
     pruneDanglingBinLinks(nmDir);
     assertNativeDepsMatchTarget(nmDir, opts.platform, opts.arch);
+    patchChatHistoryNoCatalog(gatewayDir);
     patchWindowsOpenclawArtifacts(gatewayDir, opts.platform);
     return;
   }
@@ -925,9 +926,132 @@ function installDependencies(opts, gatewayDir) {
   pruneLlamaPackages(nmDir);
   pruneDanglingBinLinks(nmDir);
   assertNativeDepsMatchTarget(nmDir, opts.platform, opts.arch);
+  patchChatHistoryNoCatalog(gatewayDir);
   patchWindowsOpenclawArtifacts(gatewayDir, opts.platform);
   fs.writeFileSync(stampPath, targetStamp);
   log("node_modules 裁剪完成");
+}
+
+// 避免 chat.history 冷启动读取历史时为补默认 thinkingLevel 触发重型模型目录加载。
+// 这是 openclaw 上游修复前的打包热修；发送消息路径仍会按原逻辑解析模型能力。
+function patchChatHistoryNoCatalog(gatewayDir) {
+  const distDir = path.join(gatewayDir, "node_modules", "openclaw", "dist");
+  if (!fs.existsSync(distDir)) {
+    die(`openclaw dist 目录不存在，无法应用 chat.history 补丁: ${distDir}`);
+  }
+
+  const serverFiles = collectJsFilesRecursive(distDir).filter((filePath) => {
+    const base = path.basename(filePath);
+    return base.startsWith("server-") && base.endsWith(".js");
+  });
+  if (serverFiles.length === 0) {
+    die("未找到 server-*.js，chat.history 补丁未生效");
+  }
+
+  let scanned = 0;
+  let patched = 0;
+  let alreadyFixed = 0;
+  let foundHandler = false;
+  let catalogStillPresent = false;
+
+  for (const filePath of serverFiles) {
+    scanned += 1;
+    const before = fs.readFileSync(filePath, "utf-8");
+    const result = injectChatHistoryNoCatalog(before);
+    if (result.foundHandler) {
+      foundHandler = true;
+      if (result.catalogStillPresent) catalogStillPresent = true;
+      if (result.alreadyFixed) alreadyFixed += 1;
+    }
+    if (result.source !== before) {
+      fs.writeFileSync(filePath, result.source, "utf-8");
+      patched += 1;
+    }
+  }
+
+  if (!foundHandler) {
+    die("未找到 chat.history handler，chat.history 补丁未生效");
+  }
+  if (catalogStillPresent) {
+    die("chat.history 仍会加载 model catalog，但补丁模式未匹配，请检查 openclaw 产物结构");
+  }
+
+  if (patched > 0) {
+    log(`已应用 chat.history 冷启动补丁: 扫描 ${scanned} 文件，补丁 ${patched} 文件`);
+  } else {
+    log(`chat.history 冷启动补丁扫描完成: 扫描 ${scanned} 文件，已就绪 ${alreadyFixed} 文件`);
+  }
+
+  return { scanned, patched, alreadyFixed };
+}
+
+function injectChatHistoryNoCatalog(source) {
+  const startMarker = '"chat.history": async ({ params, respond, context }) => {';
+  const start = source.indexOf(startMarker);
+  if (start < 0) {
+    return { source, foundHandler: false, patched: false, alreadyFixed: false, catalogStillPresent: false };
+  }
+
+  const nextHandler = source.indexOf('\n\t"chat.abort":', start);
+  const handlersEnd = source.indexOf("\n};", start);
+  const end = nextHandler >= 0 ? nextHandler : handlersEnd;
+  if (end < 0) {
+    return { source, foundHandler: true, patched: false, alreadyFixed: false, catalogStillPresent: true };
+  }
+
+  const handler = source.slice(start, end);
+  const catalogStillPresent = handler.includes("await context.loadGatewayModelCatalog()");
+  if (handler.includes("/* chat-history-no-catalog */") || !catalogStillPresent) {
+    return { source, foundHandler: true, patched: false, alreadyFixed: true, catalogStillPresent: false };
+  }
+
+  const patchedHandler = injectChatHistoryNoCatalogIntoHandler(handler);
+  if (patchedHandler === handler) {
+    return { source, foundHandler: true, patched: false, alreadyFixed: false, catalogStillPresent: true };
+  }
+
+  return {
+    source: source.slice(0, start) + patchedHandler + source.slice(end),
+    foundHandler: true,
+    patched: true,
+    alreadyFixed: false,
+    catalogStillPresent: false,
+  };
+}
+
+function injectChatHistoryNoCatalogIntoHandler(handler) {
+  const oldBlock = [
+    "\t\tlet thinkingLevel = entry?.thinkingLevel;",
+    "\t\tif (!thinkingLevel) {",
+    "\t\t\tconst resolvedModel = resolveSessionModelRef(cfg, entry, resolveSessionAgentId({",
+    "\t\t\t\tsessionKey,",
+    "\t\t\t\tconfig: cfg",
+    "\t\t\t}));",
+    "\t\t\tconst catalog = await context.loadGatewayModelCatalog();",
+    "\t\t\tthinkingLevel = resolveThinkingDefault({",
+    "\t\t\t\tcfg,",
+    "\t\t\t\tprovider: resolvedModel.provider,",
+    "\t\t\t\tmodel: resolvedModel.model,",
+    "\t\t\t\tcatalog",
+    "\t\t\t});",
+    "\t\t}",
+  ].join("\n");
+  const newBlock = [
+    "\t\tlet thinkingLevel = entry?.thinkingLevel;",
+    "\t\tif (!thinkingLevel) {",
+    "\t\t\t/* chat-history-no-catalog */ const resolvedModel = resolveSessionModelRef(cfg, entry, resolveSessionAgentId({",
+    "\t\t\t\tsessionKey,",
+    "\t\t\t\tconfig: cfg",
+    "\t\t\t}));",
+    "\t\t\tthinkingLevel = resolveThinkingDefault({",
+    "\t\t\t\tcfg,",
+    "\t\t\t\tprovider: resolvedModel.provider,",
+    "\t\t\t\tmodel: resolvedModel.model,",
+    "\t\t\t\tcatalog: []",
+    "\t\t\t});",
+    "\t\t}",
+  ].join("\n");
+  return handler.replace(oldBlock, newBlock);
 }
 
 // Windows 上给 openclaw + kimi-claw 所有 spawn 调用统一补 windowsHide，避免黑框闪烁。
