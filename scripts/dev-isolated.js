@@ -122,6 +122,48 @@ if (!withSetup && !fs.existsSync(isolatedConfig)) {
       if (fs.statSync(src).isFile()) fs.copyFileSync(src, path.join(isolatedCreds, f));
     }
   }
+
+  // ── workspace 隔离 ──
+  // 不重定向 workspace 时，session-memory hook、memory_search 等会写入真实 ~/.openclaw/workspace，
+  // 污染主实例数据。这里把 workspace 也指向 .dev-state/workspace，并复制必要的 bootstrap 文件。
+  const isolatedWorkspace = path.join(stateDir, "workspace");
+  const mainWorkspace = path.join(mainStateDir, "workspace");
+  if (!fs.existsSync(isolatedWorkspace) && fs.existsSync(mainWorkspace)) {
+    fs.mkdirSync(isolatedWorkspace, { recursive: true });
+    // bootstrap 文件：AGENTS/SOUL/TOOLS/IDENTITY/HEARTBEAT/MEMORY.md
+    const bootstrapFiles = ["AGENTS.md", "SOUL.md", "TOOLS.md", "IDENTITY.md", "HEARTBEAT.md", "MEMORY.md", "BOOTSTRAP.md", "USER.md"];
+    for (const f of bootstrapFiles) {
+      const src = path.join(mainWorkspace, f);
+      if (fs.existsSync(src)) fs.copyFileSync(src, path.join(isolatedWorkspace, f));
+    }
+    // onboarding 完成标记，避免每次启动重新引导
+    const stateMarkerSrc = path.join(mainWorkspace, ".openclaw", "workspace-state.json");
+    if (fs.existsSync(stateMarkerSrc)) {
+      fs.mkdirSync(path.join(isolatedWorkspace, ".openclaw"), { recursive: true });
+      fs.copyFileSync(stateMarkerSrc, path.join(isolatedWorkspace, ".openclaw", "workspace-state.json"));
+    }
+    // memory/ 留空，让测试从干净状态开始
+    fs.mkdirSync(path.join(isolatedWorkspace, "memory"), { recursive: true });
+    console.log(`[dev-isolated] 已初始化 workspace（bootstrap 已复制，memory 为空）`);
+  } else if (!fs.existsSync(isolatedWorkspace)) {
+    fs.mkdirSync(path.join(isolatedWorkspace, "memory"), { recursive: true });
+  }
+
+  // 强制把 agents.defaults.workspace 写进 openclaw.json，覆盖源配置里可能存在的真实路径
+  if (fs.existsSync(isolatedOpenclaw)) {
+    try {
+      const cfg = JSON.parse(fs.readFileSync(isolatedOpenclaw, "utf-8"));
+      cfg.agents ??= {};
+      cfg.agents.defaults ??= {};
+      if (cfg.agents.defaults.workspace !== isolatedWorkspace) {
+        cfg.agents.defaults.workspace = isolatedWorkspace;
+        fs.writeFileSync(isolatedOpenclaw, JSON.stringify(cfg, null, 2));
+        console.log(`[dev-isolated] 已重写 agents.defaults.workspace → ${isolatedWorkspace}`);
+      }
+    } catch (err) {
+      console.error(`[dev-isolated] 警告：无法重写 workspace 配置: ${err.message}`);
+    }
+  }
 }
 if (withSetup) {
   console.log(`[dev-isolated] --with-setup: 跳过配置复制，将进入 Setup Wizard`);

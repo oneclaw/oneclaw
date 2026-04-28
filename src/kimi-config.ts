@@ -7,6 +7,16 @@ export const KIMI_PLUGIN_ID = "kimi-claw";
 export const KIMI_SEARCH_PLUGIN_ID = "kimi-search";
 export const DEFAULT_KIMI_BRIDGE_WS_URL = "wss://www.kimi.com/api-claw/bots/agent-ws";
 
+// 当某 plugin 被启用时，若 plugins.allow 已为非空数组（用户/启动配置主动配置过白名单），
+// 把该 id 也补进去，避免 openclaw config-state 的 "allow 非空 + 不在 allow → 静默禁用" 把
+// entries.enabled=true 直接吃掉。allow 缺失或为空数组时不动它（语义是"未启用白名单"）。
+// 反向（disable）不从 allow 移除：用户可能临时禁用想保留授权，删除是另一个语义。
+export function syncPluginAllowOnEnable(config: any, pluginId: string): void {
+  const allow = config?.plugins?.allow;
+  if (!Array.isArray(allow) || allow.length === 0) return;
+  if (!allow.includes(pluginId)) allow.push(pluginId);
+}
+
 // 解析 bridge WS URL：override 非空 → 用 override（手动/从粘贴命令解析出的 --ws-url）；
 // 否则返回生产默认。前缀推断不做——环境信息永远来自显式字符串。
 export function resolveKimiBridgeURL(override?: string): string {
@@ -119,6 +129,9 @@ export function saveKimiPluginConfig(config: any, params: SaveKimiPluginParams):
       ? config.plugins.entries[KIMI_SEARCH_PLUGIN_ID]
       : {};
   config.plugins.entries[KIMI_SEARCH_PLUGIN_ID] = { ...existingSearch, enabled: true };
+
+  syncPluginAllowOnEnable(config, KIMI_PLUGIN_ID);
+  syncPluginAllowOnEnable(config, KIMI_SEARCH_PLUGIN_ID);
 }
 
 // 解析内置插件目录（packaged/dev 环境统一）
@@ -296,6 +309,8 @@ export function saveKimiSearchConfig(
   }
 
   config.plugins.entries[KIMI_SEARCH_PLUGIN_ID] = entry;
+
+  if (params.enabled) syncPluginAllowOnEnable(config, KIMI_SEARCH_PLUGIN_ID);
 }
 
 // ── Memory Search Embedding 配置（通过 auth proxy 透传鉴权） ──

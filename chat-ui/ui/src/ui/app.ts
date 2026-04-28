@@ -6,6 +6,7 @@ import type { DevicePairingList } from "./controllers/devices.ts";
 import type { ExecApprovalRequest } from "./controllers/exec-approval.ts";
 import type { ExecApprovalsFile, ExecApprovalsSnapshot } from "./controllers/exec-approvals.ts";
 import type { SkillMessage } from "./controllers/skills.ts";
+import type { NavigatePayload as IpcNavigatePayload } from "./data/ipc-bridge.ts";
 import type { GatewayBrowserClient, GatewayHelloOk } from "./gateway.ts";
 import type { Tab } from "./navigation.ts";
 import type { ResolvedTheme, ThemeMode } from "./theme.ts";
@@ -51,6 +52,7 @@ import {
 import { DEFAULT_CRON_FORM, DEFAULT_LOG_LEVEL_FILTERS } from "./app-defaults.ts";
 import { connectGateway as connectGatewayInternal } from "./app-gateway.ts";
 import {
+  deferredGatewayConnect,
   handleConnected,
   handleDisconnected,
   handleFirstUpdated,
@@ -155,8 +157,12 @@ type ReleaseNotesData = {
   locale: string;
 };
 
+type OneClawNavigatePayload = IpcNavigatePayload;
+
 type OneClawBridge = {
-  onNavigate?: (cb: (payload: { view: "settings" }) => void) => (() => void) | void;
+  onNavigate?: (cb: (payload: OneClawNavigatePayload) => void) => (() => void) | void;
+  onGatewayReady?: (cb: () => void) => (() => void) | void;
+  reportSetupViewState?: (active: boolean) => void;
   onUpdateState?: (cb: (payload: OneClawUpdateState) => void) => (() => void) | void;
   getUpdateState?: () => Promise<OneClawUpdateState>;
   onPairingState?: (
@@ -399,6 +405,7 @@ export class OpenClawApp extends LitElement {
     pairingApproving: { state: true },
     pairingRejecting: { state: true },
     settingsTabHint: { state: true },
+    settingsNotice: { state: true },
     showReleaseNotesModal: { state: true },
     releaseNotesData: { state: true },
   };
@@ -681,7 +688,8 @@ export class OpenClawApp extends LitElement {
   };
   pairingApproving = false;
   pairingRejecting = false;
-  settingsTabHint: "channels" | null = null;
+  settingsTabHint: string | null = null;
+  settingsNotice: string | null = null;
   showReleaseNotesModal = false;
   releaseNotesData: ReleaseNotesData | null = null;
   private sharePromptSendCount = 0;
@@ -1043,16 +1051,48 @@ export class OpenClawApp extends LitElement {
       return;
     }
     const unsubscribe = bridge.onNavigate((payload) => {
-      if (payload?.view !== "settings") {
+      // Any view transition away from setup must clear inSetupView on main process
+      if (payload?.view !== "setup") {
+        bridge.reportSetupViewState?.(false);
+      }
+
+      if (payload?.view === "setup") {
+        bridge.reportSetupViewState?.(true);
+        this.applySettings({
+          ...this.settings,
+          oneclawView: "setup",
+        });
         return;
       }
-      // 外部触发打开设置时，若存在待审批请求，默认引导到聊天集成页。
-      this.settingsTabHint = this.pairingState.pendingCount > 0 ? "channels" : null;
-      this.applySettings({
-        ...this.settings,
-        oneclawView: "settings",
-        navCollapsed: false,
-      });
+      if (payload?.view === "chat") {
+        const wasSetup = this.settings.oneclawView === "setup";
+        // Setup→Chat 转换时，主进程注入最新 gateway token 避免使用旧 token
+        const updates: Record<string, unknown> = { oneclawView: "chat" };
+        if (payload.token) {
+          updates.token = payload.token;
+        }
+        this.applySettings({
+          ...this.settings,
+          ...updates,
+        });
+        // Transitioning from setup → chat: gateway wasn't connected yet, start now.
+        if (wasSetup) {
+          deferredGatewayConnect(this as unknown as Parameters<typeof deferredGatewayConnect>[0]);
+        }
+        return;
+      }
+      if (payload?.view === "settings") {
+        // 外部触发打开设置时，优先使用 payload 指定的 tab（如恢复流程 → backup），
+        // 否则若存在待审批请求则引导到聊天集成页。
+        this.settingsTabHint = payload.settingsTab
+          ?? (this.pairingState.pendingCount > 0 ? "channels" : null);
+        this.settingsNotice = payload.settingsNotice ?? null;
+        this.applySettings({
+          ...this.settings,
+          oneclawView: "settings",
+          navCollapsed: false,
+        });
+      }
     });
     this.appNavigateCleanup = typeof unsubscribe === "function" ? unsubscribe : null;
   }

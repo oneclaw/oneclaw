@@ -7,7 +7,7 @@ export type UiSettings = {
   token: string;
   sessionKey: string;
   lastActiveSessionKey: string;
-  oneclawView: "chat" | "settings" | "skills" | "workspace" | "cron";
+  oneclawView: "chat" | "setup" | "settings" | "skills" | "workspace" | "cron" | "feedback";
   theme: ThemeMode;
   chatFocusMode: boolean;
   chatShowThinking: boolean;
@@ -17,6 +17,30 @@ export type UiSettings = {
 };
 
 type LocationLike = Pick<Location, "host" | "protocol" | "search" | "hash">;
+
+// URL 注入只接受主进程可控的 file:// 启动参数，避免网页场景篡改本地视图状态。
+function resolveInjectedOneclawView(locationLike: LocationLike): UiSettings["oneclawView"] | null {
+  if (locationLike.protocol !== "file:") {
+    return null;
+  }
+  const params = new URLSearchParams(locationLike.search);
+  const hashParams = new URLSearchParams(
+    locationLike.hash.startsWith("#") ? locationLike.hash.slice(1) : locationLike.hash,
+  );
+  const view = (hashParams.get("view") ?? params.get("view"))?.trim();
+  switch (view) {
+    case "chat":
+    case "setup":
+    case "settings":
+    case "skills":
+    case "workspace":
+    case "cron":
+    case "feedback":
+      return view;
+    default:
+      return null;
+  }
+}
 
 // file:// 入口由 Electron 主进程控制，query/hash 里的 gatewayUrl 属于受信启动参数。
 function resolveInjectedGatewayUrl(locationLike: LocationLike): string | null {
@@ -46,6 +70,7 @@ function resolveDefaultGatewayUrl(locationLike: LocationLike): string {
 // 启动配置解析应是纯函数，避免 localStorage 和 URL 注入逻辑彼此打架。
 export function parseUiSettings(raw: string | null, locationLike: LocationLike): UiSettings {
   const injectedGatewayUrl = resolveInjectedGatewayUrl(locationLike);
+  const injectedView = resolveInjectedOneclawView(locationLike);
   const defaultUrl = injectedGatewayUrl ?? resolveDefaultGatewayUrl(locationLike);
 
   const defaults: UiSettings = {
@@ -53,7 +78,7 @@ export function parseUiSettings(raw: string | null, locationLike: LocationLike):
     token: "",
     sessionKey: "main",
     lastActiveSessionKey: "main",
-    oneclawView: "chat",
+    oneclawView: injectedView ?? "chat",
     theme: "system",
     chatFocusMode: false,
     chatShowThinking: true,
@@ -118,5 +143,10 @@ export function loadSettings(): UiSettings {
 }
 
 export function saveSettings(next: UiSettings) {
-  localStorage.setItem(KEY, JSON.stringify(next));
+  // Setup 视图不持久化到 localStorage，防止重启后 localStorage 重放进入 Setup
+  // 初始视图始终由主进程 URL fragment 或 app:navigate IPC 决定
+  const toSave = next.oneclawView === "setup"
+    ? { ...next, oneclawView: "chat" as const }
+    : next;
+  localStorage.setItem(KEY, JSON.stringify(toSave));
 }

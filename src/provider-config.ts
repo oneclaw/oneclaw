@@ -518,6 +518,32 @@ export async function verifyProvider(params: {
 const UA_ANTHROPIC = "Anthropic/JS 0.73.0";
 const UA_OPENAI = "OpenAI/JS 6.10.0";
 
+// 从 provider 响应体中尽力抽出可读的错误消息，避免把 JSON 转义（如 >）泄漏给用户。
+// 兼容常见 provider 形态：anthropic/openai 的 {error:{message}}、moonshot 的 {error:{message}}、
+// 部分代理网关返回 {message} / {msg}、上游字符串 {error:"text"} 等。
+function extractProviderErrorMessage(rawBody: string): string {
+  const trimmed = rawBody.trim();
+  if (!trimmed) return "";
+  try {
+    const json = JSON.parse(trimmed);
+    const candidates: unknown[] = [
+      json?.error?.message,
+      json?.error?.error?.message,
+      json?.error?.msg,
+      json?.error,
+      json?.message,
+      json?.msg,
+      json?.detail,
+    ];
+    for (const c of candidates) {
+      if (typeof c === "string" && c.trim()) return c.trim();
+    }
+  } catch {
+    // body 不是合法 JSON（HTML 错误页 / 纯文本 / 截断），按原文处理
+  }
+  return trimmed;
+}
+
 export function jsonRequest(
   url: string,
   opts: { method?: string; headers?: Record<string, string>; body?: string }
@@ -545,7 +571,10 @@ export function jsonRequest(
           } else if (code === 401 || code === 403) {
             reject(new Error(`API Key 无效 (${code})`));
           } else {
-            reject(new Error(`请求失败 (${code}): ${body.slice(0, 200)}`));
+            // 真实错误文本（已 JSON 解码），上限 1000 字以兼容罕见的极长 message。
+            const text = extractProviderErrorMessage(body);
+            const trimmed = text.length > 1000 ? `${text.slice(0, 1000)}…` : text;
+            reject(new Error(`请求失败 (${code}): ${trimmed}`));
           }
         });
       }

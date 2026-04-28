@@ -6,7 +6,7 @@ import {
   DEFAULT_DINGTALK_SESSION_TIMEOUT_MS,
 } from "./dingtalk-config";
 
-test("saveDingtalkConfig 启用时应写入凭据并补齐 gateway token 与 HTTP 端点", () => {
+test("saveDingtalkConfig 启用时应写入凭据、剥离废弃字段并补齐 HTTP 端点", () => {
   // 模拟已有高级配置，确保设置页保存不会把插件自定义字段误删。
   const config: Record<string, any> = {
     plugins: {
@@ -22,6 +22,8 @@ test("saveDingtalkConfig 启用时应写入凭据并补齐 gateway token 与 HTT
         allowFrom: ["USER_A"],
         ackText: "处理中",
         gatewayPassword: "legacy-password",
+        gatewayToken: "legacy-token",
+        sessionTimeout: 900000,
       },
     },
     gateway: {
@@ -46,7 +48,6 @@ test("saveDingtalkConfig 启用时应写入凭据并补齐 gateway token 与 HTT
     enabled: true,
     clientId: "ding123",
     clientSecret: "secret-1",
-    sessionTimeout: 900000,
   });
 
   assert.equal(config.plugins.entries["dingtalk-connector"].enabled, true);
@@ -54,8 +55,8 @@ test("saveDingtalkConfig 启用时应写入凭据并补齐 gateway token 与 HTT
   assert.equal(config.channels["dingtalk-connector"].enabled, true);
   assert.equal(config.channels["dingtalk-connector"].clientId, "ding123");
   assert.equal(config.channels["dingtalk-connector"].clientSecret, "secret-1");
-  assert.equal(config.channels["dingtalk-connector"].gatewayToken, "persisted-token");
-  assert.equal(config.channels["dingtalk-connector"].sessionTimeout, 900000);
+  assert.equal("gatewayToken" in config.channels["dingtalk-connector"], false);
+  assert.equal("sessionTimeout" in config.channels["dingtalk-connector"], false);
   assert.deepEqual(config.channels["dingtalk-connector"].allowFrom, ["USER_A"]);
   assert.equal(config.channels["dingtalk-connector"].ackText, "处理中");
   assert.equal(config.channels["dingtalk-connector"].gatewayPassword, "legacy-password");
@@ -66,7 +67,7 @@ test("saveDingtalkConfig 启用时应写入凭据并补齐 gateway token 与 HTT
   assert.ok(config.gateway.controlUi.allowedOrigins.includes("https://control.example.com"));
 });
 
-test("saveDingtalkConfig 禁用时应保留凭据并仅关闭开关", () => {
+test("saveDingtalkConfig 禁用时应保留凭据、剥离废弃字段并仅关闭开关", () => {
   // 禁用不应抹掉用户已保存的钉钉凭据，便于再次启用。
   const config: Record<string, any> = {
     plugins: {
@@ -80,6 +81,7 @@ test("saveDingtalkConfig 禁用时应保留凭据并仅关闭开关", () => {
         clientId: "ding456",
         clientSecret: "secret-2",
         gatewayToken: "token-2",
+        sessionTimeout: 1800000,
       },
     },
   };
@@ -90,7 +92,8 @@ test("saveDingtalkConfig 禁用时应保留凭据并仅关闭开关", () => {
   assert.equal(config.channels["dingtalk-connector"].enabled, false);
   assert.equal(config.channels["dingtalk-connector"].clientId, "ding456");
   assert.equal(config.channels["dingtalk-connector"].clientSecret, "secret-2");
-  assert.equal(config.channels["dingtalk-connector"].gatewayToken, "token-2");
+  assert.equal("gatewayToken" in config.channels["dingtalk-connector"], false);
+  assert.equal("sessionTimeout" in config.channels["dingtalk-connector"], false);
 });
 
 test("extractDingtalkConfig 应回显基础字段并兜底默认超时", () => {

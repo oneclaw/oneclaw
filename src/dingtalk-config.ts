@@ -2,6 +2,7 @@ import * as fs from "fs";
 import * as path from "path";
 import { resolveGatewayPackageDir } from "./constants";
 import { ensureGatewayAuthTokenInConfig } from "./gateway-auth";
+import { syncPluginAllowOnEnable } from "./kimi-config";
 
 export const DINGTALK_CONNECTOR_PLUGIN_ID = "dingtalk-connector";
 export const DEFAULT_DINGTALK_SESSION_TIMEOUT_MS = 30 * 60 * 1000;
@@ -88,6 +89,15 @@ function ensureDingtalkGatewayHttpEndpoint(config: any): void {
   };
 }
 
+function stripDeprecatedDingtalkChannelFields(channel: Record<string, unknown>): Record<string, unknown> {
+  const next = { ...channel };
+  // openclaw 2026.4.x 的 dingtalk-connector schema 设置 additionalProperties: false，
+  // 拒绝旧版本遗留字段，启用和禁用保存路径都必须剥离。
+  delete next.gatewayToken;
+  delete next.sessionTimeout;
+  return next;
+}
+
 // 写入钉钉配置时保留高级字段，仅覆盖设置页可管理的核心字段。
 export function saveDingtalkConfig(config: any, params: SaveDingtalkConfigParams): void {
   config.plugins ??= {};
@@ -112,26 +122,24 @@ export function saveDingtalkConfig(config: any, params: SaveDingtalkConfigParams
 
   if (params.enabled !== true) {
     config.channels[DINGTALK_CONNECTOR_PLUGIN_ID] = {
-      ...existingChannel,
+      ...stripDeprecatedDingtalkChannelFields(existingChannel),
       enabled: false,
     };
     return;
   }
 
-  const gatewayToken = ensureGatewayAuthTokenInConfig(config);
+  ensureGatewayAuthTokenInConfig(config);
   ensureDingtalkGatewayHttpEndpoint(config);
+  // openclaw config-state 在 plugins.allow 非空时执行严格白名单语义：不在 allow
+  // 的插件即使 entries.enabled=true 也会被静默禁用（见 kimi-config.ts 的注释）。
+  // 用户首次启用钉钉时必须把 id 补进 allow，否则 channel 永远不 register。
+  syncPluginAllowOnEnable(config, DINGTALK_CONNECTOR_PLUGIN_ID);
 
-  const fallbackTimeout = normalizeDingtalkSessionTimeout(
-    existingChannel.sessionTimeout,
-    DEFAULT_DINGTALK_SESSION_TIMEOUT_MS
-  );
-
-  config.channels[DINGTALK_CONNECTOR_PLUGIN_ID] = {
-    ...existingChannel,
+  const next: Record<string, unknown> = {
+    ...stripDeprecatedDingtalkChannelFields(existingChannel),
     enabled: true,
     clientId: String(params.clientId ?? "").trim(),
     clientSecret: String(params.clientSecret ?? "").trim(),
-    gatewayToken,
-    sessionTimeout: normalizeDingtalkSessionTimeout(params.sessionTimeout, fallbackTimeout),
   };
+  config.channels[DINGTALK_CONNECTOR_PLUGIN_ID] = next;
 }

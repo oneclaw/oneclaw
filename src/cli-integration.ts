@@ -333,11 +333,21 @@ function resolveHomeDir(): string | null {
   return home && home.trim() ? home : null;
 }
 
-// 返回需要注入 PATH 的 shell profile 文件列表（login shell 层级）。
+// 返回需要注入 PATH 的 shell profile 文件列表。
+// macOS Terminal 默认读 login profiles，但 VS Code / 部分 iTerm 配置只读 interactive rc。
+export function resolvePosixRcPathsForHome(home: string): string[] {
+  return [
+    path.join(home, ".zprofile"),
+    path.join(home, ".zshrc"),
+    path.join(home, ".bash_profile"),
+    path.join(home, ".bashrc"),
+  ];
+}
+
 function resolvePosixRcPaths(): string[] {
   const home = resolveHomeDir();
   if (!home) return [];
-  return [path.join(home, ".zprofile"), path.join(home, ".bash_profile")];
+  return resolvePosixRcPathsForHome(home);
 }
 
 // 构建 OneClaw 管理的 rc 注入块，使用绝对路径避免与状态目录配置脱节。
@@ -351,6 +361,22 @@ function buildRcBlock(binDir: string): string {
     "esac",
     RC_BLOCK_END,
   ].join("\n");
+}
+
+// 检查所有目标 shell 配置文件是否都包含当前期望的 PATH 注入块。
+function arePosixRcBlocksUpToDate(): boolean {
+  const rcPaths = resolvePosixRcPaths();
+  if (rcPaths.length === 0) return false;
+
+  const expectedBlock = buildRcBlock(getPosixBinDir());
+  return rcPaths.every((rcPath) => {
+    if (!fs.existsSync(rcPath)) return false;
+    try {
+      return fs.readFileSync(rcPath, "utf-8").includes(expectedBlock);
+    } catch {
+      return false;
+    }
+  });
 }
 
 // 从 rc 文本移除 OneClaw 管理块，仅删除带完整标记的块，避免误伤用户自定义行。
@@ -686,8 +712,8 @@ export async function reconcileCliOnAppLaunch(): Promise<void> {
   }
 
   if (inferredEnabled) {
-    // wrapper 内容没变就跳过，避免每次启动都写文件和 rc
-    if (isWrapperUpToDate()) {
+    // wrapper 与 PATH 注入都没变才跳过；旧版本可能只写了 login profile。
+    if (isWrapperUpToDate() && (IS_WIN || arePosixRcBlocksUpToDate())) {
       log.info("[cli] wrapper is up-to-date, skipping reconcile");
       return;
     }
