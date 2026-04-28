@@ -58,12 +58,30 @@ contextBridge.exposeInMainWorld("oneclaw", {
   settingsGetWecomConfig: () => ipcRenderer.invoke("settings:get-wecom-config"),
   settingsSaveWecomConfig: (params: Record<string, unknown>) =>
     ipcRenderer.invoke("settings:save-wecom-config", params),
+  settingsListWecomPairing: () =>
+    ipcRenderer.invoke("settings:list-wecom-pairing"),
+  settingsApproveWecomPairing: (params: Record<string, unknown>) =>
+    ipcRenderer.invoke("settings:approve-wecom-pairing", params),
+  settingsRejectWecomPairing: (params: Record<string, unknown>) =>
+    ipcRenderer.invoke("settings:reject-wecom-pairing", params),
   settingsListWecomApproved: () =>
     ipcRenderer.invoke("settings:list-wecom-approved"),
+  settingsAddWecomUserAllowFrom: (params: Record<string, unknown>) =>
+    ipcRenderer.invoke("settings:add-wecom-user-allow-from", params),
+  settingsAddWecomGroupAllowFrom: (params: Record<string, unknown>) =>
+    ipcRenderer.invoke("settings:add-wecom-group-allow-from", params),
   settingsRemoveWecomApproved: (params: Record<string, unknown>) =>
     ipcRenderer.invoke("settings:remove-wecom-approved", params),
+  settingsListFeishuPairing: () =>
+    ipcRenderer.invoke("settings:list-feishu-pairing"),
+  settingsApproveFeishuPairing: (params: Record<string, unknown>) =>
+    ipcRenderer.invoke("settings:approve-feishu-pairing", params),
+  settingsRejectFeishuPairing: (params: Record<string, unknown>) =>
+    ipcRenderer.invoke("settings:reject-feishu-pairing", params),
   settingsListFeishuApproved: () =>
     ipcRenderer.invoke("settings:list-feishu-approved"),
+  settingsAddFeishuUserAllowFrom: (params: Record<string, unknown>) =>
+    ipcRenderer.invoke("settings:add-feishu-user-allow-from", params),
   settingsAddFeishuGroupAllowFrom: (params: Record<string, unknown>) =>
     ipcRenderer.invoke("settings:add-feishu-group-allow-from", params),
   settingsRemoveFeishuApproved: (params: Record<string, unknown>) =>
