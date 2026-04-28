@@ -179,6 +179,20 @@ function normalizePostHogConfig(raw: Partial<PostHogConfig>): PostHogConfig {
   return { enabled, captureURL, captureFallbackURL, apiKey, requestTimeoutMs, retryDelaysMs };
 }
 
+// 客户端 SDK 端点不接 server-side payload，命中即直接 disable，不让 sink 上线后空转 400。
+// 见 docs/gotchas.md #40：mcs.ctobsnssdk.com 会回 `app_id uint32 -1` 错误模板。
+const VOLCANO_CLIENT_SDK_HOST_PATTERN = /(?:^|\.)ctobsnssdk\.com$/i;
+
+function isClientSdkEndpoint(endpoint: string): boolean {
+  if (!endpoint) return false;
+  try {
+    const host = new URL(endpoint).host.toLowerCase();
+    return VOLCANO_CLIENT_SDK_HOST_PATTERN.test(host);
+  } catch {
+    return false;
+  }
+}
+
 // 规范化火山 DataFinder 配置。
 export function normalizeVolcanoConfig(raw: Partial<VolcanoConfig>): VolcanoConfig {
   const appKey = (typeof raw.appKey === "string" ? raw.appKey : "").trim();
@@ -192,7 +206,11 @@ export function normalizeVolcanoConfig(raw: Partial<VolcanoConfig>): VolcanoConf
       ? raw.requestTimeoutMs
       : DEFAULT_REQUEST_TIMEOUT_MS;
   const retryDelaysMs = normalizeRetryDelays(raw.retryDelaysMs);
-  const hasCore = endpoint.length > 0 && appKey.length > 0 && appId > 0;
+  const usesClientSdkEndpoint = isClientSdkEndpoint(endpoint) || isClientSdkEndpoint(fallbackEndpoint);
+  if (usesClientSdkEndpoint) {
+    log.warn(`[analytics] volcano endpoint 命中客户端 SDK 域名 (${endpoint}/${fallbackEndpoint})，sink 已禁用 — 请改用 server-side 端点`);
+  }
+  const hasCore = endpoint.length > 0 && appKey.length > 0 && appId > 0 && !usesClientSdkEndpoint;
   const enabled = raw.enabled === true && hasCore;
 
   return { enabled, appId, appKey, endpoint, fallbackEndpoint, requestTimeoutMs, retryDelaysMs };
@@ -260,7 +278,8 @@ export function createVolcanoSink(config: VolcanoConfig): SinkConfig {
       user: { user_unique_id: "" },
       header: {
         app_id: config.appId,
-        app_name: "OneClaw",
+        // app_name 与 DataFinder 后台注册值（小写 oneclaw）保持一致，避免看板按 app_name group-by 时分裂成两路。
+        app_name: "oneclaw",
         app_version: app.getVersion(),
         os_name: volcanoOsName(),
         os_version: typeof process.getSystemVersion === "function" ? process.getSystemVersion() : "",

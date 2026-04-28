@@ -97,6 +97,7 @@ function loadAnalyticsModule(options = {}) {
     AbortSignal,
     Date,
     JSON,
+    URL,
     setInterval(callback, delay) {
       const handle = { callback, delay };
       intervals.push(handle);
@@ -227,6 +228,31 @@ test("normalizeVolcanoConfig 完整配置时启用并用 endpoint 兜底 fallbac
   );
 });
 
+test("normalizeVolcanoConfig 命中客户端 SDK 域名时禁用并打 warn", () => {
+  const loaded = loadAnalyticsModule();
+  const { normalizeVolcanoConfig } = loaded.module;
+
+  // 主端点踩坑：mcs.ctobsnssdk.com 是客户端 SDK 接收域名，server-side payload 会被拒。
+  const result = normalizeVolcanoConfig({
+    enabled: true,
+    appId: 1,
+    appKey: "k",
+    endpoint: "https://mcs.ctobsnssdk.com/v1/list",
+  });
+  assert.equal(result.enabled, false);
+  assert.ok(loaded.warnLogs.some((m) => m.includes("命中客户端 SDK 域名")));
+
+  // fallback 也得校验，否则用户主备同时配错时只在主域名上告警就漏报。
+  const result2 = normalizeVolcanoConfig({
+    enabled: true,
+    appId: 1,
+    appKey: "k",
+    endpoint: "https://gator.volces.com/v2/event/json",
+    fallbackEndpoint: "https://x.ctobsnssdk.com/v1",
+  });
+  assert.equal(result2.enabled, false);
+});
+
 test("normalizeVolcanoConfig 非法 retryDelaysMs 回退到默认值", () => {
   const { module } = loadAnalyticsModule();
   const { normalizeVolcanoConfig } = module;
@@ -269,9 +295,11 @@ test("createVolcanoSink.buildPayload 输出 DataFinder 期望的信封结构", (
 
     assert.deepEqual(payload.user, { user_unique_id: "" });
     assert.equal(payload.header.app_id, 1);
-    assert.equal(payload.header.app_name, "OneClaw");
+    assert.equal(payload.header.app_name, "oneclaw");
     assert.equal(payload.header.app_version, "2026.420.0");
-    assert.equal(payload.header.device_id, "9838263503687778304");
+    // UUID 12345678-...-12345678 折叠出 0x8888888800000000，按 INT63_MASK 钳到 0x0888...0000。
+    // 期望值不能是未 mask 的 9838263503687778304；analytics.ts 主动剥掉符号位避免服务端读成负数。
+    assert.equal(payload.header.device_id, "614891466833002496");
     // os_name 由 sandboxProcess.platform 决定，这里只校验是枚举值之一
     assert.ok(["mac", "windows", "linux"].includes(payload.header.os_name));
     // custom 必须是 JSON 字符串（DataFinder 协议要求）
