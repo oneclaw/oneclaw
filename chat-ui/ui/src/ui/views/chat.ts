@@ -9,7 +9,6 @@ import {
   renderReadingIndicatorGroup,
   renderStreamingGroup,
 } from "../chat/grouped-render.ts";
-import { extractTextCached } from "../chat/message-extract.ts";
 import { normalizeMessage, normalizeRoleForGrouping } from "../chat/message-normalizer.ts";
 import { icons } from "../icons.ts";
 import { t } from "../i18n.ts";
@@ -312,7 +311,6 @@ export function renderChat(props: ChatProps) {
             return renderMessageGroup(item, {
               onOpenSidebar: props.onOpenSidebar,
               showReasoning,
-              showThinking: props.showThinking,
               assistantName: props.assistantName,
               assistantAvatar: assistantIdentity.avatar,
               isHydrating,
@@ -689,15 +687,6 @@ function buildChatItems(props: ChatProps): Array<ChatItem | MessageGroup> {
     }
 
     if (!props.showThinking && normalized.role.toLowerCase() === "toolresult") {
-      continue;
-    }
-
-    // 关闭思考过程时，跳过仅包含 tool_use（无文本）的 assistant 消息，避免空气泡
-    if (
-      !props.showThinking &&
-      normalized.role.toLowerCase() === "assistant" &&
-      !extractTextCached(msg)?.trim()
-    ) {
       continue;
     }
 

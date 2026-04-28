@@ -167,8 +167,6 @@ if (!withSetup && !fs.existsSync(isolatedConfig)) {
 }
 if (withSetup) {
   console.log(`[dev-isolated] --with-setup: 跳过配置复制，将进入 Setup Wizard`);
-  console.log(`[dev-isolated] 注意：Step 0 安装冲突检测会扫描默认端口 18789 与全局 openclaw，`);
-  console.log(`[dev-isolated] 如果主实例正在运行会误报"已有安装"，直接点 Next 跳过即可（属预期行为）。`);
 }
 
 console.log(`[dev-isolated] 启动 electron ...\n`);
