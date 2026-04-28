@@ -29,7 +29,6 @@ export const SHARE_COPY_PAYLOAD: ShareCopyPayload = {
         "• 会议助手：会前整理文件制作 PPT、会后快速生成纪要",
         "",
         "低成本把内容、运营、办公、招聘自动化，可以下载试试：oneclaw.cn",
-        "作者还建了反馈群，有什么问题都可以在群里反馈",
       ].join("\n"),
     },
     en: {
@@ -48,7 +47,6 @@ export const SHARE_COPY_PAYLOAD: ShareCopyPayload = {
         "• Meeting assistant: pre-meeting file prep and PPT creation, plus fast post-meeting minutes",
         "",
         "If you want low-cost automation for content, operations, office work, and recruiting, try: oneclaw.cn",
-        "The creator also set up a feedback group, so you can report any issues there",
       ].join("\n"),
     },
   },
