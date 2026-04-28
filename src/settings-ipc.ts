@@ -30,7 +30,7 @@ import {
   readUserConfig,
   writeUserConfig,
 } from "./provider-config";
-import { getLatestShareCopyPayload } from "./share-copy";
+import { SHARE_COPY_PAYLOAD } from "./share-copy";
 import { readSkillStoreRegistry, writeSkillStoreRegistry } from "./skill-store";
 import {
   readChannelAllowFromStoreEntries as readChannelAllowFromStoreEntriesFromFs,
@@ -396,20 +396,11 @@ export function registerSettingsIpc(opts: SettingsIpcOptions = {}): void {
       verifyProvider({ ...params, proxyPort: getProxyPort() }));
   });
 
-  // ── 读取最新分享文案（服务端维护中英文版本） ──
-  ipcMain.handle("settings:get-share-copy", async () => {
-    try {
-      return {
-        success: true,
-        data: await getLatestShareCopyPayload(),
-      };
-    } catch (err: any) {
-      return {
-        success: false,
-        message: err.message || String(err),
-      };
-    }
-  });
+  // ── 读取分享文案（内嵌，跟随客户端版本发布） ──
+  ipcMain.handle("settings:get-share-copy", () => ({
+    success: true,
+    data: SHARE_COPY_PAYLOAD,
+  }));
 
   // ── 保存 provider 配置 ──
   ipcMain.handle("settings:save-provider", async (_event, params) => {
