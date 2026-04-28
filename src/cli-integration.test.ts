@@ -5,6 +5,7 @@ import {
   buildWinWrapperForPaths,
   buildWinPathEnvScript,
   inferCliEnabledPreference,
+  resolvePosixRcPathsForHome,
   resolveWinCliBinDirsForPaths,
 } from "./cli-integration";
 
@@ -38,6 +39,17 @@ test("Windows CLI 目录解析应同时返回当前路径与旧版迁移路径",
 
   assert.equal(dirs.currentBinDir, "C:\\Users\\admin\\AppData\\Local\\OneClaw\\bin");
   assert.deepEqual(dirs.legacyBinDirs, ["C:\\Users\\admin\\.openclaw\\bin"]);
+});
+
+test("POSIX CLI PATH 注入应覆盖 login 与 interactive shell 配置", () => {
+  const paths = resolvePosixRcPathsForHome("/Users/admin");
+
+  assert.deepEqual(paths, [
+    "/Users/admin/.zprofile",
+    "/Users/admin/.zshrc",
+    "/Users/admin/.bash_profile",
+    "/Users/admin/.bashrc",
+  ]);
 });
 
 test("CLI 启用偏好应兼容未持久化的老用户状态", () => {

@@ -129,6 +129,21 @@ npm run dist:all:parallel    # Build all 4 targets in parallel
 npm run clean                # Remove all generated files
 ```
 
+**Isolated local startup using production config** (skip Setup):
+
+```bash
+# First run, or refresh from production config:
+rm -f .dev-state/dev.pid .dev-state/oneclaw.config.json .dev-state/openclaw.json .dev-state/openclaw.json.bak .dev-state/logs/config-health.json
+npm run dev:isolated
+
+# Cleanup after the test run:
+rm -rf .dev-state && npm run clean && rm -rf chat-ui/dist tsconfig.tsbuildinfo
+```
+
+- `dev:isolated` runs with `ONECLAW_MULTI_INSTANCE=1`, `OPENCLAW_STATE_DIR=.dev-state`, and a deterministic gateway port in `19000-19999`.
+- On a fresh `.dev-state`, it copies `~/.openclaw/oneclaw.config.json`, `~/.openclaw/openclaw.json`, and credentials, then rewrites `agents.defaults.workspace` to `.dev-state/workspace` so tests do not write into the production workspace.
+- Setup is skipped when `.dev-state/oneclaw.config.json` contains `setupCompletedAt`; use `npm run dev:isolated -- --with-setup` only when testing the Setup Wizard.
+
 **Full build pipeline** (what `dist:mac:arm64` does):
 
 1. `package:resources` — download Node.js 22, `npm install openclaw --production --install-links` (version auto-fetched from npm), optionally create `gateway.asar` (set `ONECLAW_GATEWAY_ASAR=1`)
