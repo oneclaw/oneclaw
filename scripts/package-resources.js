@@ -485,7 +485,7 @@ function readEnvRetryDelays(name, fallback) {
   return delays.length > 0 ? delays : [...fallback];
 }
 
-function buildAnalyticsConfig() {
+function buildPostHogConfig() {
   const captureURL = readEnvText("ONECLAW_ANALYTICS_CAPTURE_URL");
   const captureFallbackURL = readEnvText("ONECLAW_ANALYTICS_CAPTURE_FALLBACK_URL") || captureURL;
   const apiKey = readEnvText("ONECLAW_ANALYTICS_API_KEY");
@@ -514,12 +514,33 @@ function buildAnalyticsConfig() {
   };
 }
 
+function buildVolcanoConfig() {
+  const appId = readEnvPositiveInt("VOLCANO_APP_ID", 0);
+  const appKey = readEnvText("VOLCANO_APP_KEY");
+  const endpoint = readEnvText("VOLCANO_ENDPOINT");
+  const fallbackEndpoint = readEnvText("VOLCANO_FALLBACK_ENDPOINT") || endpoint;
+  const requestTimeoutMs = readEnvPositiveInt("VOLCANO_REQUEST_TIMEOUT_MS", 8000);
+  const retryDelaysMs = readEnvRetryDelays("VOLCANO_RETRY_DELAYS_MS", [0, 500, 1500]);
+  const enabled = appId > 0 && appKey.length > 0 && endpoint.length > 0;
+
+  return {
+    enabled,
+    appId: enabled ? appId : 0,
+    appKey: enabled ? appKey : "",
+    endpoint: enabled ? endpoint : "",
+    fallbackEndpoint: enabled ? fallbackEndpoint : "",
+    requestTimeoutMs,
+    retryDelaysMs,
+  };
+}
+
 function writeBuildConfig(configPath) {
-  const analytics = buildAnalyticsConfig();
+  const posthog = buildPostHogConfig();
+  const volcano = buildVolcanoConfig();
   const clawhubRegistry = readEnvText("ONECLAW_CLAWHUB_REGISTRY");
-  const config = { analytics, clawhubRegistry };
+  const config = { posthog, volcano, clawhubRegistry };
   fs.writeFileSync(configPath, JSON.stringify(config, null, 2));
-  log(`已生成 build-config.json（analytics.enabled=${analytics.enabled ? "true" : "false"}, clawhubRegistry=${clawhubRegistry || "(空)"}）`);
+  log(`已生成 build-config.json（posthog.enabled=${posthog.enabled ? "true" : "false"}, volcano.enabled=${volcano.enabled ? "true" : "false"}, clawhubRegistry=${clawhubRegistry || "(空)"}）`);
 }
 
 // ─── Step 2: 安装 openclaw 生产依赖 ───
