@@ -8,17 +8,16 @@ import * as ipc from "../../data/ipc-bridge.ts";
 import "../../components/toggle-switch.ts";
 import "../../components/message-box.ts";
 
-// Gateway 内置 profile：openclaw（独立浏览器）/ chrome-relay（Chrome 扩展）/ user。
-// UI 用 "dedicated" / "chrome" 这两个简短词展示给用户。两端命名错位会让 browser 工具
-// 报 BrowserProfileNotFoundError，所以 stored 必须是 gateway 认识的名字。
+// Gateway 内置 profile：openclaw（独立浏览器）/ user（Chrome existing-session）。
+// 旧版 OneClaw 曾写入 chrome/chrome-relay；读取时兼容显示，保存时写入当前 gateway 认识的 user。
 function profileToUi(stored: string): string {
   if (stored === "openclaw") return "dedicated";
-  if (stored === "chrome-relay") return "chrome";
+  if (stored === "user" || stored === "chrome" || stored === "chrome-relay") return "chrome";
   return stored;
 }
 function profileToStored(ui: string): string {
   if (ui === "dedicated") return "openclaw";
-  if (ui === "chrome") return "chrome-relay";
+  if (ui === "chrome") return "user";
   return ui;
 }
 

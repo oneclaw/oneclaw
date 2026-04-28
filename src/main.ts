@@ -46,6 +46,7 @@ import { resolveKimiSearchApiKey, readKimiApiKey, readKimiSearchDedicatedApiKey,
 import { reconcileCliOnAppLaunch } from "./cli-integration";
 import { reconcileExtensionsOnAppLaunch } from "./extension-mirror";
 import { migrateLegacyFeishuPluginEntry } from "./feishu-config";
+import { migrateBrowserProfileForCurrentGateway } from "./browser-profile-config";
 import { uninstallGatewayDaemon, killPortProcess, getPortPid } from "./install-detector";
 import { detectOwnership, migrateFromLegacy, readOneclawConfig, writeOneclawConfig, appendChannelUtm } from "./oneclaw-config";
 import { startTokenRefresh, stopTokenRefresh, loadOAuthToken } from "./kimi-oauth";
@@ -354,6 +355,19 @@ function migrateDeprecatedDingtalkFields(): void {
     for (const k of removed) delete record[k];
     writeUserConfig(config);
     log.info(`[migrate] 已移除 dingtalk-connector 的 deprecated 字段: ${removed.join(", ")}`);
+  } catch {
+    // 迁移失败不阻塞启动
+  }
+}
+
+// 存量用户迁移：openclaw 2026.4.x 移除了旧 Chrome extension relay profile。
+// 旧版 Settings 写入 chrome/chrome-relay 会让 browser control 根路径返回 ProfileNotFound。
+function migrateBrowserProfileConfig(): void {
+  try {
+    const config = readUserConfig();
+    if (!migrateBrowserProfileForCurrentGateway(config)) return;
+    writeUserConfig(config);
+    log.info("[migrate] 已将旧 Chrome relay 浏览器配置迁移到 user profile");
   } catch {
     // 迁移失败不阻塞启动
   }
@@ -920,6 +934,7 @@ app.whenReady().then(async () => {
       migrateSessionMemoryHook();
       migrateDisableGatewayUpdateCheck();
       migrateDeprecatedDingtalkFields();
+      migrateBrowserProfileConfig();
       migrateKimiPluginDeviceId();
       void reconcileCliOnAppLaunch().catch((err) => {
         log.error(`[migrate] CLI launch reconciliation failed: ${err instanceof Error ? err.message : String(err)}`);
@@ -934,6 +949,7 @@ app.whenReady().then(async () => {
       migrateSessionMemoryHook();
       migrateDisableGatewayUpdateCheck();
       migrateDeprecatedDingtalkFields();
+      migrateBrowserProfileConfig();
       migrateKimiPluginDeviceId();
       void reconcileCliOnAppLaunch().catch((err) => {
         log.error(`[migrate] CLI launch reconciliation failed: ${err instanceof Error ? err.message : String(err)}`);

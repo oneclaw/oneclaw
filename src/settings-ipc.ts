@@ -86,6 +86,7 @@ import { ensureGatewayAuthTokenInConfig, resolveGatewayAuthToken } from "./gatew
 import { callGatewayRpc } from "./gateway-rpc";
 import { getLaunchAtLoginState, setLaunchAtLoginEnabled } from "./launch-at-login";
 import { installCli, uninstallCli, getCliStatus } from "./cli-integration";
+import { migrateBrowserProfileForCurrentGateway, normalizeRequestedBrowserProfileForSave } from "./browser-profile-config";
 import * as analytics from "./analytics";
 import * as path from "path";
 import * as fs from "fs";
@@ -1538,7 +1539,9 @@ export function registerSettingsIpc(opts: SettingsIpcOptions = {}): void {
           const config = readUserConfig();
 
           config.browser ??= {};
-          config.browser.defaultProfile = browserProfile;
+          // Settings 的 UI 值可能来自旧版本，保存前统一规整到当前 gateway 支持的 profile。
+          config.browser.defaultProfile = normalizeRequestedBrowserProfileForSave(config, browserProfile);
+          migrateBrowserProfileForCurrentGateway(config);
 
           config.channels ??= {};
           config.channels.imessage ??= {};
