@@ -47,43 +47,24 @@ async function runTrackedSetupAction<T extends SetupActionResult>(
   run: () => Promise<T>,
 ): Promise<T> {
   const startedAt = Date.now();
-  const canTrackStructured =
-    typeof analytics.trackSetupActionStarted === "function" &&
-    typeof analytics.trackSetupActionResult === "function";
-  if (canTrackStructured) {
-    analytics.trackSetupActionStarted(action, props);
-  }
+  analytics.trackSetupActionStarted(action, props);
   try {
     const result = await run();
     const latencyMs = Date.now() - startedAt;
-    const errorType = result.success
-      ? undefined
-      : (typeof analytics.classifyErrorType === "function"
-        ? analytics.classifyErrorType(result.message)
-        : "unknown");
-    if (canTrackStructured) {
-      analytics.trackSetupActionResult(action, {
-        success: result.success,
-        latencyMs,
-        errorType,
-        props,
-      });
-    }
+    analytics.trackSetupActionResult(action, {
+      success: result.success,
+      latencyMs,
+      errorType: result.success ? undefined : analytics.classifyErrorType(result.message),
+      props,
+    });
     return result;
   } catch (err) {
-    const latencyMs = Date.now() - startedAt;
-    const errorType =
-      typeof analytics.classifyErrorType === "function"
-        ? analytics.classifyErrorType(err)
-        : "unknown";
-    if (canTrackStructured) {
-      analytics.trackSetupActionResult(action, {
-        success: false,
-        latencyMs,
-        errorType,
-        props,
-      });
-    }
+    analytics.trackSetupActionResult(action, {
+      success: false,
+      latencyMs: Date.now() - startedAt,
+      errorType: analytics.classifyErrorType(err),
+      props,
+    });
     throw err;
   }
 }
@@ -337,19 +318,26 @@ export function registerSetupIpc(deps: SetupIpcDeps): void {
       analytics.track("setup_completed", latestSetupCompletedProps ?? {});
 
       // CLI 开关显式持久化：开启则安装，关闭则清理，失败都不阻塞 Setup。
+      // 原始 error message 含绝对路径，只上报分类枚举给分析侧。
       if (params?.installCli !== false) {
         const cliResult = await installCli();
         if (cliResult.success) {
           analytics.track("cli_installed", { method: "setup_wizard" });
         } else {
           log.error(`[setup] CLI install failed: ${cliResult.message}`);
-          analytics.track("cli_install_failed", { error: cliResult.message });
+          analytics.track("cli_install_failed", {
+            method: "setup_wizard",
+            error_type: analytics.classifyErrorType(cliResult.message),
+          });
         }
       } else {
         const cliResult = await uninstallCli();
         if (!cliResult.success) {
           log.error(`[setup] CLI uninstall failed: ${cliResult.message}`);
-          analytics.track("cli_uninstall_failed", { error: cliResult.message });
+          analytics.track("cli_uninstall_failed", {
+            method: "setup_wizard",
+            error_type: analytics.classifyErrorType(cliResult.message),
+          });
         }
       }
 
@@ -358,7 +346,32 @@ export function registerSetupIpc(deps: SetupIpcDeps): void {
   });
 }
 
+// 归一化 URL：去尾斜杠并小写主机名，用于预设匹配。
+function normalizeBaseUrl(raw: string): string {
+  const trimmed = raw.trim().replace(/\/+$/, "");
+  try {
+    const u = new URL(trimmed);
+    return `${u.protocol}//${u.host.toLowerCase()}${u.pathname.replace(/\/+$/, "")}`;
+  } catch {
+    return trimmed.toLowerCase();
+  }
+}
+
+// 所有内置预设的 baseUrl 集合（归一化后）。基于模块常量在首次使用时构建。
+let presetBaseUrlSet: Set<string> | null = null;
+function knownPresetBaseUrls(): Set<string> {
+  if (presetBaseUrlSet) return presetBaseUrlSet;
+  const urls = [
+    ...Object.values(PROVIDER_PRESETS).map((p) => p.baseUrl),
+    ...Object.values(MOONSHOT_SUB_PLATFORMS).map((p) => p.baseUrl),
+    ...Object.values(CUSTOM_PROVIDER_PRESETS).map((p) => p.baseUrl),
+  ];
+  presetBaseUrlSet = new Set(urls.map(normalizeBaseUrl));
+  return presetBaseUrlSet;
+}
+
 // 将 setup 表单参数转换为 setup_completed 事件需要的属性字段。
+// 原始 base_url 可能包含内网主机、租户路径或凭证，只上报 preset/custom 粗分类。
 function buildSetupCompletedProps(params: {
   provider: string;
   modelID: string;
@@ -367,7 +380,6 @@ function buildSetupCompletedProps(params: {
 }, config?: any): Record<string, string> {
   const { provider, modelID, baseURL, subPlatform } = params;
 
-  // Moonshot 子平台用实际写入的 providerKey 查配置
   const sub = subPlatform ? MOONSHOT_SUB_PLATFORMS[subPlatform] : undefined;
   const effectiveKey = sub?.providerKey ?? provider;
   const configBaseUrl = config?.models?.providers?.[effectiveKey]?.baseUrl;
@@ -376,9 +388,11 @@ function buildSetupCompletedProps(params: {
       ? configBaseUrl
       : (sub?.baseUrl ?? PROVIDER_PRESETS[provider]?.baseUrl ?? baseURL ?? "");
 
+  const baseUrlKind = knownPresetBaseUrls().has(normalizeBaseUrl(rawBaseUrl)) ? "preset" : "custom";
+
   return {
     provider,
     model: modelID,
-    base_url: rawBaseUrl.trim().replace(/\/+$/, ""),
+    base_url_kind: baseUrlKind,
   };
 }

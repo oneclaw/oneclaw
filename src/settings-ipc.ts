@@ -1647,12 +1647,16 @@ export function registerSettingsIpc(opts: SettingsIpcOptions = {}): void {
   });
 
   // ── 安装 CLI（老用户迁移入口，默认不阻断其它设置流程） ──
+  // 原始 error message 含绝对路径，只上报分类枚举给分析侧。
   ipcMain.handle("settings:install-cli", async () => {
     const result = await installCli();
     if (result.success) {
       analytics.track("cli_installed", { method: "settings" });
     } else {
-      analytics.track("cli_install_failed", { method: "settings", error: result.message });
+      analytics.track("cli_install_failed", {
+        method: "settings",
+        error_type: analytics.classifyErrorType(result.message),
+      });
     }
     return result;
   });
@@ -1663,7 +1667,10 @@ export function registerSettingsIpc(opts: SettingsIpcOptions = {}): void {
     if (result.success) {
       analytics.track("cli_uninstalled", { method: "settings" });
     } else {
-      analytics.track("cli_uninstall_failed", { method: "settings", error: result.message });
+      analytics.track("cli_uninstall_failed", {
+        method: "settings",
+        error_type: analytics.classifyErrorType(result.message),
+      });
     }
     return result;
   });
