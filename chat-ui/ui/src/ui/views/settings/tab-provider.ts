@@ -585,6 +585,11 @@ function onModelSelectChange(value: string, state: AppViewState) {
   state.requestUpdate();
 }
 
+function getSaveButtonLabel(): string {
+  if (s.saving) return "...";
+  return s.editMode === "add" ? t("settings.provider.addModelSave") : t("settings.save");
+}
+
 /* ── CSS ── */
 
 let stylesInjected = false;
@@ -812,11 +817,6 @@ export function renderTabProvider(state: AppViewState) {
                   <div class="oc-provider-list-item__meta">${item.provider}</div>
                 </div>
                 <div class="oc-provider-list-item__actions">
-                  <button class="oc-provider-list-item__action-btn ${item.isDefault ? 'is-default' : ''}" ?disabled=${item.isDefault}
-                    data-tooltip=${t("settings.provider.setDefault")}
-                    @click=${(e: Event) => { e.stopPropagation(); handleSetDefault(item.key, state); }}>
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="${item.isDefault ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
-                  </button>
                   ${!item.isDefault ? html`
                     <button class="oc-provider-list-item__action-btn oc-provider-list-item__delete-btn"
                       data-tooltip=${t("settings.provider.deleteModel")}
@@ -824,9 +824,23 @@ export function renderTabProvider(state: AppViewState) {
                       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
                     </button>
                   ` : nothing}
+                  <button class="oc-provider-list-item__action-btn ${item.isDefault ? 'is-default' : ''}" ?disabled=${item.isDefault}
+                    data-tooltip=${t("settings.provider.setDefault")}
+                    @click=${(e: Event) => { e.stopPropagation(); handleSetDefault(item.key, state); }}>
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="${item.isDefault ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+                  </button>
                 </div>
               </div>
             `)}
+            ${s.editMode === "add" ? html`
+              <div class="oc-provider-list-item oc-provider-list-item--active oc-provider-list-item--placeholder"
+                @click=${() => enterAddMode(state)}>
+                <div class="oc-provider-list-item__info">
+                  <div class="oc-provider-list-item__name">${t("settings.provider.newModelPlaceholder")}</div>
+                  <div class="oc-provider-list-item__meta">—</div>
+                </div>
+              </div>
+            ` : nothing}
           </div>
           <button class="oc-provider-add-btn" @click=${() => enterAddMode(state)}>
             + ${t("settings.provider.addModel")}
@@ -954,7 +968,7 @@ export function renderTabProvider(state: AppViewState) {
           <div class="oc-settings__btn-row">
             <button class="oc-settings__btn oc-settings__btn--primary" ?disabled=${s.saving}
               @click=${() => handleSave(state)}>
-              ${s.saving ? "..." : t("settings.save")}
+              ${getSaveButtonLabel()}
             </button>
           </div>
         </div>
