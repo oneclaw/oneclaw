@@ -84,6 +84,7 @@ import {
 import { startAuthProxy, setProxyAccessToken, setProxySearchDedicatedKey, getProxyPort } from "./kimi-auth-proxy";
 import { ensureGatewayAuthTokenInConfig, resolveGatewayAuthToken } from "./gateway-auth";
 import { callGatewayRpc } from "./gateway-rpc";
+import { listSessionUsage } from "./session-usage";
 import { getLaunchAtLoginState, setLaunchAtLoginEnabled } from "./launch-at-login";
 import { installCli, uninstallCli, getCliStatus } from "./cli-integration";
 import { migrateBrowserProfileForCurrentGateway, normalizeRequestedBrowserProfileForSave } from "./browser-profile-config";
@@ -1679,6 +1680,16 @@ export function registerSettingsIpc(opts: SettingsIpcOptions = {}): void {
   ipcMain.handle("settings:list-config-backups", async () => {
     try {
       return { success: true, data: getConfigRecoveryData() };
+    } catch (err: any) {
+      return { success: false, message: err.message || String(err) };
+    }
+  });
+
+  // ── 列出全部 agent 下的会话用量（按累计 token 求和、updatedAt 倒序、最多 200 条） ──
+  ipcMain.handle("settings:list-session-usage", async () => {
+    try {
+      const rows = await listSessionUsage();
+      return { success: true, data: { rows } };
     } catch (err: any) {
       return { success: false, message: err.message || String(err) };
     }

@@ -103,6 +103,7 @@ contextBridge.exposeInMainWorld("oneclaw", {
   settingsInstallCli: () => ipcRenderer.invoke("settings:install-cli"),
   settingsUninstallCli: () => ipcRenderer.invoke("settings:uninstall-cli"),
   settingsListConfigBackups: () => ipcRenderer.invoke("settings:list-config-backups"),
+  settingsListSessionUsage: () => ipcRenderer.invoke("settings:list-session-usage"),
   settingsRestoreConfigBackup: (params: Record<string, unknown>) =>
     ipcRenderer.invoke("settings:restore-config-backup", params),
   settingsRestoreLastKnownGood: () => ipcRenderer.invoke("settings:restore-last-known-good"),
