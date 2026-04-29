@@ -441,3 +441,99 @@ test("patchPdfToolLocalRoots 应在 reply-*.js 全部缺失时中断构建", () 
 
   fs.rmSync(tmpRoot, { recursive: true, force: true });
 });
+
+// ─── patchKimiReplayPolicy 测试 ───
+
+function writeKimiReplayPolicyFixture(tmpRoot, content) {
+  const replayFile = path.join(
+    tmpRoot,
+    "node_modules",
+    "openclaw",
+    "dist",
+    "replay-policy-FAKE.js",
+  );
+  writeFixture(replayFile, content);
+  return replayFile;
+}
+
+test("patchKimiReplayPolicy 应给 Kimi replay policy 开启 dropThinkingBlocks", () => {
+  const sandbox = loadPackageResourcesSandbox();
+  assert.equal(typeof sandbox.patchKimiReplayPolicy, "function");
+
+  const tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), "oneclaw-kimi-replay-patch-"));
+  const replayFile = writeKimiReplayPolicyFixture(tmpRoot, [
+    "//#region src/llm/providers/kimi-coding/replay-policy.ts",
+    "const KIMI_REPLAY_POLICY = { preserveSignatures: false };",
+    "//#endregion",
+    "export { KIMI_REPLAY_POLICY as t };",
+    "",
+  ].join("\n"));
+
+  sandbox.patchKimiReplayPolicy(tmpRoot);
+
+  const patched = fs.readFileSync(replayFile, "utf-8");
+  assert.ok(
+    patched.includes("const KIMI_REPLAY_POLICY = { preserveSignatures: false, dropThinkingBlocks: true };"),
+    "expected dropThinkingBlocks to be enabled",
+  );
+
+  const beforeSecond = fs.readFileSync(replayFile, "utf-8");
+  sandbox.patchKimiReplayPolicy(tmpRoot);
+  const afterSecond = fs.readFileSync(replayFile, "utf-8");
+  assert.equal(afterSecond, beforeSecond, "second run must be idempotent");
+  assert.equal((afterSecond.match(/dropThinkingBlocks/g) || []).length, 1);
+
+  fs.rmSync(tmpRoot, { recursive: true, force: true });
+});
+
+test("patchKimiReplayPolicy 应在 anchor drift 时中断构建", () => {
+  const sandbox = loadPackageResourcesSandbox({
+    process: Object.assign(Object.create(process), {
+      argv: process.argv.slice(),
+      env: { ...process.env },
+      exit(code) {
+        throw new Error(`process.exit:${code}`);
+      },
+    }),
+  });
+
+  const tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), "oneclaw-kimi-replay-patch-drift-"));
+  writeKimiReplayPolicyFixture(tmpRoot, [
+    "const KIMI_REPLAY_POLICY = {",
+    "\tpreserveSignatures: false,",
+    "};",
+    "export { KIMI_REPLAY_POLICY as t };",
+    "",
+  ].join("\n"));
+
+  assert.throws(
+    () => sandbox.patchKimiReplayPolicy(tmpRoot),
+    /process\.exit:1/,
+  );
+
+  fs.rmSync(tmpRoot, { recursive: true, force: true });
+});
+
+test("patchKimiReplayPolicy 应在 replay policy chunk 缺失时中断构建", () => {
+  const sandbox = loadPackageResourcesSandbox({
+    process: Object.assign(Object.create(process), {
+      argv: process.argv.slice(),
+      env: { ...process.env },
+      exit(code) {
+        throw new Error(`process.exit:${code}`);
+      },
+    }),
+  });
+
+  const tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), "oneclaw-kimi-replay-patch-missing-"));
+  const distDir = path.join(tmpRoot, "node_modules", "openclaw", "dist");
+  fs.mkdirSync(distDir, { recursive: true });
+  fs.writeFileSync(path.join(distDir, "entry.js"), "export {};\n");
+
+  assert.throws(
+    () => sandbox.patchKimiReplayPolicy(tmpRoot),
+    /process\.exit:1/,
+  );
+
+  fs.rmSync(tmpRoot, { recursive: true, force: true });
+});

@@ -37,13 +37,14 @@ Verify: `officecli --version`. If not found after install, open a new terminal.
 
 ## Execution Model
 
-**Run commands one at a time. Do not batch into a shell script.**
+**Use interactive checkpoints. For repetitive edits, prefer small `officecli batch` chunks instead of hundreds of separate tool calls. Do not hide commands in an unobserved shell script.**
 
 OfficeCLI is incremental — every command immediately modifies the file.
 
-1. One command at a time, check output before proceeding.
-2. Non-zero exit = stop and fix immediately.
-3. Verify after structural operations with `get` or `validate`.
+1. Structural or risky operation: run one command, then check output before proceeding.
+2. Repetitive low-risk `add`/`set` operations: use `officecli batch` in small chunks (8-12 ops), then read the batch output.
+3. Non-zero exit = stop and fix immediately.
+4. Verify after structural operations with `get` or `validate`.
 
 **Always use resident mode:**
 

@@ -899,6 +899,7 @@ function installDependencies(opts, gatewayDir) {
     assertNativeDepsMatchTarget(nmDir, opts.platform, opts.arch);
     patchWindowsOpenclawArtifacts(gatewayDir, opts.platform);
     patchPdfToolLocalRoots(gatewayDir);
+    patchKimiReplayPolicy(gatewayDir);
     injectBuiltinSkills(gatewayDir);
     return;
   }
@@ -950,6 +951,7 @@ function installDependencies(opts, gatewayDir) {
   assertNativeDepsMatchTarget(nmDir, opts.platform, opts.arch);
   patchWindowsOpenclawArtifacts(gatewayDir, opts.platform);
   patchPdfToolLocalRoots(gatewayDir);
+  patchKimiReplayPolicy(gatewayDir);
   injectBuiltinSkills(gatewayDir);
   fs.writeFileSync(stampPath, targetStamp);
   log("node_modules 裁剪完成");
@@ -1266,6 +1268,67 @@ function patchPdfToolLocalRoots(gatewayDir) {
     log(`已补丁 ${patched} 个 chunk（PDF tool 路径绕过）`);
   } else {
     log(`PDF tool 补丁已在 ${alreadyPatched} 个 chunk 中就位（幂等跳过）`);
+  }
+}
+
+// Kimi Code 使用 anthropic-messages 传输时，长工具链会在历史 assistant
+// thinking block 里累积 provider 签名。officecli 这类多轮工具调用会把后续
+// replay 迅速膨胀到数十万/百万 token。Kimi 不需要重放旧 thinking block，
+// 因此强制开启 openclaw 现有的 dropThinkingBlocks 策略，仅保留最新
+// assistant turn 的 thinking。
+function patchKimiReplayPolicy(gatewayDir) {
+  const distDir = path.join(gatewayDir, "node_modules", "openclaw", "dist");
+  if (!fs.existsSync(distDir)) {
+    die(`openclaw dist 目录不存在，无法应用 Kimi replay 补丁: ${distDir}`);
+  }
+
+  const candidateFiles = fs
+    .readdirSync(distDir)
+    .filter((f) => f.endsWith(".js") && f.startsWith("replay-policy-"));
+  if (candidateFiles.length === 0) {
+    die("openclaw dist 下无 replay-policy-*.js 文件，patchKimiReplayPolicy 失败");
+  }
+
+  const anchor = "const KIMI_REPLAY_POLICY = { preserveSignatures: false };";
+  const replacement = "const KIMI_REPLAY_POLICY = { preserveSignatures: false, dropThinkingBlocks: true };";
+
+  let patched = 0;
+  let alreadyPatched = 0;
+  for (const fileName of candidateFiles) {
+    const filePath = path.join(distDir, fileName);
+    const source = fs.readFileSync(filePath, "utf-8");
+
+    if (!source.includes("KIMI_REPLAY_POLICY")) continue;
+    if (source.includes(replacement)) {
+      alreadyPatched++;
+      continue;
+    }
+
+    const hits = source.split(anchor).length - 1;
+    if (hits === 0) continue;
+    if (hits > 1) {
+      die(`patchKimiReplayPolicy: anchor 在 ${fileName} 命中 ${hits} 次，拒绝模糊替换`);
+    }
+
+    const result = source.replace(anchor, replacement);
+    if (result === source) {
+      die(`patchKimiReplayPolicy: ${fileName} 替换无效（anchor 匹配但 replace 失败）`);
+    }
+    fs.writeFileSync(filePath, result, "utf-8");
+    patched++;
+  }
+
+  if (patched === 0 && alreadyPatched === 0) {
+    die(
+      `patchKimiReplayPolicy: anchor 在所有 ${candidateFiles.length} 个 replay-policy chunk 中均未命中。` +
+      `可能是 openclaw 升级导致 anchor drift。`,
+    );
+  }
+
+  if (patched > 0) {
+    log(`已补丁 ${patched} 个 chunk（Kimi replay 丢弃旧 thinking blocks）`);
+  } else {
+    log(`Kimi replay 补丁已在 ${alreadyPatched} 个 chunk 中就位（幂等跳过）`);
   }
 }
 

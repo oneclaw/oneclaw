@@ -38,15 +38,16 @@ metadata:
 
 ## Execution Model
 
-**Run commands one at a time. Do not write all commands into a shell script and execute it as a single block.**
+**Use interactive checkpoints. For repetitive edits, prefer small `officecli batch` chunks instead of hundreds of separate tool calls. Do not write an unobserved shell script and execute it as a single block.**
 
 OfficeCLI is incremental: every `add`, `set`, and `remove` immediately modifies the file and returns output. Use this to catch errors early:
 
-1. **One command at a time, then read the output.** Check the exit code before proceeding.
-2. **Non-zero exit = stop and fix immediately.** Do not continue building on a broken state.
-3. **Verify after structural operations.** After adding a sheet, chart, pivot table, or named range, run `get` or `validate` before building on top of it.
+1. **Structural or risky operation: one command, then read the output.** Check the exit code before proceeding.
+2. **Repetitive low-risk edits: use `officecli batch` in small chunks (8-12 ops).** Read the batch output before the next chunk.
+3. **Non-zero exit = stop and fix immediately.** Do not continue building on a broken state.
+4. **Verify after structural operations.** After adding a sheet, chart, pivot table, or named range, run `get` or `validate` before building on top of it.
 
-Running a 50-command script all at once means the first error cascades silently through every subsequent command. Running incrementally means the failure context is immediate and local — fix it and move on.
+Running a 50-command script all at once means the first error cascades silently through every subsequent command. Small observed batch chunks keep failure context local while avoiding unnecessary tool turns.
 
 ---
 
