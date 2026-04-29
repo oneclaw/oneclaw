@@ -898,6 +898,7 @@ function installDependencies(opts, gatewayDir) {
     pruneDanglingBinLinks(nmDir);
     assertNativeDepsMatchTarget(nmDir, opts.platform, opts.arch);
     patchWindowsOpenclawArtifacts(gatewayDir, opts.platform);
+    patchPdfToolLocalRoots(gatewayDir);
     return;
   }
 
@@ -947,6 +948,7 @@ function installDependencies(opts, gatewayDir) {
   pruneDanglingBinLinks(nmDir);
   assertNativeDepsMatchTarget(nmDir, opts.platform, opts.arch);
   patchWindowsOpenclawArtifacts(gatewayDir, opts.platform);
+  patchPdfToolLocalRoots(gatewayDir);
   fs.writeFileSync(stampPath, targetStamp);
   log("node_modules 裁剪完成");
 }
@@ -1132,8 +1134,140 @@ function patchAsarBoundaryCheck(gatewayDir) {
   }
 }
 
-// ─── Step 2.5: 注入 bundled 插件（kimi-claw + kimi-search） ───
 
+// patchPdfToolLocalRoots: openclaw 的 PDF tool 非 sandbox 分支只允许
+// ~/.openclaw/{media,agents,workspace,sandboxes} 下的文件，而用户通常从
+// ~/Desktop / ~/Downloads 拖 PDF 会被拒。利用 openclaw 自带的 escape hatch：
+// 同时传 localRoots:"any" + 自定义 readFile 时会跳过 assertLocalMediaAllowed。
+// 自定义 readFile 做五层防护：输入校验 / realpath + NFC / isFile + size /
+// PDF magic bytes / 敏感路径 deny list。anchor 未命中时 die，防止 openclaw
+// 升级后静默失效。
+function patchPdfToolLocalRoots(gatewayDir) {
+  const distDir = path.join(gatewayDir, "node_modules", "openclaw", "dist");
+  if (!fs.existsSync(distDir)) {
+    die(`openclaw dist 目录不存在，无法应用 PDF tool 补丁: ${distDir}`);
+  }
+
+  // rolldown 会把 createPdfTool 代码复制到多个 chunk，散弹式 patch 所有带
+  // anchor 的 .js（anchor 足够精确，不会误伤）。
+  const candidateFiles = fs.readdirSync(distDir).filter((f) => f.endsWith(".js"));
+  if (candidateFiles.length === 0) {
+    die("openclaw dist 下无 .js 文件，patchPdfToolLocalRoots 失败");
+  }
+
+  const MARKER = "/* oneclaw-pdf-bypass */";
+
+  // anchor: tabs 精确匹配，缩进改变即 miss → die
+  const anchor = [
+    "\t\t\t\t}) : await loadWebMediaRaw(resolvedPathInfo.resolved, {",
+    "\t\t\t\t\tmaxBytes,",
+    "\t\t\t\t\tlocalRoots",
+    "\t\t\t\t});",
+  ].join("\n");
+
+  // 临时变量以下划线开头避免与外层 createPdfTool 冲突；maxBytes 从外层闭包捕获。
+  const replacement = [
+    "\t\t\t\t}) : await loadWebMediaRaw(resolvedPathInfo.resolved, " + MARKER + " {",
+    "\t\t\t\t\tmaxBytes,",
+    "\t\t\t\t\tlocalRoots: \"any\",",
+    "\t\t\t\t\treadFile: async (inputPath) => {",
+    "\t\t\t\t\t\tif (typeof inputPath !== \"string\" || inputPath.length === 0) {",
+    "\t\t\t\t\t\t\tthrow new Error(\"PDF path must be a non-empty string\");",
+    "\t\t\t\t\t\t}",
+    "\t\t\t\t\t\tif (inputPath.includes(\"\\0\")) {",
+    "\t\t\t\t\t\t\tthrow new Error(\"PDF path must not contain null bytes\");",
+    "\t\t\t\t\t\t}",
+    "\t\t\t\t\t\tif (!isAbsolute(inputPath)) {",
+    "\t\t\t\t\t\t\tthrow new Error(\"PDF path must be absolute: \" + inputPath);",
+    "\t\t\t\t\t\t}",
+    "\t\t\t\t\t\tconst _resolvedRaw = await fs.promises.realpath(inputPath);",
+    "\t\t\t\t\t\tconst _resolvedPath = _resolvedRaw.normalize(\"NFC\");",
+    "\t\t\t\t\t\tconst _st = await fs.promises.stat(_resolvedPath);",
+    "\t\t\t\t\t\tif (!_st.isFile()) {",
+    "\t\t\t\t\t\t\tthrow new Error(\"PDF path is not a regular file: \" + inputPath);",
+    "\t\t\t\t\t\t}",
+    "\t\t\t\t\t\tif (_st.size > maxBytes) {",
+    "\t\t\t\t\t\t\tthrow new Error(\"PDF exceeds size cap: \" + _st.size);",
+    "\t\t\t\t\t\t}",
+    "\t\t\t\t\t\tif (_st.size < 5) {",
+    "\t\t\t\t\t\t\tthrow new Error(\"PDF too small to contain header: \" + _st.size);",
+    "\t\t\t\t\t\t}",
+    "\t\t\t\t\t\tconst _fd = await fs.promises.open(_resolvedPath, \"r\");",
+    "\t\t\t\t\t\ttry {",
+    "\t\t\t\t\t\t\tconst _probeSize = Math.min(1024, Number(_st.size));",
+    "\t\t\t\t\t\t\tconst _probe = Buffer.alloc(_probeSize);",
+    "\t\t\t\t\t\t\tawait _fd.read(_probe, 0, _probeSize, 0);",
+    "\t\t\t\t\t\t\tif (!_probe.includes(Buffer.from(\"%PDF-\", \"ascii\"))) {",
+    "\t\t\t\t\t\t\t\tthrow new Error(\"Not a valid PDF (no %PDF- marker in first 1KB): \" + inputPath);",
+    "\t\t\t\t\t\t\t}",
+    "\t\t\t\t\t\t} finally {",
+    "\t\t\t\t\t\t\tawait _fd.close();",
+    "\t\t\t\t\t\t}",
+    "\t\t\t\t\t\tconst _lower = _resolvedPath.toLowerCase();",
+    "\t\t\t\t\t\tconst _segments = _lower.split(/[\\\\/]+/).filter(Boolean);",
+    "\t\t\t\t\t\tconst _basename = _segments[_segments.length - 1] || \"\";",
+    "\t\t\t\t\t\tconst _DENY_DIR_SEGMENTS = [\".ssh\", \".aws\", \".gnupg\", \".kube\", \".docker\", \"keychains\", \"secrets\"];",
+    "\t\t\t\t\t\tconst _DENY_BASENAMES = new Set([",
+    "\t\t\t\t\t\t\t\"id_rsa\", \"id_dsa\", \"id_ecdsa\", \"id_ed25519\",",
+    "\t\t\t\t\t\t\t\".env\", \".netrc\", \".pgpass\", \".git-credentials\", \".npmrc\", \".pypirc\",",
+    "\t\t\t\t\t\t\t\"credentials\", \"credentials.json\", \"wallet.dat\", \".htpasswd\"",
+    "\t\t\t\t\t\t]);",
+    "\t\t\t\t\t\tconst _DENY_PATTERNS = [/^\\.env(\\.|$)/, /\\.pem$/, /\\.key$/, /\\.p12$/, /\\.pfx$/];",
+    "\t\t\t\t\t\tif (_DENY_DIR_SEGMENTS.some((d) => _segments.includes(d))) {",
+    "\t\t\t\t\t\t\tthrow new Error(\"PDF path touches a protected directory: \" + inputPath);",
+    "\t\t\t\t\t\t}",
+    "\t\t\t\t\t\tif (_DENY_BASENAMES.has(_basename)) {",
+    "\t\t\t\t\t\t\tthrow new Error(\"PDF path matches a protected filename: \" + _basename);",
+    "\t\t\t\t\t\t}",
+    "\t\t\t\t\t\tif (_DENY_PATTERNS.some((r) => r.test(_basename))) {",
+    "\t\t\t\t\t\t\tthrow new Error(\"PDF path matches a protected pattern: \" + _basename);",
+    "\t\t\t\t\t\t}",
+    "\t\t\t\t\t\treturn fs.promises.readFile(_resolvedPath);",
+    "\t\t\t\t\t}",
+    "\t\t\t\t});",
+  ].join("\n");
+
+  let patched = 0;
+  let alreadyPatched = 0;
+  for (const fileName of candidateFiles) {
+    const filePath = path.join(distDir, fileName);
+    const source = fs.readFileSync(filePath, "utf-8");
+
+    if (source.includes(MARKER)) {
+      alreadyPatched++;
+      continue;
+    }
+
+    const hits = source.split(anchor).length - 1;
+    if (hits === 0) continue;
+    if (hits > 1) {
+      die(`patchPdfToolLocalRoots: anchor 在 ${fileName} 命中 ${hits} 次，拒绝模糊替换`);
+    }
+
+    const result = source.replace(anchor, replacement);
+    if (result === source) {
+      die(`patchPdfToolLocalRoots: ${fileName} 替换无效（anchor 匹配但 replace 失败）`);
+    }
+    fs.writeFileSync(filePath, result, "utf-8");
+    patched++;
+  }
+
+  // 全部文件都未命中且无已 patched → anchor drift → 中断构建。
+  if (patched === 0 && alreadyPatched === 0) {
+    die(
+      `patchPdfToolLocalRoots: anchor 在所有 ${candidateFiles.length} 个 .js chunk 中均未命中。` +
+      `可能是 openclaw 升级导致 anchor drift。`,
+    );
+  }
+
+  if (patched > 0) {
+    log(`已补丁 ${patched} 个 chunk（PDF tool 路径绕过）`);
+  } else {
+    log(`PDF tool 补丁已在 ${alreadyPatched} 个 chunk 中就位（幂等跳过）`);
+  }
+}
+
+// ─── Step 2.5: 注入 bundled 插件（kimi-claw + kimi-search + qqbot + dingtalk） ───
 // 插件定义（id → 下载/缓存参数）
 //
 // 注：dingtalk-connector 由 extensions-mirror（外部插件扫描路径）回滚到 bundled

@@ -83,6 +83,12 @@
       "label": "image",
       "detailKeys": ["path", "url"]
     },
+    "pdf": {
+      "icon": "file-text",
+      "title": "PDF",
+      "label": "pdf",
+      "detailKeys": ["pdf", "pdfs", "path"]
+    },
     "sessions_list": {
       "icon": "list",
       "title": "Sessions List",

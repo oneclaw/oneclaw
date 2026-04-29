@@ -29,7 +29,7 @@ import {
   recordLastKnownGoodConfigSnapshot,
   restoreLastKnownGoodConfigSnapshot,
 } from "./config-backup";
-import { readUserConfig, writeUserConfig } from "./provider-config";
+import { readUserConfig, writeUserConfig, syncPdfModelToPrimary } from "./provider-config";
 import { resolveKimiSearchApiKey, readKimiApiKey, readKimiSearchDedicatedApiKey, writeKimiApiKey, ensureMemorySearchProxyConfig, ensureKimiPluginDeviceId } from "./kimi-config";
 import { reconcileCliOnAppLaunch } from "./cli-integration";
 import { reconcileExtensionsOnAppLaunch } from "./extension-mirror";
@@ -257,6 +257,25 @@ function migrateSessionMemoryHook(): void {
     };
     writeUserConfig(config);
     log.info("[migrate] 已为存量用户默认开启 session-memory hook");
+  } catch {
+    // 迁移失败不阻塞启动
+  }
+}
+
+// 存量用户迁移：为已安装用户补写 agents.defaults.pdfModel 配置，激活 openclaw 内置 pdf tool。
+// 老用户更新后不会重走 setup 也不会主动改 settings，必须靠启动迁移覆盖。
+// 逻辑：pdfModel 未配置 → 直接复用 model.primary（pdf tool 对纯文本模型也有 fallback，无需判断 image 能力）。
+function migratePdfModelConfig(): void {
+  try {
+    const config = readUserConfig();
+    if (config?.agents?.defaults?.pdfModel?.primary) return; // 已配置，跳过
+
+    const primary = config?.agents?.defaults?.model?.primary;
+    if (!primary || typeof primary !== "string") return; // 无主模型，跳过
+
+    syncPdfModelToPrimary(config);
+    writeUserConfig(config);
+    log.info(`[migrate] pdfModel 已设置为当前主模型: ${primary}`);
   } catch {
     // 迁移失败不阻塞启动
   }
@@ -883,6 +902,7 @@ app.whenReady().then(async () => {
       migrateDeprecatedDingtalkFields();
       migrateBrowserProfileConfig();
       migrateKimiPluginDeviceId();
+      migratePdfModelConfig();
       void reconcileCliOnAppLaunch().catch((err) => {
         log.error(`[migrate] CLI launch reconciliation failed: ${err instanceof Error ? err.message : String(err)}`);
       });
@@ -898,6 +918,7 @@ app.whenReady().then(async () => {
       migrateDeprecatedDingtalkFields();
       migrateBrowserProfileConfig();
       migrateKimiPluginDeviceId();
+      migratePdfModelConfig();
       void reconcileCliOnAppLaunch().catch((err) => {
         log.error(`[migrate] CLI launch reconciliation failed: ${err instanceof Error ? err.message : String(err)}`);
       });
