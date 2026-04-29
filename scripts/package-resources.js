@@ -900,6 +900,7 @@ function installDependencies(opts, gatewayDir) {
     patchWindowsOpenclawArtifacts(gatewayDir, opts.platform);
     patchPdfToolLocalRoots(gatewayDir);
     patchKimiReplayPolicy(gatewayDir);
+    patchKimiAnthropicThinkingSignatures(gatewayDir);
     injectBuiltinSkills(gatewayDir);
     return;
   }
@@ -952,6 +953,7 @@ function installDependencies(opts, gatewayDir) {
   patchWindowsOpenclawArtifacts(gatewayDir, opts.platform);
   patchPdfToolLocalRoots(gatewayDir);
   patchKimiReplayPolicy(gatewayDir);
+  patchKimiAnthropicThinkingSignatures(gatewayDir);
   injectBuiltinSkills(gatewayDir);
   fs.writeFileSync(stampPath, targetStamp);
   log("node_modules 裁剪完成");
@@ -1271,11 +1273,11 @@ function patchPdfToolLocalRoots(gatewayDir) {
   }
 }
 
-// Kimi Code 使用 anthropic-messages 传输时，长工具链会在历史 assistant
-// thinking block 里累积 provider 签名。officecli 这类多轮工具调用会把后续
-// replay 迅速膨胀到数十万/百万 token。Kimi 不需要重放旧 thinking block，
-// 因此强制开启 openclaw 现有的 dropThinkingBlocks 策略，仅保留最新
-// assistant turn 的 thinking。
+// Kimi Code 使用 anthropic-messages 传输时，assistant tool_call 历史必须保留
+// reasoning_content/thinking，否则服务端会拒绝：
+// "thinking is enabled but reasoning_content is missing..."。上一版曾用
+// dropThinkingBlocks 降低签名膨胀，但这会破坏该约束；这里强制恢复为只关闭
+// preserveSignatures 的上游策略，真正的签名瘦身在 pi-ai anthropic payload 层做。
 function patchKimiReplayPolicy(gatewayDir) {
   const distDir = path.join(gatewayDir, "node_modules", "openclaw", "dist");
   if (!fs.existsSync(distDir)) {
@@ -1290,46 +1292,131 @@ function patchKimiReplayPolicy(gatewayDir) {
   }
 
   const anchor = "const KIMI_REPLAY_POLICY = { preserveSignatures: false };";
-  const replacement = "const KIMI_REPLAY_POLICY = { preserveSignatures: false, dropThinkingBlocks: true };";
+  const staleDropThinking = "const KIMI_REPLAY_POLICY = { preserveSignatures: false, dropThinkingBlocks: true };";
 
-  let patched = 0;
-  let alreadyPatched = 0;
+  let restored = 0;
+  let verified = 0;
   for (const fileName of candidateFiles) {
     const filePath = path.join(distDir, fileName);
     const source = fs.readFileSync(filePath, "utf-8");
 
     if (!source.includes("KIMI_REPLAY_POLICY")) continue;
-    if (source.includes(replacement)) {
-      alreadyPatched++;
+
+    if (source.includes(anchor)) {
+      verified++;
       continue;
     }
 
-    const hits = source.split(anchor).length - 1;
-    if (hits === 0) continue;
+    const hits = source.split(staleDropThinking).length - 1;
+    if (hits === 0) {
+      continue;
+    }
     if (hits > 1) {
       die(`patchKimiReplayPolicy: anchor 在 ${fileName} 命中 ${hits} 次，拒绝模糊替换`);
     }
 
-    const result = source.replace(anchor, replacement);
+    const result = source.replace(staleDropThinking, anchor);
     if (result === source) {
       die(`patchKimiReplayPolicy: ${fileName} 替换无效（anchor 匹配但 replace 失败）`);
     }
     fs.writeFileSync(filePath, result, "utf-8");
-    patched++;
+    restored++;
   }
 
-  if (patched === 0 && alreadyPatched === 0) {
+  if (restored === 0 && verified === 0) {
     die(
       `patchKimiReplayPolicy: anchor 在所有 ${candidateFiles.length} 个 replay-policy chunk 中均未命中。` +
       `可能是 openclaw 升级导致 anchor drift。`,
     );
   }
 
-  if (patched > 0) {
-    log(`已补丁 ${patched} 个 chunk（Kimi replay 丢弃旧 thinking blocks）`);
+  if (restored > 0) {
+    log(`已修复 ${restored} 个 chunk（Kimi replay 恢复保留 thinking blocks）`);
   } else {
-    log(`Kimi replay 补丁已在 ${alreadyPatched} 个 chunk 中就位（幂等跳过）`);
+    log(`Kimi replay policy 已校验（${verified} 个 chunk，未启用 dropThinkingBlocks）`);
   }
+}
+
+// Kimi Code 的历史 thinkingSignature 可能是 provider 返回的大块 opaque 签名。
+// 多轮 officecli 工具调用会把这些旧签名反复上传；但直接删除旧 thinking 会让
+// Kimi 在 thinking+tool_calls 请求中报 reasoning_content 缺失。这里只在
+// @mariozechner/pi-ai 的 Anthropic payload 转换层，把 Kimi 的“非最新 assistant”
+// 大签名替换为短占位符：保留 thinking/reasoning_content 形态，去掉历史签名体积。
+function patchKimiAnthropicThinkingSignatures(gatewayDir) {
+  const anthropicProvider = path.join(
+    gatewayDir,
+    "node_modules",
+    "@mariozechner",
+    "pi-ai",
+    "dist",
+    "providers",
+    "anthropic.js",
+  );
+  if (!fs.existsSync(anthropicProvider)) {
+    die(`pi-ai anthropic provider 不存在，无法应用 Kimi thinking 签名补丁: ${anthropicProvider}`);
+  }
+
+  const source = fs.readFileSync(anthropicProvider, "utf-8");
+  const marker = "oneclaw-kimi-signature-compact";
+  if (source.includes(marker)) {
+    log("Kimi thinking 签名补丁已就位（幂等跳过）");
+    return;
+  }
+
+  const transformAnchor = [
+    "    const transformedMessages = transformMessages(messages, model, normalizeToolCallId);",
+    "    for (let i = 0; i < transformedMessages.length; i++) {",
+  ].join("\n");
+  const transformReplacement = [
+    "    const transformedMessages = transformMessages(messages, model, normalizeToolCallId);",
+    "    const latestAssistantIndex = (() => {",
+    "        for (let j = transformedMessages.length - 1; j >= 0; j--) {",
+    "            if (transformedMessages[j]?.role === \"assistant\")",
+    "                return j;",
+    "        }",
+    "        return -1;",
+    "    })();",
+    "    for (let i = 0; i < transformedMessages.length; i++) {",
+  ].join("\n");
+
+  const signatureAnchor = [
+    "                        blocks.push({",
+    "                            type: \"thinking\",",
+    "                            thinking: sanitizeSurrogates(block.thinking),",
+    "                            signature: block.thinkingSignature,",
+    "                        });",
+  ].join("\n");
+  const signatureReplacement = [
+    "                        const signature = /* " + marker + " */ model.provider === \"kimi\" &&",
+    "                            i !== latestAssistantIndex &&",
+    "                            typeof block.thinkingSignature === \"string\" &&",
+    "                            block.thinkingSignature.length > 256",
+    "                            ? \"oneclaw-omitted-thinking-signature\"",
+    "                            : block.thinkingSignature;",
+    "                        blocks.push({",
+    "                            type: \"thinking\",",
+    "                            thinking: sanitizeSurrogates(block.thinking),",
+    "                            signature,",
+    "                        });",
+  ].join("\n");
+
+  const transformHits = source.split(transformAnchor).length - 1;
+  const signatureHits = source.split(signatureAnchor).length - 1;
+  if (transformHits !== 1 || signatureHits !== 1) {
+    die(
+      `patchKimiAnthropicThinkingSignatures: anchor drift ` +
+      `(transform=${transformHits}, signature=${signatureHits})`,
+    );
+  }
+
+  const result = source
+    .replace(transformAnchor, transformReplacement)
+    .replace(signatureAnchor, signatureReplacement);
+  if (result === source || !result.includes(marker)) {
+    die("patchKimiAnthropicThinkingSignatures: 替换无效");
+  }
+  fs.writeFileSync(anthropicProvider, result, "utf-8");
+  log("已补丁 pi-ai Anthropic provider（Kimi 旧 thinking 签名瘦身）");
 }
 
 // 把仓库 builtin-skills/ 下的 skill 注入 openclaw bundled skills 目录。
@@ -2481,11 +2568,14 @@ async function packGatewayAsar(gatewayDir, targetBase, platform, arch) {
   // 补丁 boundary-file-read：让 asar 内路径绕过 O_NOFOLLOW / realpathSync 校验
   patchAsarBoundaryCheck(gatewayDir);
 
-  // unpack 规则：仅二进制文件需要 unpack（dlopen 不支持 asar 虚拟路径）
+  // unpack 规则：
+  //   - 二进制：dlopen 不支持 asar 虚拟路径（.node/.exe/.dll/.dylib/.so/spawn-helper）
+  //   - skill 脚本：openclaw 把 {baseDir} 指向 asar 内的 skill 目录，但 PowerShell / bash
+  //     等子进程不走 Electron 的 asar fs shim，必须放到真实磁盘上才能 -File 调用
   // extensions/ 不再需要 unpack——boundary-file-read 补丁已处理 asar 路径校验
   log("正在打包 gateway.asar ...");
   await asar.createPackageWithOptions(gatewayDir, asarPath, {
-    unpack: "{**/*.node,**/*.exe,**/*.dll,**/*.dylib,**/*.so,**/spawn-helper}",
+    unpack: "{**/*.node,**/*.exe,**/*.dll,**/*.dylib,**/*.so,**/spawn-helper,**/skills/**/scripts/**}",
   });
 
   const asarSize = (fs.statSync(asarPath).size / 1048576).toFixed(1);

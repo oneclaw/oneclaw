@@ -456,14 +456,14 @@ function writeKimiReplayPolicyFixture(tmpRoot, content) {
   return replayFile;
 }
 
-test("patchKimiReplayPolicy 应给 Kimi replay policy 开启 dropThinkingBlocks", () => {
+test("patchKimiReplayPolicy 应保持 Kimi thinking blocks 并回滚旧 dropThinkingBlocks 补丁", () => {
   const sandbox = loadPackageResourcesSandbox();
   assert.equal(typeof sandbox.patchKimiReplayPolicy, "function");
 
   const tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), "oneclaw-kimi-replay-patch-"));
   const replayFile = writeKimiReplayPolicyFixture(tmpRoot, [
     "//#region src/llm/providers/kimi-coding/replay-policy.ts",
-    "const KIMI_REPLAY_POLICY = { preserveSignatures: false };",
+    "const KIMI_REPLAY_POLICY = { preserveSignatures: false, dropThinkingBlocks: true };",
     "//#endregion",
     "export { KIMI_REPLAY_POLICY as t };",
     "",
@@ -473,15 +473,110 @@ test("patchKimiReplayPolicy 应给 Kimi replay policy 开启 dropThinkingBlocks"
 
   const patched = fs.readFileSync(replayFile, "utf-8");
   assert.ok(
-    patched.includes("const KIMI_REPLAY_POLICY = { preserveSignatures: false, dropThinkingBlocks: true };"),
-    "expected dropThinkingBlocks to be enabled",
+    patched.includes("const KIMI_REPLAY_POLICY = { preserveSignatures: false };"),
+    "expected dropThinkingBlocks to be removed",
   );
+  assert.equal((patched.match(/dropThinkingBlocks/g) || []).length, 0);
 
   const beforeSecond = fs.readFileSync(replayFile, "utf-8");
   sandbox.patchKimiReplayPolicy(tmpRoot);
   const afterSecond = fs.readFileSync(replayFile, "utf-8");
   assert.equal(afterSecond, beforeSecond, "second run must be idempotent");
-  assert.equal((afterSecond.match(/dropThinkingBlocks/g) || []).length, 1);
+
+  fs.rmSync(tmpRoot, { recursive: true, force: true });
+});
+
+function buildPiAiAnthropicFixture() {
+  return [
+    "function convertMessages(messages, model, isOAuthToken, cacheControl) {",
+    "    const params = [];",
+    "    const transformedMessages = transformMessages(messages, model, normalizeToolCallId);",
+    "    for (let i = 0; i < transformedMessages.length; i++) {",
+    "        const msg = transformedMessages[i];",
+    "        if (msg.role === \"assistant\") {",
+    "            const blocks = [];",
+    "            for (const block of msg.content) {",
+    "                if (block.type === \"thinking\") {",
+    "                    if (!block.thinkingSignature || block.thinkingSignature.trim().length === 0) {",
+    "                        blocks.push({",
+    "                            type: \"text\",",
+    "                            text: sanitizeSurrogates(block.thinking),",
+    "                        });",
+    "                    }",
+    "                    else {",
+    "                        blocks.push({",
+    "                            type: \"thinking\",",
+    "                            thinking: sanitizeSurrogates(block.thinking),",
+    "                            signature: block.thinkingSignature,",
+    "                        });",
+    "                    }",
+    "                }",
+    "            }",
+    "        }",
+    "    }",
+    "}",
+    "",
+  ].join("\n");
+}
+
+function writePiAiAnthropicFixture(tmpRoot, content = buildPiAiAnthropicFixture()) {
+  const providerFile = path.join(
+    tmpRoot,
+    "node_modules",
+    "@mariozechner",
+    "pi-ai",
+    "dist",
+    "providers",
+    "anthropic.js",
+  );
+  writeFixture(providerFile, content);
+  return providerFile;
+}
+
+test("patchKimiAnthropicThinkingSignatures 应压缩 Kimi 旧 thinking 签名并保留最新签名", () => {
+  const sandbox = loadPackageResourcesSandbox();
+  assert.equal(typeof sandbox.patchKimiAnthropicThinkingSignatures, "function");
+
+  const tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), "oneclaw-kimi-thinking-signature-"));
+  const providerFile = writePiAiAnthropicFixture(tmpRoot);
+
+  sandbox.patchKimiAnthropicThinkingSignatures(tmpRoot);
+
+  const patched = fs.readFileSync(providerFile, "utf-8");
+  assert.ok(patched.includes("latestAssistantIndex"), "expected latest assistant detection");
+  assert.ok(patched.includes("oneclaw-kimi-signature-compact"), "expected idempotence marker");
+  assert.ok(patched.includes('model.provider === "kimi"'), "expected Kimi-only guard");
+  assert.ok(patched.includes("i !== latestAssistantIndex"), "expected latest turn to keep original signature");
+  assert.ok(patched.includes("block.thinkingSignature.length > 256"), "expected large-signature threshold");
+  assert.ok(patched.includes("oneclaw-omitted-thinking-signature"), "expected compact placeholder");
+  assert.ok(patched.includes("signature,"), "expected payload to keep a thinking signature field");
+
+  const beforeSecond = fs.readFileSync(providerFile, "utf-8");
+  sandbox.patchKimiAnthropicThinkingSignatures(tmpRoot);
+  const afterSecond = fs.readFileSync(providerFile, "utf-8");
+  assert.equal(afterSecond, beforeSecond, "second run must be idempotent");
+
+  fs.rmSync(tmpRoot, { recursive: true, force: true });
+});
+
+test("patchKimiAnthropicThinkingSignatures 应在 anchor drift 时中断构建", () => {
+  const sandbox = loadPackageResourcesSandbox({
+    process: Object.assign(Object.create(process), {
+      argv: process.argv.slice(),
+      env: { ...process.env },
+      exit(code) {
+        throw new Error(`process.exit:${code}`);
+      },
+    }),
+  });
+
+  const tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), "oneclaw-kimi-thinking-signature-drift-"));
+  writePiAiAnthropicFixture(tmpRoot, "export const nope = true;\n");
+
+  assert.throws(
+    () => sandbox.patchKimiAnthropicThinkingSignatures(tmpRoot),
+    /process\.exit:1/,
+  );
 
   fs.rmSync(tmpRoot, { recursive: true, force: true });
 });
