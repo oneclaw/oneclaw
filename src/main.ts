@@ -29,7 +29,7 @@ import {
   recordLastKnownGoodConfigSnapshot,
   restoreLastKnownGoodConfigSnapshot,
 } from "./config-backup";
-import { readUserConfig, writeUserConfig, syncPdfModelToPrimary } from "./provider-config";
+import { readUserConfig, writeUserConfig, mirrorAliasedProviders, isMirroredProviderEntry, syncPdfModelToPrimary } from "./provider-config";
 import { resolveKimiSearchApiKey, readKimiApiKey, readKimiSearchDedicatedApiKey, writeKimiApiKey, ensureMemorySearchProxyConfig, ensureKimiPluginDeviceId } from "./kimi-config";
 import { reconcileCliOnAppLaunch } from "./cli-integration";
 import { reconcileExtensionsOnAppLaunch } from "./extension-mirror";
@@ -262,20 +262,33 @@ function migrateSessionMemoryHook(): void {
   }
 }
 
-// 存量用户迁移：为已安装用户补写 agents.defaults.pdfModel 配置，激活 openclaw 内置 pdf tool。
-// 老用户更新后不会重走 setup 也不会主动改 settings，必须靠启动迁移覆盖。
-// 逻辑：pdfModel 未配置 → 直接复用 model.primary（pdf tool 对纯文本模型也有 fallback，无需判断 image 能力）。
-function migratePdfModelConfig(): void {
+// 存量用户迁移：为已安装用户补写归一化 provider 镜像条目，激活 openclaw 内置 pdf tool。
+// openclaw 把 provider 写入 models.json 时保留原始 key，但 pdf tool 查询时会归一化（例如
+// kimi-coding → kimi），导致写入键和查询键不一致 → "Unknown model"。镜像条目让查询能命中。
+// 老用户从不触发 writeUserConfig 时无法享受新版 mirror，必须靠启动迁移兜底。
+// 同时补齐缺失的 agents.defaults.pdfModel；openclaw 的 PDF 自动选型不认 OneClaw 的 config apiKey。
+function migrateAliasedProviderMirror(): void {
   try {
     const config = readUserConfig();
-    if (config?.agents?.defaults?.pdfModel?.primary) return; // 已配置，跳过
-
-    const primary = config?.agents?.defaults?.model?.primary;
-    if (!primary || typeof primary !== "string") return; // 无主模型，跳过
-
-    syncPdfModelToPrimary(config);
+    const providers = config?.models?.providers;
+    if (!providers || typeof providers !== "object") return;
+    const mirrorResult = mirrorAliasedProviders(config, { persistState: true });
+    const pdfModelSynced = syncPdfModelToPrimary(config);
+    const changed =
+      mirrorResult.added +
+      mirrorResult.updated +
+      mirrorResult.removed +
+      mirrorResult.mergedCollisions +
+      mirrorResult.cleanedLegacyMetadata;
+    if (changed === 0 && !pdfModelSynced) return;
     writeUserConfig(config);
-    log.info(`[migrate] pdfModel 已设置为当前主模型: ${primary}`);
+    if (changed > 0) {
+      const mirrored = Object.keys(providers).filter((k) => isMirroredProviderEntry(providers, k)).join(", ");
+      log.info(`[migrate] 已同步 provider 别名镜像（added=${mirrorResult.added} updated=${mirrorResult.updated} removed=${mirrorResult.removed} merged=${mirrorResult.mergedCollisions} cleaned=${mirrorResult.cleanedLegacyMetadata}: ${mirrored}）以激活 openclaw 内置 pdf tool`);
+    }
+    if (pdfModelSynced) {
+      log.info("[migrate] 已补齐 agents.defaults.pdfModel.primary，确保 PDF tool 可用");
+    }
   } catch {
     // 迁移失败不阻塞启动
   }
@@ -937,7 +950,7 @@ app.whenReady().then(async () => {
       migrateKimiPluginDeviceId();
       migrateAgentTimeout();
       migrateSubagentTimeout();
-      migratePdfModelConfig();
+      migrateAliasedProviderMirror();
       void reconcileCliOnAppLaunch().catch((err) => {
         log.error(`[migrate] CLI launch reconciliation failed: ${err instanceof Error ? err.message : String(err)}`);
       });
@@ -955,7 +968,7 @@ app.whenReady().then(async () => {
       migrateKimiPluginDeviceId();
       migrateAgentTimeout();
       migrateSubagentTimeout();
-      migratePdfModelConfig();
+      migrateAliasedProviderMirror();
       void reconcileCliOnAppLaunch().catch((err) => {
         log.error(`[migrate] CLI launch reconciliation failed: ${err instanceof Error ? err.message : String(err)}`);
       });

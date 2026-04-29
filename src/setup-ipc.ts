@@ -12,7 +12,6 @@ import {
   saveMoonshotConfig,
   readUserConfig,
   writeUserConfig,
-  syncPdfModelToPrimary,
 } from "./provider-config";
 import * as log from "./logger";
 import { installCli, uninstallCli } from "./cli-integration";
@@ -231,9 +230,6 @@ export function registerSetupIpc(deps: SetupIpcDeps): void {
           config.models.providers[configKey] = providerConfig;
           config.agents.defaults.model.primary = `${configKey}/${modelID}`;
         }
-
-        // 同步 pdfModel，激活 openclaw 内置 pdf tool（复用主模型）
-        syncPdfModelToPrimary(config);
 
         // 统一 gateway 鉴权配置：local 模式 + 持久化 token（单一真相源）
         config.gateway ??= {};
