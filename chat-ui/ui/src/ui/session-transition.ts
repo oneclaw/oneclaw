@@ -38,6 +38,7 @@ export function applySessionKeyTransition(
   host.chatAttachments = [];
   host.chatStream = null;
   host.chatPendingStreamText = null;
+  host.chatStreamFrozenPrefix = "";
   host.chatVisibleMessageCount = 0;
   host.chatStreamStartedAt = null;
   host.chatRunId = null;
