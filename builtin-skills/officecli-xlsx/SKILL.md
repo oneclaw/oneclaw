@@ -51,6 +51,16 @@ Running a 50-command script all at once means the first error cascades silently 
 
 ---
 
+## Cross-Platform Contract (Zero-Dependency)
+
+All commands are plain CLI invocations: `officecli <verb> <file> [args]`. They behave identically on macOS Terminal, Windows cmd, Windows PowerShell, and bash/zsh. Do not rely on Git Bash, POSIX text-processing tools, shell here-documents, stdin redirection, or single-quote escape tricks — those are not portable.
+
+- **Bulk operations always go through a JSON file** written via the Write tool, then passed via `--input <path>`: `officecli batch data.xlsx --input batch-1.json`. JSON is UTF-8; CJK / `!` / `$` / `'` / `"` inside JSON strings are literal characters with zero shell interpretation.
+- **CSV imports** use `officecli import <file> <path> --file <csv> [--header]`. Never pipe stdin (PowerShell 5 defaults to UTF-16LE and corrupts the bytes).
+- **Short batch (≤ 3 ops, all-ASCII)** may use `officecli batch data.xlsx --commands '<inline-json>'`. Anything longer or containing CJK / `!` / `$` / quotes goes through `--input file.json`.
+
+---
+
 ## Reading & Analyzing
 
 ### View Modes
@@ -153,7 +163,7 @@ officecli query data.xlsx 'cell:contains("placeholder")'
 - [ ] Row offsets: check formula ranges include all data rows
 - [ ] Division by zero: verify denominators are non-zero or wrapped in IFERROR
 - [ ] Cross-sheet references: use correct `Sheet1!A1` format
-- [ ] Cross-sheet formula escaping: run `officecli get` on 2-3 cross-sheet formula cells and confirm no `\!` in the formula string. If `\!` is present, the formula is broken -- delete and re-set using batch/heredoc.
+- [ ] Cross-sheet formula escaping: run `officecli get` on 2-3 cross-sheet formula cells and confirm no `\!` in the formula string. If `\!` is present, the formula is broken -- delete and re-set via batch JSON file with `officecli batch <file> --input batch.json`.
 - [ ] Named ranges: verify `ref` values match actual data locations
 - [ ] Edge cases: test with zero values, negative numbers, empty cells
 - [ ] **Chart data vs formula results**: for every chart with hardcoded/inline data, verify each data point matches the corresponding formula cell result. Use `officecli get` on the source cells and compare against chart series values. Mismatches here are silent data integrity bugs.
@@ -186,18 +196,15 @@ officecli validate data.xlsx
 |---------|-----------------|
 | `--name "foo"` | Use `--prop name="foo"` -- all attributes go through `--prop` |
 | Guessing property names | Run `officecli xlsx set cell` to see exact names |
-| `\n` in shell strings | Use `\\n` for newlines in `--prop text="line1\\nline2"` |
+| `\n` in cell text | Use `\\n` for newlines in `--prop text="line1\\nline2"` (or just put `\n` inside a JSON string in batch mode) |
 | Modifying an open file | Close the file in Excel first |
 | Hex colors with `#` | Use `FF0000` not `#FF0000` -- no hash prefix |
 | Paths are 1-based | `"/Sheet1/row[1]"`, `"/Sheet1/col[1]"` -- XPath convention |
 | `--index` is 0-based | `--index 0` = first position -- array convention |
-| Unquoted `[N]` in zsh/bash | Shell glob-expands `/Sheet1/row[1]` -- always quote paths: `"/Sheet1/row[1]"` |
 | Sheet names with spaces | Quote the full path: `"/My Sheet/A1"` |
 | Formula prefix `=` | OfficeCLI strips the `=` -- use `formula="SUM(A1:A10)"` not `formula="=SUM(A1:A10)"` |
-| Cross-sheet `!` in formulas | **CRITICAL:** The `!` in `Sheet1!A1` can be corrupted by shell quoting. Use batch/heredoc for cross-sheet formulas, or double quotes: `--prop "formula==Sheet1!A1"`. NEVER use single quotes for formulas containing `!`. After setting, verify with `officecli get` that the formula shows `Sheet1!A1` (no backslash before `!`). |
+| Cross-sheet `!` in formulas | Put cross-sheet formulas in a batch JSON file and run `officecli batch <file> --input batch.json`. JSON strings are UTF-8 literal; `!` is never re-interpreted. After setting, verify with `officecli get` that the formula shows `Sheet1!A1` (no backslash before `!`). |
 | Hardcoded calculated values | Use `--prop formula="SUM(B2:B9)"` not `--prop value=5000` |
-| `$` and `'` in batch JSON | Use heredoc: `cat <<'EOF' \| officecli batch` -- single-quoted delimiter prevents shell expansion |
-| Number format with `$` | Shell interprets `$` -- use single quotes: `numFmt='$#,##0'` |
 | Year displayed as "2,026" | Set cell type to string: `--prop type=string` or use `numFmt="@"` |
 
 ---
@@ -217,14 +224,39 @@ Use this pattern for every workbook build, regardless of command count.
 
 ## Performance: Batch Mode
 
-```bash
-cat <<'EOF' | officecli batch data.xlsx
+Agent flow:
+
+1. Use the **Write tool** to create a JSON file (e.g. `batch-1.json`) containing the batch ops array.
+2. Run `officecli batch data.xlsx --input batch-1.json`.
+3. Read the output, confirm zero failures, then proceed.
+
+Example `batch-1.json` (write this with the Write tool, then invoke `--input`):
+
+```json
 [
   {"command":"set","path":"/Sheet1/A1","props":{"value":"Revenue","bold":"true","fill":"1F4E79","font.color":"FFFFFF"}},
-  {"command":"set","path":"/Sheet1/B1","props":{"value":"Q1","bold":"true","fill":"1F4E79","font.color":"FFFFFF"}}
+  {"command":"set","path":"/Sheet1/B1","props":{"value":"Q1","bold":"true","fill":"1F4E79","font.color":"FFFFFF"}},
+  {"command":"set","path":"/Sheet1/A2","props":{"value":"Total"}},
+  {"command":"set","path":"/Sheet1/B2","props":{"formula":"SUM(B3:B12)","numFmt":"$#,##0"}},
+  {"command":"set","path":"/Summary/B2","props":{"formula":"Sheet1!B2"}}
 ]
-EOF
 ```
+
+JSON is UTF-8. CJK characters, `!` (cross-sheet), `$` (number format), `'`, `"`, backslash — all are literal inside JSON strings and never re-interpreted by any shell.
+
+Then:
+
+```bash
+officecli batch data.xlsx --input batch-1.json
+```
+
+For a very short ASCII-only batch (≤ 3 ops, no special characters), `--commands` works as a one-liner:
+
+```bash
+officecli batch data.xlsx --commands '[{"command":"set","path":"/Sheet1/A1","props":{"value":"OK"}}]'
+```
+
+Anything else: write a JSON file and use `--input`. Never rely on stdin redirection — Windows PowerShell 5 emits UTF-16LE by default and corrupts the JSON.
 
 Batch supports: `add`, `set`, `get`, `query`, `remove`, `move`, `swap`, `view`, `raw`, `raw-set`, `validate`.
 
@@ -234,52 +266,23 @@ Batch fields: `command`, `path`, `parent`, `type`, `from`, `to`, `index`, `after
 
 ## Performance: CSV Bulk Import (fast path)
 
-For 600-6000+ cells from raw data (CSV, transformed data, scraped tables), `officecli import` is the simplest path when the data is a clean CSV with a header row — **no interpreter required**:
+For 600–6000+ cells of tabular data, `officecli import` is the simplest path when the data is a clean CSV with a header row — **fully cross-platform, zero interpreter required**:
 
 ```bash
 officecli import data.xlsx "/Raw Data" --file data.csv --header
 ```
 
-If the data needs filtering, type conversion, or computed columns, normalize it to CSV first (write the cleaned CSV with a heredoc or shell pipeline), then import. For non-CSV-shaped writes (mixed cell formatting, scattered cells), split into multiple heredoc-batch commands of ~80 ops each. A 648-row / 6490-cell load completes in ~30s.
+Variations:
 
 ```bash
-# Chunk 1 — 80 value-set ops in one batch call
-cat <<'EOF' | officecli batch data.xlsx
-[
-  {"command":"set","path":"/Data/A1","props":{"value":"Revenue"}},
-  {"command":"set","path":"/Data/B1","props":{"value":"Q1"}}
-]
-EOF
-
-# Chunk 2 — next 80 ops, etc.
+officecli import data.xlsx /Sheet1 --file data.csv                  # No header row
+officecli import data.xlsx /Sheet1 --file data.csv --start-cell B5  # Anchor at B5
+officecli import data.xlsx /Sheet1 --file data.tsv --format tsv     # Tab-separated
 ```
 
-To drive bulk cell writes from a CSV in pure POSIX shell (no Python/Node needed), use awk to emit batch JSON chunks:
+If the data needs filtering, type conversion, or computed columns, **build the cleaned CSV with the Write tool** (write the CSV string directly to a file), then call `officecli import --file cleaned.csv --header`.
 
-```bash
-# data.csv → 80-op batch chunks → officecli batch
-awk -F, '
-function esc(s) { gsub(/\\/, "\\\\", s); gsub(/"/, "\\\"", s); return s }
-function colname(n,    r,c) {
-  r=""; while (n>0) { c=(n-1)%26; r=sprintf("%c%s",65+c,r); n=int((n-1)/26) }
-  return r
-}
-BEGIN { ops=0; out="[" }
-{
-  for (c=1; c<=NF; c++) {
-    if (ops>0) out = out ","
-    out = out sprintf("{\"command\":\"set\",\"path\":\"/Data/%s%d\",\"props\":{\"value\":\"%s\"}}", colname(c), NR, esc($c))
-    ops++
-    if (ops==80) { print out "]"; out="["; ops=0 }
-  }
-}
-END { if (ops>0) print out "]" }
-' data.csv | while IFS= read -r chunk; do
-  printf '%s\n' "$chunk" | officecli batch data.xlsx
-done
-```
-
-Tune chunk size: start at 80 ops, drop to 40 if any chunk fails. This recipe is **pure value injection** — apply numeric type inference, formulas, and formatting afterward via targeted `set` commands.
+For non-CSV-shaped writes (mixed formatting, scattered cells, formulas), split the work into multiple batch JSON files (~50 ops each; ≤ 12 ops per file when mixing formulas with resident mode), each loaded via the Write tool, then run `officecli batch data.xlsx --input chunk-N.json` once per file. A 648-row / 6490-cell load completes in ~30s this way.
 
 ---
 
@@ -291,8 +294,7 @@ Tune chunk size: start at 80 ops, drop to 40 if any chunk fails. This recipe is 
 | **No visual preview** | Unlike pptx (SVG/HTML), xlsx has no built-in rendering. Use `view text`/`view annotated`/`view stats`/`view issues` for verification. Users must open in Excel for visual check. |
 | **Formula cached values for new formulas** | OfficeCLI writes formula strings natively. For newly added formulas, the cached value may not update until the file is opened in Excel/LibreOffice. Existing formula cached values are preserved. |
 | **No auto-fit column width** | No "auto-fit" column width based on content. Set `width` explicitly on each column. |
-| **Shell quoting in batch with echo** | `echo '...' \| officecli batch` fails when JSON values contain apostrophes or `$`. Use heredoc: `cat <<'EOF' \| officecli batch data.xlsx`. |
-| **Cross-sheet formula deadlock** | Observed deadlocks (CPU 99%, `main pipe busy`, `kill -9` required) for cross-sheet formula batches **even at 3–5 ops** — the "≤ 12 ops safe" guideline is **not reliable** for cross-sheet formulas. Rule: **cross-sheet formulas go through non-resident one-big-batch OR individual `set`** (100% reliable). Pure value-set batches (no formulas) stay reliable at 50–80+ ops even in resident mode. |
+| **Cross-sheet formula deadlock** | Observed deadlocks (CPU 99%, `main pipe busy`, `kill -9` required) for cross-sheet formula batches **even at 3–5 ops** — the "≤ 12 ops safe" guideline is **not reliable** for cross-sheet formulas in resident mode. Rule: **cross-sheet formulas go through non-resident one-big-batch via `--input file.json` OR individual `set` commands** (100% reliable). Pure value-set batches (no formulas) stay reliable at 50–80+ ops even in resident mode. |
 | **Batch intermittent failure (resident + mixed formula)** | Batch+resident mode with mixed formulas has a higher failure rate. For maximum reliability: (1) prefer batch WITHOUT resident mode for mixed-formula workloads, (2) keep mixed-formula batches to ≤ 12 ops, (3) always check batch output for failures, (4) retry failed operations individually. Pure value-set batches do not need this restriction. |
 | **Data bar default min/max invalid** | Creating a data bar without `--prop min=N --prop max=N` produces empty `val` attributes in cfvo elements, which may be rejected by strict XML validators or Excel. Always specify explicit min and max values. |
 | **Cell protection requires sheet protection** | `locked` and `formulahidden` properties only take effect when the sheet itself is protected. |

@@ -13,20 +13,21 @@ officecli set data.xlsx "/Sheet1/D14" --prop formula="COUNT(D2:D13)"
 
 ## Cross-Sheet References
 
-**CRITICAL:** The `!` in `Sheet1!A1` can be corrupted by shell quoting. Follow these safe patterns:
+**CRITICAL:** The `!` in `Sheet1!A1` can be corrupted by some shell quoting paths. Cross-platform safe pattern: **write the formula op into a batch JSON file with the Write tool, then pass it via `--input`**. JSON strings are UTF-8 literal; `!` is never re-interpreted.
 
-```bash
-# SAFE: Double quotes with = prefix
-officecli set data.xlsx "/Summary/B2" --prop "formula==Revenue!B14"
+`xref.json`:
 
-# SAFE: Batch/heredoc (RECOMMENDED for cross-sheet formulas)
-officecli set data.xlsx /Summary/B2 --prop "formula==Revenue!B14"
+```json
+[
+  {"command":"set","path":"/Summary/B2","props":{"formula":"Revenue!B14"}}
+]
 ```
 
 ```bash
-# BROKEN: Single quotes corrupt the ! character
-officecli set data.xlsx "/Summary/B2" --prop formula='Revenue!B14'   # WRONG
+officecli batch data.xlsx --input xref.json
 ```
+
+This works identically on macOS Terminal, Windows cmd, and PowerShell — no quoting tricks required.
 
 **VERIFY** cross-sheet formulas after setting:
 

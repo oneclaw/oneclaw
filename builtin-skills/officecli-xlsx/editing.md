@@ -136,15 +136,22 @@ Where `data.json` contains `{"key": "value", ...}`.
 ```bash
 # Step 1: Find matching cells
 officecli query data.xlsx 'cell[type=Number]' --json
+```
 
-# Step 2: Use the returned paths in a batch command
-cat <<'EOF' | officecli batch data.xlsx
+Step 2: Use the **Write tool** to create a batch JSON file (e.g. `bulk-fmt.json`):
+
+```json
 [
   {"command":"set","path":"/Sheet1/B2","props":{"numFmt":"$#,##0"}},
   {"command":"set","path":"/Sheet1/B3","props":{"numFmt":"$#,##0"}},
   {"command":"set","path":"/Sheet1/C2","props":{"numFmt":"$#,##0"}}
 ]
-EOF
+```
+
+Then run:
+
+```bash
+officecli batch data.xlsx --input bulk-fmt.json
 ```
 
 ### CSV Data Refresh
@@ -183,29 +190,26 @@ officecli view data.xlsx annotated
 
 ### Pitfall: Cross-Sheet Formula `!` Escaping
 
-The `!` character in cross-sheet references (e.g., `Revenue!B14`) can be corrupted by shell quoting, producing `Revenue\!B14` in the XML. This renders ALL affected formulas broken (Err:508 in Excel/LibreOffice). The `validate` command does NOT catch this.
+If a cross-sheet reference like `Revenue!B14` is passed through some shell quoting paths, history-expansion or escape rules can produce `Revenue\!B14` in the XML. This renders ALL affected formulas broken (Err:508 in Excel/LibreOffice). The `validate` command does NOT catch this.
 
-**Safe patterns:**
-```bash
-# SAFE: batch/heredoc (recommended)
-cat <<'EOF' | officecli batch data.xlsx
-[{"command":"set","path":"/PL/B2","props":{"formula":"Revenue!D14"}}]
-EOF
+**Cross-platform safe pattern: write a batch JSON file with the Write tool, then `--input`:**
 
-# SAFE: double quotes
-officecli set data.xlsx "/PL/B2" --prop "formula==Revenue!D14"
+`fix-formula.json`:
+
+```json
+[
+  {"command":"set","path":"/PL/B2","props":{"formula":"Revenue!D14"}}
+]
 ```
 
-**Broken patterns:**
 ```bash
-# BROKEN: single quotes
-officecli set data.xlsx "/PL/B2" --prop 'formula==Revenue!D14'
-
-# BROKEN: escaped ! in double quotes
-officecli set data.xlsx "/PL/B2" --prop "formula==Revenue\!D14"
+officecli batch data.xlsx --input fix-formula.json
 ```
+
+JSON is UTF-8; the `!` is a literal character with zero shell interpretation. Identical behavior on macOS Terminal, Windows cmd, and PowerShell.
 
 **Always verify after setting cross-sheet formulas:**
+
 ```bash
 officecli get data.xlsx "/PL/B2"
 # GOOD: formula: Revenue!D14

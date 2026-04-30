@@ -138,7 +138,7 @@ officecli set sales-tracker.xlsx /Summary/C6 --prop "formula==COUNTIF('Sales Dat
 officecli set sales-tracker.xlsx /Summary/C7 --prop "formula==COUNTIF('Sales Data'!C2:C11,\"West\")"
 
 # Status summary
-# NOTE: Cross-sheet formulas MUST use batch/heredoc to avoid shell escaping issues with !
+# NOTE: Cross-sheet formulas MUST go through `officecli batch <file> --input <jsonfile>` (write the JSON via the Write tool) to avoid any shell interpretation of `!`. The forms below use `--prop "formula==..."` which works on macOS/zsh; on Windows use the JSON-file path.
 officecli set sales-tracker.xlsx /Summary/A9 --prop value="By Status" --prop bold=true --prop font.size=13
 officecli set sales-tracker.xlsx /Summary/A10 --prop value=Open
 officecli set sales-tracker.xlsx /Summary/A11 --prop value=Won

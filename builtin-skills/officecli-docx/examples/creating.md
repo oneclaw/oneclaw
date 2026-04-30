@@ -48,19 +48,27 @@ Values are in twips (1440 twips = 1 inch, 567 twips = 1 cm).
 - `validate` -- always run alone
 - **When in doubt** -- a single command gives immediate feedback; if it fails you know exactly where. Batch errors are harder to diagnose.
 
-**Use BATCH (heredoc):**
+**Use BATCH (`--input` file):**
 - Multiple consecutive `add /body --type paragraph/run` -- body content has no structural side effects
 - Bulk list items (bullet points, numbered steps)
 - Format painting -- applying the same props to multiple paragraphs or table cells
 - Filling table rows with text
 
+The batch flow is always:
+
+1. Use the `Write` tool to create a JSON file (e.g. `chunk-1.json`) containing the ops array.
+2. Run `officecli batch doc.docx --input chunk-1.json`.
+3. Read the output. If clean, write `chunk-2.json` and repeat.
+
+Do **not** feed batch JSON via shell here-documents, pipes, `echo`, or shell loops — those constructs break on Windows cmd / PowerShell. `--input <file>` is the only cross-platform path.
+
 **Always use `officecli open`/`close`.** It keeps the file in memory so every command skips repeated file I/O. Batch and resident mode are independent: each works on its own, and they can be combined.
 
-**Batch chunk size:** Keep batches under 15 operations. Split by section (e.g., one batch per heading + its body paragraphs).
+**Batch chunk size:** Keep batches under 15 operations for incremental work, up to ~50 ops for pure body content. Split by section (e.g., one batch per heading + its body paragraphs).
 
 For individual command syntax and property details, see [commands.md](../reference/commands.md).
 
-> **Execute recipes below incrementally -- one command (or one `batch` block) at a time, not as a single shell script.** Read the output after each command. If a command fails, fix it before continuing. After each structural phase (styles, headers/footers, tables, charts), verify with `validate` or `get` before proceeding.
+> **Execute recipes below incrementally -- one command (or one `batch --input` invocation) at a time.** Read the output after each command. If a command fails, fix it before continuing. After each structural phase (styles, headers/footers, tables, charts), verify with `validate` or `get` before proceeding.
 
 ---
 

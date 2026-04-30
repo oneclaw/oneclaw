@@ -2,20 +2,28 @@
 
 ## Batch Mode
 
-Run multiple commands in a single call using a heredoc JSON array:
+Run multiple commands in a single call by passing a JSON file via `--input`. This is the only cross-platform path (works identically in macOS Terminal, Windows cmd, and PowerShell).
 
-```bash
-cat <<'EOF' | officecli batch doc.docx
-[
-  {"command":"add","parent":"/body","type":"paragraph","props":{"text":"Hello","bold":true}},
-  {"command":"set","path":"/body/tbl[1]/tr[1]/tc[1]","props":{"shd":"1F4E79","color":"FFFFFF"}}
-]
-EOF
-```
+1. Use the `Write` tool to create a file (e.g. `batch.json`) with a JSON array of ops:
+
+   ```json
+   [
+     {"command":"add","parent":"/body","type":"paragraph","props":{"text":"Hello","bold":true}},
+     {"command":"set","path":"/body/tbl[1]/tr[1]/tc[1]","props":{"shd":"1F4E79","color":"FFFFFF"}}
+   ]
+   ```
+
+2. Run:
+
+   ```
+   officecli batch doc.docx --input batch.json
+   ```
 
 **Fields:** `command` (add/set/remove), `parent`/`path`, `type`, `props`, `from`, `index`.
 
-**Chunk size:** Keep batches under 15 operations. Split by section.
+**Chunk size:** Keep batches under 15 operations for mixed work, up to ~50 ops for pure paragraph adds. Split by section.
+
+**Do not** pipe inline JSON via here-documents into `officecli batch` — that path breaks on Windows shells. Always go through `--input <file>`.
 
 ---
 

@@ -83,7 +83,7 @@ officecli add data.xlsx "/Sheet1/A1" --type run --prop text="normal part" --prop
 | Multiples | `0.0x` | 12.5x | `--prop numFmt="0.0x"` |
 | Zeros as dash | `#,##0;-#,##0;"-"` | - | `--prop numFmt='#,##0;-#,##0;"-"'` |
 
-**Shell quoting:** Number formats containing `$` must use single quotes (`'$#,##0'`) or heredoc in batch mode. Double quotes cause shell variable expansion.
+**Cross-platform tip:** for any number format containing `$`, `"`, or other characters that some shells re-interpret, set `numFmt` via a batch JSON file (`officecli batch <file> --input batch.json`). Inside JSON strings, `$` and quotes are literal — no shell escaping required, identical behavior on macOS / Windows cmd / PowerShell.
 
 ## Financial Model Color Coding
 

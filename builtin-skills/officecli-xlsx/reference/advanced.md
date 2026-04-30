@@ -14,12 +14,11 @@ officecli import data.xlsx /Sheet1 --file data.csv --header
 # Import TSV
 officecli import data.xlsx /Sheet1 --file data.tsv --format tsv
 
-# Import from stdin
-cat data.csv | officecli import data.xlsx /Sheet1 --stdin
-
 # Import starting at specific cell
 officecli import data.xlsx /Sheet1 --file data.csv --start-cell B5
 ```
+
+Always read the CSV/TSV from a file with `--file <path>`. Do not pipe via stdin — Windows PowerShell 5 defaults to UTF-16LE output and corrupts the bytes before `officecli` sees them.
 
 ## Shapes and Textboxes
 

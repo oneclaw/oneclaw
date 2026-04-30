@@ -1207,6 +1207,83 @@ function patchSkillBaseDirToUnpacked(gatewayDir) {
 }
 
 
+// patchPiCodingAgentShellFallback: pi-coding-agent 的 getShellConfig() 在 win32
+// 上找不到 Git Bash + PATH 上没 bash.exe 时直接抛 "No bash shell found"，
+// 强制用户必须装 Git for Windows——零依赖目标失败。这里在 throw 之前注入一条
+// cmd.exe fallback：`spawn("cmd.exe", ["/d", "/s", "/c", userCmd])`。
+//
+// 安全前提（已由 builtin-skills/officecli-{docx,xlsx} SKILL.md 的
+// "Cross-platform contract" 段兑现）：
+//   - agent 通过 Write 工具把 CJK / 特殊字符写进 batch.json 文件（UTF-8）
+//   - 命令行 argv 仅含 ASCII（officecli + 文件路径 + --input + json 路径）
+//   - 因此 cmd.exe 解析 ASCII argv 不会 mojibake
+//   - officecli stdout 是 UTF-8 byte stream，经 Node.js spawn pipe 直通，
+//     cmd.exe 不做 codepage 翻译（pipe 模式只转发字节），不受 console
+//     codepage 影响
+//
+// /d /s /c 标志：
+//   /d = 禁用 AutoRun（防 reg HKCU\Software\Microsoft\Command Processor 注入）
+//   /s = 宽松 quote 处理，剥外层 "
+//   /c = 执行后退出
+//
+// 与 patchSkillBaseDirToUnpacked 同样补两个候选路径（顶层 dedup + nested）。
+function patchPiCodingAgentShellFallback(gatewayDir, platform) {
+  if (platform !== "win32") return;
+
+  const candidates = [
+    path.join(gatewayDir, "node_modules", "@mariozechner", "pi-coding-agent", "dist", "utils", "shell.js"),
+    path.join(gatewayDir, "node_modules", "openclaw", "node_modules", "@mariozechner", "pi-coding-agent", "dist", "utils", "shell.js"),
+  ];
+
+  // 锚点：win32 分支末尾，Git Bash + PATH bash 都失败之后、throw 之前
+  const anchor = "        throw new Error(`No bash shell found. Options:";
+
+  const fallback = [
+    "        /* cmd-fallback */ // OneClaw zero-deps: 找不到 Git Bash/PATH bash 时退到 cmd.exe.",
+    "        // 安全前提: skill 文档已强制 agent 通过 Write 工具把 CJK/特殊字符写进 batch.json,",
+    "        // 命令行 argv 仅含 ASCII (officecli + 文件路径 + --input + json 路径).",
+    "        // /d 禁用 AutoRun, /s 宽松 quote, /c 执行后退出.",
+    '        cachedShellConfig = { shell: "cmd.exe", args: ["/d", "/s", "/c"] };',
+    "        return cachedShellConfig;",
+    "",
+  ].join("\n");
+
+  let patched = 0;
+  let seen = 0;
+  for (const filePath of candidates) {
+    if (!fs.existsSync(filePath)) continue;
+    seen++;
+    const source = fs.readFileSync(filePath, "utf-8");
+    if (source.includes("/* cmd-fallback */")) continue;
+    if (!source.includes(anchor)) {
+      log(`⚠ ${path.relative(gatewayDir, filePath)} 缺少预期 anchor，跳过 cmd.exe fallback 补丁`);
+      continue;
+    }
+    // 防御：anchor 在文件中应只命中一次；多次说明结构变化，拒绝模糊替换
+    const occurrences = source.split(anchor).length - 1;
+    if (occurrences !== 1) {
+      log(`⚠ ${path.relative(gatewayDir, filePath)} anchor 命中 ${occurrences} 次，拒绝模糊替换`);
+      continue;
+    }
+    const result = source.replace(anchor, fallback + anchor);
+    if (result === source) {
+      log(`⚠ ${path.relative(gatewayDir, filePath)} 替换无效，跳过 cmd.exe fallback 补丁`);
+      continue;
+    }
+    fs.writeFileSync(filePath, result, "utf-8");
+    patched++;
+  }
+
+  if (seen === 0) {
+    log("⚠ 未找到 pi-coding-agent shell.js，跳过 cmd.exe fallback 补丁");
+  } else if (patched > 0) {
+    log(`已补丁 ${patched} 个 pi-coding-agent shell.js（Windows cmd.exe fallback）`);
+  } else {
+    log("⚠ pi-coding-agent shell.js 已是补丁后版本或结构不匹配");
+  }
+}
+
+
 // patchPowerShellEncoding: openclaw 内部 exec/PTY 通道（exec-defaults-*.js）在
 // Windows 上把命令路由到 `powershell.exe -NoProfile -NonInteractive -Command <user-cmd>`。
 // 注意：agent 的 bash tool 实际走的是 pi-coding-agent → Git Bash（不是这条
@@ -2707,6 +2784,10 @@ async function packGatewayAsar(gatewayDir, targetBase, platform, arch) {
   // 重写到 gateway.asar.unpacked/，子进程 -File 调用才能命中真实磁盘
   patchSkillBaseDirToUnpacked(gatewayDir);
 
+  // 补丁 pi-coding-agent shell.js：在 win32 找不到 Git Bash 时 fallback 到
+  // cmd.exe，让 OneClaw 零依赖跑（不强制用户装 Git for Windows）
+  patchPiCodingAgentShellFallback(gatewayDir, platform);
+
   // 补丁 openclaw exec-defaults：往 PowerShell -Command 前面注入
   // OutputEncoding=UTF8，避免 Windows 中文系统下 stderr mojibake
   patchPowerShellEncoding(gatewayDir);
@@ -3085,6 +3166,10 @@ async function main() {
   // 在初始化 terminal session 时闪 conhost 黑窗；任何更早的 patch 都会被这一步
   // 的解压覆盖掉。
   patchWindowsOpenclawArtifacts(targetPaths.gatewayDir, opts.platform);
+
+  // pi-coding-agent shell.js: win32 找不到 Git Bash 时 fallback 到 cmd.exe（零依赖）
+  // 必须在 installDependencies 之后、ASAR 打包之前；非-ASAR 路径同样补一遍
+  patchPiCodingAgentShellFallback(targetPaths.gatewayDir, opts.platform);
 
   // 护栏：所有插件入口必须是 native——必须在 ASAR 打包前跑，因为 ASAR 会删散文件
   log("Step 2.6: 校验插件入口形态");
