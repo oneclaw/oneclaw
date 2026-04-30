@@ -232,40 +232,54 @@ Batch fields: `command`, `path`, `parent`, `type`, `from`, `to`, `index`, `after
 
 `parent` = container to add into (for `add`). `path` = element to modify (for `set`, `get`, `remove`, `move`, `swap`).
 
-## Performance: CSV Bulk Import via Python (fast path)
+## Performance: CSV Bulk Import (fast path)
 
-For 600-6000+ cells from raw data (CSV, transformed data, scraped tables), `officecli import` is the simplest path when the data is a clean CSV with a header row:
+For 600-6000+ cells from raw data (CSV, transformed data, scraped tables), `officecli import` is the simplest path when the data is a clean CSV with a header row — **no interpreter required**:
 
 ```bash
 officecli import data.xlsx "/Raw Data" --file data.csv --header
 ```
 
-If the data is **not** a clean header+rows CSV — e.g. it needs filtering, type conversion, computed columns, or comes from a Python pipeline — generate the batch JSON in Python and pipe through `officecli batch`. This is dramatically faster than emitting hundreds of individual `set` commands (a 648-row / 6490-cell load completes in ~30s with zero failures).
-
-```python
-# gen_batch.py — produces batch chunks of 80 value-set ops each
-import csv, json
-ops = []
-with open("data.csv") as f:
-    reader = csv.reader(f)
-    for r, row in enumerate(reader, start=1):
-        for c, val in enumerate(row):
-            col = chr(ord('A') + c)
-            ops.append({"command": "set", "path": f"/Data/{col}{r}",
-                        "props": {"value": val}})
-for i in range(0, len(ops), 80):
-    print(json.dumps(ops[i:i+80]))
-```
+If the data needs filtering, type conversion, or computed columns, normalize it to CSV first (write the cleaned CSV with a heredoc or shell pipeline), then import. For non-CSV-shaped writes (mixed cell formatting, scattered cells), split into multiple heredoc-batch commands of ~80 ops each. A 648-row / 6490-cell load completes in ~30s.
 
 ```bash
-python gen_batch.py | while IFS= read -r chunk; do
+# Chunk 1 — 80 value-set ops in one batch call
+cat <<'EOF' | officecli batch data.xlsx
+[
+  {"command":"set","path":"/Data/A1","props":{"value":"Revenue"}},
+  {"command":"set","path":"/Data/B1","props":{"value":"Q1"}}
+]
+EOF
+
+# Chunk 2 — next 80 ops, etc.
+```
+
+To drive bulk cell writes from a CSV in pure POSIX shell (no Python/Node needed), use awk to emit batch JSON chunks:
+
+```bash
+# data.csv → 80-op batch chunks → officecli batch
+awk -F, '
+function esc(s) { gsub(/\\/, "\\\\", s); gsub(/"/, "\\\"", s); return s }
+function colname(n,    r,c) {
+  r=""; while (n>0) { c=(n-1)%26; r=sprintf("%c%s",65+c,r); n=int((n-1)/26) }
+  return r
+}
+BEGIN { ops=0; out="[" }
+{
+  for (c=1; c<=NF; c++) {
+    if (ops>0) out = out ","
+    out = out sprintf("{\"command\":\"set\",\"path\":\"/Data/%s%d\",\"props\":{\"value\":\"%s\"}}", colname(c), NR, esc($c))
+    ops++
+    if (ops==80) { print out "]"; out="["; ops=0 }
+  }
+}
+END { if (ops>0) print out "]" }
+' data.csv | while IFS= read -r chunk; do
   printf '%s\n' "$chunk" | officecli batch data.xlsx
 done
 ```
 
 Tune chunk size: start at 80 ops, drop to 40 if any chunk fails. This recipe is **pure value injection** — apply numeric type inference, formulas, and formatting afterward via targeted `set` commands.
-
-> Need Python and don't have it set up? Use the `env-setup` skill — never `pip install` against system Python.
 
 ---
 

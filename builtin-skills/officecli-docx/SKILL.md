@@ -57,48 +57,46 @@ officecli close doc.docx          # Write to disk
 
 ---
 
-## Performance: Bulk Insert via Python (fast path)
+## Performance: Bulk Insert via Chunked Batches (fast path)
 
-**Reach for Python pipeline only in these cases — for normal generation (≤ ~300 paragraphs of agent-authored content), inline `officecli batch` with reasonable chunk size is faster overall:**
-
-1. **Very large documents (500+ paragraphs)** where inline batch chunks would exceed ~6 tool turns.
-2. **Content is already in a Python data pipeline** — CSV / JSON / scraped tables / Markdown parsed to AST. The script you'd write to feed batch JSON is the same script you'd write anyway.
-3. **Schema-invalid emit cases** where even `raw-set` cannot fix the output — post-patching the .docx with Python `zipfile` + XML edit is acceptable: open the archive, mutate `word/document.xml`, write back.
-
-For agent-authored content under ~300 paragraphs, prefer inline batch with chunks of ~10–12 ops; the LLM round-trip on a few extra chunks is cheaper than the script-write + execute overhead.
-
-```python
-# gen_batch.py — produces batch chunks of 20 add-paragraph ops each
-import json
-
-paragraphs = [
-    {"text": "Executive Summary", "style": "Heading1"},
-    {"text": "Quarterly results exceeded expectations...", "style": "Normal"},
-    # ... hundreds more
-]
-
-ops = []
-for p in paragraphs:
-    ops.append({
-        "command": "add",
-        "parent": "/body",
-        "type": "paragraph",
-        "props": {"text": p["text"], "style": p["style"]},
-    })
-
-for i in range(0, len(ops), 20):
-    print(json.dumps(ops[i:i+20]))
-```
+For normal generation (≤ ~300 paragraphs of agent-authored content), inline `officecli batch` with reasonable chunk size is the fastest path. For very large documents (500+ paragraphs), split the work into multiple heredoc-batch commands of ~50 ops each. **No interpreter (Python/Node) is required** — emit JSON inline via `cat <<'EOF'` heredoc.
 
 ```bash
-python gen_batch.py | while IFS= read -r chunk; do
-  printf '%s\n' "$chunk" | officecli batch doc.docx
-done
+# Chunk 1 — 50 add-paragraph ops in one batch call
+cat <<'EOF' | officecli batch doc.docx
+[
+  {"command":"add","parent":"/body","type":"paragraph","props":{"text":"Executive Summary","style":"Heading1"}},
+  {"command":"add","parent":"/body","type":"paragraph","props":{"text":"Quarterly results exceeded expectations...","style":"Normal"}}
+]
+EOF
+
+# Chunk 2 — next 50 ops
+cat <<'EOF' | officecli batch doc.docx
+[
+  {"command":"add","parent":"/body","type":"paragraph","props":{"text":"Revenue Growth","style":"Heading2"}},
+  ...
+]
+EOF
 ```
 
-Tune chunk size: start at 20 ops, drop to 10 if any chunk fails. Apply heavy formatting (font, color, complex shading) afterward via targeted `set` to avoid bloating the batch payload.
+If you have content already in a TSV/CSV file (`text<TAB>style` per line) and want to drive the batch from a shell loop, use pure POSIX shell — no interpreter needed:
 
-> Need Python and don't have it set up? Use the `env-setup` skill — never `pip install` against system Python.
+```bash
+# data.tsv: each line is "text<TAB>style"
+chunk=50; i=0; ops=""
+emit() { printf '[%s]\n' "$ops" | officecli batch doc.docx; ops=""; i=0; }
+while IFS=$'\t' read -r text style; do
+  esc_text=$(printf '%s' "$text" | sed 's/\\/\\\\/g; s/"/\\"/g')
+  esc_style=$(printf '%s' "$style" | sed 's/\\/\\\\/g; s/"/\\"/g')
+  [ $i -gt 0 ] && ops="$ops,"
+  ops="$ops{\"command\":\"add\",\"parent\":\"/body\",\"type\":\"paragraph\",\"props\":{\"text\":\"$esc_text\",\"style\":\"$esc_style\"}}"
+  i=$((i+1))
+  [ $i -ge $chunk ] && emit
+done < data.tsv
+[ $i -gt 0 ] && emit
+```
+
+Tune chunk size: start at 50 ops, drop to 20 if any chunk fails. Apply heavy formatting (font, color, complex shading) afterward via targeted `set` to avoid bloating the batch payload.
 
 ---
 
