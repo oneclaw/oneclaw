@@ -57,13 +57,47 @@ function shortId(id: string): string {
   return id.length > 8 ? id.slice(0, 8) : id;
 }
 
+function renderTotals(rows: SessionUsageRow[]) {
+  let input = 0;
+  let output = 0;
+  let cacheRead = 0;
+  let outputPartial = false;
+  let cacheReadPartial = false;
+  for (const r of rows) {
+    if (typeof r.input === "number" && Number.isFinite(r.input)) input += r.input;
+    if (r.outputUnsupported) {
+      outputPartial = true;
+    } else if (typeof r.output === "number" && Number.isFinite(r.output)) {
+      output += r.output;
+    }
+    if (r.cacheReadUnsupported) {
+      cacheReadPartial = true;
+    } else if (typeof r.cacheRead === "number" && Number.isFinite(r.cacheRead)) {
+      cacheRead += r.cacheRead;
+    }
+  }
+  const partialNote = html`<span class="oc-session-usage__totals-partial">${t("settings.sessionUsage.totals.partial")}</span>`;
+  return html`
+    <div class="oc-session-usage__totals">
+      <div class="oc-session-usage__totals-label">${t("settings.sessionUsage.totals.label")}</div>
+      <div class="oc-session-usage__totals-tokens">
+        <span><span class="oc-session-usage__tag">${t("settings.sessionUsage.tokenIn")}</span> ${formatToken(input)}</span>
+        <span class="oc-session-usage__sep">·</span>
+        <span><span class="oc-session-usage__tag">${t("settings.sessionUsage.tokenOut")}</span> ${formatToken(output)}${outputPartial ? partialNote : nothing}</span>
+        <span class="oc-session-usage__sep">·</span>
+        <span><span class="oc-session-usage__tag">${t("settings.sessionUsage.tokenCacheRead")}</span> ${formatToken(cacheRead)}${cacheReadPartial ? partialNote : nothing}</span>
+      </div>
+    </div>
+  `;
+}
+
 function renderRow(row: SessionUsageRow) {
-  const label = row.customLabel || row.originLabel || t("settings.sessionUsage.unlabeled");
+  const label = row.customLabel || row.originLabel;
   return html`
     <div class="oc-session-usage__row">
       <div class="oc-session-usage__row-head">
         <span class="oc-session-usage__id">${row.agent}/${shortId(row.sessionId)}</span>
-        <span class="oc-session-usage__label" title=${label}>${label}</span>
+        ${label ? html`<span class="oc-session-usage__label" title=${label}>${label}</span>` : nothing}
         <span class="oc-session-usage__time">${formatDateTime(row.updatedAt)}</span>
       </div>
       <div class="oc-session-usage__row-tokens">
@@ -89,7 +123,10 @@ export function renderTabSessionUsage(state: AppViewState) {
         ${s.loading
           ? html`<div class="oc-session-usage__empty">…</div>`
           : s.rows.length
-            ? html`<div class="oc-session-usage__list">${s.rows.map(renderRow)}</div>`
+            ? html`
+                ${renderTotals(s.rows)}
+                <div class="oc-session-usage__list">${s.rows.map(renderRow)}</div>
+              `
             : html`<div class="oc-session-usage__empty">${t("settings.sessionUsage.empty")}</div>`}
       </div>
 
@@ -100,6 +137,39 @@ export function renderTabSessionUsage(state: AppViewState) {
 
 const styleSheet = new CSSStyleSheet();
 styleSheet.replaceSync(/* css */`
+  .oc-session-usage__totals {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 12px 14px;
+    margin-bottom: 12px;
+    border: 1px solid var(--border-strong, var(--border, #d4d4d8));
+    border-radius: var(--radius-md, 10px);
+    background: var(--bg-input, #f5f5f5);
+  }
+  .oc-session-usage__totals-label {
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--text-strong, #18181b);
+    letter-spacing: 0.02em;
+  }
+  .oc-session-usage__totals-tokens {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-strong, #18181b);
+    font-variant-numeric: tabular-nums;
+  }
+  .oc-session-usage__totals-partial {
+    margin-left: 6px;
+    font-size: 11.5px;
+    font-weight: 400;
+    color: var(--text-muted, #a1a1aa);
+    font-style: italic;
+  }
   .oc-session-usage__list {
     display: flex;
     flex-direction: column;
@@ -121,8 +191,7 @@ styleSheet.replaceSync(/* css */`
     border-color: var(--border-strong, var(--border, #d4d4d8));
   }
   .oc-session-usage__row-head {
-    display: grid;
-    grid-template-columns: auto minmax(0, 1fr) auto;
+    display: flex;
     align-items: center;
     gap: 10px;
     min-width: 0;
@@ -139,6 +208,7 @@ styleSheet.replaceSync(/* css */`
     user-select: text;
   }
   .oc-session-usage__label {
+    flex: 1;
     min-width: 0;
     font-size: 13px;
     font-weight: 500;
@@ -148,6 +218,7 @@ styleSheet.replaceSync(/* css */`
     white-space: nowrap;
   }
   .oc-session-usage__time {
+    margin-left: auto;
     font-size: 11.5px;
     color: var(--text-muted, #a1a1aa);
     flex-shrink: 0;
@@ -180,10 +251,9 @@ styleSheet.replaceSync(/* css */`
   }
   @media (max-width: 640px) {
     .oc-session-usage__row-head {
-      grid-template-columns: 1fr auto;
+      flex-wrap: wrap;
     }
     .oc-session-usage__id {
-      grid-column: 1 / -1;
       width: fit-content;
     }
   }
