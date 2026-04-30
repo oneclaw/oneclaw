@@ -7392,6 +7392,7 @@ img.chat-avatar {
 .chat-compose__toolbar-right {
   display: flex;
   align-items: center;
+  gap: 8px;
 }
 
 /* 工具按钮 — 无外圆角边框 */
@@ -7568,6 +7569,84 @@ img.chat-avatar {
   font-weight: 600;
 }
 
+/* ── Context Meter ──
+ * 发送按钮左侧的对话记忆占用指示：明确标签 + 短进度条 + 百分比。
+ * 单色黑/白/灰，无色阶变化；仅反映 activeSession 的占用比，会话切换会即时更新。
+ */
+.chat-compose__ctx-meter {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+  width: auto;
+  height: 32px;
+  margin: 0 6px 0 0;
+  flex-shrink: 0;
+  align-self: center;
+  cursor: default;
+  user-select: none;
+}
+
+.chat-compose__ctx-meter-label {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.chat-compose__ctx-meter-bar {
+  display: inline-block;
+  width: 42px;
+  height: 5px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--muted) 24%, transparent);
+  overflow: hidden;
+}
+
+.chat-compose__ctx-meter-fill {
+  height: 100%;
+  background: color-mix(in srgb, var(--text) 72%, var(--muted));
+  border-radius: inherit;
+  transition: width 300ms ease;
+}
+
+.chat-compose__ctx-meter-percent {
+  min-width: 32px;
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1;
+  text-align: left;
+  font-variant-numeric: tabular-nums;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .chat-compose__ctx-meter-fill {
+    transition: none;
+  }
+}
+
+@media (max-width: 560px) {
+  .chat-compose__ctx-meter {
+    gap: 5px;
+    margin-right: 4px;
+  }
+
+  .chat-compose__ctx-meter-label {
+    font-size: 11px;
+  }
+
+  .chat-compose__ctx-meter-bar {
+    width: 34px;
+  }
+
+  .chat-compose__ctx-meter-percent {
+    min-width: 30px;
+    font-size: 11px;
+  }
+}
+
 /* 发送按钮 — 圆形 */
 .chat-compose__send-btn {
   display: inline-flex;
@@ -7676,11 +7755,18 @@ img.chat-avatar {
   color: var(--text-on-accent);
   background: rgba(0, 0, 0, 0.78);
   border-radius: var(--radius-xs);
-  white-space: nowrap;
+  max-width: min(280px, calc(100vw - 24px));
+  white-space: pre-line;
+  text-align: left;
   pointer-events: none;
   opacity: 0;
   transition: opacity 150ms ease;
   z-index: 10000;
+}
+
+.fixed-tooltip--wide {
+  padding: 8px 10px;
+  line-height: 1.45;
 }
 
 .workspace__header-btn svg {

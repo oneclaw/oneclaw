@@ -20,6 +20,7 @@ document.title = t("app.windowTitle");
     const text = btn.getAttribute("data-tooltip");
     if (!text) { tip.style.opacity = "0"; return; }
     tip.textContent = text;
+    tip.classList.toggle("fixed-tooltip--wide", btn.hasAttribute("data-tooltip-wide"));
     tip.style.opacity = "1";
     const rect = btn.getBoundingClientRect();
     // 默认向上弹出

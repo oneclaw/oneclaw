@@ -104,6 +104,8 @@ function applySessionKey(state: AppViewState, next: string, syncUrl = false) {
   );
   if (changed) {
     void refreshChatAvatar(state as any);
+    // 拉取最新 sessions 快照，让 context meter 立即反映新会话的 token 占用。
+    void loadSessions(state as any);
   }
 }
 
