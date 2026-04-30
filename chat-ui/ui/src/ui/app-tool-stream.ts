@@ -1,4 +1,5 @@
 import { truncateText } from "./format.ts";
+import { debugLog } from "./debug.ts";
 
 const TOOL_STREAM_LIMIT = 50;
 const TOOL_STREAM_THROTTLE_MS = 80;
@@ -48,6 +49,12 @@ type ToolStreamHost = {
   chatStreamStartedAt: number | null;
   // handleChatEvent delta 走 raf 节流，pending 是下一帧要写进 chatStream 的值
   chatPendingStreamText: string | null;
+  // 已被 leadingSegment 冻结的累计前缀。每次冻结要把当前 chatStream 增量并入；
+  // controllers/chat.ts 的 delta handler 用它从"累计文本"里切片出新段。
+  chatStreamFrozenPrefix: string;
+  // 被 trimToolStream 淘汰的 entry 上的 leadingSegment 要保留下来，否则一轮工具调用很多时
+  // （超过 TOOL_STREAM_LIMIT），早期段会被一起删掉，渲染层只剩 chatStream 的尾段，让用户看着像"开头丢了"。
+  evictedLeadingSegments: StreamSegment[];
 };
 
 function extractToolOutputText(value: unknown): string | null {
@@ -145,6 +152,16 @@ function trimToolStream(host: ToolStreamHost) {
   const overflow = host.toolStreamOrder.length - TOOL_STREAM_LIMIT;
   const removed = host.toolStreamOrder.splice(0, overflow);
   for (const id of removed) {
+    const entry = host.toolStreamById.get(id);
+    if (entry?.leadingSegment && entry.leadingSegment.text.trim().length > 0) {
+      // 把这条 entry 上的 leading 文本搬到 sticky 列表，渲染时仍能看到（顺序在最前面）。
+      host.evictedLeadingSegments.push(entry.leadingSegment);
+      debugLog("tool", "evict tool entry, retain leadingSegment", {
+        toolCallId: id,
+        segmentLen: entry.leadingSegment.text.length,
+        evictedTotal: host.evictedLeadingSegments.length,
+      });
+    }
     host.toolStreamById.delete(id);
   }
 }
@@ -152,6 +169,15 @@ function trimToolStream(host: ToolStreamHost) {
 function syncToolStreamMessages(host: ToolStreamHost) {
   // 摊平成时间线：每条 entry 依次贡献 leadingSegment（若有）→ callMessage → resultMessage（若已出）
   const out: Record<string, unknown>[] = [];
+  // 先放被 trim 淘汰的 leadingSegments，保证渲染时序与原本一致（它们时间最早）。
+  for (const seg of host.evictedLeadingSegments) {
+    if (seg.text.trim().length === 0) continue;
+    out.push({
+      role: "assistant",
+      content: [{ type: "text", text: seg.text }],
+      timestamp: seg.ts,
+    });
+  }
   for (const id of host.toolStreamOrder) {
     const entry = host.toolStreamById.get(id);
     if (!entry) {
@@ -198,6 +224,9 @@ export function resetToolStream(host: ToolStreamHost) {
   host.toolStreamById.clear();
   host.toolStreamOrder = [];
   host.chatToolMessages = [];
+  host.evictedLeadingSegments = [];
+  // 清掉 frozenPrefix —— 这个 host-level 字段会跨 turn 残留，新 turn 的累计文本完全不该再切旧前缀。
+  host.chatStreamFrozenPrefix = "";
   flushToolStreamSync(host);
 }
 
@@ -300,9 +329,17 @@ export function handleAgentEvent(host: ToolStreamHost, payload?: AgentEventPaylo
       ? { text: liveText, ts: host.chatStreamStartedAt ?? now }
       : undefined;
     if (leading) {
+      // 同步把这一段并入 frozenPrefix；下一帧 delta 进来 controllers/chat.ts 才知道
+      // gateway 给的"累计文本"里有多少属于已冻结部分，要切掉。
+      host.chatStreamFrozenPrefix = (host.chatStreamFrozenPrefix ?? "") + (liveText ?? "");
       host.chatStream = null;
       host.chatStreamStartedAt = null;
       host.chatPendingStreamText = null;
+      debugLog("tool", "freeze leadingSegment", {
+        toolCallId,
+        segmentLen: liveText?.length ?? 0,
+        prefixLenAfter: host.chatStreamFrozenPrefix.length,
+      });
     }
     entry = {
       toolCallId,

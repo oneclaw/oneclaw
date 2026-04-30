@@ -1,6 +1,7 @@
 import type { GatewayBrowserClient } from "../gateway.ts";
 import type { ChatAttachment } from "../ui-types.ts";
 import { extractText } from "../chat/message-extract.ts";
+import { debugLog } from "../debug.ts";
 import { generateUUID } from "../uuid.ts";
 
 // delivery-mirror 是 gateway 将外发消息镜像写回 transcript 的副本。
@@ -46,6 +47,9 @@ export type ChatState = {
   chatHistoryHydrationFrame: number | null;
   chatPendingStreamText: string | null;
   chatStreamFrame: number | null;
+  // 已被 app-tool-stream 冻成 leadingSegment 的文本前缀。每帧 delta 进来要先把它切掉，
+  // 否则旧段会被重复写进 chatStream，并和 leadingSegment 同时显示出来。
+  chatStreamFrozenPrefix: string;
   lastError: string | null;
 };
 
@@ -113,6 +117,8 @@ function resetChatStreamState(state: ChatState) {
   state.chatStream = null;
   state.chatRunId = null;
   state.chatStreamStartedAt = null;
+  // 新一轮 run 重新开始，frozenPrefix 也要清，避免上一轮的前缀切错本轮的累计文本。
+  state.chatStreamFrozenPrefix = "";
 }
 
 export async function loadChatHistory(state: ChatState) {
@@ -223,6 +229,7 @@ export async function sendChatMessage(
   state.chatRunId = runId;
   state.chatStream = "";
   state.chatStreamStartedAt = now;
+  state.chatStreamFrozenPrefix = "";
 
   // 只有图片附件走 base64 API，文件路径已拼入消息文本
   const apiAttachments = hasImages
@@ -307,19 +314,52 @@ export function handleChatEvent(state: ChatState, payload?: ChatEventPayload) {
   }
 
   if (payload.state === "delta") {
-    const next = extractText(payload.message);
-    if (typeof next === "string") {
+    // gateway 把整轮的 assistant 文本累积进同一个 text block，每帧 delta 给的是"截至现在的全部文本"。
+    // 工具调用走另一条 agent 流，content 里没有 tool_use；所以需要靠 frozenPrefix 把已被
+    // app-tool-stream 冻成 leadingSegment 的前缀切掉，剩下的才是当前正在打字的"新段"。
+    const fullText = extractText(payload.message);
+    if (typeof fullText === "string") {
+      const prefix = state.chatStreamFrozenPrefix;
+      let next = fullText;
+      if (prefix && fullText.startsWith(prefix)) {
+        next = fullText.slice(prefix.length);
+      } else if (prefix) {
+        // gateway 极少会"改写"已经吐出的文本，但若发生（例如 thinking-tag 重写），保守降级为原文，
+        // 让用户至少看得到，渲染重复也比文本丢失好。
+        next = fullText;
+        debugLog("stream", "delta full-text 不再以 frozenPrefix 开头，降级直显", {
+          fullLen: fullText.length,
+          prefixLen: prefix.length,
+        });
+      }
       const current = state.chatPendingStreamText ?? state.chatStream ?? "";
       if (!current || next.length >= current.length) {
         state.chatPendingStreamText = next;
         scheduleChatStreamFlush(state);
+        debugLog("stream", "delta accept", {
+          fullLen: fullText.length,
+          prefixLen: prefix.length,
+          nextLen: next.length,
+        });
+      } else {
+        debugLog("stream", "delta drop (out-of-order)", {
+          fullLen: fullText.length,
+          nextLen: next.length,
+          currentLen: current.length,
+        });
       }
     }
   } else if (payload.state === "final") {
+    debugLog("lifecycle", "chat:final → reset stream state", { runId: payload.runId });
     resetChatStreamState(state);
   } else if (payload.state === "aborted") {
+    debugLog("lifecycle", "chat:aborted → reset stream state", { runId: payload.runId });
     resetChatStreamState(state);
   } else if (payload.state === "error") {
+    debugLog("lifecycle", "chat:error → reset stream state", {
+      runId: payload.runId,
+      err: payload.errorMessage,
+    });
     resetChatStreamState(state);
     state.lastError = payload.errorMessage ?? "chat error";
   }
