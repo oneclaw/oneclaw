@@ -28,6 +28,7 @@ metadata:
 > - ❌ `python -m venv .venv` 对系统 Python 建 venv（用户机器上的 system Python 不可信）。
 > - ❌ 让用户"自己去装 Python"或去 Microsoft Store——用户装的是 OneClaw，不是 Python 开发环境。
 > - ❌ 改用其他语言绕过 Python 需求（除非用户明确同意）。
+> - ❌ **不查 `~/.openclaw/venvs/` 就直接重装 Python**——上次安装的解释器仍然可用，新会话/换 agent 后必须先做下面的"探测已有 venv"。
 >
 > 上下文被压缩后如果记不清细节，**只要看到 Python 相关诉求或报错，第一反应就是回到本 skill**。
 >
@@ -44,6 +45,25 @@ metadata:
 > 数十秒级别是用户可接受的代价，远比让用户手动装 Python 顺滑。直接执行，不要请示。
 
 按版本隔离 venv：`~/.openclaw/venvs/venv<python-version>`。先检查是否可用；不可用才按 0 → 3 执行。镜像细节见 `references/mirrors.md`。
+
+## 探测已有 venv（第一步，永远先做）
+
+新会话 / 新 agent 没有上次的记忆，**绝不能直接挑 `<python-version>` 跑**——必须先列出本机已有的 venv 目录，优先复用最高版本。
+
+```bash
+ls -1 ~/.openclaw/venvs/ 2>/dev/null | grep -E '^venv[0-9]+\.[0-9]+$' | sed 's/^venv//' | sort -V
+```
+
+```powershell
+Get-ChildItem -Directory "$env:USERPROFILE\.openclaw\venvs" -ErrorAction SilentlyContinue |
+  Where-Object { $_.Name -match '^venv(\d+\.\d+)$' } |
+  ForEach-Object { $Matches[1] } | Sort-Object { [version]$_ }
+```
+
+- **有输出**：取列表里最高的版本作为 `<python-version>`（如 `3.11`），进入下面的"前置检查"。
+- **无输出**：本机还没装过，`<python-version>` 默认取 `3.11`，按 Step 0 → 3 完整跑一遍。
+
+这一步只决定版本号，不验证包是否安装；是否跳过 Step 0–3 由「前置检查」和下方表格决定。
 
 ## 前置检查
 

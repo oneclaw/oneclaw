@@ -54,8 +54,11 @@ case "$tz" in
   Asia/Shanghai|Asia/Urumqi|Asia/Chongqing|Asia/Harbin|Asia/Kashgar|PRC)
     printf 'CN\n'; exit 0 ;;
   Asia/Hong_Kong|Asia/Macau|Asia/Macao|Asia/Taipei|Asia/Singapore)
-    # Geographically near China but on good international links — treat as INTL.
-    printf 'INTL\n'; exit 0 ;;
+    # UTC+8 neighbours with good international links. Users actually in those
+    # regions probe to INTL (aliyun isn't 40% faster than pypi from there);
+    # a Beijing user whose Mac has one of these set (iCloud sync, custom config)
+    # will probe pypi.org → timeout → CN. Either way the probe is correct.
+    log "UTC+8 neighbour timezone '$tz' — falling through to latency probe" ;;
   America/*|Europe/*|Australia/*|Africa/*|Pacific/*|Atlantic/*|Antarctica/*|Indian/*)
     printf 'INTL\n'; exit 0 ;;
   Asia/*)

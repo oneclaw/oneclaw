@@ -897,7 +897,6 @@ function installDependencies(opts, gatewayDir) {
     pruneLlamaPackages(nmDir);
     pruneDanglingBinLinks(nmDir);
     assertNativeDepsMatchTarget(nmDir, opts.platform, opts.arch);
-    patchWindowsOpenclawArtifacts(gatewayDir, opts.platform);
     patchPdfToolLocalRoots(gatewayDir);
     patchKimiReplayPolicy(gatewayDir);
     patchKimiAnthropicThinkingSignatures(gatewayDir);
@@ -950,7 +949,6 @@ function installDependencies(opts, gatewayDir) {
   pruneLlamaPackages(nmDir);
   pruneDanglingBinLinks(nmDir);
   assertNativeDepsMatchTarget(nmDir, opts.platform, opts.arch);
-  patchWindowsOpenclawArtifacts(gatewayDir, opts.platform);
   patchPdfToolLocalRoots(gatewayDir);
   patchKimiReplayPolicy(gatewayDir);
   patchKimiAnthropicThinkingSignatures(gatewayDir);
@@ -959,27 +957,32 @@ function installDependencies(opts, gatewayDir) {
   log("node_modules 裁剪完成");
 }
 
-// Windows 上给 openclaw + kimi-claw 所有 spawn 调用统一补 windowsHide，避免黑框闪烁。
+// Windows 上给 openclaw + kimi-claw + pi-coding-agent 所有 spawn 调用统一补
+// windowsHide，避免黑框闪烁。
 // 采用全局扫描策略，不再逐文件 whack-a-mole，确保上游新增 spawn 调用自动被覆盖。
+//
+// 调用时机：必须在 bundleAllPlugins 之后——kimi-claw 是从 CDN tgz 下载的 minify
+// 插件，会覆盖 openclaw npm install 里 ship 的版本，patch 跑在它之前会被覆盖。
 function patchWindowsOpenclawArtifacts(gatewayDir, platform = "win32") {
   if (platform !== "win32") return;
 
-  // 收集所有需要扫描的 JS 目录
+  // 收集所有需要扫描的 JS 目录（递归）
+  // - openclaw/dist 已经把 extensions/kimi-claw/dist 一起递归覆盖
+  // - pi-coding-agent 在 npm 树里可能 dedup 到顶层（@mariozechner/...），
+  //   也可能挂在 openclaw/node_modules 下，两个候选都扫
   const scanDirs = [];
 
-  // openclaw 核心 dist
   const distDir = path.join(gatewayDir, "node_modules", "openclaw", "dist");
   if (!fs.existsSync(distDir)) {
     die(`openclaw dist 目录不存在，无法应用 Windows 补丁: ${distDir}`);
   }
   scanDirs.push(distDir);
 
-  // kimi-claw 插件（terminal-session-manager 有 pipe 回退未加 windowsHide）
-  const kimiClawDist = path.join(
-    gatewayDir, "node_modules", "openclaw", "dist", "extensions", "kimi-claw", "dist"
-  );
-  if (fs.existsSync(kimiClawDist)) {
-    scanDirs.push(kimiClawDist);
+  for (const piDist of [
+    path.join(gatewayDir, "node_modules", "@mariozechner", "pi-coding-agent", "dist"),
+    path.join(gatewayDir, "node_modules", "openclaw", "node_modules", "@mariozechner", "pi-coding-agent", "dist"),
+  ]) {
+    if (fs.existsSync(piDist)) scanDirs.push(piDist);
   }
 
   let totalFiles = 0;
@@ -1140,6 +1143,138 @@ function patchAsarBoundaryCheck(gatewayDir) {
   }
 }
 
+
+// patchSkillBaseDirToUnpacked: pi-coding-agent 的 skills.js 把
+// `dirname(filePath)` 直接当作 skill.baseDir 塞进 system prompt，且在
+// formatSkillsForPrompt 里把 `skill.filePath`（asar 虚路径）渲染成
+// <location>…/gateway.asar/…/SKILL.md</location>。模型 strip basename
+// 当 baseDir 用，再拼出 `& powershell -File <baseDir>/scripts/xxx.ps1` 等命令；
+// 子进程不走 Electron 的 asar fs shim，看到的是磁盘上不存在的虚拟路径
+// → PathNotFound。
+// 我们已经把 skills/** 整棵解出到 gateway.asar.unpacked/，这里把
+// skillDir 和 filePath 同步重写到 unpacked 路径上：baseDir 让 -File 命中
+// 真实磁盘，filePath 让 system prompt <location> 是真实磁盘路径，模型 read
+// SKILL.md 也走 unpacked。
+function patchSkillBaseDirToUnpacked(gatewayDir) {
+  // pi-coding-agent 在 npm 树里可能 dedup 到顶层，也可能挂在
+  // openclaw/node_modules 下；都补丁一遍更稳。
+  const candidates = [
+    path.join(gatewayDir, "node_modules", "@mariozechner", "pi-coding-agent", "dist", "core", "skills.js"),
+    path.join(gatewayDir, "node_modules", "openclaw", "node_modules", "@mariozechner", "pi-coding-agent", "dist", "core", "skills.js"),
+  ];
+
+  const marker = "const skillDir = dirname(filePath);";
+  const replacement = [
+    "let skillDir = dirname(filePath); /* asar-unpacked-skill */",
+    "try {",
+    "  if (/[\\\\/]gateway\\.asar[\\\\/]/.test(skillDir)) {",
+    "    const __fs = require('fs');",
+    "    const __path = require('path');",
+    "    const __unpacked = skillDir.replace(/([\\\\/])gateway\\.asar([\\\\/])/, '$1gateway.asar.unpacked$2');",
+    "    if (__fs.existsSync(__unpacked)) {",
+    "      skillDir = __unpacked;",
+    "      filePath = __path.join(__unpacked, __path.basename(filePath));",
+    "    }",
+    "  }",
+    "} catch {}",
+  ].join("\n        ");
+
+  let patched = 0;
+  let seen = 0;
+  for (const filePath of candidates) {
+    if (!fs.existsSync(filePath)) continue;
+    seen++;
+    const source = fs.readFileSync(filePath, "utf-8");
+    if (source.includes("/* asar-unpacked-skill */")) continue;
+    if (!source.includes(marker)) {
+      log(`⚠ ${path.relative(gatewayDir, filePath)} 缺少预期 marker，跳过 baseDir 补丁`);
+      continue;
+    }
+    const result = source.replace(marker, replacement);
+    if (result !== source) {
+      fs.writeFileSync(filePath, result, "utf-8");
+      patched++;
+    }
+  }
+
+  if (seen === 0) {
+    log("⚠ 未找到 pi-coding-agent skills.js，跳过 baseDir 补丁");
+  } else if (patched > 0) {
+    log(`已补丁 ${patched} 个 pi-coding-agent skills.js（baseDir + filePath → gateway.asar.unpacked）`);
+  } else {
+    log("⚠ pi-coding-agent skills.js 已是补丁后版本或结构不匹配");
+  }
+}
+
+
+// patchPowerShellEncoding: openclaw 内部 exec/PTY 通道（exec-defaults-*.js）在
+// Windows 上把命令路由到 `powershell.exe -NoProfile -NonInteractive -Command <user-cmd>`。
+// 注意：agent 的 bash tool 实际走的是 pi-coding-agent → Git Bash（不是这条
+// 路径），所以这条 prelude 只对 openclaw 自己的 PTY/exec 通道生效，留着无害。
+// PowerShell 默认 [Console]::OutputEncoding 跟系统 ANSI 码页（中文 zh-CN
+// 是 cp936 / GBK），但 openclaw 把子进程 stderr 当 UTF-8 解，导致路径报错
+// 等系统消息全部 mojibake。这里把 args 改成 `-Command <utf8-prelude>`
+// —— PowerShell 把后续参数拼到一起执行，所以最终命令变成
+// `<utf8-prelude> ; <user-cmd>`，输出立刻切到 UTF-8。
+function patchPowerShellEncoding(gatewayDir) {
+  const distDir = path.join(gatewayDir, "node_modules", "openclaw", "dist");
+  if (!fs.existsSync(distDir)) {
+    log("⚠ 未找到 openclaw/dist，跳过 PowerShell UTF-8 补丁");
+    return;
+  }
+
+  const execFiles = fs.readdirSync(distDir).filter((f) => /^exec-defaults-[A-Za-z0-9_-]+\.js$/.test(f));
+  if (execFiles.length === 0) {
+    log("⚠ 未找到 exec-defaults 模块，跳过 PowerShell UTF-8 补丁");
+    return;
+  }
+
+  // 匹配 getShellConfig 内 win32 分支：
+  //   if (process.platform === "win32") return {
+  //     shell: resolvePowerShellPath(),
+  //     args: [
+  //       "-NoProfile",
+  //       "-NonInteractive",
+  //       "-Command"
+  //     ]
+  //   };
+  // 末尾插一个 prelude 字符串作为额外 arg；PowerShell 会把多个 -Command
+  // 后置参数拼成一条命令执行。
+  const re = /if \(process\.platform === "win32"\) return \{(\s*)shell: resolvePowerShellPath\(\),(\s*)args: \[(\s*)"-NoProfile",(\s*)"-NonInteractive",(\s*)"-Command"(\s*)\](\s*)\};/;
+
+  // 注意：单独包在 try{...}catch{} 里防止极老 PowerShell 不支持 ::new() 时整条命令爆掉。
+  const prelude =
+    'try{[Console]::OutputEncoding=[System.Text.UTF8Encoding]::new();$OutputEncoding=[System.Text.UTF8Encoding]::new()}catch{};';
+
+  let patched = 0;
+  for (const fileName of execFiles) {
+    const filePath = path.join(distDir, fileName);
+    const source = fs.readFileSync(filePath, "utf-8");
+    if (source.includes("/* powershell-utf8 */")) continue;
+
+    if (!re.test(source)) {
+      log(`⚠ ${fileName} getShellConfig 结构不匹配，跳过 UTF-8 补丁`);
+      continue;
+    }
+
+    const result = source.replace(
+      re,
+      (_m, s1, s2, s3, s4, s5, s6, s7) =>
+        `if (process.platform === "win32") return {${s1}shell: resolvePowerShellPath(),${s2}args: [${s3}"-NoProfile",${s4}"-NonInteractive",${s5}"-Command",${s5}/* powershell-utf8 */ ${JSON.stringify(prelude)}${s6}]${s7}};`,
+    );
+
+    if (result !== source) {
+      fs.writeFileSync(filePath, result, "utf-8");
+      patched++;
+    }
+  }
+
+  if (patched > 0) {
+    log(`已补丁 ${patched} 个 exec-defaults 模块（PowerShell UTF-8 输出编码）`);
+  } else {
+    log("⚠ exec-defaults 模块已是补丁后版本或结构不匹配");
+  }
+}
 
 // patchPdfToolLocalRoots: openclaw 的 PDF tool 非 sandbox 分支只允许
 // ~/.openclaw/{media,agents,workspace,sandboxes} 下的文件，而用户通常从
@@ -2568,14 +2703,24 @@ async function packGatewayAsar(gatewayDir, targetBase, platform, arch) {
   // 补丁 boundary-file-read：让 asar 内路径绕过 O_NOFOLLOW / realpathSync 校验
   patchAsarBoundaryCheck(gatewayDir);
 
+  // 补丁 pi-coding-agent skills.js：把 skill.baseDir 从 asar 内部路径
+  // 重写到 gateway.asar.unpacked/，子进程 -File 调用才能命中真实磁盘
+  patchSkillBaseDirToUnpacked(gatewayDir);
+
+  // 补丁 openclaw exec-defaults：往 PowerShell -Command 前面注入
+  // OutputEncoding=UTF8，避免 Windows 中文系统下 stderr mojibake
+  patchPowerShellEncoding(gatewayDir);
+
   // unpack 规则：
   //   - 二进制：dlopen 不支持 asar 虚拟路径（.node/.exe/.dll/.dylib/.so/spawn-helper）
-  //   - skill 脚本：openclaw 把 {baseDir} 指向 asar 内的 skill 目录，但 PowerShell / bash
-  //     等子进程不走 Electron 的 asar fs shim，必须放到真实磁盘上才能 -File 调用
+  //   - skill 文件：openclaw 通过 SKILL.md 路径 dirname 推导出 baseDir，模型据此拼出
+  //     `powershell -File <baseDir>/scripts/xxx.ps1` 等命令；子进程不走 Electron 的
+  //     asar fs shim，所以 SKILL.md / scripts / references 都必须落在真实磁盘上，
+  //     模型 read 工具读 SKILL.md 走的路径也得是 unpacked 后的实文件
   // extensions/ 不再需要 unpack——boundary-file-read 补丁已处理 asar 路径校验
   log("正在打包 gateway.asar ...");
   await asar.createPackageWithOptions(gatewayDir, asarPath, {
-    unpack: "{**/*.node,**/*.exe,**/*.dll,**/*.dylib,**/*.so,**/spawn-helper,**/skills/**/scripts/**}",
+    unpack: "{**/*.node,**/*.exe,**/*.dll,**/*.dylib,**/*.so,**/spawn-helper,**/skills/**}",
   });
 
   const asarSize = (fs.statSync(asarPath).size / 1048576).toFixed(1);
@@ -2933,6 +3078,13 @@ async function main() {
   // Step 2.5: 注入 bundled 插件（kimi-claw + kimi-search）
   log("Step 2.5: 注入 bundled 插件");
   await bundleAllPlugins(targetPaths, opts);
+
+  // Windows windowsHide 全局补丁——必须在 bundleAllPlugins 之后跑：kimi-claw 是
+  // 从 CDN tgz 下载的 minify 插件，它的 terminal-session-manager pipe 回退直接
+  // `spawn(e.shell, [], …)`（e.shell = Git Bash bash.exe），少了 windowsHide 会
+  // 在初始化 terminal session 时闪 conhost 黑窗；任何更早的 patch 都会被这一步
+  // 的解压覆盖掉。
+  patchWindowsOpenclawArtifacts(targetPaths.gatewayDir, opts.platform);
 
   // 护栏：所有插件入口必须是 native——必须在 ASAR 打包前跑，因为 ASAR 会删散文件
   log("Step 2.6: 校验插件入口形态");

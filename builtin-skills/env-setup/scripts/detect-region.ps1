@@ -45,21 +45,30 @@ Write-Log "system timezone: $tzDisplay"
 
 # 3. Decide from timezone (Windows IDs)
 if ($tzId) {
-    switch ($tzId) {
-        'China Standard Time' {
-            Write-Output 'CN'
-            exit 0
-        }
-        'UTC' {
-            Write-Log 'UTC -- falling through to latency probe'
-        }
-        default {
-            # Windows uses unique IDs per region. Anything other than
-            # "China Standard Time" -- including Taipei / Hong Kong / Singapore /
-            # Ulaanbaatar -- is correctly mapped to INTL here.
-            Write-Output 'INTL'
-            exit 0
-        }
+    if ($tzId -eq 'China Standard Time') {
+        Write-Output 'CN'
+        exit 0
+    }
+
+    $offsetHours = $null
+    try {
+        $offsetHours = [TimeZoneInfo]::Local.GetUtcOffset([DateTime]::UtcNow).TotalHours
+    } catch { }
+
+    if ($tzId -eq 'UTC') {
+        Write-Log 'UTC -- falling through to latency probe'
+    } elseif ($offsetHours -eq 8) {
+        # UTC+8 but not 'China Standard Time'. Windows ships several neighbour
+        # IDs at this offset (Singapore / Taipei / Ulaanbaatar / N. Korea /
+        # North Asia East / W. Australia); enterprise images and English-locale
+        # installs in mainland China sometimes default to one of these. The
+        # user might genuinely be in that region, or a Beijing user whose
+        # machine just has the wrong ID. Latency probe disambiguates.
+        Write-Log "UTC+8 timezone '$tzId' -- falling through to latency probe"
+    } else {
+        # Non-UTC+8 named timezone (Americas, Europe, etc.) -- definitively INTL.
+        Write-Output 'INTL'
+        exit 0
     }
 }
 
