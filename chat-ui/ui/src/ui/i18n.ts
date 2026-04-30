@@ -194,6 +194,7 @@ const dict: Record<Locale, Record<string, string>> = {
     "settings.error.verifyFailed": "验证失败",
     "settings.error.loginFailed": "登录失败",
     "settings.error.addGroupFailed": "添加群 ID 失败",
+    "settings.error.loadFailed": "加载失败",
 
     // Settings nav tabs
     "settings.nav.channels": "远程控制",
@@ -202,6 +203,7 @@ const dict: Record<Locale, Record<string, string>> = {
     "settings.nav.memory": "记忆",
     "settings.nav.appearance": "外观",
     "settings.nav.advanced": "高级",
+    "settings.nav.sessionUsage": "会话用量",
     "settings.nav.backup": "备份恢复",
     "settings.nav.about": "软件更新",
 
@@ -266,6 +268,18 @@ const dict: Record<Locale, Record<string, string>> = {
     "settings.backup.noticeGatewayRecoverFailed": "自动回退失败，请手动选择备份恢复",
     "settings.backup.confirmRestore": "确定要恢复 {fileName} 吗？",
     "settings.backup.confirmRestoreLKG": "确定要恢复最后正常配置吗？",
+
+    // Settings: Session Usage
+    "settings.sessionUsage.pageTitle": "会话用量",
+    "settings.sessionUsage.pageDesc": "按会话累计的 Token 估算用量（使用 openclaw estimateTokens，按最近更新倒序，最多 200 条）",
+    "settings.sessionUsage.empty": "暂无可统计的会话",
+    "settings.sessionUsage.tokenIn": "输入",
+    "settings.sessionUsage.tokenOut": "输出",
+    "settings.sessionUsage.tokenCacheRead": "缓存读",
+    "settings.sessionUsage.unsupported": "暂不支持",
+    "settings.sessionUsage.unlabeled": "（无自定义标签）",
+    "settings.sessionUsage.totals.label": "汇总",
+    "settings.sessionUsage.totals.partial": "（部分会话不支持）",
 
     // Settings: About
     "settings.about.version": "版本信息",
@@ -701,6 +715,7 @@ const dict: Record<Locale, Record<string, string>> = {
     "settings.error.verifyFailed": "Verification failed",
     "settings.error.loginFailed": "Login failed",
     "settings.error.addGroupFailed": "Failed to add group ID",
+    "settings.error.loadFailed": "Load failed",
 
     // Settings nav tabs
     "settings.nav.channels": "Remote Control",
@@ -709,6 +724,7 @@ const dict: Record<Locale, Record<string, string>> = {
     "settings.nav.memory": "Memory",
     "settings.nav.appearance": "Appearance",
     "settings.nav.advanced": "Advanced",
+    "settings.nav.sessionUsage": "Session Usage",
     "settings.nav.backup": "Backup & Restore",
     "settings.nav.about": "Software Update",
 
@@ -773,6 +789,18 @@ const dict: Record<Locale, Record<string, string>> = {
     "settings.backup.noticeGatewayRecoverFailed": "Auto recovery failed. Please select a backup manually",
     "settings.backup.confirmRestore": "Restore {fileName}?",
     "settings.backup.confirmRestoreLKG": "Restore last known good config?",
+
+    // Settings: Session Usage
+    "settings.sessionUsage.pageTitle": "Session Usage",
+    "settings.sessionUsage.pageDesc": "Estimated cumulative token usage per session (using openclaw estimateTokens, sorted by most recent, up to 200 rows)",
+    "settings.sessionUsage.empty": "No sessions to report",
+    "settings.sessionUsage.tokenIn": "in",
+    "settings.sessionUsage.tokenOut": "out",
+    "settings.sessionUsage.tokenCacheRead": "cacheR",
+    "settings.sessionUsage.unsupported": "n/a",
+    "settings.sessionUsage.unlabeled": "(no custom label)",
+    "settings.sessionUsage.totals.label": "Totals",
+    "settings.sessionUsage.totals.partial": "(some unsupported)",
 
     // Settings: About
     "settings.about.version": "Version",
