@@ -15,6 +15,7 @@ import {
 import { registerTickHandler, unregisterTickHandler, startTicker, stopTicker } from "./client-ticker.ts";
 import { loadCronJobs } from "./controllers/cron.ts";
 import { handleAgentEvent, resetToolStream, type AgentEventPayload } from "./app-tool-stream.ts";
+import { debugLog, isDebugEnabled } from "./debug.ts";
 import { loadAgents } from "./controllers/agents.ts";
 import { loadAssistantIdentity } from "./controllers/assistant-identity.ts";
 import { loadChatHistory } from "./controllers/chat.ts";
@@ -257,6 +258,11 @@ export function handleGatewayEvent(host: GatewayHost, evt: GatewayEventFrame) {
 }
 
 function handleGatewayEventUnsafe(host: GatewayHost, evt: GatewayEventFrame) {
+  // 调试钩子：在 DevTools 里 `localStorage.setItem("oneclaw.debug","gateway")` + 刷新即可看到。
+  // 默认 cached === false，整段 if 是常量折叠后的死代码，对生产无开销。
+  if (isDebugEnabled("gateway")) {
+    debugLog("gateway", `evt:${evt.event}`, evt.payload);
+  }
   // 直接 unshift + 截断，避免每个事件都 spread 整个数组造成 GC 风暴
   host.eventLogBuffer.unshift({ ts: Date.now(), event: evt.event, payload: evt.payload });
   if (host.eventLogBuffer.length > 250) {

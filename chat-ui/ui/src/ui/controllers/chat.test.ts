@@ -131,9 +131,106 @@ async function testLoadChatHistoryBatchesInitialRender() {
   assert.equal(state.chatVisibleMessageCount, 80, "渐进渲染结束后应补齐全部历史消息");
 }
 
+// 复现 #streaming-dup：tool_use 之后的 delta 不应把 tool_use 之前的整段文本再次写入 chatStream。
+// 之前的段已经被 app-tool-stream 冻成 leadingSegment 单独渲染，再写入就会和 leadingSegment 重复。
+async function testDeltaAfterToolUseShowsOnlyTrailingText() {
+  const raf = new FakeRaf();
+  installBrowserGlobals(raf);
+  const state = makeState();
+
+  // 1) tool_use 之前的流式：chatStream 反映完整文本。
+  handleChatEvent(state, {
+    runId: "run-1",
+    sessionKey: "session-1",
+    state: "delta",
+    message: {
+      role: "assistant",
+      content: [{ type: "text", text: "前置段：让我尝试直接调用 API" }],
+    },
+  });
+  raf.runAll();
+  assert.equal(state.chatStream, "前置段：让我尝试直接调用 API");
+
+  // 2) 模拟 app-tool-stream 在 tool 事件中冻结 leadingSegment 后清空 chatStream。
+  state.chatStream = null;
+  state.chatPendingStreamText = null;
+
+  // 3) tool_use 之后第一帧 delta：content 仍带 tool_use 之前的 text 块，
+  //    但 chatStream 应只反映 tool_use 之后的新段，不能把"前置段"再写一次。
+  handleChatEvent(state, {
+    runId: "run-1",
+    sessionKey: "session-1",
+    state: "delta",
+    message: {
+      role: "assistant",
+      content: [
+        { type: "text", text: "前置段：让我尝试直接调用 API" },
+        { type: "tool_use", id: "t1", name: "bash", input: {} },
+        { type: "text", text: "让我尝试使用一个已知的小红书 API 端点" },
+      ],
+    },
+  });
+  raf.runAll();
+  assert.equal(
+    state.chatStream,
+    "让我尝试使用一个已知的小红书 API 端点",
+    "tool_use 之后的 chatStream 应只显示后续段，不应包含前置段",
+  );
+}
+
+// 一个 turn 出现多次 tool_use 时，chatStream 始终只反映"最后一次 tool_use 之后"那一段。
+async function testDeltaWithMultipleToolUsesUsesLastTrailing() {
+  const raf = new FakeRaf();
+  installBrowserGlobals(raf);
+  const state = makeState({ chatStream: null, chatPendingStreamText: null });
+
+  handleChatEvent(state, {
+    runId: "run-1",
+    sessionKey: "session-1",
+    state: "delta",
+    message: {
+      role: "assistant",
+      content: [
+        { type: "text", text: "first" },
+        { type: "tool_use", id: "t1", name: "bash", input: {} },
+        { type: "text", text: "second" },
+        { type: "tool_use", id: "t2", name: "bash", input: {} },
+        { type: "text", text: "third" },
+      ],
+    },
+  });
+  raf.runAll();
+  assert.equal(state.chatStream, "third", "应以最后一个 tool_use 之后的文本为流式当前段");
+}
+
+// content 末尾正好是 tool_use（没有任何尾随 text），chatStream 不应被任何旧文本污染。
+async function testDeltaEndingWithToolUseLeavesStreamEmpty() {
+  const raf = new FakeRaf();
+  installBrowserGlobals(raf);
+  const state = makeState({ chatStream: null, chatPendingStreamText: null });
+
+  handleChatEvent(state, {
+    runId: "run-1",
+    sessionKey: "session-1",
+    state: "delta",
+    message: {
+      role: "assistant",
+      content: [
+        { type: "text", text: "前置" },
+        { type: "tool_use", id: "t1", name: "bash", input: {} },
+      ],
+    },
+  });
+  raf.runAll();
+  assert.equal(state.chatStream, null, "尾部即 tool_use 时不应回写旧段");
+}
+
 async function main() {
   await testChatStreamIsRafThrottled();
   await testLoadChatHistoryBatchesInitialRender();
+  await testDeltaAfterToolUseShowsOnlyTrailingText();
+  await testDeltaWithMultipleToolUsesUsesLastTrailing();
+  await testDeltaEndingWithToolUseLeavesStreamEmpty();
   console.log("chat controller tests passed");
 }
 

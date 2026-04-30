@@ -15,6 +15,9 @@ import { t } from "../i18n.ts";
 import { detectTextDirection } from "../text-direction.ts";
 import { renderMarkdownSidebar } from "./markdown-sidebar.ts";
 import "../components/resizable-divider.ts";
+import { computeStopButtonVisible } from "./chat-stop-button-gate.ts";
+
+export { computeStopButtonVisible };
 
 export type CompactionIndicatorStatus = {
   active: boolean;
@@ -228,8 +231,7 @@ function renderAttachmentPreview(props: ChatProps) {
 
 export function renderChat(props: ChatProps) {
   const canCompose = props.connected;
-  const isBusy = props.sending || props.stream !== null;
-  const canAbort = Boolean(props.canAbort && props.onAbort);
+  const { isBusy, canAbort } = computeStopButtonVisible(props);
   const activeSession = props.sessions?.sessions?.find((row) => row.key === props.sessionKey);
   const reasoningLevel = activeSession?.reasoningLevel ?? "off";
   const thinkingActive = (props.thinkingToggleLevel && props.thinkingToggleLevel !== "off") || (props.thinkingLevel && props.thinkingLevel !== "off");
