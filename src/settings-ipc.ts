@@ -29,6 +29,7 @@ import {
   saveMoonshotConfig,
   readUserConfig,
   writeUserConfig,
+  isMirroredProviderEntry,
 } from "./provider-config";
 import { SHARE_COPY_PAYLOAD } from "./share-copy";
 import { readSkillStoreRegistry, writeSkillStoreRegistry } from "./skill-store";
@@ -201,7 +202,7 @@ interface SettingsIpcOptions {
 
 // 注册 Settings 相关 IPC
 export function registerSettingsIpc(opts: SettingsIpcOptions = {}): void {
-  // 写入配置后自动重启 gateway，避免新增 handler 遗漏重启调用
+  // 写入配置后自动重启 gateway，避免新增 handler 遗漏重启调用。
   const writeUserConfigAndRestart: typeof writeUserConfig = (config) => {
     writeUserConfig(config);
     opts.requestGatewayRestart?.();
@@ -226,6 +227,7 @@ export function registerSettingsIpc(opts: SettingsIpcOptions = {}): void {
 
       for (const [providerKey, prov] of Object.entries(providers)) {
         if (!prov || typeof prov !== "object") continue;
+        if (isMirroredProviderEntry(providers, providerKey)) continue; // 跳过别名镜像条目
         const models = (prov as any).models;
         if (!Array.isArray(models)) continue;
         for (const m of models) {
@@ -2465,6 +2467,7 @@ function extractProviderInfo(config: any): any {
   for (const [key, prov] of Object.entries(providers)) {
     if (!prov || typeof prov !== "object") continue;
     const p = prov as any;
+    if (isMirroredProviderEntry(providers, key)) continue; // 跳过别名镜像条目
     if (!p.apiKey) continue;
     savedProviders[key] = {
       apiKey: p.apiKey ?? "",
@@ -2534,4 +2537,3 @@ function maskApiKey(key: string): string {
   if (!key || key.length <= 8) return key ? "••••••••" : "";
   return key.slice(0, 4) + "••••" + key.slice(-4);
 }
-

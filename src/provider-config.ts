@@ -1,6 +1,7 @@
 import * as https from "https";
 import * as http from "http";
 import * as fs from "fs";
+import * as path from "path";
 import { resolveUserConfigPath, resolveUserStateDir } from "./constants";
 import { syncOpenClawStateAfterWrite } from "./openclaw-health-state";
 import { backupCurrentUserConfig } from "./config-backup";
@@ -186,6 +187,293 @@ export function saveMoonshotConfig(
   config.agents.defaults.model.primary = `${providerKey}/${modelID}`;
 }
 
+// 镜像 openclaw 的 normalizeProviderId（provider-id-CUjr7KCR.js）。
+// openclaw 把 cfg.models.providers 写入 models.json 时保留原始 key，但
+// pdf tool 解析 ref 时会先 normalizeProviderId 再 registry.find —— 写入键和
+// 查询键不一致导致 "Unknown model"（例如 kimi-coding → 归一化为 kimi → 查不到）。
+export function normalizeProviderId(provider: string): string {
+  const n = provider.trim().toLowerCase();
+  if (n === "modelstudio" || n === "qwencloud") return "qwen";
+  if (n === "z.ai" || n === "z-ai") return "zai";
+  if (n === "opencode-zen") return "opencode";
+  if (n === "opencode-go-auth") return "opencode-go";
+  if (n === "kimi" || n === "kimi-code" || n === "kimi-coding") return "kimi";
+  if (n === "bedrock" || n === "aws-bedrock") return "amazon-bedrock";
+  if (n === "bytedance" || n === "doubao") return "volcengine";
+  return n;
+}
+
+// 旧版曾把这个标记写进 openclaw.json，但 openclaw 2026.4.x provider schema 是 strict 的，
+// 会直接拒绝未知字段。保留常量只用于清理遗留配置，不再写入新配置。
+export const MIRRORED_FROM_FIELD = "_mirroredFrom";
+
+export interface ProviderMirrorResult {
+  added: number;
+  updated: number;
+  removed: number;
+  mergedCollisions: number;
+  cleanedLegacyMetadata: number;
+}
+
+export interface ProviderMirrorState {
+  mirrors: Record<string, { source: string; signature: string }>;
+}
+
+export interface MirrorAliasedProvidersOptions {
+  state?: ProviderMirrorState;
+  persistState?: boolean;
+}
+
+export interface SyncPdfModelOptions {
+  previousPrimary?: string;
+}
+
+const PROVIDER_MIRROR_STATE_FILE = "oneclaw-provider-mirrors.json";
+
+function createEmptyMirrorState(): ProviderMirrorState {
+  return { mirrors: {} };
+}
+
+function isRecord(value: unknown): value is Record<string, any> {
+  return !!value && typeof value === "object" && !Array.isArray(value);
+}
+
+function readProviderMirrorState(): ProviderMirrorState {
+  const statePath = path.join(resolveUserStateDir(), PROVIDER_MIRROR_STATE_FILE);
+  try {
+    const parsed = JSON.parse(fs.readFileSync(statePath, "utf-8"));
+    if (!isRecord(parsed?.mirrors)) return createEmptyMirrorState();
+    const mirrors: ProviderMirrorState["mirrors"] = {};
+    for (const [key, value] of Object.entries(parsed.mirrors)) {
+      if (!isRecord(value)) continue;
+      if (typeof value.source !== "string" || typeof value.signature !== "string") continue;
+      mirrors[key] = { source: value.source, signature: value.signature };
+    }
+    return { mirrors };
+  } catch {
+    return createEmptyMirrorState();
+  }
+}
+
+function writeProviderMirrorState(state: ProviderMirrorState): void {
+  const statePath = path.join(resolveUserStateDir(), PROVIDER_MIRROR_STATE_FILE);
+  const keys = Object.keys(state.mirrors);
+  try {
+    if (keys.length === 0) {
+      if (fs.existsSync(statePath)) fs.unlinkSync(statePath);
+      return;
+    }
+    fs.mkdirSync(path.dirname(statePath), { recursive: true });
+    fs.writeFileSync(statePath, JSON.stringify(state, null, 2) + "\n", "utf-8");
+  } catch {
+    // 镜像状态只是 OneClaw 的辅助索引；写失败时不要阻断用户保存模型配置。
+  }
+}
+
+function cloneProviderEntry(entry: Record<string, any>): Record<string, any> {
+  // openclaw.json 是 JSON 配置；用 JSON clone 可避免镜像条目与源条目共享 models/header 引用。
+  const cloned = JSON.parse(JSON.stringify(entry));
+  delete cloned[MIRRORED_FROM_FIELD];
+  return cloned;
+}
+
+function providerMirrorSignature(entry: Record<string, any>): string {
+  const normalized = cloneProviderEntry(entry);
+  return JSON.stringify({
+    apiKey: normalized.apiKey ?? null,
+    baseUrl: normalized.baseUrl ?? null,
+    api: normalized.api ?? null,
+    authHeader: normalized.authHeader ?? null,
+    headers: normalized.headers ?? null,
+    request: normalized.request ?? null,
+    models: normalized.models ?? null,
+  });
+}
+
+function modelIdOf(entry: unknown): string | null {
+  if (typeof entry === "string") return entry.trim() || null;
+  if (isRecord(entry) && typeof entry.id === "string") return entry.id.trim() || null;
+  return null;
+}
+
+function hasProviderModel(provider: Record<string, any>, modelId: string): boolean {
+  const models = Array.isArray(provider.models) ? provider.models : [];
+  return models.some((entry: unknown) => modelIdOf(entry) === modelId);
+}
+
+function mergeMissingModels(target: Record<string, any>, source: Record<string, any>): boolean {
+  const sourceModels = Array.isArray(source.models) ? source.models : [];
+  if (sourceModels.length === 0) return false;
+  if (!Array.isArray(target.models)) target.models = [];
+
+  let changed = false;
+  for (const model of sourceModels) {
+    const modelId = modelIdOf(model);
+    if (!modelId || hasProviderModel(target, modelId)) continue;
+    // normalized provider 已被用户占用时，只补模型声明，不覆盖用户的 baseUrl/apiKey。
+    target.models.push(JSON.parse(JSON.stringify(model)));
+    changed = true;
+  }
+  return changed;
+}
+
+function isGeneratedPdfModel(value: unknown, expectedPrimary: string): boolean {
+  if (!isRecord(value)) return false;
+  const keys = Object.keys(value);
+  return keys.length === 1 && keys[0] === "primary" && value.primary === expectedPrimary;
+}
+
+// ── 同步 pdfModel 到当前 primary 模型 ──
+//
+// openclaw 2026.4.x 的 PDF 自动选型只检查 env/auth profile，不认 OneClaw 写在
+// models.providers.*.apiKey 下的密钥。因此 OneClaw 必须显式写 pdfModel.primary。
+// 已有自定义 pdfModel（例如 native PDF 模型或 fallbacks）一律保留，避免配置数据丢失。
+export function syncPdfModelToPrimary(config: any, opts: SyncPdfModelOptions = {}): boolean {
+  const primary = config?.agents?.defaults?.model?.primary;
+  if (!primary || typeof primary !== "string") return false;
+
+  config.agents ??= {};
+  config.agents.defaults ??= {};
+  const current = config.agents.defaults.pdfModel;
+  if (current == null) {
+    config.agents.defaults.pdfModel = { primary };
+    return true;
+  }
+
+  // 只有确认是 OneClaw 旧版自动生成的 { primary: 旧主模型 } 时才跟随更新；
+  // 用户手动设置的 pdfModel/fallbacks 不做覆盖。
+  if (opts.previousPrimary && isGeneratedPdfModel(current, opts.previousPrimary)) {
+    config.agents.defaults.pdfModel = { primary };
+    return true;
+  }
+
+  return false;
+}
+
+export function isMirroredProviderEntry(
+  providers: any,
+  providerKey: string,
+  state: ProviderMirrorState = readProviderMirrorState(),
+): boolean {
+  if (!isRecord(providers)) return false;
+  const entry = providers[providerKey];
+  if (!isRecord(entry)) return false;
+
+  const legacySource = entry[MIRRORED_FROM_FIELD];
+  if (typeof legacySource === "string" && normalizeProviderId(legacySource) === providerKey.trim().toLowerCase()) {
+    return true;
+  }
+
+  const tracked = state.mirrors[providerKey];
+  if (tracked) {
+    const signature = providerMirrorSignature(entry);
+    if (signature === tracked.signature) return true;
+    const sourceEntry = providers[tracked.source];
+    if (isRecord(sourceEntry) && signature === providerMirrorSignature(sourceEntry)) return true;
+    return false;
+  }
+
+  const normalizedKey = normalizeProviderId(providerKey);
+  if (normalizedKey !== providerKey.trim().toLowerCase()) return false;
+  const entrySig = providerMirrorSignature(entry);
+  for (const [sourceKey, sourceEntry] of Object.entries(providers)) {
+    if (sourceKey === providerKey || !isRecord(sourceEntry)) continue;
+    if (normalizeProviderId(sourceKey) !== normalizedKey) continue;
+    if (normalizeProviderId(sourceKey) === sourceKey.trim().toLowerCase()) continue;
+    if (providerMirrorSignature(sourceEntry) === entrySig) return true;
+  }
+  return false;
+}
+
+// 让 pdf tool 等走 normalizeProviderId 的查询路径能命中：
+// 对每个会被改名的 provider key，复制一份到归一化后的 key（同 baseUrl/apiKey/models）。
+// oneclaw 内部代码继续按原 key（如 kimi-coding）访问；镜像条目仅供 openclaw 注册表使用。
+export function mirrorAliasedProviders(
+  config: any,
+  opts: MirrorAliasedProvidersOptions = {},
+): ProviderMirrorResult {
+  const result: ProviderMirrorResult = {
+    added: 0,
+    updated: 0,
+    removed: 0,
+    mergedCollisions: 0,
+    cleanedLegacyMetadata: 0,
+  };
+  const providers = config?.models?.providers;
+  if (!isRecord(providers)) return result;
+
+  const state = opts.state ?? (opts.persistState ? readProviderMirrorState() : createEmptyMirrorState());
+  const legacyMirrorSources = new Map<string, string>();
+  for (const key of Object.keys(providers)) {
+    const entry = providers[key];
+    if (!isRecord(entry)) continue;
+    const legacySource = entry[MIRRORED_FROM_FIELD];
+    if (typeof legacySource === "string" && legacySource.trim()) {
+      legacyMirrorSources.set(key, legacySource.trim());
+      state.mirrors[key] = {
+        source: legacySource.trim(),
+        signature: providerMirrorSignature(entry),
+      };
+    }
+    if (Object.prototype.hasOwnProperty.call(entry, MIRRORED_FROM_FIELD)) {
+      delete entry[MIRRORED_FROM_FIELD];
+      result.cleanedLegacyMetadata += 1;
+    }
+  }
+
+  for (const [targetKey, meta] of Object.entries({ ...state.mirrors })) {
+    const targetEntry = providers[targetKey];
+    if (!isRecord(targetEntry)) {
+      delete state.mirrors[targetKey];
+      continue;
+    }
+    const sourceEntry = providers[meta.source];
+    const sourceStillTargetsHere = isRecord(sourceEntry) && normalizeProviderId(meta.source) === targetKey.trim().toLowerCase();
+    if (sourceStillTargetsHere) continue;
+
+    if (providerMirrorSignature(targetEntry) === meta.signature) {
+      delete providers[targetKey];
+      result.removed += 1;
+    }
+    // 如果用户手动改过 normalized provider，则让它脱离 OneClaw 镜像管理。
+    delete state.mirrors[targetKey];
+  }
+
+  const sourceKeys = Object.keys(providers);
+  for (const key of sourceKeys) {
+    const entry = providers[key];
+    if (!isRecord(entry) || legacyMirrorSources.has(key) || state.mirrors[key]) continue;
+    const normalized = normalizeProviderId(key);
+    if (!normalized || normalized === key.trim().toLowerCase()) continue;
+    const nextEntry = cloneProviderEntry(entry);
+    const nextSignature = providerMirrorSignature(nextEntry);
+    if (!providers[normalized]) {
+      providers[normalized] = nextEntry;
+      state.mirrors[normalized] = { source: key, signature: nextSignature };
+      result.added += 1;
+      continue;
+    }
+    // 只更新 OneClaw 管理的镜像；元数据放在 sidecar，避免污染 openclaw strict schema。
+    const tracked = state.mirrors[normalized];
+    if ((tracked && tracked.source === key) || (!tracked && isMirroredProviderEntry(providers, normalized, state))) {
+      providers[normalized] = nextEntry;
+      state.mirrors[normalized] = { source: key, signature: nextSignature };
+      result.updated += 1;
+      continue;
+    }
+
+    const normalizedEntry = providers[normalized];
+    if (isRecord(normalizedEntry) && mergeMissingModels(normalizedEntry, entry)) {
+      // normalized key 被用户真实 provider 占用时不能覆盖凭据，只合并缺失模型，
+      // 至少避免 pdf/registry 路径因 normalize 后找不到模型而报 Unknown model。
+      result.mergedCollisions += 1;
+    }
+  }
+
+  if (opts.persistState) writeProviderMirrorState(state);
+  return result;
+}
+
 // ── 用户配置读写（薄封装） ──
 
 export function readUserConfig(): any {
@@ -201,6 +489,11 @@ export function readUserConfig(): any {
 export function writeUserConfig(config: any): void {
   const stateDir = resolveUserStateDir();
   fs.mkdirSync(stateDir, { recursive: true });
+  const previousPrimary = readUserConfig()?.agents?.defaults?.model?.primary;
+  // 写配置时集中维护 pdfModel：缺失时补齐，旧自动值随 primary 迁移，自定义值不覆盖。
+  syncPdfModelToPrimary(config, { previousPrimary });
+  // 落盘前补齐归一化 provider 镜像，确保 pdf tool 等需要归一化查询的路径能命中注册表。
+  mirrorAliasedProviders(config, { persistState: true });
   // 覆盖写入前先保留一份当前可解析配置，便于用户在设置页回退。
   backupCurrentUserConfig();
   const configPath = resolveUserConfigPath();

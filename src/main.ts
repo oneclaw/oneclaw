@@ -29,7 +29,7 @@ import {
   recordLastKnownGoodConfigSnapshot,
   restoreLastKnownGoodConfigSnapshot,
 } from "./config-backup";
-import { readUserConfig, writeUserConfig } from "./provider-config";
+import { readUserConfig, writeUserConfig, mirrorAliasedProviders, isMirroredProviderEntry, syncPdfModelToPrimary } from "./provider-config";
 import { resolveKimiSearchApiKey, readKimiApiKey, readKimiSearchDedicatedApiKey, writeKimiApiKey, ensureMemorySearchProxyConfig, ensureKimiPluginDeviceId } from "./kimi-config";
 import { reconcileCliOnAppLaunch } from "./cli-integration";
 import { reconcileExtensionsOnAppLaunch } from "./extension-mirror";
@@ -257,6 +257,71 @@ function migrateSessionMemoryHook(): void {
     };
     writeUserConfig(config);
     log.info("[migrate] 已为存量用户默认开启 session-memory hook");
+  } catch {
+    // 迁移失败不阻塞启动
+  }
+}
+
+// 存量用户迁移：为已安装用户补写归一化 provider 镜像条目，激活 openclaw 内置 pdf tool。
+// openclaw 把 provider 写入 models.json 时保留原始 key，但 pdf tool 查询时会归一化（例如
+// kimi-coding → kimi），导致写入键和查询键不一致 → "Unknown model"。镜像条目让查询能命中。
+// 老用户从不触发 writeUserConfig 时无法享受新版 mirror，必须靠启动迁移兜底。
+// 同时补齐缺失的 agents.defaults.pdfModel；openclaw 的 PDF 自动选型不认 OneClaw 的 config apiKey。
+function migrateAliasedProviderMirror(): void {
+  try {
+    const config = readUserConfig();
+    const providers = config?.models?.providers;
+    if (!providers || typeof providers !== "object") return;
+    const mirrorResult = mirrorAliasedProviders(config, { persistState: true });
+    const pdfModelSynced = syncPdfModelToPrimary(config);
+    const changed =
+      mirrorResult.added +
+      mirrorResult.updated +
+      mirrorResult.removed +
+      mirrorResult.mergedCollisions +
+      mirrorResult.cleanedLegacyMetadata;
+    if (changed === 0 && !pdfModelSynced) return;
+    writeUserConfig(config);
+    if (changed > 0) {
+      const mirrored = Object.keys(providers).filter((k) => isMirroredProviderEntry(providers, k)).join(", ");
+      log.info(`[migrate] 已同步 provider 别名镜像（added=${mirrorResult.added} updated=${mirrorResult.updated} removed=${mirrorResult.removed} merged=${mirrorResult.mergedCollisions} cleaned=${mirrorResult.cleanedLegacyMetadata}: ${mirrored}）以激活 openclaw 内置 pdf tool`);
+    }
+    if (pdfModelSynced) {
+      log.info("[migrate] 已补齐 agents.defaults.pdfModel.primary，确保 PDF tool 可用");
+    }
+  } catch {
+    // 迁移失败不阻塞启动
+  }
+}
+
+// 存量用户迁移，避免复杂 skill 执行中途超时。
+// 仅在未配置时写入 1200（20 min），不覆盖用户手动设置的值。
+function migrateAgentTimeout(): void {
+  try {
+    const config = readUserConfig();
+    if (config?.agents?.defaults?.timeoutSeconds != null) return; // 已配置，跳过
+    config.agents ??= {};
+    config.agents.defaults ??= {};
+    config.agents.defaults.timeoutSeconds = 1200;
+    writeUserConfig(config);
+    log.info("[migrate] 已设置默认 agent 超时: 1200s (20min)");
+  } catch {
+    // 迁移失败不阻塞启动
+  }
+}
+
+// 存量用户迁移：子 agent 超时 15 min。
+// morph-ppt 等 skill 在子 agent 中执行构建脚本，默认超时太短导致构建中断、文件丢失。
+function migrateSubagentTimeout(): void {
+  try {
+    const config = readUserConfig();
+    if (config?.agents?.defaults?.subagents?.runTimeoutSeconds != null) return;
+    config.agents ??= {};
+    config.agents.defaults ??= {};
+    config.agents.defaults.subagents ??= {};
+    config.agents.defaults.subagents.runTimeoutSeconds = 900;
+    writeUserConfig(config);
+    log.info("[migrate] 已设置默认子 agent 超时: 600s (10min)");
   } catch {
     // 迁移失败不阻塞启动
   }
@@ -883,6 +948,9 @@ app.whenReady().then(async () => {
       migrateDeprecatedDingtalkFields();
       migrateBrowserProfileConfig();
       migrateKimiPluginDeviceId();
+      migrateAgentTimeout();
+      migrateSubagentTimeout();
+      migrateAliasedProviderMirror();
       void reconcileCliOnAppLaunch().catch((err) => {
         log.error(`[migrate] CLI launch reconciliation failed: ${err instanceof Error ? err.message : String(err)}`);
       });
@@ -898,6 +966,9 @@ app.whenReady().then(async () => {
       migrateDeprecatedDingtalkFields();
       migrateBrowserProfileConfig();
       migrateKimiPluginDeviceId();
+      migrateAgentTimeout();
+      migrateSubagentTimeout();
+      migrateAliasedProviderMirror();
       void reconcileCliOnAppLaunch().catch((err) => {
         log.error(`[migrate] CLI launch reconciliation failed: ${err instanceof Error ? err.message : String(err)}`);
       });

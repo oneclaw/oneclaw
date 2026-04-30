@@ -44,6 +44,7 @@
     "dingtalkConnector": "0.8.17",
     "weixin": "2.1.8",
     "wecom": "2026.4.8",
-    "qqbot": "1.6.1"
+    "qqbot": "1.6.1",
+    "officecli": "1.0.47"
   }
 }

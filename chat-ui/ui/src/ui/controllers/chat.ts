@@ -175,15 +175,26 @@ export async function sendChatMessage(
   // 分离图片附件和文件路径附件
   const imageAttachments = attachments?.filter((a) => a.dataUrl) ?? [];
   const fileAttachments = attachments?.filter((a) => a.filePath && !a.dataUrl) ?? [];
+
   const hasImages = imageAttachments.length > 0;
   const hasFiles = fileAttachments.length > 0;
 
-  // 文件路径拼到消息前面，让 gateway 自行读取
-  const filePaths = fileAttachments.map((a) => a.filePath!);
-  const filePrefix = filePaths.length > 0
-    ? filePaths.join("\n") + "\n\n"
+  // 分离 PDF 和其他文件：PDF 需要特殊提示，引导 agent 调用 pdf tool 而非 read
+  // （read tool 会把 PDF 当二进制文本读取，产生乱码）
+  const pdfFiles = fileAttachments.filter((a) => a.filePath!.toLowerCase().endsWith(".pdf"));
+  const otherFiles = fileAttachments.filter((a) => !a.filePath!.toLowerCase().endsWith(".pdf"));
+
+  const otherPrefix = otherFiles.length > 0
+    ? otherFiles.map((a) => a.filePath!).join("\n") + "\n\n"
     : "";
-  const msg = (filePrefix + message).trim();
+
+  const pdfPrefix = pdfFiles.length > 0
+    ? pdfFiles
+        .map((a) => `[Attached PDF: ${a.filePath}] (use the pdf tool to read this file)`)
+        .join("\n") + "\n\n"
+    : "";
+
+  const msg = (pdfPrefix + otherPrefix + message).trim();
 
   const hasAttachments = hasImages || hasFiles;
   if (!msg && !hasAttachments) {

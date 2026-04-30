@@ -897,7 +897,10 @@ function installDependencies(opts, gatewayDir) {
     pruneLlamaPackages(nmDir);
     pruneDanglingBinLinks(nmDir);
     assertNativeDepsMatchTarget(nmDir, opts.platform, opts.arch);
-    patchWindowsOpenclawArtifacts(gatewayDir, opts.platform);
+    patchPdfToolLocalRoots(gatewayDir);
+    patchKimiReplayPolicy(gatewayDir);
+    patchKimiAnthropicThinkingSignatures(gatewayDir);
+    injectBuiltinSkills(gatewayDir);
     return;
   }
 
@@ -946,32 +949,40 @@ function installDependencies(opts, gatewayDir) {
   pruneLlamaPackages(nmDir);
   pruneDanglingBinLinks(nmDir);
   assertNativeDepsMatchTarget(nmDir, opts.platform, opts.arch);
-  patchWindowsOpenclawArtifacts(gatewayDir, opts.platform);
+  patchPdfToolLocalRoots(gatewayDir);
+  patchKimiReplayPolicy(gatewayDir);
+  patchKimiAnthropicThinkingSignatures(gatewayDir);
+  injectBuiltinSkills(gatewayDir);
   fs.writeFileSync(stampPath, targetStamp);
   log("node_modules 裁剪完成");
 }
 
-// Windows 上给 openclaw + kimi-claw 所有 spawn 调用统一补 windowsHide，避免黑框闪烁。
+// Windows 上给 openclaw + kimi-claw + pi-coding-agent 所有 spawn 调用统一补
+// windowsHide，避免黑框闪烁。
 // 采用全局扫描策略，不再逐文件 whack-a-mole，确保上游新增 spawn 调用自动被覆盖。
+//
+// 调用时机：必须在 bundleAllPlugins 之后——kimi-claw 是从 CDN tgz 下载的 minify
+// 插件，会覆盖 openclaw npm install 里 ship 的版本，patch 跑在它之前会被覆盖。
 function patchWindowsOpenclawArtifacts(gatewayDir, platform = "win32") {
   if (platform !== "win32") return;
 
-  // 收集所有需要扫描的 JS 目录
+  // 收集所有需要扫描的 JS 目录（递归）
+  // - openclaw/dist 已经把 extensions/kimi-claw/dist 一起递归覆盖
+  // - pi-coding-agent 在 npm 树里可能 dedup 到顶层（@mariozechner/...），
+  //   也可能挂在 openclaw/node_modules 下，两个候选都扫
   const scanDirs = [];
 
-  // openclaw 核心 dist
   const distDir = path.join(gatewayDir, "node_modules", "openclaw", "dist");
   if (!fs.existsSync(distDir)) {
     die(`openclaw dist 目录不存在，无法应用 Windows 补丁: ${distDir}`);
   }
   scanDirs.push(distDir);
 
-  // kimi-claw 插件（terminal-session-manager 有 pipe 回退未加 windowsHide）
-  const kimiClawDist = path.join(
-    gatewayDir, "node_modules", "openclaw", "dist", "extensions", "kimi-claw", "dist"
-  );
-  if (fs.existsSync(kimiClawDist)) {
-    scanDirs.push(kimiClawDist);
+  for (const piDist of [
+    path.join(gatewayDir, "node_modules", "@mariozechner", "pi-coding-agent", "dist"),
+    path.join(gatewayDir, "node_modules", "openclaw", "node_modules", "@mariozechner", "pi-coding-agent", "dist"),
+  ]) {
+    if (fs.existsSync(piDist)) scanDirs.push(piDist);
   }
 
   let totalFiles = 0;
@@ -1132,8 +1143,520 @@ function patchAsarBoundaryCheck(gatewayDir) {
   }
 }
 
-// ─── Step 2.5: 注入 bundled 插件（kimi-claw + kimi-search） ───
 
+// patchSkillBaseDirToUnpacked: pi-coding-agent 的 skills.js 把
+// `dirname(filePath)` 直接当作 skill.baseDir 塞进 system prompt，且在
+// formatSkillsForPrompt 里把 `skill.filePath`（asar 虚路径）渲染成
+// <location>…/gateway.asar/…/SKILL.md</location>。模型 strip basename
+// 当 baseDir 用，再拼出 `& powershell -File <baseDir>/scripts/xxx.ps1` 等命令；
+// 子进程不走 Electron 的 asar fs shim，看到的是磁盘上不存在的虚拟路径
+// → PathNotFound。
+// 我们已经把 skills/** 整棵解出到 gateway.asar.unpacked/，这里把
+// skillDir 和 filePath 同步重写到 unpacked 路径上：baseDir 让 -File 命中
+// 真实磁盘，filePath 让 system prompt <location> 是真实磁盘路径，模型 read
+// SKILL.md 也走 unpacked。
+function patchSkillBaseDirToUnpacked(gatewayDir) {
+  // pi-coding-agent 在 npm 树里可能 dedup 到顶层，也可能挂在
+  // openclaw/node_modules 下；都补丁一遍更稳。
+  const candidates = [
+    path.join(gatewayDir, "node_modules", "@mariozechner", "pi-coding-agent", "dist", "core", "skills.js"),
+    path.join(gatewayDir, "node_modules", "openclaw", "node_modules", "@mariozechner", "pi-coding-agent", "dist", "core", "skills.js"),
+  ];
+
+  const marker = "const skillDir = dirname(filePath);";
+  const replacement = [
+    "let skillDir = dirname(filePath); /* asar-unpacked-skill */",
+    "try {",
+    "  if (/[\\\\/]gateway\\.asar[\\\\/]/.test(skillDir)) {",
+    "    const __fs = require('fs');",
+    "    const __path = require('path');",
+    "    const __unpacked = skillDir.replace(/([\\\\/])gateway\\.asar([\\\\/])/, '$1gateway.asar.unpacked$2');",
+    "    if (__fs.existsSync(__unpacked)) {",
+    "      skillDir = __unpacked;",
+    "      filePath = __path.join(__unpacked, __path.basename(filePath));",
+    "    }",
+    "  }",
+    "} catch {}",
+  ].join("\n        ");
+
+  let patched = 0;
+  let seen = 0;
+  for (const filePath of candidates) {
+    if (!fs.existsSync(filePath)) continue;
+    seen++;
+    const source = fs.readFileSync(filePath, "utf-8");
+    if (source.includes("/* asar-unpacked-skill */")) continue;
+    if (!source.includes(marker)) {
+      log(`⚠ ${path.relative(gatewayDir, filePath)} 缺少预期 marker，跳过 baseDir 补丁`);
+      continue;
+    }
+    const result = source.replace(marker, replacement);
+    if (result !== source) {
+      fs.writeFileSync(filePath, result, "utf-8");
+      patched++;
+    }
+  }
+
+  if (seen === 0) {
+    log("⚠ 未找到 pi-coding-agent skills.js，跳过 baseDir 补丁");
+  } else if (patched > 0) {
+    log(`已补丁 ${patched} 个 pi-coding-agent skills.js（baseDir + filePath → gateway.asar.unpacked）`);
+  } else {
+    log("⚠ pi-coding-agent skills.js 已是补丁后版本或结构不匹配");
+  }
+}
+
+
+// patchPiCodingAgentShellFallback: pi-coding-agent 的 getShellConfig() 在 win32
+// 上找不到 Git Bash + PATH 上没 bash.exe 时直接抛 "No bash shell found"，
+// 强制用户必须装 Git for Windows——零依赖目标失败。这里在 throw 之前注入一条
+// cmd.exe fallback：`spawn("cmd.exe", ["/d", "/s", "/c", userCmd])`。
+//
+// 安全前提（已由 builtin-skills/officecli-{docx,xlsx} SKILL.md 的
+// "Cross-platform contract" 段兑现）：
+//   - agent 通过 Write 工具把 CJK / 特殊字符写进 batch.json 文件（UTF-8）
+//   - 命令行 argv 仅含 ASCII（officecli + 文件路径 + --input + json 路径）
+//   - 因此 cmd.exe 解析 ASCII argv 不会 mojibake
+//   - officecli stdout 是 UTF-8 byte stream，经 Node.js spawn pipe 直通，
+//     cmd.exe 不做 codepage 翻译（pipe 模式只转发字节），不受 console
+//     codepage 影响
+//
+// /d /s /c 标志：
+//   /d = 禁用 AutoRun（防 reg HKCU\Software\Microsoft\Command Processor 注入）
+//   /s = 宽松 quote 处理，剥外层 "
+//   /c = 执行后退出
+//
+// 与 patchSkillBaseDirToUnpacked 同样补两个候选路径（顶层 dedup + nested）。
+function patchPiCodingAgentShellFallback(gatewayDir, platform) {
+  if (platform !== "win32") return;
+
+  const candidates = [
+    path.join(gatewayDir, "node_modules", "@mariozechner", "pi-coding-agent", "dist", "utils", "shell.js"),
+    path.join(gatewayDir, "node_modules", "openclaw", "node_modules", "@mariozechner", "pi-coding-agent", "dist", "utils", "shell.js"),
+  ];
+
+  // 锚点：win32 分支末尾，Git Bash + PATH bash 都失败之后、throw 之前
+  const anchor = "        throw new Error(`No bash shell found. Options:";
+
+  const fallback = [
+    "        /* cmd-fallback */ // OneClaw zero-deps: 找不到 Git Bash/PATH bash 时退到 cmd.exe.",
+    "        // 安全前提: skill 文档已强制 agent 通过 Write 工具把 CJK/特殊字符写进 batch.json,",
+    "        // 命令行 argv 仅含 ASCII (officecli + 文件路径 + --input + json 路径).",
+    "        // /d 禁用 AutoRun, /s 宽松 quote, /c 执行后退出.",
+    '        cachedShellConfig = { shell: "cmd.exe", args: ["/d", "/s", "/c"] };',
+    "        return cachedShellConfig;",
+    "",
+  ].join("\n");
+
+  let patched = 0;
+  let seen = 0;
+  for (const filePath of candidates) {
+    if (!fs.existsSync(filePath)) continue;
+    seen++;
+    const source = fs.readFileSync(filePath, "utf-8");
+    if (source.includes("/* cmd-fallback */")) continue;
+    if (!source.includes(anchor)) {
+      log(`⚠ ${path.relative(gatewayDir, filePath)} 缺少预期 anchor，跳过 cmd.exe fallback 补丁`);
+      continue;
+    }
+    // 防御：anchor 在文件中应只命中一次；多次说明结构变化，拒绝模糊替换
+    const occurrences = source.split(anchor).length - 1;
+    if (occurrences !== 1) {
+      log(`⚠ ${path.relative(gatewayDir, filePath)} anchor 命中 ${occurrences} 次，拒绝模糊替换`);
+      continue;
+    }
+    const result = source.replace(anchor, fallback + anchor);
+    if (result === source) {
+      log(`⚠ ${path.relative(gatewayDir, filePath)} 替换无效，跳过 cmd.exe fallback 补丁`);
+      continue;
+    }
+    fs.writeFileSync(filePath, result, "utf-8");
+    patched++;
+  }
+
+  if (seen === 0) {
+    log("⚠ 未找到 pi-coding-agent shell.js，跳过 cmd.exe fallback 补丁");
+  } else if (patched > 0) {
+    log(`已补丁 ${patched} 个 pi-coding-agent shell.js（Windows cmd.exe fallback）`);
+  } else {
+    log("⚠ pi-coding-agent shell.js 已是补丁后版本或结构不匹配");
+  }
+}
+
+
+// patchPowerShellEncoding: openclaw 内部 exec/PTY 通道（exec-defaults-*.js）在
+// Windows 上把命令路由到 `powershell.exe -NoProfile -NonInteractive -Command <user-cmd>`。
+// 注意：agent 的 bash tool 实际走的是 pi-coding-agent → Git Bash（不是这条
+// 路径），所以这条 prelude 只对 openclaw 自己的 PTY/exec 通道生效，留着无害。
+// PowerShell 默认 [Console]::OutputEncoding 跟系统 ANSI 码页（中文 zh-CN
+// 是 cp936 / GBK），但 openclaw 把子进程 stderr 当 UTF-8 解，导致路径报错
+// 等系统消息全部 mojibake。这里把 args 改成 `-Command <utf8-prelude>`
+// —— PowerShell 把后续参数拼到一起执行，所以最终命令变成
+// `<utf8-prelude> ; <user-cmd>`，输出立刻切到 UTF-8。
+function patchPowerShellEncoding(gatewayDir) {
+  const distDir = path.join(gatewayDir, "node_modules", "openclaw", "dist");
+  if (!fs.existsSync(distDir)) {
+    log("⚠ 未找到 openclaw/dist，跳过 PowerShell UTF-8 补丁");
+    return;
+  }
+
+  const execFiles = fs.readdirSync(distDir).filter((f) => /^exec-defaults-[A-Za-z0-9_-]+\.js$/.test(f));
+  if (execFiles.length === 0) {
+    log("⚠ 未找到 exec-defaults 模块，跳过 PowerShell UTF-8 补丁");
+    return;
+  }
+
+  // 匹配 getShellConfig 内 win32 分支：
+  //   if (process.platform === "win32") return {
+  //     shell: resolvePowerShellPath(),
+  //     args: [
+  //       "-NoProfile",
+  //       "-NonInteractive",
+  //       "-Command"
+  //     ]
+  //   };
+  // 末尾插一个 prelude 字符串作为额外 arg；PowerShell 会把多个 -Command
+  // 后置参数拼成一条命令执行。
+  const re = /if \(process\.platform === "win32"\) return \{(\s*)shell: resolvePowerShellPath\(\),(\s*)args: \[(\s*)"-NoProfile",(\s*)"-NonInteractive",(\s*)"-Command"(\s*)\](\s*)\};/;
+
+  // 注意：单独包在 try{...}catch{} 里防止极老 PowerShell 不支持 ::new() 时整条命令爆掉。
+  const prelude =
+    'try{[Console]::OutputEncoding=[System.Text.UTF8Encoding]::new();$OutputEncoding=[System.Text.UTF8Encoding]::new()}catch{};';
+
+  let patched = 0;
+  for (const fileName of execFiles) {
+    const filePath = path.join(distDir, fileName);
+    const source = fs.readFileSync(filePath, "utf-8");
+    if (source.includes("/* powershell-utf8 */")) continue;
+
+    if (!re.test(source)) {
+      log(`⚠ ${fileName} getShellConfig 结构不匹配，跳过 UTF-8 补丁`);
+      continue;
+    }
+
+    const result = source.replace(
+      re,
+      (_m, s1, s2, s3, s4, s5, s6, s7) =>
+        `if (process.platform === "win32") return {${s1}shell: resolvePowerShellPath(),${s2}args: [${s3}"-NoProfile",${s4}"-NonInteractive",${s5}"-Command",${s5}/* powershell-utf8 */ ${JSON.stringify(prelude)}${s6}]${s7}};`,
+    );
+
+    if (result !== source) {
+      fs.writeFileSync(filePath, result, "utf-8");
+      patched++;
+    }
+  }
+
+  if (patched > 0) {
+    log(`已补丁 ${patched} 个 exec-defaults 模块（PowerShell UTF-8 输出编码）`);
+  } else {
+    log("⚠ exec-defaults 模块已是补丁后版本或结构不匹配");
+  }
+}
+
+// patchPdfToolLocalRoots: openclaw 的 PDF tool 非 sandbox 分支只允许
+// ~/.openclaw/{media,agents,workspace,sandboxes} 下的文件，而用户通常从
+// ~/Desktop / ~/Downloads 拖 PDF 会被拒。利用 openclaw 自带的 escape hatch：
+// 同时传 localRoots:"any" + 自定义 readFile 时会跳过 assertLocalMediaAllowed。
+// 自定义 readFile 做五层防护：输入校验 / realpath + NFC / isFile + size /
+// PDF magic bytes / 敏感路径 deny list。anchor 未命中时 die，防止 openclaw
+// 升级后静默失效。
+function patchPdfToolLocalRoots(gatewayDir) {
+  const distDir = path.join(gatewayDir, "node_modules", "openclaw", "dist");
+  if (!fs.existsSync(distDir)) {
+    die(`openclaw dist 目录不存在，无法应用 PDF tool 补丁: ${distDir}`);
+  }
+
+  // rolldown 会把 createPdfTool 代码复制到多个 chunk，散弹式 patch 所有带
+  // anchor 的 .js（anchor 足够精确，不会误伤）。
+  const candidateFiles = fs.readdirSync(distDir).filter((f) => f.endsWith(".js"));
+  if (candidateFiles.length === 0) {
+    die("openclaw dist 下无 .js 文件，patchPdfToolLocalRoots 失败");
+  }
+
+  const MARKER = "/* oneclaw-pdf-bypass */";
+
+  // anchor: tabs 精确匹配，缩进改变即 miss → die
+  const anchor = [
+    "\t\t\t\t}) : await loadWebMediaRaw(resolvedPathInfo.resolved, {",
+    "\t\t\t\t\tmaxBytes,",
+    "\t\t\t\t\tlocalRoots",
+    "\t\t\t\t});",
+  ].join("\n");
+
+  // 临时变量以下划线开头避免与外层 createPdfTool 冲突；maxBytes 从外层闭包捕获。
+  const replacement = [
+    "\t\t\t\t}) : await loadWebMediaRaw(resolvedPathInfo.resolved, " + MARKER + " {",
+    "\t\t\t\t\tmaxBytes,",
+    "\t\t\t\t\tlocalRoots: \"any\",",
+    "\t\t\t\t\treadFile: async (inputPath) => {",
+    "\t\t\t\t\t\tif (typeof inputPath !== \"string\" || inputPath.length === 0) {",
+    "\t\t\t\t\t\t\tthrow new Error(\"PDF path must be a non-empty string\");",
+    "\t\t\t\t\t\t}",
+    "\t\t\t\t\t\tif (inputPath.includes(\"\\0\")) {",
+    "\t\t\t\t\t\t\tthrow new Error(\"PDF path must not contain null bytes\");",
+    "\t\t\t\t\t\t}",
+    "\t\t\t\t\t\tif (!isAbsolute(inputPath)) {",
+    "\t\t\t\t\t\t\tthrow new Error(\"PDF path must be absolute: \" + inputPath);",
+    "\t\t\t\t\t\t}",
+    "\t\t\t\t\t\tconst _resolvedRaw = await fs.promises.realpath(inputPath);",
+    "\t\t\t\t\t\tconst _resolvedPath = _resolvedRaw.normalize(\"NFC\");",
+    "\t\t\t\t\t\tconst _st = await fs.promises.stat(_resolvedPath);",
+    "\t\t\t\t\t\tif (!_st.isFile()) {",
+    "\t\t\t\t\t\t\tthrow new Error(\"PDF path is not a regular file: \" + inputPath);",
+    "\t\t\t\t\t\t}",
+    "\t\t\t\t\t\tif (_st.size > maxBytes) {",
+    "\t\t\t\t\t\t\tthrow new Error(\"PDF exceeds size cap: \" + _st.size);",
+    "\t\t\t\t\t\t}",
+    "\t\t\t\t\t\tif (_st.size < 5) {",
+    "\t\t\t\t\t\t\tthrow new Error(\"PDF too small to contain header: \" + _st.size);",
+    "\t\t\t\t\t\t}",
+    "\t\t\t\t\t\tconst _fd = await fs.promises.open(_resolvedPath, \"r\");",
+    "\t\t\t\t\t\ttry {",
+    "\t\t\t\t\t\t\tconst _probeSize = Math.min(1024, Number(_st.size));",
+    "\t\t\t\t\t\t\tconst _probe = Buffer.alloc(_probeSize);",
+    "\t\t\t\t\t\t\tawait _fd.read(_probe, 0, _probeSize, 0);",
+    "\t\t\t\t\t\t\tif (!_probe.includes(Buffer.from(\"%PDF-\", \"ascii\"))) {",
+    "\t\t\t\t\t\t\t\tthrow new Error(\"Not a valid PDF (no %PDF- marker in first 1KB): \" + inputPath);",
+    "\t\t\t\t\t\t\t}",
+    "\t\t\t\t\t\t} finally {",
+    "\t\t\t\t\t\t\tawait _fd.close();",
+    "\t\t\t\t\t\t}",
+    "\t\t\t\t\t\tconst _lower = _resolvedPath.toLowerCase();",
+    "\t\t\t\t\t\tconst _segments = _lower.split(/[\\\\/]+/).filter(Boolean);",
+    "\t\t\t\t\t\tconst _basename = _segments[_segments.length - 1] || \"\";",
+    "\t\t\t\t\t\tconst _DENY_DIR_SEGMENTS = [\".ssh\", \".aws\", \".gnupg\", \".kube\", \".docker\", \"keychains\", \"secrets\"];",
+    "\t\t\t\t\t\tconst _DENY_BASENAMES = new Set([",
+    "\t\t\t\t\t\t\t\"id_rsa\", \"id_dsa\", \"id_ecdsa\", \"id_ed25519\",",
+    "\t\t\t\t\t\t\t\".env\", \".netrc\", \".pgpass\", \".git-credentials\", \".npmrc\", \".pypirc\",",
+    "\t\t\t\t\t\t\t\"credentials\", \"credentials.json\", \"wallet.dat\", \".htpasswd\"",
+    "\t\t\t\t\t\t]);",
+    "\t\t\t\t\t\tconst _DENY_PATTERNS = [/^\\.env(\\.|$)/, /\\.pem$/, /\\.key$/, /\\.p12$/, /\\.pfx$/];",
+    "\t\t\t\t\t\tif (_DENY_DIR_SEGMENTS.some((d) => _segments.includes(d))) {",
+    "\t\t\t\t\t\t\tthrow new Error(\"PDF path touches a protected directory: \" + inputPath);",
+    "\t\t\t\t\t\t}",
+    "\t\t\t\t\t\tif (_DENY_BASENAMES.has(_basename)) {",
+    "\t\t\t\t\t\t\tthrow new Error(\"PDF path matches a protected filename: \" + _basename);",
+    "\t\t\t\t\t\t}",
+    "\t\t\t\t\t\tif (_DENY_PATTERNS.some((r) => r.test(_basename))) {",
+    "\t\t\t\t\t\t\tthrow new Error(\"PDF path matches a protected pattern: \" + _basename);",
+    "\t\t\t\t\t\t}",
+    "\t\t\t\t\t\treturn fs.promises.readFile(_resolvedPath);",
+    "\t\t\t\t\t}",
+    "\t\t\t\t});",
+  ].join("\n");
+
+  let patched = 0;
+  let alreadyPatched = 0;
+  for (const fileName of candidateFiles) {
+    const filePath = path.join(distDir, fileName);
+    const source = fs.readFileSync(filePath, "utf-8");
+
+    if (source.includes(MARKER)) {
+      alreadyPatched++;
+      continue;
+    }
+
+    const hits = source.split(anchor).length - 1;
+    if (hits === 0) continue;
+    if (hits > 1) {
+      die(`patchPdfToolLocalRoots: anchor 在 ${fileName} 命中 ${hits} 次，拒绝模糊替换`);
+    }
+
+    const result = source.replace(anchor, replacement);
+    if (result === source) {
+      die(`patchPdfToolLocalRoots: ${fileName} 替换无效（anchor 匹配但 replace 失败）`);
+    }
+    fs.writeFileSync(filePath, result, "utf-8");
+    patched++;
+  }
+
+  // 全部文件都未命中且无已 patched → anchor drift → 中断构建。
+  if (patched === 0 && alreadyPatched === 0) {
+    die(
+      `patchPdfToolLocalRoots: anchor 在所有 ${candidateFiles.length} 个 .js chunk 中均未命中。` +
+      `可能是 openclaw 升级导致 anchor drift。`,
+    );
+  }
+
+  if (patched > 0) {
+    log(`已补丁 ${patched} 个 chunk（PDF tool 路径绕过）`);
+  } else {
+    log(`PDF tool 补丁已在 ${alreadyPatched} 个 chunk 中就位（幂等跳过）`);
+  }
+}
+
+// Kimi Code 使用 anthropic-messages 传输时，assistant tool_call 历史必须保留
+// reasoning_content/thinking，否则服务端会拒绝：
+// "thinking is enabled but reasoning_content is missing..."。上一版曾用
+// dropThinkingBlocks 降低签名膨胀，但这会破坏该约束；这里强制恢复为只关闭
+// preserveSignatures 的上游策略，真正的签名瘦身在 pi-ai anthropic payload 层做。
+function patchKimiReplayPolicy(gatewayDir) {
+  const distDir = path.join(gatewayDir, "node_modules", "openclaw", "dist");
+  if (!fs.existsSync(distDir)) {
+    die(`openclaw dist 目录不存在，无法应用 Kimi replay 补丁: ${distDir}`);
+  }
+
+  const candidateFiles = fs
+    .readdirSync(distDir)
+    .filter((f) => f.endsWith(".js") && f.startsWith("replay-policy-"));
+  if (candidateFiles.length === 0) {
+    die("openclaw dist 下无 replay-policy-*.js 文件，patchKimiReplayPolicy 失败");
+  }
+
+  const anchor = "const KIMI_REPLAY_POLICY = { preserveSignatures: false };";
+  const staleDropThinking = "const KIMI_REPLAY_POLICY = { preserveSignatures: false, dropThinkingBlocks: true };";
+
+  let restored = 0;
+  let verified = 0;
+  for (const fileName of candidateFiles) {
+    const filePath = path.join(distDir, fileName);
+    const source = fs.readFileSync(filePath, "utf-8");
+
+    if (!source.includes("KIMI_REPLAY_POLICY")) continue;
+
+    if (source.includes(anchor)) {
+      verified++;
+      continue;
+    }
+
+    const hits = source.split(staleDropThinking).length - 1;
+    if (hits === 0) {
+      continue;
+    }
+    if (hits > 1) {
+      die(`patchKimiReplayPolicy: anchor 在 ${fileName} 命中 ${hits} 次，拒绝模糊替换`);
+    }
+
+    const result = source.replace(staleDropThinking, anchor);
+    if (result === source) {
+      die(`patchKimiReplayPolicy: ${fileName} 替换无效（anchor 匹配但 replace 失败）`);
+    }
+    fs.writeFileSync(filePath, result, "utf-8");
+    restored++;
+  }
+
+  if (restored === 0 && verified === 0) {
+    die(
+      `patchKimiReplayPolicy: anchor 在所有 ${candidateFiles.length} 个 replay-policy chunk 中均未命中。` +
+      `可能是 openclaw 升级导致 anchor drift。`,
+    );
+  }
+
+  if (restored > 0) {
+    log(`已修复 ${restored} 个 chunk（Kimi replay 恢复保留 thinking blocks）`);
+  } else {
+    log(`Kimi replay policy 已校验（${verified} 个 chunk，未启用 dropThinkingBlocks）`);
+  }
+}
+
+// Kimi Code 的历史 thinkingSignature 可能是 provider 返回的大块 opaque 签名。
+// 多轮 officecli 工具调用会把这些旧签名反复上传；但直接删除旧 thinking 会让
+// Kimi 在 thinking+tool_calls 请求中报 reasoning_content 缺失。这里只在
+// @mariozechner/pi-ai 的 Anthropic payload 转换层，把 Kimi 的“非最新 assistant”
+// 大签名替换为短占位符：保留 thinking/reasoning_content 形态，去掉历史签名体积。
+function patchKimiAnthropicThinkingSignatures(gatewayDir) {
+  const anthropicProvider = path.join(
+    gatewayDir,
+    "node_modules",
+    "@mariozechner",
+    "pi-ai",
+    "dist",
+    "providers",
+    "anthropic.js",
+  );
+  if (!fs.existsSync(anthropicProvider)) {
+    die(`pi-ai anthropic provider 不存在，无法应用 Kimi thinking 签名补丁: ${anthropicProvider}`);
+  }
+
+  const source = fs.readFileSync(anthropicProvider, "utf-8");
+  const marker = "oneclaw-kimi-signature-compact";
+  if (source.includes(marker)) {
+    log("Kimi thinking 签名补丁已就位（幂等跳过）");
+    return;
+  }
+
+  const transformAnchor = [
+    "    const transformedMessages = transformMessages(messages, model, normalizeToolCallId);",
+    "    for (let i = 0; i < transformedMessages.length; i++) {",
+  ].join("\n");
+  const transformReplacement = [
+    "    const transformedMessages = transformMessages(messages, model, normalizeToolCallId);",
+    "    const latestAssistantIndex = (() => {",
+    "        for (let j = transformedMessages.length - 1; j >= 0; j--) {",
+    "            if (transformedMessages[j]?.role === \"assistant\")",
+    "                return j;",
+    "        }",
+    "        return -1;",
+    "    })();",
+    "    for (let i = 0; i < transformedMessages.length; i++) {",
+  ].join("\n");
+
+  const signatureAnchor = [
+    "                        blocks.push({",
+    "                            type: \"thinking\",",
+    "                            thinking: sanitizeSurrogates(block.thinking),",
+    "                            signature: block.thinkingSignature,",
+    "                        });",
+  ].join("\n");
+  const signatureReplacement = [
+    "                        const signature = /* " + marker + " */ model.provider === \"kimi\" &&",
+    "                            i !== latestAssistantIndex &&",
+    "                            typeof block.thinkingSignature === \"string\" &&",
+    "                            block.thinkingSignature.length > 256",
+    "                            ? \"oneclaw-omitted-thinking-signature\"",
+    "                            : block.thinkingSignature;",
+    "                        blocks.push({",
+    "                            type: \"thinking\",",
+    "                            thinking: sanitizeSurrogates(block.thinking),",
+    "                            signature,",
+    "                        });",
+  ].join("\n");
+
+  const transformHits = source.split(transformAnchor).length - 1;
+  const signatureHits = source.split(signatureAnchor).length - 1;
+  if (transformHits !== 1 || signatureHits !== 1) {
+    die(
+      `patchKimiAnthropicThinkingSignatures: anchor drift ` +
+      `(transform=${transformHits}, signature=${signatureHits})`,
+    );
+  }
+
+  const result = source
+    .replace(transformAnchor, transformReplacement)
+    .replace(signatureAnchor, signatureReplacement);
+  if (result === source || !result.includes(marker)) {
+    die("patchKimiAnthropicThinkingSignatures: 替换无效");
+  }
+  fs.writeFileSync(anthropicProvider, result, "utf-8");
+  log("已补丁 pi-ai Anthropic provider（Kimi 旧 thinking 签名瘦身）");
+}
+
+// 把仓库 builtin-skills/ 下的 skill 注入 openclaw bundled skills 目录。
+// 必须在 pruneOpenclawSkills() 之后调用，否则会被白名单裁掉。
+function injectBuiltinSkills(gatewayDir) {
+  const builtinDir = path.join(__dirname, "..", "builtin-skills");
+  if (!fs.existsSync(builtinDir)) return;
+
+  const skillDirs = fs
+    .readdirSync(builtinDir, { withFileTypes: true })
+    .filter((e) => e.isDirectory() && !e.name.startsWith("."))
+    .filter((e) => fs.existsSync(path.join(builtinDir, e.name, "SKILL.md")));
+  if (skillDirs.length === 0) return;
+
+  const destBase = path.join(gatewayDir, "node_modules", "openclaw", "skills");
+  ensureDir(destBase);
+
+  for (const entry of skillDirs) {
+    const dest = path.join(destBase, entry.name);
+    if (fs.existsSync(dest)) {
+      die(`builtin skill "${entry.name}" 与上游 openclaw skill 同名，请先从白名单移除`);
+    }
+    fs.cpSync(path.join(builtinDir, entry.name), dest, { recursive: true });
+  }
+  log(`已注入 ${skillDirs.length} 个 OneClaw 内置 skill`);
+}
+
+// ─── Step 2.5: 注入 bundled 插件（kimi-claw + kimi-search + qqbot + dingtalk） ───
 // 插件定义（id → 下载/缓存参数）
 //
 // 注：dingtalk-connector 由 extensions-mirror（外部插件扫描路径）回滚到 bundled
@@ -2257,11 +2780,28 @@ async function packGatewayAsar(gatewayDir, targetBase, platform, arch) {
   // 补丁 boundary-file-read：让 asar 内路径绕过 O_NOFOLLOW / realpathSync 校验
   patchAsarBoundaryCheck(gatewayDir);
 
-  // unpack 规则：仅二进制文件需要 unpack（dlopen 不支持 asar 虚拟路径）
+  // 补丁 pi-coding-agent skills.js：把 skill.baseDir 从 asar 内部路径
+  // 重写到 gateway.asar.unpacked/，子进程 -File 调用才能命中真实磁盘
+  patchSkillBaseDirToUnpacked(gatewayDir);
+
+  // 补丁 pi-coding-agent shell.js：在 win32 找不到 Git Bash 时 fallback 到
+  // cmd.exe，让 OneClaw 零依赖跑（不强制用户装 Git for Windows）
+  patchPiCodingAgentShellFallback(gatewayDir, platform);
+
+  // 补丁 openclaw exec-defaults：往 PowerShell -Command 前面注入
+  // OutputEncoding=UTF8，避免 Windows 中文系统下 stderr mojibake
+  patchPowerShellEncoding(gatewayDir);
+
+  // unpack 规则：
+  //   - 二进制：dlopen 不支持 asar 虚拟路径（.node/.exe/.dll/.dylib/.so/spawn-helper）
+  //   - skill 文件：openclaw 通过 SKILL.md 路径 dirname 推导出 baseDir，模型据此拼出
+  //     `powershell -File <baseDir>/scripts/xxx.ps1` 等命令；子进程不走 Electron 的
+  //     asar fs shim，所以 SKILL.md / scripts / references 都必须落在真实磁盘上，
+  //     模型 read 工具读 SKILL.md 走的路径也得是 unpacked 后的实文件
   // extensions/ 不再需要 unpack——boundary-file-read 补丁已处理 asar 路径校验
   log("正在打包 gateway.asar ...");
   await asar.createPackageWithOptions(gatewayDir, asarPath, {
-    unpack: "{**/*.node,**/*.exe,**/*.dll,**/*.dylib,**/*.so,**/spawn-helper}",
+    unpack: "{**/*.node,**/*.exe,**/*.dll,**/*.dylib,**/*.so,**/spawn-helper,**/skills/**}",
   });
 
   const asarSize = (fs.statSync(asarPath).size / 1048576).toFixed(1);
@@ -2314,6 +2854,103 @@ function countFilesRecursive(dir) {
   return count;
 }
 
+// ─── Step 7: 下载 OfficeCLI 二进制 ───
+
+/**
+ * OfficeCLI 平台映射：Node.js (platform, arch) → GitHub Release 资产名
+ */
+function getOfficecliAssetName(platform, arch) {
+  const map = {
+    "darwin-arm64": "officecli-mac-arm64",
+    "darwin-x64": "officecli-mac-x64",
+    "win32-x64": "officecli-win-x64.exe",
+    "win32-arm64": "officecli-win-arm64.exe",
+  };
+  const key = `${platform}-${arch}`;
+  const name = map[key];
+  if (!name) die(`OfficeCLI 不支持平台 ${key}`);
+  return name;
+}
+
+/**
+ * 下载 OfficeCLI 单体二进制并做 SHA256 校验
+ * - 缓存: .cache/officecli/<version>/<assetName>
+ * - 增量: <targetBase>/officecli/.officecli-stamp
+ * - 输出: <targetBase>/officecli/officecli[.exe]
+ */
+async function downloadOfficeCli(platform, arch, targetBase) {
+  const pkg = JSON.parse(fs.readFileSync(path.join(ROOT, "package.json"), "utf8"));
+  const version = pkg.oneclaw?.officecli;
+  if (!version) {
+    log("package.json oneclaw.officecli 未指定，跳过 OfficeCLI");
+    return;
+  }
+
+  const assetName = getOfficecliAssetName(platform, arch);
+  const outputDir = path.join(targetBase, "officecli");
+  const outputBin = path.join(outputDir, platform === "win32" ? "officecli.exe" : "officecli");
+
+  // 增量检测
+  const stampFile = path.join(outputDir, ".officecli-stamp");
+  const stampValue = `${version}-${platform}-${arch}`;
+  if (fs.existsSync(stampFile) && fs.readFileSync(stampFile, "utf-8").trim() === stampValue) {
+    log(`OfficeCLI 已是 ${stampValue}，跳过`);
+    return;
+  }
+
+  // 缓存目录
+  const cacheDir = path.join(ROOT, ".cache", "officecli", version);
+  ensureDir(cacheDir);
+
+  const baseUrl = `https://github.com/iOfficeAI/OfficeCLI/releases/download/v${version}`;
+  const cachedBin = path.join(cacheDir, assetName);
+  const cachedSums = path.join(cacheDir, "SHA256SUMS");
+
+  // 下载 SHA256SUMS（每版本只下一次）
+  if (!fs.existsSync(cachedSums)) {
+    log("下载 SHA256SUMS ...");
+    await downloadFileWithFallback([`${baseUrl}/SHA256SUMS`], cachedSums);
+  }
+
+  // 下载二进制（如果缓存中没有）
+  if (fs.existsSync(cachedBin)) {
+    log(`使用缓存: ${assetName}`);
+  } else {
+    log(`正在下载 ${assetName} ...`);
+    await downloadFileWithFallback([`${baseUrl}/${assetName}`], cachedBin);
+    log(`下载完成: ${assetName}`);
+  }
+
+  // SHA256 校验
+  const { createHash } = require("crypto");
+  const hash = createHash("sha256").update(fs.readFileSync(cachedBin)).digest("hex");
+  const sumsContent = fs.readFileSync(cachedSums, "utf-8");
+  const expectedLine = sumsContent.split("\n").find((l) => l.includes(assetName));
+  if (!expectedLine) {
+    die(`SHA256SUMS 中未找到 ${assetName}`);
+  }
+  const expectedHash = expectedLine.trim().split(/\s+/)[0];
+  if (hash !== expectedHash) {
+    // 校验失败，清除缓存重试
+    safeUnlink(cachedBin);
+    die(`SHA256 校验失败: ${assetName} (期望 ${expectedHash}, 实际 ${hash})`);
+  }
+  log(`SHA256 校验通过: ${assetName}`);
+
+  // 输出到目标目录
+  ensureDir(outputDir);
+  fs.copyFileSync(cachedBin, outputBin);
+
+  // macOS/Linux 设置可执行权限
+  if (platform !== "win32") {
+    fs.chmodSync(outputBin, 0o755);
+  }
+
+  // 写入版本戳
+  fs.writeFileSync(stampFile, stampValue);
+  log(`OfficeCLI v${version} → ${path.relative(ROOT, outputBin)}`);
+}
+
 // 验证目标目录关键文件是否存在
 function verifyOutput(targetPaths, opts) {
   log("正在验证输出文件...");
@@ -2335,6 +2972,7 @@ function verifyOutput(targetPaths, opts) {
       path.join(targetRel, "gateway.asar"),
       path.join(targetRel, "build-config.json"),
       path.join(targetRel, "app-icon.png"),
+      path.join(targetRel, "officecli", platform === "darwin" ? "officecli" : "officecli.exe"),
     ];
 
     // External channel plugins 不进 gateway.asar，需要单独校验 mirror 输出。
@@ -2368,6 +3006,7 @@ function verifyOutput(targetPaths, opts) {
     path.join(targetRel, "gateway", "node_modules", "clawhub", "bin", "clawdhub.js"),
     path.join(targetRel, "build-config.json"),
     path.join(targetRel, "app-icon.png"),
+    path.join(targetRel, "officecli", platform === "win32" ? "officecli.exe" : "officecli"),
   ];
 
   // Windows arm64 交叉编译时含 native addon 的插件可能注入失败，校验时降级为 warning
@@ -2521,6 +3160,17 @@ async function main() {
   log("Step 2.5: 注入 bundled 插件");
   await bundleAllPlugins(targetPaths, opts);
 
+  // Windows windowsHide 全局补丁——必须在 bundleAllPlugins 之后跑：kimi-claw 是
+  // 从 CDN tgz 下载的 minify 插件，它的 terminal-session-manager pipe 回退直接
+  // `spawn(e.shell, [], …)`（e.shell = Git Bash bash.exe），少了 windowsHide 会
+  // 在初始化 terminal session 时闪 conhost 黑窗；任何更早的 patch 都会被这一步
+  // 的解压覆盖掉。
+  patchWindowsOpenclawArtifacts(targetPaths.gatewayDir, opts.platform);
+
+  // pi-coding-agent shell.js: win32 找不到 Git Bash 时 fallback 到 cmd.exe（零依赖）
+  // 必须在 installDependencies 之后、ASAR 打包之前；非-ASAR 路径同样补一遍
+  patchPiCodingAgentShellFallback(targetPaths.gatewayDir, opts.platform);
+
   // 护栏：所有插件入口必须是 native——必须在 ASAR 打包前跑，因为 ASAR 会删散文件
   log("Step 2.6: 校验插件入口形态");
   assertPluginsNativeEntry(targetPaths);
@@ -2552,6 +3202,12 @@ async function main() {
   } else {
     log("Step 6: 跳过 ASAR 打包（未指定 --asar）");
   }
+
+  console.log();
+
+  // Step 7: 下载 OfficeCLI 二进制
+  log("Step 7: 下载 OfficeCLI 二进制");
+  await downloadOfficeCli(opts.platform, opts.arch, targetPaths.targetBase);
 
   console.log();
 

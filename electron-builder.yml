@@ -30,6 +30,9 @@ mac:
   hardenedRuntime: true
   gatekeeperAssess: false
   notarize: true
+  extraResources:
+    - from: "resources/targets/darwin-${arch}/officecli"
+      to: "resources/officecli"
 
 # 自动更新：指向阿里云 CDN
 publish:
@@ -46,6 +49,9 @@ dmg:
 win:
   target: nsis
   icon: assets/icon.ico
+  extraResources:
+    - from: "resources/targets/win32-${arch}/officecli"
+      to: "resources/officecli"
 
 nsis:
   oneClick: false
