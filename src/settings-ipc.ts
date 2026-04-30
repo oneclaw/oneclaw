@@ -1685,7 +1685,7 @@ export function registerSettingsIpc(opts: SettingsIpcOptions = {}): void {
     }
   });
 
-  // ── 列出全部 agent 下的会话用量（按累计 token 求和、updatedAt 倒序、最多 200 条） ──
+  // ── 列出全部 agent 下的会话估算用量（openclaw estimateTokens、updatedAt 倒序、最多 200 条） ──
   ipcMain.handle("settings:list-session-usage", async () => {
     try {
       const rows = await listSessionUsage();
@@ -2545,4 +2545,3 @@ function maskApiKey(key: string): string {
   if (!key || key.length <= 8) return key ? "••••••••" : "";
   return key.slice(0, 4) + "••••" + key.slice(-4);
 }
-

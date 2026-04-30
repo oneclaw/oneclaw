@@ -271,7 +271,7 @@ const dict: Record<Locale, Record<string, string>> = {
 
     // Settings: Session Usage
     "settings.sessionUsage.pageTitle": "会话用量",
-    "settings.sessionUsage.pageDesc": "按会话累计的 Token 用量（按最近更新倒序，最多 200 条）",
+    "settings.sessionUsage.pageDesc": "按会话累计的 Token 估算用量（使用 openclaw estimateTokens，按最近更新倒序，最多 200 条）",
     "settings.sessionUsage.empty": "暂无可统计的会话",
     "settings.sessionUsage.tokenIn": "输入",
     "settings.sessionUsage.tokenOut": "输出",
@@ -790,7 +790,7 @@ const dict: Record<Locale, Record<string, string>> = {
 
     // Settings: Session Usage
     "settings.sessionUsage.pageTitle": "Session Usage",
-    "settings.sessionUsage.pageDesc": "Cumulative token usage per session (sorted by most recent, up to 200 rows)",
+    "settings.sessionUsage.pageDesc": "Estimated cumulative token usage per session (using openclaw estimateTokens, sorted by most recent, up to 200 rows)",
     "settings.sessionUsage.empty": "No sessions to report",
     "settings.sessionUsage.tokenIn": "in",
     "settings.sessionUsage.tokenOut": "out",
