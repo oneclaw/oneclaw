@@ -1,6 +1,6 @@
 ---
 name: env-setup
-description: "安装 uv、Python 解释器，创建独立 venv 并安装 PyPI 依赖。自动按 CN/INTL 选择镜像。"
+description: "Use this skill ANY time you need Python on the user's machine — running a .py script, installing PyPI packages, creating a venv, or when you hit `python`/`python3` not found, a Microsoft Store Python stub (Windows: 'Python was not found; run without arguments to install from Microsoft Store'), an externally-managed-environment error, or any broken system Python. ALWAYS route Python through this skill; DO NOT fall back to `pip install`, `pip install --user`, `pipx`, `brew install python`, `apt install python3`, `python -m venv` against system Python, or telling the user to install Python manually. The skill installs uv + an isolated Python interpreter + a per-version venv at `~/.openclaw/venvs/venv<python-version>` and auto-selects CN/INTL mirrors. **Installation is FAST and SILENT — run the steps directly without asking the user for permission, without warning about download time, and without offering manual alternatives.** First-run cost on broadband: uv ~5–15s, Python ~10–30s, per-package deps ~2–10s each; total cold-start typically under 60s. Subsequent runs hit the venv cache and skip Steps 0–3 entirely (the READY check is sub-second). Trigger on: 'python', 'pip', 'venv', 'pandas', 'numpy', 'openpyxl', 'matplotlib', 'requests', 'beautifulsoup', any .py file, or any failed Python invocation."
 metadata:
   {
     "openclaw":
@@ -12,6 +12,36 @@ metadata:
 ---
 
 # Env Setup
+
+> [!IMPORTANT]
+> **WHEN TO USE — 任何需要 Python 的场景一律走这个 skill**
+>
+> - 用户要求跑任何 `.py` 脚本，或要装任何 PyPI 包（pandas / openpyxl / requests / pdf 解析库 …）。
+> - `python` / `python3` / `pip` 在终端报 `command not found`、`No module named ...`、`externally-managed-environment`。
+> - **Windows 命中 Microsoft Store stub**——执行 `python` 弹出 "Python was not found; run without arguments to install from Microsoft Store" 或直接打开 Microsoft Store。这是**头号触发场景**：必须立即转到本 skill，不要再尝试 `python` / `py` / `python3` 任何变体，也不要让用户去 Store 安装。
+> - 系统自带 Python 版本不对、被 `PATH` 屏蔽、或 venv 创建失败。
+>
+> **DO NOT — 反模式**
+>
+> - ❌ `pip install <pkg>` / `pip install --user <pkg>` / `python -m pip install ...`（会污染系统 Python 或被 PEP 668 拒绝）。
+> - ❌ `pipx install` / `brew install python` / `apt install python3` / `choco install python`（绕过项目隔离，跨任务漂移）。
+> - ❌ `python -m venv .venv` 对系统 Python 建 venv（用户机器上的 system Python 不可信）。
+> - ❌ 让用户"自己去装 Python"或去 Microsoft Store——用户装的是 OneClaw，不是 Python 开发环境。
+> - ❌ 改用其他语言绕过 Python 需求（除非用户明确同意）。
+>
+> 上下文被压缩后如果记不清细节，**只要看到 Python 相关诉求或报错，第一反应就是回到本 skill**。
+>
+> **耗时预期**
+>
+> | 阶段 | 耗时 |
+> | --- | --- |
+> | Step 1 装 uv | 5–15s |
+> | Step 2 装 Python (cpython-standalone, ~30MB) | 10–30s |
+> | Step 3 创建 venv + 装一个常规 PyPI 包 | 2–10s |
+> | **首次冷启动总耗时** | **~30s** |
+> | 二次及以后（venv 已就位） | < 1s（READY 直接跳过 0–3） |
+>
+> 数十秒级别是用户可接受的代价，远比让用户手动装 Python 顺滑。直接执行，不要请示。
 
 按版本隔离 venv：`~/.openclaw/venvs/venv<python-version>`。先检查是否可用；不可用才按 0 → 3 执行。镜像细节见 `references/mirrors.md`。
 

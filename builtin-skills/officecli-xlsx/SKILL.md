@@ -43,7 +43,7 @@ metadata:
 OfficeCLI is incremental: every `add`, `set`, and `remove` immediately modifies the file and returns output. Use this to catch errors early:
 
 1. **Structural or risky operation: one command, then read the output.** Check the exit code before proceeding.
-2. **Repetitive low-risk edits: use `officecli batch` in small chunks (8-12 ops).** Read the batch output before the next chunk.
+2. **Repetitive low-risk edits: use `officecli batch` (default ≤ 50 ops/block; pure value-set batches run fine at 80+ ops, verified at 82×80-op chunks with 0 failures).** Drop to ≤ 12 only for mixed formula + resident scenarios. Read the batch output before the next chunk.
 3. **Non-zero exit = stop and fix immediately.** Do not continue building on a broken state.
 4. **Verify after structural operations.** After adding a sheet, chart, pivot table, or named range, run `get` or `validate` before building on top of it.
 
@@ -232,6 +232,41 @@ Batch fields: `command`, `path`, `parent`, `type`, `from`, `to`, `index`, `after
 
 `parent` = container to add into (for `add`). `path` = element to modify (for `set`, `get`, `remove`, `move`, `swap`).
 
+## Performance: CSV Bulk Import via Python (fast path)
+
+For 600-6000+ cells from raw data (CSV, transformed data, scraped tables), `officecli import` is the simplest path when the data is a clean CSV with a header row:
+
+```bash
+officecli import data.xlsx "/Raw Data" --file data.csv --header
+```
+
+If the data is **not** a clean header+rows CSV — e.g. it needs filtering, type conversion, computed columns, or comes from a Python pipeline — generate the batch JSON in Python and pipe through `officecli batch`. This is dramatically faster than emitting hundreds of individual `set` commands (a 648-row / 6490-cell load completes in ~30s with zero failures).
+
+```python
+# gen_batch.py — produces batch chunks of 80 value-set ops each
+import csv, json
+ops = []
+with open("data.csv") as f:
+    reader = csv.reader(f)
+    for r, row in enumerate(reader, start=1):
+        for c, val in enumerate(row):
+            col = chr(ord('A') + c)
+            ops.append({"command": "set", "path": f"/Data/{col}{r}",
+                        "props": {"value": val}})
+for i in range(0, len(ops), 80):
+    print(json.dumps(ops[i:i+80]))
+```
+
+```bash
+python gen_batch.py | while IFS= read -r chunk; do
+  printf '%s\n' "$chunk" | officecli batch data.xlsx
+done
+```
+
+Tune chunk size: start at 80 ops, drop to 40 if any chunk fails. This recipe is **pure value injection** — apply numeric type inference, formulas, and formatting afterward via targeted `set` commands.
+
+> Need Python and don't have it set up? Use the `env-setup` skill — never `pip install` against system Python.
+
 ---
 
 ## Known Issues
@@ -243,7 +278,8 @@ Batch fields: `command`, `path`, `parent`, `type`, `from`, `to`, `index`, `after
 | **Formula cached values for new formulas** | OfficeCLI writes formula strings natively. For newly added formulas, the cached value may not update until the file is opened in Excel/LibreOffice. Existing formula cached values are preserved. |
 | **No auto-fit column width** | No "auto-fit" column width based on content. Set `width` explicitly on each column. |
 | **Shell quoting in batch with echo** | `echo '...' \| officecli batch` fails when JSON values contain apostrophes or `$`. Use heredoc: `cat <<'EOF' \| officecli batch data.xlsx`. |
-| **Batch intermittent failure** | Batch+resident mode has a high failure rate (up to 1-in-3 in some sessions). For maximum reliability: (1) prefer batch WITHOUT resident mode, (2) keep batches to 8-12 operations, (3) always check batch output for failures, (4) retry failed operations individually. For critical formulas (especially cross-sheet), consider using individual `set` commands which have 100% reliability. |
+| **Cross-sheet formula deadlock** | Observed deadlocks (CPU 99%, `main pipe busy`, `kill -9` required) for cross-sheet formula batches **even at 3–5 ops** — the "≤ 12 ops safe" guideline is **not reliable** for cross-sheet formulas. Rule: **cross-sheet formulas go through non-resident one-big-batch OR individual `set`** (100% reliable). Pure value-set batches (no formulas) stay reliable at 50–80+ ops even in resident mode. |
+| **Batch intermittent failure (resident + mixed formula)** | Batch+resident mode with mixed formulas has a higher failure rate. For maximum reliability: (1) prefer batch WITHOUT resident mode for mixed-formula workloads, (2) keep mixed-formula batches to ≤ 12 ops, (3) always check batch output for failures, (4) retry failed operations individually. Pure value-set batches do not need this restriction. |
 | **Data bar default min/max invalid** | Creating a data bar without `--prop min=N --prop max=N` produces empty `val` attributes in cfvo elements, which may be rejected by strict XML validators or Excel. Always specify explicit min and max values. |
 | **Cell protection requires sheet protection** | `locked` and `formulahidden` properties only take effect when the sheet itself is protected. |
 

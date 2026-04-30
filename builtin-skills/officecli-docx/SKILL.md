@@ -42,7 +42,7 @@ Verify: `officecli --version`. If not found after install, open a new terminal.
 OfficeCLI is incremental — every command immediately modifies the file.
 
 1. Structural or risky operation: run one command, then check output before proceeding.
-2. Repetitive low-risk `add`/`set` operations: use `officecli batch` in small chunks (8-12 ops), then read the batch output.
+2. Repetitive low-risk `add`/`set` operations: use `officecli batch` in chunks (default up to ~12 ops; pure content add can go higher), then read the batch output.
 3. Non-zero exit = stop and fix immediately.
 4. Verify after structural operations with `get` or `validate`.
 
@@ -54,6 +54,51 @@ officecli add doc.docx ...        # All commands run fast
 officecli set doc.docx ...
 officecli close doc.docx          # Write to disk
 ```
+
+---
+
+## Performance: Bulk Insert via Python (fast path)
+
+**Reach for Python pipeline only in these cases — for normal generation (≤ ~300 paragraphs of agent-authored content), inline `officecli batch` with reasonable chunk size is faster overall:**
+
+1. **Very large documents (500+ paragraphs)** where inline batch chunks would exceed ~6 tool turns.
+2. **Content is already in a Python data pipeline** — CSV / JSON / scraped tables / Markdown parsed to AST. The script you'd write to feed batch JSON is the same script you'd write anyway.
+3. **Schema-invalid emit cases** where even `raw-set` cannot fix the output — post-patching the .docx with Python `zipfile` + XML edit is acceptable: open the archive, mutate `word/document.xml`, write back.
+
+For agent-authored content under ~300 paragraphs, prefer inline batch with chunks of ~10–12 ops; the LLM round-trip on a few extra chunks is cheaper than the script-write + execute overhead.
+
+```python
+# gen_batch.py — produces batch chunks of 20 add-paragraph ops each
+import json
+
+paragraphs = [
+    {"text": "Executive Summary", "style": "Heading1"},
+    {"text": "Quarterly results exceeded expectations...", "style": "Normal"},
+    # ... hundreds more
+]
+
+ops = []
+for p in paragraphs:
+    ops.append({
+        "command": "add",
+        "parent": "/body",
+        "type": "paragraph",
+        "props": {"text": p["text"], "style": p["style"]},
+    })
+
+for i in range(0, len(ops), 20):
+    print(json.dumps(ops[i:i+20]))
+```
+
+```bash
+python gen_batch.py | while IFS= read -r chunk; do
+  printf '%s\n' "$chunk" | officecli batch doc.docx
+done
+```
+
+Tune chunk size: start at 20 ops, drop to 10 if any chunk fails. Apply heavy formatting (font, color, complex shading) afterward via targeted `set` to avoid bloating the batch payload.
+
+> Need Python and don't have it set up? Use the `env-setup` skill — never `pip install` against system Python.
 
 ---
 
