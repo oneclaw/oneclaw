@@ -2,11 +2,11 @@ import { app, ipcMain, session, shell } from "electron";
 import * as os from "os";
 import { spawn } from "child_process";
 import {
+  resolveGatewayCwd,
+  resolveGatewayEntry,
+  resolveGatewayPackageDir,
   resolveNodeBin,
   resolveNodeExtraEnv,
-  resolveGatewayEntry,
-  resolveGatewayCwd,
-  resolveGatewayPackageDir,
   resolveResourcesPath,
   resolveUserConfigPath,
   resolveUserStateDir,
@@ -143,6 +143,11 @@ export type PairingRequestView = {
 
 export type FeishuPairingRequestView = PairingRequestView;
 
+type FeishuRejectedPairingStore = {
+  version: 1;
+  codes: string[];
+};
+
 type FeishuAuthorizedEntryView = {
   kind: "user" | "group";
   id: string;
@@ -159,29 +164,15 @@ const FEISHU_CHANNEL = FEISHU_CHANNEL_ID;
 const WILDCARD_ALLOW_ENTRY = "*";
 const FEISHU_ALIAS_STORE_FILE = "feishu-allowFrom-aliases.json";
 const FEISHU_REJECTED_PAIRING_STORE_FILE = "feishu-rejected-pairing-codes.json";
-const FEISHU_FIRST_PAIRING_WINDOW_FILE = "feishu-first-pairing-window.json";
 const WECOM_REJECTED_PAIRING_STORE_FILE = "wecom-rejected-pairing-codes.json";
-const FEISHU_FIRST_PAIRING_WINDOW_TTL_MS = 10 * 60 * 1000;
 const FEISHU_OPEN_API_BASE = "https://open.feishu.cn/open-apis";
 const FEISHU_TOKEN_SAFETY_MS = 60_000;
-
-type FeishuFirstPairingWindowState = {
-  openedAtMs: number;
-  expiresAtMs: number;
-  consumedAtMs: number | null;
-  consumedBy: string;
-};
 
 type FeishuTenantTokenCache = {
   appId: string;
   appSecret: string;
   token: string;
   expireAt: number;
-};
-
-type FeishuRejectedPairingStore = {
-  version: 1;
-  codes: string[];
 };
 
 let feishuTenantTokenCache: FeishuTenantTokenCache | null = null;
@@ -252,7 +243,7 @@ export function registerSettingsIpc(opts: SettingsIpcOptions = {}): void {
     opts.requestGatewayRestart?.();
   };
   // 读取 openclaw.json 中 kimi-webbridge skill 的 enabled 字段（webbridge-precheck 用）。
-  // 用户从 chat-ui Skills 页关掉 → enabled=false → precheck 视为 missing.skill，
+  // 用户可以单独 disable/enable 该 skill，跟 browser.defaultProfile 是两条独立的开关；
   // 触发 Settings → 高级"需要修复"banner，修复时 applyBrowserModeConfig 会改回 true。
   const readKimiWebbridgeSkillEnabled = (): boolean | undefined => {
     try {
@@ -264,7 +255,7 @@ export function registerSettingsIpc(opts: SettingsIpcOptions = {}): void {
   };
   // 当前浏览器模式（来自 detectBrowserMode）。precheck 用它区分：
   //   webbridge + enabled=false = 漂移（要修复）
-  //   openclaw/user + enabled=false = 当前模式预期值（不要把切换前的状态当 bug）
+  //   非 webbridge + enabled=false = 切换前的初始状态（不算漂移）
   const getCurrentBrowserMode = (): "webbridge" | "openclaw" | "user" => {
     try {
       return detectBrowserMode(readUserConfig());
@@ -272,11 +263,6 @@ export function registerSettingsIpc(opts: SettingsIpcOptions = {}): void {
       return "openclaw";
     }
   };
-
-  // precheck 的 readExtensionStates 只透传 extId，但 getExtensionStates 现在要求完整 spec
-  // （需要 crxPath/crxVersion 才能判断"JSON 是否指向当前 OneClaw 内置 CRX"）。
-  // 这个 thunk 把 extId 升级成 spec：crxPath/crxVersion 缺失时给空串，让所有 configured 检查
-  // 直接判 false（≈ 缺扩展），上层会触发修复路径。
   const specFromExtId = (extId: string): ExtensionSpec => {
     const meta = readWebbridgeCrxMetadata();
     return {
@@ -285,12 +271,10 @@ export function registerSettingsIpc(opts: SettingsIpcOptions = {}): void {
       crxVersion: meta?.version ?? "",
     };
   };
-
-  // 修复完扩展后主动打开默认浏览器 + 引导页（带箭头指向「启用扩展」按钮）。
+  // 在用户的默认浏览器里打开 enable-guide 页面（修复成功且扩展刚装上时调用）。
   // setup/webbridge-enable-guide.html 在 packaged 时被打进 app.asar，shell.openExternal
-  // 不能直接打开 asar 内文件——所以读出来写到 os.tmpdir() 后再 open。
-  // 浏览器关时这一步会同时启动浏览器，Chrome 启动会读 External JSON 弹「启用扩展」prompt，
-  // 我们的引导页紧随其后展示「请点其中『启用扩展』」的视觉指引。
+  // 不能直接打开 asar 内的文件，所以先读出来写到系统临时目录，再用 file:// 打开。
+  // ?lang=zh|en, ?browser=chrome|edge —— 让 enable-guide 显示对应的语言和浏览器图标。
   const openWebbridgeEnableGuideInBrowser = (): boolean => {
     try {
       const sourcePath = path.join(
@@ -306,18 +290,10 @@ export function registerSettingsIpc(opts: SettingsIpcOptions = {}): void {
       const content = fs.readFileSync(sourcePath, "utf-8");
       fs.writeFileSync(tempPath, content, "utf-8");
       const lang = app.getLocale().toLowerCase().startsWith("zh") ? "zh" : "en";
-      // 引导页菜单步骤要按 Chrome / Edge 区分（图标 ⋮/⋯ + 标签「扩展程序 / 扩展」），
-      // 所以把当前默认浏览器透传给前端；前端没有该 param 时会回退到 UA 猜测。
       const def = getDefaultBrowser();
       const browserParam =
-        def?.target.id === "edge"
-          ? "edge"
-          : def?.target.id === "chrome"
-            ? "chrome"
-            : "";
-      const qs = browserParam
-        ? `?lang=${lang}&browser=${browserParam}`
-        : `?lang=${lang}`;
+        def?.target.id === "edge" ? "edge" : def?.target.id === "chrome" ? "chrome" : "";
+      const qs = browserParam ? `?lang=${lang}&browser=${browserParam}` : `?lang=${lang}`;
       void shell.openExternal(`file://${tempPath}${qs}`);
       return true;
     } catch (err) {
@@ -508,20 +484,11 @@ export function registerSettingsIpc(opts: SettingsIpcOptions = {}): void {
       verifyProvider({ ...params, proxyPort: getProxyPort() }));
   });
 
-  // ── 读取最新分享文案（服务端维护中英文版本） ──
-  ipcMain.handle("settings:get-share-copy", async () => {
-    try {
-      return {
-        success: true,
-        data: SHARE_COPY_PAYLOAD,
-      };
-    } catch (err: any) {
-      return {
-        success: false,
-        message: err.message || String(err),
-      };
-    }
-  });
+  // ── 读取分享文案（内嵌，跟随客户端版本发布） ──
+  ipcMain.handle("settings:get-share-copy", () => ({
+    success: true,
+    data: SHARE_COPY_PAYLOAD,
+  }));
 
   // ── 保存 provider 配置 ──
   ipcMain.handle("settings:save-provider", async (_event, params) => {
@@ -601,8 +568,14 @@ export function registerSettingsIpc(opts: SettingsIpcOptions = {}): void {
             const existingProv = config.models.providers[provKey];
 
             if (existingProv) {
-              // provider 已存在 → 追加模型
-              // keepProxyAuth 时不覆写 apiKey/baseUrl（OAuth 代理已就绪）
+              const existingModels = Array.isArray(existingProv.models) ? existingProv.models : [];
+              const hasModel = existingModels.some((m: any) => {
+                const id = typeof m === "string" ? m : m?.id;
+                return id === modelID;
+              });
+              if (hasModel) {
+                return { success: false, message: `模型已存在: ${provKey}/${modelID}` };
+              }
               if (!keepProxyAuth) {
                 existingProv.apiKey = apiKey;
                 if (sub) {
@@ -610,15 +583,8 @@ export function registerSettingsIpc(opts: SettingsIpcOptions = {}): void {
                   existingProv.api = sub.api;
                 }
               }
-              // 追加模型（如果不存在）
               if (!Array.isArray(existingProv.models)) existingProv.models = [];
-              const hasModel = existingProv.models.some((m: any) => {
-                const id = typeof m === "string" ? m : m?.id;
-                return id === modelID;
-              });
-              if (!hasModel) {
-                existingProv.models.push({ id: modelID, name: modelID, input: ["text", "image"] });
-              }
+              existingProv.models.push({ id: modelID, name: modelID, input: ["text", "image"] });
             } else {
               // provider 不存在 → 用 saveMoonshotConfig 创建
               const prevPrimary = config.agents.defaults.model.primary;
@@ -657,17 +623,18 @@ export function registerSettingsIpc(opts: SettingsIpcOptions = {}): void {
             const existingProv = config.models.providers[configKey];
 
             if (existingProv) {
-              // provider 已存在 → 更新 apiKey，追加模型
-              existingProv.apiKey = apiKey;
-              if (!Array.isArray(existingProv.models)) existingProv.models = [];
-              const hasModel = existingProv.models.some((m: any) => {
+              const existingModels = Array.isArray(existingProv.models) ? existingProv.models : [];
+              const hasModel = existingModels.some((m: any) => {
                 const id = typeof m === "string" ? m : m?.id;
                 return id === modelID;
               });
-              if (!hasModel) {
-                const input = supportImage !== false ? ["text", "image"] : ["text"];
-                existingProv.models.push({ id: modelID, name: modelID, input });
+              if (hasModel) {
+                return { success: false, message: `模型已存在: ${configKey}/${modelID}` };
               }
+              existingProv.apiKey = apiKey;
+              if (!Array.isArray(existingProv.models)) existingProv.models = [];
+              const input = supportImage !== false ? ["text", "image"] : ["text"];
+              existingProv.models.push({ id: modelID, name: modelID, input });
             } else {
               // provider 不存在 → 创建新 provider entry
               config.models.providers[configKey] = buildProviderConfig(provider, apiKey, modelID, baseURL, api, supportImage, customPreset);
@@ -744,7 +711,7 @@ export function registerSettingsIpc(opts: SettingsIpcOptions = {}): void {
       const config = readUserConfig();
       const feishu = config?.channels?.feishu ?? {};
       const enabled = isFeishuEnabled(config);
-      const dmPolicy = normalizeDmPolicy(feishu?.dmPolicy, "pairing");
+      const dmPolicy = normalizeDmPolicy(feishu?.dmPolicy, "open");
       const allowFrom = normalizeAllowFromEntries(feishu?.allowFrom);
       const dmPolicyOpen = dmPolicy === "open" || allowFrom.includes(WILDCARD_ALLOW_ENTRY);
       const dmScope = normalizeDmScope(config?.session?.dmScope, "main");
@@ -775,7 +742,7 @@ export function registerSettingsIpc(opts: SettingsIpcOptions = {}): void {
     const { appId, appSecret, enabled } = params;
     const dmPolicy = normalizeDmPolicy(
       params?.dmPolicy,
-      params?.dmPolicyOpen === true ? "open" : "pairing"
+      params?.dmPolicyOpen === false ? "pairing" : "open"
     );
     const dmScopeInput = params?.dmScope;
     const groupPolicy = normalizeGroupPolicy(params?.groupPolicy, "allowlist");
@@ -804,8 +771,6 @@ export function registerSettingsIpc(opts: SettingsIpcOptions = {}): void {
         if (enabled === false) {
           setFeishuChannelEnabled(config, false);
           writeUserConfigAndRestart(config);
-          // 禁用飞书时关闭“首配自动批准”窗口，但保留已消费标记，防止重复自动批准。
-          closeFeishuFirstPairingWindow();
           return { success: true };
         }
 
@@ -864,8 +829,6 @@ export function registerSettingsIpc(opts: SettingsIpcOptions = {}): void {
           config.session.dmScope = dmScope;
         }
         writeUserConfigAndRestart(config);
-        // 保存完成后按当前策略维护首配窗口，确保仅在 pairing 且无授权用户时才开启。
-        reconcileFeishuFirstPairingWindow(config);
         return { success: true };
       } catch (err: any) {
         return { success: false, message: err.message || String(err) };
@@ -1119,7 +1082,8 @@ export function registerSettingsIpc(opts: SettingsIpcOptions = {}): void {
     );
   });
 
-  // ── 列出企业微信待审批配对请求（走 openclaw pairing list） ──
+  // ── 列出企业微信已授权用户与群聊 ──
+  // ── 列出企业微信待审批配对请求（按需 spawn `openclaw pairing list`） ──
   ipcMain.handle("settings:list-wecom-pairing", async () => {
     const listed = await listWecomPairingRequests();
     return {
@@ -1129,7 +1093,16 @@ export function registerSettingsIpc(opts: SettingsIpcOptions = {}): void {
     };
   });
 
-  // ── 列出企业微信已授权用户与群聊 ──
+  // ── 批准企业微信配对请求 ──
+  ipcMain.handle("settings:approve-wecom-pairing", async (_event, params) => {
+    return approveWecomPairingRequest(params);
+  });
+
+  // ── 拒绝企业微信配对请求（本地 sidecar 忽略） ──
+  ipcMain.handle("settings:reject-wecom-pairing", async (_event, params) => {
+    return rejectWecomPairingRequest(params);
+  });
+
   ipcMain.handle("settings:list-wecom-approved", async () => {
     try {
       const config = readUserConfig();
@@ -1148,14 +1121,56 @@ export function registerSettingsIpc(opts: SettingsIpcOptions = {}): void {
     }
   });
 
-  // ── 批准企业微信配对请求（走 openclaw pairing approve） ──
-  ipcMain.handle("settings:approve-wecom-pairing", async (_event, params) => {
-    return approveWecomPairingRequest(params);
+  // ── 添加企业微信用户白名单条目 ──
+  ipcMain.handle("settings:add-wecom-user-allow-from", async (_event, params) => {
+    const id = typeof params?.id === "string" ? params.id.trim() : "";
+    if (!id) {
+      return { success: false, message: "用户 ID 不能为空。" };
+    }
+
+    try {
+      const config = readUserConfig();
+      config.channels ??= {};
+      config.channels[WECOM_CHANNEL_ID] ??= {};
+      const currentAllowFrom = normalizeAllowFromEntries(config.channels[WECOM_CHANNEL_ID].allowFrom)
+        .filter((entry) => entry !== WILDCARD_ALLOW_ENTRY);
+      const nextAllowFrom = dedupeEntries([...currentAllowFrom, id]);
+      if (nextAllowFrom.length > 0) {
+        config.channels[WECOM_CHANNEL_ID].allowFrom = nextAllowFrom;
+      }
+      const nextStoreAllowFrom = dedupeEntries([
+        ...readChannelAllowFromStore(WECOM_CHANNEL_ID),
+        id,
+      ]);
+      writeChannelAllowFromStore(WECOM_CHANNEL_ID, nextStoreAllowFrom);
+      writeUserConfigAndRestart(config);
+      return { success: true };
+    } catch (err: any) {
+      return { success: false, message: err.message || String(err) };
+    }
   });
 
-  // ── 拒绝企业微信配对请求（本地忽略 pairing code） ──
-  ipcMain.handle("settings:reject-wecom-pairing", async (_event, params) => {
-    return rejectWecomPairingRequest(params);
+  // ── 添加企业微信群白名单条目 ──
+  ipcMain.handle("settings:add-wecom-group-allow-from", async (_event, params) => {
+    const id = typeof params?.id === "string" ? params.id.trim() : "";
+    if (!id) {
+      return { success: false, message: "群 ID 不能为空。" };
+    }
+
+    try {
+      const config = readUserConfig();
+      config.channels ??= {};
+      config.channels[WECOM_CHANNEL_ID] ??= {};
+      const nextGroupAllowFrom = dedupeEntries([
+        ...normalizeAllowFromEntries(config.channels[WECOM_CHANNEL_ID].groupAllowFrom),
+        id,
+      ]);
+      config.channels[WECOM_CHANNEL_ID].groupAllowFrom = nextGroupAllowFrom;
+      writeUserConfigAndRestart(config);
+      return { success: true };
+    } catch (err: any) {
+      return { success: false, message: err.message || String(err) };
+    }
   });
 
   // ── 删除企业微信已授权用户/群聊 ──
@@ -1301,16 +1316,27 @@ export function registerSettingsIpc(opts: SettingsIpcOptions = {}): void {
     }
   });
 
-  // ── 列出飞书待审批配对请求（走 openclaw pairing list，避免重复实现存储协议） ──
+  // ── 列出飞书已授权列表（用户 + 群聊，优先展示可读名称） ──
+  // ── 列出飞书待审批配对请求（按需 spawn `openclaw pairing list`） ──
   ipcMain.handle("settings:list-feishu-pairing", async () => {
     const listed = await listFeishuPairingRequests();
-    if (!listed.success) {
-      return { success: false, message: listed.message || "读取飞书待审批列表失败" };
-    }
-    return { success: true, data: { requests: listed.requests } };
+    return {
+      success: listed.success,
+      data: listed.success ? { requests: listed.requests } : undefined,
+      message: listed.message,
+    };
   });
 
-  // ── 列出飞书已授权列表（用户 + 群聊，优先展示可读名称） ──
+  // ── 批准飞书配对请求 ──
+  ipcMain.handle("settings:approve-feishu-pairing", async (_event, params) => {
+    return approveFeishuPairingRequest(params);
+  });
+
+  // ── 拒绝飞书配对请求（本地 sidecar 忽略） ──
+  ipcMain.handle("settings:reject-feishu-pairing", async (_event, params) => {
+    return rejectFeishuPairingRequest(params);
+  });
+
   ipcMain.handle("settings:list-feishu-approved", async () => {
     try {
       const config = readUserConfig();
@@ -1337,16 +1363,6 @@ export function registerSettingsIpc(opts: SettingsIpcOptions = {}): void {
     }
   });
 
-  // ── 批准飞书配对请求（走 openclaw pairing approve，统一写入 allowlist store） ──
-  ipcMain.handle("settings:approve-feishu-pairing", async (_event, params) => {
-    return approveFeishuPairingRequest(params);
-  });
-
-  // ── 拒绝飞书配对请求（openclaw 暂无 reject 命令，使用本地 sidecar 忽略该 pairing code） ──
-  ipcMain.handle("settings:reject-feishu-pairing", async (_event, params) => {
-    return rejectFeishuPairingRequest(params);
-  });
-
   // ── 添加群聊白名单条目（仅允许群 ID） ──
   ipcMain.handle("settings:add-feishu-group-allow-from", async (_event, params) => {
     const id = String(params?.id ?? "").trim();
@@ -1363,6 +1379,35 @@ export function registerSettingsIpc(opts: SettingsIpcOptions = {}): void {
         id,
       ]);
       config.channels.feishu.groupAllowFrom = nextGroupAllowFrom;
+      writeUserConfigAndRestart(config);
+      return { success: true };
+    } catch (err: any) {
+      return { success: false, message: err.message || String(err) };
+    }
+  });
+
+  // ── 添加用户白名单条目（飞书 open_id / union_id） ──
+  ipcMain.handle("settings:add-feishu-user-allow-from", async (_event, params) => {
+    const id = String(params?.id ?? "").trim();
+    if (!id) {
+      return { success: false, message: "用户 ID 不能为空。" };
+    }
+    if (!looksLikeFeishuUserId(id)) {
+      return { success: false, message: "仅允许填写以 ou_ 开头的飞书用户 open_id。" };
+    }
+
+    try {
+      const config = readUserConfig();
+      config.channels ??= {};
+      config.channels.feishu ??= {};
+      const currentAllowFrom = normalizeAllowFromEntries(config.channels.feishu.allowFrom)
+        .filter((entry) => entry !== WILDCARD_ALLOW_ENTRY);
+      const nextAllowFrom = dedupeEntries([...currentAllowFrom, id]);
+      if (nextAllowFrom.length > 0) {
+        config.channels.feishu.allowFrom = nextAllowFrom;
+      }
+      const nextStoreAllowFrom = dedupeEntries([...readFeishuAllowFromStore(), id]);
+      writeFeishuAllowFromStore(nextStoreAllowFrom);
       writeUserConfigAndRestart(config);
       return { success: true };
     } catch (err: any) {
@@ -1675,13 +1720,13 @@ export function registerSettingsIpc(opts: SettingsIpcOptions = {}): void {
                 extensionId: readWebbridgeExtensionId(),
                 fileExists: fs.existsSync,
                 readExtensionStates: (extId) =>
-                getExtensionStates(specFromExtId(extId), {
-                  processExec: DEFAULT_PROCESS_EXEC,
-                  processCheckBrowserId: def?.target.id,
-                }),
+                  getExtensionStates(specFromExtId(extId), {
+                    processExec: DEFAULT_PROCESS_EXEC,
+                    processCheckBrowserId: def?.target.id,
+                  }),
                 getDefaultBrowser,
                 readSkillEnabled: readKimiWebbridgeSkillEnabled,
-        currentBrowserMode: getCurrentBrowserMode(),
+                currentBrowserMode: getCurrentBrowserMode(),
               });
               if (!pre.ok) {
                 return {
@@ -1929,7 +1974,7 @@ export function registerSettingsIpc(opts: SettingsIpcOptions = {}): void {
       // 4. 选择性修复：只对真正缺的项跑安装；扩展只装到默认浏览器
       const summary = await runWebbridgeSetupTask({
         installer: () => installWebbridge({ force: false }),
-        installExtensions: async (id) => {
+        installExtensions: async () => {
           const spec = resolveWebbridgeExtensionSpec();
           if (!spec) {
             log.error(
@@ -2071,7 +2116,7 @@ export function registerSettingsIpc(opts: SettingsIpcOptions = {}): void {
       // 4. 选择性修复：按 precheck 缺啥跑啥
       const summary = await runWebbridgeSetupTask({
         installer: () => installWebbridge({ force: false }),
-        installExtensions: async (id) => {
+        installExtensions: async () => {
           const spec = resolveWebbridgeExtensionSpec();
           if (!spec) {
             log.error(
@@ -2213,12 +2258,16 @@ export function registerSettingsIpc(opts: SettingsIpcOptions = {}): void {
   });
 
   // ── 安装 CLI（老用户迁移入口，默认不阻断其它设置流程） ──
+  // 原始 error message 含绝对路径，只上报分类枚举给分析侧。
   ipcMain.handle("settings:install-cli", async () => {
     const result = await installCli();
     if (result.success) {
       analytics.track("cli_installed", { method: "settings" });
     } else {
-      analytics.track("cli_install_failed", { method: "settings", error: result.message });
+      analytics.track("cli_install_failed", {
+        method: "settings",
+        error_type: analytics.classifyErrorType(result.message),
+      });
     }
     return result;
   });
@@ -2229,7 +2278,10 @@ export function registerSettingsIpc(opts: SettingsIpcOptions = {}): void {
     if (result.success) {
       analytics.track("cli_uninstalled", { method: "settings" });
     } else {
-      analytics.track("cli_uninstall_failed", { method: "settings", error: result.message });
+      analytics.track("cli_uninstall_failed", {
+        method: "settings",
+        error_type: analytics.classifyErrorType(result.message),
+      });
     }
     return result;
   });
@@ -2324,41 +2376,6 @@ export function registerSettingsIpc(opts: SettingsIpcOptions = {}): void {
     }
   });
 
-}
-
-// 读取当前飞书配对模式状态，供主进程轮询器判断是否需要继续监听。
-export function getFeishuPairingModeState(): {
-  enabled: boolean;
-  dmPolicy: "open" | "pairing" | "allowlist";
-  approvedUserCount: number;
-} {
-  const config = readUserConfig();
-  const feishu = config?.channels?.feishu ?? {};
-  const enabled = isFeishuEnabled(config);
-  const dmPolicy = normalizeDmPolicy(feishu?.dmPolicy, "pairing");
-  const approvedUserIds = collectApprovedUserIds(FEISHU_CHANNEL, feishu?.allowFrom);
-  return {
-    enabled,
-    dmPolicy,
-    approvedUserCount: approvedUserIds.length,
-  };
-}
-
-// 读取当前企业微信配对模式状态，供主进程轮询器判断是否需要继续监听。
-export function getWecomPairingModeState(): {
-  enabled: boolean;
-  dmPolicy: "open" | "pairing" | "allowlist";
-  approvedUserCount: number;
-} {
-  const config = readUserConfig();
-  const wecom = config?.channels?.[WECOM_CHANNEL_ID] ?? {};
-  const enabled = config?.plugins?.entries?.["wecom-openclaw-plugin"]?.enabled === true;
-  const dmPolicy = normalizeDmPolicy(wecom?.dmPolicy, "pairing");
-  return {
-    enabled,
-    dmPolicy,
-    approvedUserCount: collectApprovedUserIds(WECOM_CHANNEL_ID, wecom?.allowFrom).length,
-  };
 }
 
 // 列出飞书待审批请求：解析 CLI 输出并统一成前端可消费结构。
@@ -2523,135 +2540,6 @@ function collectApprovedUserIds(channel: string, configAllowFrom: unknown): stri
   return dedupeEntries([...configEntries, ...storeEntries]);
 }
 
-// 返回首配自动批准窗口文件路径（sidecar，不污染 openclaw.json schema）。
-function resolveFeishuFirstPairingWindowPath(): string {
-  return path.join(resolveUserStateDir(), "credentials", FEISHU_FIRST_PAIRING_WINDOW_FILE);
-}
-
-// 读取首配自动批准窗口状态；解析失败返回 null，保证调用端逻辑简单。
-function readFeishuFirstPairingWindowState(): FeishuFirstPairingWindowState | null {
-  const filePath = resolveFeishuFirstPairingWindowPath();
-  if (!fs.existsSync(filePath)) {
-    return null;
-  }
-  try {
-    const parsed = parseJsonSafe(fs.readFileSync(filePath, "utf-8"));
-    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
-      return null;
-    }
-    const openedAtMs = Number((parsed as Record<string, unknown>).openedAtMs);
-    const expiresAtMs = Number((parsed as Record<string, unknown>).expiresAtMs);
-    const consumedAtRaw = (parsed as Record<string, unknown>).consumedAtMs;
-    const consumedAtMs = consumedAtRaw == null ? null : Number(consumedAtRaw);
-    const consumedBy = String((parsed as Record<string, unknown>).consumedBy ?? "").trim();
-    if (!Number.isFinite(openedAtMs) || !Number.isFinite(expiresAtMs)) {
-      return null;
-    }
-    return {
-      openedAtMs,
-      expiresAtMs,
-      consumedAtMs: consumedAtMs == null || !Number.isFinite(consumedAtMs) ? null : consumedAtMs,
-      consumedBy,
-    };
-  } catch {
-    return null;
-  }
-}
-
-// 原子写入首配窗口状态文件，所有窗口相关状态变更都通过这个函数落盘。
-function writeFeishuFirstPairingWindowState(state: FeishuFirstPairingWindowState): void {
-  const filePath = resolveFeishuFirstPairingWindowPath();
-  const dir = path.dirname(filePath);
-  fs.mkdirSync(dir, { recursive: true });
-  fs.writeFileSync(filePath, JSON.stringify(state, null, 2), "utf-8");
-}
-
-// 开启首配自动批准时间窗；若已消费过则保持熔断，不再重开窗口。
-function openFeishuFirstPairingWindow(nowMs = Date.now()): void {
-  const prev = readFeishuFirstPairingWindowState();
-  if (prev?.consumedAtMs) {
-    return;
-  }
-  writeFeishuFirstPairingWindowState({
-    openedAtMs: nowMs,
-    expiresAtMs: nowMs + FEISHU_FIRST_PAIRING_WINDOW_TTL_MS,
-    consumedAtMs: null,
-    consumedBy: "",
-  });
-}
-
-// 关闭首配自动批准窗口：未消费场景删除文件；已消费场景保留熔断标记。
-export function closeFeishuFirstPairingWindow(): void {
-  const filePath = resolveFeishuFirstPairingWindowPath();
-  const prev = readFeishuFirstPairingWindowState();
-  if (prev?.consumedAtMs) {
-    return;
-  }
-  if (fs.existsSync(filePath)) {
-    fs.unlinkSync(filePath);
-  }
-}
-
-// 标记首配窗口已消费，无论批准成功或失败都熔断，避免重试风暴。
-export function consumeFeishuFirstPairingWindow(userId: string): void {
-  const nowMs = Date.now();
-  const prev = readFeishuFirstPairingWindowState();
-  if (prev) {
-    writeFeishuFirstPairingWindowState({
-      ...prev,
-      consumedAtMs: prev.consumedAtMs ?? nowMs,
-      consumedBy: prev.consumedBy || String(userId ?? "").trim(),
-    });
-    return;
-  }
-  writeFeishuFirstPairingWindowState({
-    openedAtMs: nowMs,
-    expiresAtMs: nowMs,
-    consumedAtMs: nowMs,
-    consumedBy: String(userId ?? "").trim(),
-  });
-}
-
-// 判断首配窗口是否处于生效期；过期或已消费都返回 false，并自动清理过期窗口。
-export function isFeishuFirstPairingWindowActive(nowMs = Date.now()): boolean {
-  const state = readFeishuFirstPairingWindowState();
-  if (!state) {
-    return false;
-  }
-  if (state.consumedAtMs) {
-    return false;
-  }
-  if (nowMs > state.expiresAtMs) {
-    closeFeishuFirstPairingWindow();
-    return false;
-  }
-  return nowMs >= state.openedAtMs;
-}
-
-// 根据当前飞书配置与授权状态维护首配窗口，避免把窗口状态散落在多个调用点。
-function reconcileFeishuFirstPairingWindow(config: any): void {
-  const enabled = isFeishuEnabled(config);
-  if (!enabled) {
-    closeFeishuFirstPairingWindow();
-    return;
-  }
-
-  const feishu = config?.channels?.feishu ?? {};
-  const dmPolicy = normalizeDmPolicy(feishu?.dmPolicy, "pairing");
-  if (dmPolicy !== "pairing") {
-    closeFeishuFirstPairingWindow();
-    return;
-  }
-
-  const approvedUserIds = collectApprovedUserIds(FEISHU_CHANNEL, feishu?.allowFrom);
-  if (approvedUserIds.length > 0) {
-    closeFeishuFirstPairingWindow();
-    return;
-  }
-
-  openFeishuFirstPairingWindow();
-}
-
 // 统一运行 openclaw CLI 子命令，复用 OneClaw 内嵌 runtime 与网关入口。
 async function runGatewayCli(args: string[]): Promise<CliRunResult> {
   const nodeBin = resolveNodeBin();
@@ -2752,7 +2640,7 @@ function writeChannelAllowFromStore(channel: string, entries: string[]): void {
   );
 }
 
-// 读取本地“已拒绝配对码”sidecar，用于过滤待审批列表。
+// 读取本地"已拒绝配对码"sidecar，用于过滤待审批列表。
 function readRejectedPairingStore(fileName: string): FeishuRejectedPairingStore {
   const filePath = path.join(resolveUserStateDir(), "credentials", fileName);
   if (!fs.existsSync(filePath)) {
@@ -2768,7 +2656,7 @@ function readRejectedPairingStore(fileName: string): FeishuRejectedPairingStore 
   }
 }
 
-// 写入本地“已拒绝配对码”sidecar，空数组时删除文件。
+// 写入本地"已拒绝配对码"sidecar，空数组时删除文件。
 function writeRejectedPairingStore(fileName: string, codes: string[]): void {
   const normalized = normalizeAllowFromEntries(codes);
   const dir = path.join(resolveUserStateDir(), "credentials");
@@ -2787,12 +2675,10 @@ function writeRejectedPairingStore(fileName: string, codes: string[]): void {
   fs.writeFileSync(filePath, JSON.stringify(payload, null, 2), "utf-8");
 }
 
-// 读取某个渠道的拒绝码列表。
 function readRejectedPairingCodes(fileName: string): string[] {
   return readRejectedPairingStore(fileName).codes;
 }
 
-// 追加单个拒绝码（幂等）。
 function appendRejectedPairingCode(fileName: string, code: string): void {
   const trimmed = String(code ?? "").trim();
   if (!trimmed) return;
@@ -2802,7 +2688,6 @@ function appendRejectedPairingCode(fileName: string, code: string): void {
   writeRejectedPairingStore(fileName, store.codes);
 }
 
-// 移除单个拒绝码（批准后自动清理）。
 function removeRejectedPairingCode(fileName: string, code: string): void {
   const trimmed = String(code ?? "").trim();
   if (!trimmed) return;
@@ -2812,7 +2697,6 @@ function removeRejectedPairingCode(fileName: string, code: string): void {
   writeRejectedPairingStore(fileName, nextCodes);
 }
 
-// 清理过期拒绝码：只保留当前 pending 列表里仍存在的 code。
 function pruneRejectedPairingCodes(fileName: string, activeCodes: Set<string>): void {
   const store = readRejectedPairingStore(fileName);
   if (store.codes.length === 0) return;
@@ -2821,7 +2705,6 @@ function pruneRejectedPairingCodes(fileName: string, activeCodes: Set<string>): 
   writeRejectedPairingStore(fileName, nextCodes);
 }
 
-// 渠道专用 sidecar 文件映射；目前只有飞书和企业微信会走这套拒绝码逻辑。
 function resolveRejectedPairingStoreFile(channel: string): string {
   if (channel === WECOM_CHANNEL_ID) {
     return WECOM_REJECTED_PAIRING_STORE_FILE;
@@ -2837,26 +2720,6 @@ function readFeishuAllowFromStore(): string[] {
 // 写入飞书 allowFrom store 文件（兼容保留原有字段）。
 function writeFeishuAllowFromStore(entries: string[]): void {
   writeChannelAllowFromStore(FEISHU_CHANNEL, entries);
-}
-
-// 读取拒绝码列表。
-function readFeishuRejectedPairingCodes(): string[] {
-  return readRejectedPairingCodes(FEISHU_REJECTED_PAIRING_STORE_FILE);
-}
-
-// 追加单个拒绝码（幂等）。
-function appendFeishuRejectedPairingCode(code: string): void {
-  appendRejectedPairingCode(FEISHU_REJECTED_PAIRING_STORE_FILE, code);
-}
-
-// 移除单个拒绝码（批准后自动清理）。
-function removeFeishuRejectedPairingCode(code: string): void {
-  removeRejectedPairingCode(FEISHU_REJECTED_PAIRING_STORE_FILE, code);
-}
-
-// 清理过期拒绝码：只保留当前 pending 列表里仍存在的 code。
-function pruneFeishuRejectedPairingCodes(activeCodes: Set<string>): void {
-  pruneRejectedPairingCodes(FEISHU_REJECTED_PAIRING_STORE_FILE, activeCodes);
 }
 
 // 补全授权条目的可读名称：用户/群聊优先查缓存，未命中则实时查询并回写缓存。
@@ -3230,7 +3093,7 @@ function extractProviderInfo(config: any): any {
     apiKey,
     baseURL,
     api,
-    supportsImage,
+    supportImage: supportsImage,
     configuredModels,
     raw: primary,
     savedProviders,
@@ -3282,3 +3145,4 @@ function maskApiKey(key: string): string {
   if (!key || key.length <= 8) return key ? "••••••••" : "";
   return key.slice(0, 4) + "••••" + key.slice(-4);
 }
+
