@@ -27,6 +27,14 @@ export type SidebarProps = {
   updateVersion: string | null;
   updatePercent: number | null;
   updateShowBadge: boolean;
+  // 当前 webbridge 模式但浏览器扩展未启用 → 显示「连接你的常用浏览器」pill
+  // 用户在浏览器外部启用扩展 OneClaw 拿不到事件，所以 pill 改成可点击：
+  // 点一次重跑 needs-repair；扩展已启用就 pill 消失，否则保持显示
+  // checking=true 时图标换成转圈 loader
+  webbridgeRepairVisible: boolean;
+  webbridgeRepairBrowserName: string | null;
+  webbridgeRepairChecking: boolean;
+  onWebbridgeRepairClick: () => void;
   onToggleSidebar: () => void;
   onSelectSession: (sessionKey: string) => void;
   onNewChat: () => void;
@@ -200,6 +208,24 @@ export function renderSidebar(props: SidebarProps) {
       </nav>
 
       <div class="oneclaw-sidebar__footer">
+        ${props.webbridgeRepairVisible
+          ? (() => {
+              // 不挂 tooltip——点击 pill 弹 modal 已经承担提示职责，避免 hover + click 双重提示
+              const checking = props.webbridgeRepairChecking;
+              return html`
+                <button
+                  class="oneclaw-sidebar__item oneclaw-sidebar__item--webbridge-repair ${checking ? "is-checking" : ""}"
+                  type="button"
+                  @click=${props.onWebbridgeRepairClick}
+                >
+                  <span class="oneclaw-sidebar__icon">
+                    ${checking ? icons.loader : icons.wrench}
+                  </span>
+                  <span class="oneclaw-sidebar__label">${t("sidebar.webbridgeRepairNeeded")}</span>
+                </button>
+              `;
+            })()
+          : nothing}
         ${showUpdateAction
           ? html`
               <button

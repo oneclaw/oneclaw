@@ -12,6 +12,10 @@ contextBridge.exposeInMainWorld("oneclaw", {
   checkForUpdates: () => ipcRenderer.send("app:check-updates"),
   getUpdateState: () => ipcRenderer.invoke("app:get-update-state"),
   downloadAndInstallUpdate: () => ipcRenderer.invoke("app:download-and-install-update"),
+  getPairingState: () => ipcRenderer.invoke("app:get-pairing-state"),
+  refreshPairingState: () => ipcRenderer.send("app:refresh-pairing-state"),
+  getFeishuPairingState: () => ipcRenderer.invoke("app:get-feishu-pairing-state"),
+  refreshFeishuPairingState: () => ipcRenderer.send("app:refresh-feishu-pairing-state"),
 
   // Setup 相关
   verifyKey: (params: Record<string, unknown>) =>
@@ -60,28 +64,22 @@ contextBridge.exposeInMainWorld("oneclaw", {
     ipcRenderer.invoke("settings:save-wecom-config", params),
   settingsListWecomPairing: () =>
     ipcRenderer.invoke("settings:list-wecom-pairing"),
+  settingsListWecomApproved: () =>
+    ipcRenderer.invoke("settings:list-wecom-approved"),
   settingsApproveWecomPairing: (params: Record<string, unknown>) =>
     ipcRenderer.invoke("settings:approve-wecom-pairing", params),
   settingsRejectWecomPairing: (params: Record<string, unknown>) =>
     ipcRenderer.invoke("settings:reject-wecom-pairing", params),
-  settingsListWecomApproved: () =>
-    ipcRenderer.invoke("settings:list-wecom-approved"),
-  settingsAddWecomUserAllowFrom: (params: Record<string, unknown>) =>
-    ipcRenderer.invoke("settings:add-wecom-user-allow-from", params),
-  settingsAddWecomGroupAllowFrom: (params: Record<string, unknown>) =>
-    ipcRenderer.invoke("settings:add-wecom-group-allow-from", params),
   settingsRemoveWecomApproved: (params: Record<string, unknown>) =>
     ipcRenderer.invoke("settings:remove-wecom-approved", params),
   settingsListFeishuPairing: () =>
     ipcRenderer.invoke("settings:list-feishu-pairing"),
+  settingsListFeishuApproved: () =>
+    ipcRenderer.invoke("settings:list-feishu-approved"),
   settingsApproveFeishuPairing: (params: Record<string, unknown>) =>
     ipcRenderer.invoke("settings:approve-feishu-pairing", params),
   settingsRejectFeishuPairing: (params: Record<string, unknown>) =>
     ipcRenderer.invoke("settings:reject-feishu-pairing", params),
-  settingsListFeishuApproved: () =>
-    ipcRenderer.invoke("settings:list-feishu-approved"),
-  settingsAddFeishuUserAllowFrom: (params: Record<string, unknown>) =>
-    ipcRenderer.invoke("settings:add-feishu-user-allow-from", params),
   settingsAddFeishuGroupAllowFrom: (params: Record<string, unknown>) =>
     ipcRenderer.invoke("settings:add-feishu-group-allow-from", params),
   settingsRemoveFeishuApproved: (params: Record<string, unknown>) =>
@@ -99,6 +97,23 @@ contextBridge.exposeInMainWorld("oneclaw", {
   settingsGetAdvanced: () => ipcRenderer.invoke("settings:get-advanced"),
   settingsSaveAdvanced: (params: Record<string, unknown>) =>
     ipcRenderer.invoke("settings:save-advanced", params),
+  settingsWebbridgeStatus: () => ipcRenderer.invoke("settings:webbridge-status"),
+  settingsWebbridgeInstallExtensions: () =>
+    ipcRenderer.invoke("settings:webbridge-install-extensions"),
+  settingsWebbridgeCleanBlocklist: (browserId: string) =>
+    ipcRenderer.invoke("settings:webbridge-clean-blocklist", browserId),
+  settingsWebbridgePrecheck: () =>
+    ipcRenderer.invoke("settings:webbridge-precheck"),
+  settingsWebbridgeRepairAndEnable: () =>
+    ipcRenderer.invoke("settings:webbridge-repair-and-enable"),
+  settingsGetDefaultBrowserName: () =>
+    ipcRenderer.invoke("settings:get-default-browser-name"),
+  // 主窗左侧栏 WebBridge 修复 pill 用：返回 { visible: boolean }
+  settingsWebbridgeNeedsRepair: () =>
+    ipcRenderer.invoke("settings:webbridge-needs-repair"),
+  // 主窗左侧栏 pill 点击时调用：清 blocklist + 写 External JSON（仅当浏览器已关闭）
+  settingsWebbridgePillRepair: () =>
+    ipcRenderer.invoke("settings:webbridge-pill-repair"),
   settingsGetCliStatus: () => ipcRenderer.invoke("settings:get-cli-status"),
   settingsInstallCli: () => ipcRenderer.invoke("settings:install-cli"),
   settingsUninstallCli: () => ipcRenderer.invoke("settings:uninstall-cli"),
@@ -145,9 +160,7 @@ contextBridge.exposeInMainWorld("oneclaw", {
     ipcRenderer.invoke("workspace:read-file", filePath),
 
   onSettingsNavigate: (cb: (payload: { tab: string; notice: string }) => void) => {
-    const handler = (_e: Electron.IpcRendererEvent, payload: { tab: string; notice: string }) => cb(payload);
-    ipcRenderer.on("settings:navigate", handler);
-    return () => { ipcRenderer.removeListener("settings:navigate", handler); };
+    ipcRenderer.on("settings:navigate", (_e, payload) => cb(payload));
   },
 
   // 打开外部链接（走 IPC 到主进程，sandbox 下 shell 不可用）
@@ -167,8 +180,6 @@ contextBridge.exposeInMainWorld("oneclaw", {
   dismissReleaseNotes: (version: string) => ipcRenderer.invoke("app:dismiss-release-notes", version),
 
   // Chat UI 侧边栏操作
-  quit: () => ipcRenderer.send("app:quit"),
-  reportSetupViewState: (active: boolean) => ipcRenderer.send("app:setup-view-state", active),
   openSettings: () => ipcRenderer.send("app:open-settings"),
   openWebUI: () => ipcRenderer.send("app:open-webui"),
   getGatewayPort: () => ipcRenderer.invoke("gateway:port"),
@@ -177,6 +188,13 @@ contextBridge.exposeInMainWorld("oneclaw", {
     const listener = () => cb();
     ipcRenderer.on("gateway:ready", listener);
     return () => ipcRenderer.removeListener("gateway:ready", listener);
+  },
+  // 主进程通知 webbridge precheck 状态可能已变（setup-task 后台装完扩展、settings 修复完成等）
+  // chat-ui 据此重查 settings:webbridge-needs-repair，避免 pill 卡在旧结果
+  onWebbridgeStateChanged: (cb: () => void) => {
+    const listener = () => cb();
+    ipcRenderer.on("webbridge:state-changed", listener);
+    return () => ipcRenderer.removeListener("webbridge:state-changed", listener);
   },
 
   // 截取当前窗口截图，返回 base64 PNG
@@ -249,6 +267,104 @@ contextBridge.exposeInMainWorld("oneclaw", {
     };
     ipcRenderer.on("app:update-state", listener);
     return () => ipcRenderer.removeListener("app:update-state", listener);
+  },
+  onPairingState: (
+    cb: (payload: {
+      pendingCount: number;
+      requests: Array<{
+        channel: string;
+        code: string;
+        id: string;
+        name: string;
+        createdAt: string;
+        lastSeenAt: string;
+      }>;
+      updatedAt: number;
+      channels: Record<string, {
+        channel: string;
+        pendingCount: number;
+        requests: Array<{
+          code: string;
+          id: string;
+          name: string;
+          createdAt: string;
+          lastSeenAt: string;
+        }>;
+        updatedAt: number;
+        lastAutoApprovedAt: number | null;
+        lastAutoApprovedName: string | null;
+      }>;
+    }) => void,
+  ) => {
+    const listener = (
+      _event: Electron.IpcRendererEvent,
+      payload: {
+        pendingCount: number;
+        requests: Array<{
+          channel: string;
+          code: string;
+          id: string;
+          name: string;
+          createdAt: string;
+          lastSeenAt: string;
+        }>;
+        updatedAt: number;
+        channels: Record<string, {
+          channel: string;
+          pendingCount: number;
+          requests: Array<{
+            code: string;
+            id: string;
+            name: string;
+            createdAt: string;
+            lastSeenAt: string;
+          }>;
+          updatedAt: number;
+          lastAutoApprovedAt: number | null;
+          lastAutoApprovedName: string | null;
+        }>;
+      },
+    ) => {
+      cb(payload);
+    };
+    ipcRenderer.on("app:pairing-state", listener);
+    return () => ipcRenderer.removeListener("app:pairing-state", listener);
+  },
+  onFeishuPairingState: (
+    cb: (payload: {
+      pendingCount: number;
+      requests: Array<{
+        code: string;
+        id: string;
+        name: string;
+        createdAt: string;
+        lastSeenAt: string;
+      }>;
+      updatedAt: number;
+      lastAutoApprovedAt: number | null;
+      lastAutoApprovedName: string | null;
+    }) => void,
+  ) => {
+    const listener = (
+      _event: Electron.IpcRendererEvent,
+      payload: {
+        pendingCount: number;
+        requests: Array<{
+          code: string;
+          id: string;
+          name: string;
+          createdAt: string;
+          lastSeenAt: string;
+        }>;
+        updatedAt: number;
+        lastAutoApprovedAt: number | null;
+        lastAutoApprovedName: string | null;
+      },
+    ) => {
+      cb(payload);
+    };
+    ipcRenderer.on("app:feishu-pairing-state", listener);
+    return () => ipcRenderer.removeListener("app:feishu-pairing-state", listener);
   },
 });
 

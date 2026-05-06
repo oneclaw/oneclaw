@@ -1,15 +1,54 @@
-import { app, ipcMain, session } from "electron";
+import { app, ipcMain, session, shell } from "electron";
+import * as os from "os";
 import { spawn } from "child_process";
 import {
-  resolveGatewayCwd,
-  resolveGatewayEntry,
-  resolveGatewayPackageDir,
   resolveNodeBin,
   resolveNodeExtraEnv,
+  resolveGatewayEntry,
+  resolveGatewayCwd,
+  resolveGatewayPackageDir,
   resolveResourcesPath,
   resolveUserConfigPath,
   resolveUserStateDir,
+  resolveWebbridgeBinaryPath,
+  resolveWebbridgeCrxPath,
+  resolveWebbridgeDataDir,
+  readWebbridgeCrxMetadata,
+  readWebbridgeExtensionId,
 } from "./constants";
+import {
+  applyBrowserModeConfig,
+  coerceBrowserMode,
+  detectBrowserMode,
+} from "./browser-mode-config";
+import {
+  migrateBrowserProfileForCurrentGateway,
+  normalizeRequestedBrowserProfileForSave,
+} from "./browser-profile-config";
+import {
+  installWebbridge,
+  readCacheManifest,
+} from "./webbridge-installer";
+import {
+  installForAllDetectedBrowsers,
+  installForDefaultBrowser,
+  getExtensionStates,
+  isExtensionBlocklisted,
+  cleanExtensionBlocklist,
+  type ExtensionSpec,
+} from "./browser-extension-installer";
+import { resolveWebbridgeExtensionSpec } from "./webbridge-extension-spec";
+import { BROWSER_TARGETS, isBrowserInstalled } from "./browser-detector";
+import {
+  getBrowserRunningState,
+  killBackgroundProcesses,
+  DEFAULT_PROCESS_EXEC,
+} from "./browser-process-detector";
+import { getWebbridgeInstallState } from "./webbridge-status";
+import { getWebbridgePrecheck } from "./webbridge-precheck";
+import { getDefaultBrowser } from "./default-browser-detector";
+import { runWebbridgeSetupTask } from "./webbridge-setup-task";
+import { installWebbridgeSkill } from "./webbridge-skill-installer";
 import { resolveOneclawConfigPath } from "./oneclaw-config";
 import {
   getConfigRecoveryData,
@@ -86,8 +125,8 @@ import { ensureGatewayAuthTokenInConfig, resolveGatewayAuthToken } from "./gatew
 import { callGatewayRpc } from "./gateway-rpc";
 import { getLaunchAtLoginState, setLaunchAtLoginEnabled } from "./launch-at-login";
 import { installCli, uninstallCli, getCliStatus } from "./cli-integration";
-import { migrateBrowserProfileForCurrentGateway, normalizeRequestedBrowserProfileForSave } from "./browser-profile-config";
 import * as analytics from "./analytics";
+import * as log from "./logger";
 import * as path from "path";
 import * as fs from "fs";
 
@@ -107,11 +146,6 @@ export type PairingRequestView = {
 
 export type FeishuPairingRequestView = PairingRequestView;
 
-type FeishuRejectedPairingStore = {
-  version: 1;
-  codes: string[];
-};
-
 type FeishuAuthorizedEntryView = {
   kind: "user" | "group";
   id: string;
@@ -128,15 +162,29 @@ const FEISHU_CHANNEL = FEISHU_CHANNEL_ID;
 const WILDCARD_ALLOW_ENTRY = "*";
 const FEISHU_ALIAS_STORE_FILE = "feishu-allowFrom-aliases.json";
 const FEISHU_REJECTED_PAIRING_STORE_FILE = "feishu-rejected-pairing-codes.json";
+const FEISHU_FIRST_PAIRING_WINDOW_FILE = "feishu-first-pairing-window.json";
 const WECOM_REJECTED_PAIRING_STORE_FILE = "wecom-rejected-pairing-codes.json";
+const FEISHU_FIRST_PAIRING_WINDOW_TTL_MS = 10 * 60 * 1000;
 const FEISHU_OPEN_API_BASE = "https://open.feishu.cn/open-apis";
 const FEISHU_TOKEN_SAFETY_MS = 60_000;
+
+type FeishuFirstPairingWindowState = {
+  openedAtMs: number;
+  expiresAtMs: number;
+  consumedAtMs: number | null;
+  consumedBy: string;
+};
 
 type FeishuTenantTokenCache = {
   appId: string;
   appSecret: string;
   token: string;
   expireAt: number;
+};
+
+type FeishuRejectedPairingStore = {
+  version: 1;
+  codes: string[];
 };
 
 let feishuTenantTokenCache: FeishuTenantTokenCache | null = null;
@@ -205,6 +253,82 @@ export function registerSettingsIpc(opts: SettingsIpcOptions = {}): void {
   const writeUserConfigAndRestart: typeof writeUserConfig = (config) => {
     writeUserConfig(config);
     opts.requestGatewayRestart?.();
+  };
+  // 读取 openclaw.json 中 kimi-webbridge skill 的 enabled 字段（webbridge-precheck 用）。
+  // 用户从 chat-ui Skills 页关掉 → enabled=false → precheck 视为 missing.skill，
+  // 触发 Settings → 高级"需要修复"banner，修复时 applyBrowserModeConfig 会改回 true。
+  const readKimiWebbridgeSkillEnabled = (): boolean | undefined => {
+    try {
+      const cfg = readUserConfig();
+      return cfg?.skills?.entries?.["kimi-webbridge"]?.enabled;
+    } catch {
+      return undefined;
+    }
+  };
+  // 当前浏览器模式（来自 detectBrowserMode）。precheck 用它区分：
+  //   webbridge + enabled=false = 漂移（要修复）
+  //   openclaw/user + enabled=false = 当前模式预期值（不要把切换前的状态当 bug）
+  const getCurrentBrowserMode = (): "webbridge" | "openclaw" | "user" => {
+    try {
+      return detectBrowserMode(readUserConfig());
+    } catch {
+      return "openclaw";
+    }
+  };
+
+  // precheck 的 readExtensionStates 只透传 extId，但 getExtensionStates 现在要求完整 spec
+  // （需要 crxPath/crxVersion 才能判断"JSON 是否指向当前 OneClaw 内置 CRX"）。
+  // 这个 thunk 把 extId 升级成 spec：crxPath/crxVersion 缺失时给空串，让所有 configured 检查
+  // 直接判 false（≈ 缺扩展），上层会触发修复路径。
+  const specFromExtId = (extId: string): ExtensionSpec => {
+    const meta = readWebbridgeCrxMetadata();
+    return {
+      extId,
+      crxPath: resolveWebbridgeCrxPath(),
+      crxVersion: meta?.version ?? "",
+    };
+  };
+
+  // 修复完扩展后主动打开默认浏览器 + 引导页（带箭头指向「启用扩展」按钮）。
+  // setup/webbridge-enable-guide.html 在 packaged 时被打进 app.asar，shell.openExternal
+  // 不能直接打开 asar 内文件——所以读出来写到 os.tmpdir() 后再 open。
+  // 浏览器关时这一步会同时启动浏览器，Chrome 启动会读 External JSON 弹「启用扩展」prompt，
+  // 我们的引导页紧随其后展示「请点其中『启用扩展』」的视觉指引。
+  const openWebbridgeEnableGuideInBrowser = (): boolean => {
+    try {
+      const sourcePath = path.join(
+        __dirname,
+        "..",
+        "setup",
+        "webbridge-enable-guide.html",
+      );
+      const tempPath = path.join(
+        os.tmpdir(),
+        "oneclaw-webbridge-enable-guide.html",
+      );
+      const content = fs.readFileSync(sourcePath, "utf-8");
+      fs.writeFileSync(tempPath, content, "utf-8");
+      const lang = app.getLocale().toLowerCase().startsWith("zh") ? "zh" : "en";
+      // 引导页菜单步骤要按 Chrome / Edge 区分（图标 ⋮/⋯ + 标签「扩展程序 / 扩展」），
+      // 所以把当前默认浏览器透传给前端；前端没有该 param 时会回退到 UA 猜测。
+      const def = getDefaultBrowser();
+      const browserParam =
+        def?.target.id === "edge"
+          ? "edge"
+          : def?.target.id === "chrome"
+            ? "chrome"
+            : "";
+      const qs = browserParam
+        ? `?lang=${lang}&browser=${browserParam}`
+        : `?lang=${lang}`;
+      void shell.openExternal(`file://${tempPath}${qs}`);
+      return true;
+    } catch (err) {
+      log.error(
+        `[webbridge] open enable-guide failed: ${err instanceof Error ? err.message : String(err)}`,
+      );
+      return false;
+    }
   };
   // ── 读取当前 provider/model 配置（apiKey 掩码返回） ──
   ipcMain.handle("settings:get-config", async () => {
@@ -387,11 +511,20 @@ export function registerSettingsIpc(opts: SettingsIpcOptions = {}): void {
       verifyProvider({ ...params, proxyPort: getProxyPort() }));
   });
 
-  // ── 读取分享文案（内嵌，跟随客户端版本发布） ──
-  ipcMain.handle("settings:get-share-copy", () => ({
-    success: true,
-    data: SHARE_COPY_PAYLOAD,
-  }));
+  // ── 读取最新分享文案（服务端维护中英文版本） ──
+  ipcMain.handle("settings:get-share-copy", async () => {
+    try {
+      return {
+        success: true,
+        data: SHARE_COPY_PAYLOAD,
+      };
+    } catch (err: any) {
+      return {
+        success: false,
+        message: err.message || String(err),
+      };
+    }
+  });
 
   // ── 保存 provider 配置 ──
   ipcMain.handle("settings:save-provider", async (_event, params) => {
@@ -471,14 +604,8 @@ export function registerSettingsIpc(opts: SettingsIpcOptions = {}): void {
             const existingProv = config.models.providers[provKey];
 
             if (existingProv) {
-              const existingModels = Array.isArray(existingProv.models) ? existingProv.models : [];
-              const hasModel = existingModels.some((m: any) => {
-                const id = typeof m === "string" ? m : m?.id;
-                return id === modelID;
-              });
-              if (hasModel) {
-                return { success: false, message: `模型已存在: ${provKey}/${modelID}` };
-              }
+              // provider 已存在 → 追加模型
+              // keepProxyAuth 时不覆写 apiKey/baseUrl（OAuth 代理已就绪）
               if (!keepProxyAuth) {
                 existingProv.apiKey = apiKey;
                 if (sub) {
@@ -486,8 +613,15 @@ export function registerSettingsIpc(opts: SettingsIpcOptions = {}): void {
                   existingProv.api = sub.api;
                 }
               }
+              // 追加模型（如果不存在）
               if (!Array.isArray(existingProv.models)) existingProv.models = [];
-              existingProv.models.push({ id: modelID, name: modelID, input: ["text", "image"] });
+              const hasModel = existingProv.models.some((m: any) => {
+                const id = typeof m === "string" ? m : m?.id;
+                return id === modelID;
+              });
+              if (!hasModel) {
+                existingProv.models.push({ id: modelID, name: modelID, input: ["text", "image"] });
+              }
             } else {
               // provider 不存在 → 用 saveMoonshotConfig 创建
               const prevPrimary = config.agents.defaults.model.primary;
@@ -526,18 +660,17 @@ export function registerSettingsIpc(opts: SettingsIpcOptions = {}): void {
             const existingProv = config.models.providers[configKey];
 
             if (existingProv) {
-              const existingModels = Array.isArray(existingProv.models) ? existingProv.models : [];
-              const hasModel = existingModels.some((m: any) => {
+              // provider 已存在 → 更新 apiKey，追加模型
+              existingProv.apiKey = apiKey;
+              if (!Array.isArray(existingProv.models)) existingProv.models = [];
+              const hasModel = existingProv.models.some((m: any) => {
                 const id = typeof m === "string" ? m : m?.id;
                 return id === modelID;
               });
-              if (hasModel) {
-                return { success: false, message: `模型已存在: ${configKey}/${modelID}` };
+              if (!hasModel) {
+                const input = supportImage !== false ? ["text", "image"] : ["text"];
+                existingProv.models.push({ id: modelID, name: modelID, input });
               }
-              existingProv.apiKey = apiKey;
-              if (!Array.isArray(existingProv.models)) existingProv.models = [];
-              const input = supportImage !== false ? ["text", "image"] : ["text"];
-              existingProv.models.push({ id: modelID, name: modelID, input });
             } else {
               // provider 不存在 → 创建新 provider entry
               config.models.providers[configKey] = buildProviderConfig(provider, apiKey, modelID, baseURL, api, supportImage, customPreset);
@@ -614,7 +747,7 @@ export function registerSettingsIpc(opts: SettingsIpcOptions = {}): void {
       const config = readUserConfig();
       const feishu = config?.channels?.feishu ?? {};
       const enabled = isFeishuEnabled(config);
-      const dmPolicy = normalizeDmPolicy(feishu?.dmPolicy, "open");
+      const dmPolicy = normalizeDmPolicy(feishu?.dmPolicy, "pairing");
       const allowFrom = normalizeAllowFromEntries(feishu?.allowFrom);
       const dmPolicyOpen = dmPolicy === "open" || allowFrom.includes(WILDCARD_ALLOW_ENTRY);
       const dmScope = normalizeDmScope(config?.session?.dmScope, "main");
@@ -645,7 +778,7 @@ export function registerSettingsIpc(opts: SettingsIpcOptions = {}): void {
     const { appId, appSecret, enabled } = params;
     const dmPolicy = normalizeDmPolicy(
       params?.dmPolicy,
-      params?.dmPolicyOpen === false ? "pairing" : "open"
+      params?.dmPolicyOpen === true ? "open" : "pairing"
     );
     const dmScopeInput = params?.dmScope;
     const groupPolicy = normalizeGroupPolicy(params?.groupPolicy, "allowlist");
@@ -674,6 +807,8 @@ export function registerSettingsIpc(opts: SettingsIpcOptions = {}): void {
         if (enabled === false) {
           setFeishuChannelEnabled(config, false);
           writeUserConfigAndRestart(config);
+          // 禁用飞书时关闭“首配自动批准”窗口，但保留已消费标记，防止重复自动批准。
+          closeFeishuFirstPairingWindow();
           return { success: true };
         }
 
@@ -732,6 +867,8 @@ export function registerSettingsIpc(opts: SettingsIpcOptions = {}): void {
           config.session.dmScope = dmScope;
         }
         writeUserConfigAndRestart(config);
+        // 保存完成后按当前策略维护首配窗口，确保仅在 pairing 且无授权用户时才开启。
+        reconcileFeishuFirstPairingWindow(config);
         return { success: true };
       } catch (err: any) {
         return { success: false, message: err.message || String(err) };
@@ -985,8 +1122,7 @@ export function registerSettingsIpc(opts: SettingsIpcOptions = {}): void {
     );
   });
 
-  // ── 列出企业微信已授权用户与群聊 ──
-  // ── 列出企业微信待审批配对请求（按需 spawn `openclaw pairing list`） ──
+  // ── 列出企业微信待审批配对请求（走 openclaw pairing list） ──
   ipcMain.handle("settings:list-wecom-pairing", async () => {
     const listed = await listWecomPairingRequests();
     return {
@@ -996,16 +1132,7 @@ export function registerSettingsIpc(opts: SettingsIpcOptions = {}): void {
     };
   });
 
-  // ── 批准企业微信配对请求 ──
-  ipcMain.handle("settings:approve-wecom-pairing", async (_event, params) => {
-    return approveWecomPairingRequest(params);
-  });
-
-  // ── 拒绝企业微信配对请求（本地 sidecar 忽略） ──
-  ipcMain.handle("settings:reject-wecom-pairing", async (_event, params) => {
-    return rejectWecomPairingRequest(params);
-  });
-
+  // ── 列出企业微信已授权用户与群聊 ──
   ipcMain.handle("settings:list-wecom-approved", async () => {
     try {
       const config = readUserConfig();
@@ -1024,56 +1151,14 @@ export function registerSettingsIpc(opts: SettingsIpcOptions = {}): void {
     }
   });
 
-  // ── 添加企业微信用户白名单条目 ──
-  ipcMain.handle("settings:add-wecom-user-allow-from", async (_event, params) => {
-    const id = typeof params?.id === "string" ? params.id.trim() : "";
-    if (!id) {
-      return { success: false, message: "用户 ID 不能为空。" };
-    }
-
-    try {
-      const config = readUserConfig();
-      config.channels ??= {};
-      config.channels[WECOM_CHANNEL_ID] ??= {};
-      const currentAllowFrom = normalizeAllowFromEntries(config.channels[WECOM_CHANNEL_ID].allowFrom)
-        .filter((entry) => entry !== WILDCARD_ALLOW_ENTRY);
-      const nextAllowFrom = dedupeEntries([...currentAllowFrom, id]);
-      if (nextAllowFrom.length > 0) {
-        config.channels[WECOM_CHANNEL_ID].allowFrom = nextAllowFrom;
-      }
-      const nextStoreAllowFrom = dedupeEntries([
-        ...readChannelAllowFromStore(WECOM_CHANNEL_ID),
-        id,
-      ]);
-      writeChannelAllowFromStore(WECOM_CHANNEL_ID, nextStoreAllowFrom);
-      writeUserConfigAndRestart(config);
-      return { success: true };
-    } catch (err: any) {
-      return { success: false, message: err.message || String(err) };
-    }
+  // ── 批准企业微信配对请求（走 openclaw pairing approve） ──
+  ipcMain.handle("settings:approve-wecom-pairing", async (_event, params) => {
+    return approveWecomPairingRequest(params);
   });
 
-  // ── 添加企业微信群白名单条目 ──
-  ipcMain.handle("settings:add-wecom-group-allow-from", async (_event, params) => {
-    const id = typeof params?.id === "string" ? params.id.trim() : "";
-    if (!id) {
-      return { success: false, message: "群 ID 不能为空。" };
-    }
-
-    try {
-      const config = readUserConfig();
-      config.channels ??= {};
-      config.channels[WECOM_CHANNEL_ID] ??= {};
-      const nextGroupAllowFrom = dedupeEntries([
-        ...normalizeAllowFromEntries(config.channels[WECOM_CHANNEL_ID].groupAllowFrom),
-        id,
-      ]);
-      config.channels[WECOM_CHANNEL_ID].groupAllowFrom = nextGroupAllowFrom;
-      writeUserConfigAndRestart(config);
-      return { success: true };
-    } catch (err: any) {
-      return { success: false, message: err.message || String(err) };
-    }
+  // ── 拒绝企业微信配对请求（本地忽略 pairing code） ──
+  ipcMain.handle("settings:reject-wecom-pairing", async (_event, params) => {
+    return rejectWecomPairingRequest(params);
   });
 
   // ── 删除企业微信已授权用户/群聊 ──
@@ -1219,27 +1304,16 @@ export function registerSettingsIpc(opts: SettingsIpcOptions = {}): void {
     }
   });
 
-  // ── 列出飞书已授权列表（用户 + 群聊，优先展示可读名称） ──
-  // ── 列出飞书待审批配对请求（按需 spawn `openclaw pairing list`） ──
+  // ── 列出飞书待审批配对请求（走 openclaw pairing list，避免重复实现存储协议） ──
   ipcMain.handle("settings:list-feishu-pairing", async () => {
     const listed = await listFeishuPairingRequests();
-    return {
-      success: listed.success,
-      data: listed.success ? { requests: listed.requests } : undefined,
-      message: listed.message,
-    };
+    if (!listed.success) {
+      return { success: false, message: listed.message || "读取飞书待审批列表失败" };
+    }
+    return { success: true, data: { requests: listed.requests } };
   });
 
-  // ── 批准飞书配对请求 ──
-  ipcMain.handle("settings:approve-feishu-pairing", async (_event, params) => {
-    return approveFeishuPairingRequest(params);
-  });
-
-  // ── 拒绝飞书配对请求（本地 sidecar 忽略） ──
-  ipcMain.handle("settings:reject-feishu-pairing", async (_event, params) => {
-    return rejectFeishuPairingRequest(params);
-  });
-
+  // ── 列出飞书已授权列表（用户 + 群聊，优先展示可读名称） ──
   ipcMain.handle("settings:list-feishu-approved", async () => {
     try {
       const config = readUserConfig();
@@ -1266,6 +1340,16 @@ export function registerSettingsIpc(opts: SettingsIpcOptions = {}): void {
     }
   });
 
+  // ── 批准飞书配对请求（走 openclaw pairing approve，统一写入 allowlist store） ──
+  ipcMain.handle("settings:approve-feishu-pairing", async (_event, params) => {
+    return approveFeishuPairingRequest(params);
+  });
+
+  // ── 拒绝飞书配对请求（openclaw 暂无 reject 命令，使用本地 sidecar 忽略该 pairing code） ──
+  ipcMain.handle("settings:reject-feishu-pairing", async (_event, params) => {
+    return rejectFeishuPairingRequest(params);
+  });
+
   // ── 添加群聊白名单条目（仅允许群 ID） ──
   ipcMain.handle("settings:add-feishu-group-allow-from", async (_event, params) => {
     const id = String(params?.id ?? "").trim();
@@ -1282,35 +1366,6 @@ export function registerSettingsIpc(opts: SettingsIpcOptions = {}): void {
         id,
       ]);
       config.channels.feishu.groupAllowFrom = nextGroupAllowFrom;
-      writeUserConfigAndRestart(config);
-      return { success: true };
-    } catch (err: any) {
-      return { success: false, message: err.message || String(err) };
-    }
-  });
-
-  // ── 添加用户白名单条目（飞书 open_id / union_id） ──
-  ipcMain.handle("settings:add-feishu-user-allow-from", async (_event, params) => {
-    const id = String(params?.id ?? "").trim();
-    if (!id) {
-      return { success: false, message: "用户 ID 不能为空。" };
-    }
-    if (!looksLikeFeishuUserId(id)) {
-      return { success: false, message: "仅允许填写以 ou_ 开头的飞书用户 open_id。" };
-    }
-
-    try {
-      const config = readUserConfig();
-      config.channels ??= {};
-      config.channels.feishu ??= {};
-      const currentAllowFrom = normalizeAllowFromEntries(config.channels.feishu.allowFrom)
-        .filter((entry) => entry !== WILDCARD_ALLOW_ENTRY);
-      const nextAllowFrom = dedupeEntries([...currentAllowFrom, id]);
-      if (nextAllowFrom.length > 0) {
-        config.channels.feishu.allowFrom = nextAllowFrom;
-      }
-      const nextStoreAllowFrom = dedupeEntries([...readFeishuAllowFromStore(), id]);
-      writeFeishuAllowFromStore(nextStoreAllowFrom);
       writeUserConfigAndRestart(config);
       return { success: true };
     } catch (err: any) {
@@ -1572,7 +1627,14 @@ export function registerSettingsIpc(opts: SettingsIpcOptions = {}): void {
       return {
         success: true,
         data: {
-          browserProfile: config?.browser?.defaultProfile ?? "openclaw",
+          // 新字段：Settings UI 的三选 radio 用
+          browserMode: detectBrowserMode(config),
+          // 旧字段：向后兼容（值是 gateway defaultProfile，非 UI mode）
+          // 注意 webbridge 模式下也保留底层 profile 值（plugin disabled 决定模式而不是 profile）
+          browserProfile:
+            (typeof config?.browser?.defaultProfile === "string"
+              ? config.browser.defaultProfile
+              : "") || "openclaw",
           imessageEnabled: config?.channels?.imessage?.enabled !== false,
           launchAtLoginSupported: launchAtLoginState.supported,
           launchAtLogin: launchAtLoginState.enabled,
@@ -1587,21 +1649,67 @@ export function registerSettingsIpc(opts: SettingsIpcOptions = {}): void {
 
   // ── 保存高级配置 ──
   ipcMain.handle("settings:save-advanced", async (_event, params) => {
-    const { browserProfile, imessageEnabled } = params;
+    const { browserProfile, browserMode, imessageEnabled } = params;
     const launchAtLogin = typeof params?.launchAtLogin === "boolean" ? params.launchAtLogin : undefined;
     const sessionMemoryEnabled = typeof params?.sessionMemoryEnabled === "boolean" ? params.sessionMemoryEnabled : undefined;
     const clawHubRegistry = typeof params?.clawHubRegistry === "string" ? params.clawHubRegistry.trim() : undefined;
     return runTrackedSettingsAction(
       "save_advanced",
-      { browser_profile: browserProfile, imessage_enabled: imessageEnabled, launch_at_login: launchAtLogin, session_memory: sessionMemoryEnabled },
+      {
+        browser_mode: browserMode ?? null,
+        browser_profile: browserProfile ?? null,
+        imessage_enabled: imessageEnabled,
+        launch_at_login: launchAtLogin,
+        session_memory: sessionMemoryEnabled,
+      },
       async () => {
         try {
           const config = readUserConfig();
 
-          config.browser ??= {};
-          // Settings 的 UI 值可能来自旧版本，保存前统一规整到当前 gateway 支持的 profile。
-          config.browser.defaultProfile = normalizeRequestedBrowserProfileForSave(config, browserProfile);
-          migrateBrowserProfileForCurrentGateway(config);
+          // 优先 browserMode（新前端）；回退 browserProfile（老前端兼容）
+          // coerce 顺手吃下早期分支的 alias —— browserMode === "chrome" 自动归一化成 "user"
+          const coercedMode = coerceBrowserMode(browserMode);
+          if (coercedMode) {
+            // webbridge 模式服务端兜底：三项都过才能切（防前端被绕过 / 条件在选中到保存之间变化）
+            if (coercedMode === "webbridge") {
+              const def = getDefaultBrowser();
+              const pre = await getWebbridgePrecheck({
+                binaryPath: resolveWebbridgeBinaryPath(),
+                extensionId: readWebbridgeExtensionId(),
+                fileExists: fs.existsSync,
+                readExtensionStates: (extId) =>
+                getExtensionStates(specFromExtId(extId), {
+                  processExec: DEFAULT_PROCESS_EXEC,
+                  processCheckBrowserId: def?.target.id,
+                }),
+                getDefaultBrowser,
+                readSkillEnabled: readKimiWebbridgeSkillEnabled,
+        currentBrowserMode: getCurrentBrowserMode(),
+              });
+              if (!pre.ok) {
+                return {
+                  success: false,
+                  code: pre.defaultUnsupported
+                    ? "DEFAULT_BROWSER_UNSUPPORTED"
+                    : "WEBBRIDGE_PRECHECK_FAILED",
+                  missing: pre.missing,
+                  defaultBrowser: pre.defaultBrowser,
+                  defaultUnsupported: pre.defaultUnsupported,
+                  message: "WebBridge 条件未满足；请先点[修复并启用]",
+                };
+              }
+            }
+            Object.assign(config, applyBrowserModeConfig(config, coercedMode));
+          } else if (typeof browserProfile === "string" && browserProfile) {
+            // 老前端兼容：直接传 profile 名（"openclaw" / "user" / "chrome" / 自定义）。
+            // 走 main 分支的 normalize：旧名 "chrome" → "user"，并清掉 driver:"extension" 残留。
+            config.browser ??= {};
+            config.browser.defaultProfile = normalizeRequestedBrowserProfileForSave(
+              config,
+              browserProfile,
+            );
+            migrateBrowserProfileForCurrentGateway(config);
+          }
 
           config.channels ??= {};
           config.channels.imessage ??= {};
@@ -1634,6 +1742,467 @@ export function registerSettingsIpc(opts: SettingsIpcOptions = {}): void {
     );
   });
 
+  // ── WebBridge 安装状态（只读，不调 CLI） ──
+  // 单一默认浏览器策略：只对默认浏览器查进程，避免 Win 下 Defender 实时扫描 tasklist
+  // 翻倍延迟。非默认浏览器上的 running 字段会是 false（我们不再关心）。
+  ipcMain.handle("settings:webbridge-status", async () => {
+    try {
+      const def = getDefaultBrowser();
+      const state = await getWebbridgeInstallState({
+        binaryPath: resolveWebbridgeBinaryPath(),
+        dataDir: resolveWebbridgeDataDir(),
+        fileExists: fs.existsSync,
+        readManifest: readCacheManifest,
+        readExtensionStates: (extId) =>
+          getExtensionStates(specFromExtId(extId), {
+            processExec: DEFAULT_PROCESS_EXEC,
+            processCheckBrowserId: def?.target.id,
+          }),
+        extensionId: readWebbridgeExtensionId(),
+      });
+      return { success: true, data: state };
+    } catch (err: any) {
+      return { success: false, message: err.message || String(err) };
+    }
+  });
+
+  // ── WebBridge 切换前置 precheck（read-only；binary/skill/extension 三项 + default browser） ──
+  ipcMain.handle("settings:webbridge-precheck", async () => {
+    try {
+      const def = getDefaultBrowser();
+      const result = await getWebbridgePrecheck({
+        binaryPath: resolveWebbridgeBinaryPath(),
+        extensionId: readWebbridgeExtensionId(),
+        fileExists: fs.existsSync,
+        readExtensionStates: (extId) =>
+          getExtensionStates(specFromExtId(extId), {
+            processExec: DEFAULT_PROCESS_EXEC,
+            processCheckBrowserId: def?.target.id,
+          }),
+        getDefaultBrowser,
+        readSkillEnabled: readKimiWebbridgeSkillEnabled,
+        currentBrowserMode: getCurrentBrowserMode(),
+      });
+      return { success: true, data: result };
+    } catch (err: any) {
+      return { success: false, message: err.message || String(err) };
+    }
+  });
+
+  // ── 拿系统默认浏览器名（给 setup done modal 文案用） ──
+  ipcMain.handle("settings:get-default-browser-name", () => {
+    const d = getDefaultBrowser();
+    return d ? { id: d.target.id, name: d.target.name } : null;
+  });
+
+  // ── 主窗左侧栏「连接你的常用浏览器」pill ──
+  // 单一职责：当前是 webbridge 模式 + 扩展实际未在浏览器里启用 → 显示，否则隐藏。
+  // 设计前提（来自用户测试用例树）：
+  //   - 用户启用 webbridge 后 setup-task 已经把 binary/skill/JSON 装好、清过 blocklist
+  //   - 唯一会让扩展不工作的常见情况就是用户没在浏览器弹窗里点"启用"
+  //   - 这种情况 OneClaw 修不了，只能催用户去操作；pill 是纯信息，无 click → repair
+  //   - settings 高级页面也不应报"需要修复"（已通过 precheck 简化处理）
+  // 退化场景（默认浏览器变成非 Chrome/Edge、binary/skill 被人删了）罕见，pill 隐藏即可——
+  // settings 高级页面会通过另一条 precheck 路径暴露这些真坏的状态。
+  ipcMain.handle("settings:webbridge-needs-repair", async () => {
+    try {
+      if (getCurrentBrowserMode() !== "webbridge") {
+        return { success: true, data: { visible: false, defaultBrowser: null } };
+      }
+      // pill 可见性 = OneClaw 组件是否健康 + 用户是否真的启用了扩展
+      //   1) 三组件（binary/skill/extension）任一缺 → pill 显示让用户修
+      //   2) 三组件都健康但 presentInChrome=false（用户没在浏览器点"启用扩展"）→ pill 仍显示
+      //      —— External JSON 写完只是"我们这边装好了"，必须等用户在浏览器里启用才算真正连接
+      const extId = readWebbridgeExtensionId();
+      const pre = await getWebbridgePrecheck({
+        binaryPath: resolveWebbridgeBinaryPath(),
+        extensionId: extId,
+        fileExists: fs.existsSync,
+        readExtensionStates: (id) =>
+          getExtensionStates(specFromExtId(id), {
+            processExec: DEFAULT_PROCESS_EXEC,
+          }),
+        getDefaultBrowser,
+        readSkillEnabled: readKimiWebbridgeSkillEnabled,
+        currentBrowserMode: getCurrentBrowserMode(),
+      });
+      if (!pre.ok) {
+        return {
+          success: true,
+          data: { visible: true, defaultBrowser: pre.defaultBrowser },
+        };
+      }
+      // 三组件健康——再看用户是否真的启用了扩展
+      const def = pre.defaultBrowser;
+      if (!def || !extId) {
+        return { success: true, data: { visible: false, defaultBrowser: def } };
+      }
+      const states = await getExtensionStates(specFromExtId(extId), {
+        processExec: DEFAULT_PROCESS_EXEC,
+        processCheckBrowserId: def.id,
+      });
+      const enabled = states.find((s) => s.browserId === def.id)
+        ?.presentInChrome === true;
+      return {
+        success: true,
+        data: { visible: !enabled, defaultBrowser: def },
+      };
+    } catch (err: any) {
+      return {
+        success: true,
+        data: { visible: false, defaultBrowser: null },
+        message: err?.message,
+      };
+    }
+  });
+
+  // ── WebBridge 修复并启用：按 precheck 结果选择性修复 → 写 config + 重启 gateway ──
+  // 单一默认浏览器策略：只对系统默认浏览器（Chrome/Edge）做修复；默认非支持直接拒绝。
+  ipcMain.handle("settings:webbridge-repair-and-enable", async () => {
+    try {
+      // 0. 默认浏览器必须是 Chrome/Edge，不然没法修
+      const def = getDefaultBrowser();
+      if (!def) {
+        return {
+          success: false,
+          code: "DEFAULT_BROWSER_UNSUPPORTED",
+          message:
+            "系统默认浏览器不是 Chrome 或 Edge，请先在系统设置中修改默认浏览器。",
+        };
+      }
+
+      const extId = readWebbridgeExtensionId();
+      const binaryPath = resolveWebbridgeBinaryPath();
+
+      // 1. 先跑 precheck 知道缺啥（只查默认浏览器的进程，省 1 次 tasklist）
+      const pre = await getWebbridgePrecheck({
+        binaryPath,
+        extensionId: extId,
+        fileExists: fs.existsSync,
+        readExtensionStates: (id) =>
+          getExtensionStates(specFromExtId(id), {
+            processExec: DEFAULT_PROCESS_EXEC,
+            processCheckBrowserId: def.target.id,
+          }),
+        getDefaultBrowser,
+        readSkillEnabled: readKimiWebbridgeSkillEnabled,
+        currentBrowserMode: getCurrentBrowserMode(),
+      });
+
+      // 2. 只有 extension 项要修时才检查默认浏览器是否在跑
+      //    （清 blocklist / 写 External Extensions / 验证 presentInChrome 都需要浏览器关闭，
+      //     binary-only / skill-only 修复完全不碰浏览器，没理由勒令关。）
+      //    Win Edge 经典坑：用户已关窗口但 "Continue running background apps" 让 msedge.exe
+      //    后台进程残留，触发 "请退出 Edge" 提示但用户实际已关——区分前台/后台两种状态。
+      if (pre.missing.extension && isBrowserInstalled(def.target)) {
+        const state = await getBrowserRunningState(def.target);
+        if (state === "foreground") {
+          return {
+            success: false,
+            code: "BROWSER_RUNNING",
+            browserName: def.target.name,
+            message: `${def.target.name} 正在运行；请先完全退出 ${def.target.name} 后再点修复。`,
+          };
+        }
+        if (state === "background-only") {
+          const k = await killBackgroundProcesses(def.target);
+          log.info(
+            `[webbridge-repair] ${def.target.name} background-only 清理: killed=${k.killed}${
+              k.error ? ` error=${k.error}` : ""
+            }`,
+          );
+        }
+      }
+      if (pre.missing.extension) {
+        // 3. 用户从 UI 卸过扩展会进 external_uninstalls 黑名单，写 JSON 静默失效。
+        //    只有 extension 项要修时才需要清；只清默认浏览器。
+        if (extId && isBrowserInstalled(def.target)) {
+          if (await isExtensionBlocklisted(def.target, extId)) {
+            const cleanResult = await cleanExtensionBlocklist(
+              def.target,
+              extId,
+            );
+            log.info(
+              `[webbridge-repair] ${def.target.name} blocklist cleanup: ${cleanResult}`,
+            );
+          }
+        }
+      }
+
+      // 4. 选择性修复：只对真正缺的项跑安装；扩展只装到默认浏览器
+      const summary = await runWebbridgeSetupTask({
+        installer: () => installWebbridge({ force: false }),
+        installExtensions: async (id) => {
+          const spec = resolveWebbridgeExtensionSpec();
+          if (!spec) {
+            log.error(
+              "[webbridge-repair] 无法解析 ExtensionSpec（CRX 资源缺失），跳过扩展安装",
+            );
+            return [];
+          }
+          return installForDefaultBrowser(spec);
+        },
+        readConfig: readUserConfig,
+        writeConfig: writeUserConfig, // fallbackOnFailure:false 下不会被调
+        applyMode: applyBrowserModeConfig,
+        extensionId: extId,
+        installSkill: (bp) => installWebbridgeSkill(bp),
+        fallbackOnFailure: false,
+        skipBinaryInstall: !pre.missing.binary,
+        skipSkillInstall: !pre.missing.skill,
+        skipExtensionInstall: !pre.missing.extension,
+        existingBinaryPath: binaryPath,
+        logger: {
+          info: (m) => log.info(m),
+          error: (m) => log.error(m),
+        },
+      });
+      if (summary.outcome !== "webbridge-ready") {
+        return {
+          success: false,
+          code: "REPAIR_FAILED",
+          message: summary.error ?? "unknown",
+          summary,
+        };
+      }
+      // 三项全过 → 写 webbridge config + 重启 gateway
+      const config = readUserConfig();
+      Object.assign(config, applyBrowserModeConfig(config, "webbridge"));
+      writeUserConfigAndRestart(config);
+      // 含扩展修复 → 主动 open 引导页（同时启动浏览器触发"启用扩展"prompt）
+      // 跟 pill-repair 行为一致：避免用户多走一步「手动开浏览器」
+      const openedBrowser =
+        pre.missing.extension && openWebbridgeEnableGuideInBrowser();
+      return { success: true, data: summary, openedBrowser };
+    } catch (err: any) {
+      return { success: false, message: err.message || String(err) };
+    }
+  });
+
+  // ── 侧边栏 pill 点击 → 完整修复 (binary / skill / extension 三组件，按 precheck 选择性安装) ──
+  // 跟 webbridge-repair-and-enable 的区别：
+  //   - 假设已经在 webbridge 模式（不切模式），但仍然写 config 重启 gateway 让新装的 binary/skill 生效
+  //   - 用户场景：使用中删了 binary/skill，或 skill 关了，重启 gateway 后 pill 应当出现并能一键修
+  // 返回 code:
+  //   "READY"                       → 修复完成，gateway 已重启
+  //   "ALREADY_OK"                  → 三组件都 OK（precheck.ok=true），pill 自然该消失
+  //   "BROWSER_RUNNING"             → 缺扩展 + 浏览器在 foreground 跑，前端提示关闭再点
+  //   "DEFAULT_BROWSER_UNSUPPORTED" → 默认浏览器不是 Chrome/Edge
+  //   "FAILED"                      → 修复中途失败
+  ipcMain.handle("settings:webbridge-pill-repair", async () => {
+    try {
+      const def = getDefaultBrowser();
+      if (!def) {
+        return { success: false, code: "DEFAULT_BROWSER_UNSUPPORTED" };
+      }
+      const extId = readWebbridgeExtensionId();
+      const binaryPath = resolveWebbridgeBinaryPath();
+
+      // 1. 跑 precheck 知道缺哪几项
+      const pre = await getWebbridgePrecheck({
+        binaryPath,
+        extensionId: extId,
+        fileExists: fs.existsSync,
+        readExtensionStates: (id) =>
+          getExtensionStates(specFromExtId(id), {
+            processExec: DEFAULT_PROCESS_EXEC,
+            processCheckBrowserId: def.target.id,
+          }),
+        getDefaultBrowser,
+        readSkillEnabled: readKimiWebbridgeSkillEnabled,
+        currentBrowserMode: getCurrentBrowserMode(),
+      });
+
+      if (pre.ok) {
+        // 三组件都健康——再看用户是否真的启用了扩展
+        const states = await getExtensionStates(specFromExtId(extId), {
+          processExec: DEFAULT_PROCESS_EXEC,
+          processCheckBrowserId: def.target.id,
+        });
+        const enabled = states.find((s) => s.browserId === def.target.id)
+          ?.presentInChrome === true;
+        if (enabled) {
+          return { success: true, code: "ALREADY_OK" };
+        }
+        // 我们这边都装好了，剩下的是用户去浏览器点「启用扩展」
+        // 浏览器关 → 主动 open 引导页（同时启动浏览器，启动时会弹"启用扩展"prompt）
+        // 浏览器跑 → 没法自动重启，前端弹 modal 提示「请重启」
+        const browserRunning = isBrowserInstalled(def.target)
+          ? (await getBrowserRunningState(def.target)) !== "not-running"
+          : false;
+        const openedBrowser = !browserRunning && openWebbridgeEnableGuideInBrowser();
+        return {
+          success: true,
+          code: "READY",
+          browserName: def.target.name,
+          includesExtension: true,
+          browserRunning,
+          openedBrowser,
+        };
+      }
+
+      // 2. 缺扩展 + 浏览器 foreground → 必须让用户关浏览器（无法 race-safe 清 blocklist）
+      if (pre.missing.extension && isBrowserInstalled(def.target)) {
+        const state = await getBrowserRunningState(def.target);
+        if (state === "foreground") {
+          return {
+            success: false,
+            code: "BROWSER_RUNNING",
+            browserName: def.target.name,
+          };
+        }
+        if (state === "background-only") {
+          const k = await killBackgroundProcesses(def.target);
+          log.info(
+            `[webbridge-pill-repair] ${def.target.name} background-only 清理: killed=${k.killed}${
+              k.error ? ` error=${k.error}` : ""
+            }`,
+          );
+        }
+      }
+
+      // 3. 清 blocklist（仅当要装扩展时）
+      if (pre.missing.extension && extId && isBrowserInstalled(def.target)) {
+        if (await isExtensionBlocklisted(def.target, extId)) {
+          const cleanResult = await cleanExtensionBlocklist(def.target, extId);
+          log.info(
+            `[webbridge-pill-repair] ${def.target.name} blocklist cleanup: ${cleanResult}`,
+          );
+        }
+      }
+
+      // 4. 选择性修复：按 precheck 缺啥跑啥
+      const summary = await runWebbridgeSetupTask({
+        installer: () => installWebbridge({ force: false }),
+        installExtensions: async (id) => {
+          const spec = resolveWebbridgeExtensionSpec();
+          if (!spec) {
+            log.error(
+              "[webbridge-repair] 无法解析 ExtensionSpec（CRX 资源缺失），跳过扩展安装",
+            );
+            return [];
+          }
+          return installForDefaultBrowser(spec);
+        },
+        readConfig: readUserConfig,
+        writeConfig: writeUserConfig, // fallbackOnFailure:false 下不会被调
+        applyMode: applyBrowserModeConfig,
+        extensionId: extId,
+        installSkill: (bp) => installWebbridgeSkill(bp),
+        fallbackOnFailure: false,
+        skipBinaryInstall: !pre.missing.binary,
+        skipSkillInstall: !pre.missing.skill,
+        skipExtensionInstall: !pre.missing.extension,
+        existingBinaryPath: binaryPath,
+        logger: {
+          info: (m) => log.info(m),
+          error: (m) => log.error(m),
+        },
+      });
+
+      if (summary.outcome !== "webbridge-ready") {
+        return {
+          success: false,
+          code: "FAILED",
+          message: summary.error ?? "unknown",
+        };
+      }
+
+      // 5. 写 config 重启 gateway——确保新装的 binary/skill enable=true 立即生效
+      // 即便已经在 webbridge 模式，applyBrowserModeConfig 会把 skill enabled 翻回 true（修复 drift）
+      const config = readUserConfig();
+      Object.assign(config, applyBrowserModeConfig(config, "webbridge"));
+      writeUserConfigAndRestart(config);
+
+      // 修复路径走到这里时浏览器一定已关闭（缺扩展时 step 2 已要求关 + 杀 background）
+      // 含扩展修复 → 主动 open 引导页（同时启动浏览器触发"启用扩展"prompt）
+      // 仅 binary/skill 修复 → 不开浏览器，前端弹简短「WebBridge 已修复」modal
+      const openedBrowser =
+        pre.missing.extension && openWebbridgeEnableGuideInBrowser();
+      return {
+        success: true,
+        code: "READY",
+        browserName: def.target.name,
+        // 此次修复是否触及扩展——前端据此决定是否提示用户去浏览器点「启用扩展」
+        // 只装 binary/skill 时不需要这条提示，避免误导用户去找弹窗
+        includesExtension: pre.missing.extension,
+        browserRunning: false,
+        openedBrowser,
+      };
+    } catch (err: any) {
+      return {
+        success: false,
+        code: "FAILED",
+        message: err?.message || String(err),
+      };
+    }
+  });
+
+  // ── 重新配置浏览器扩展（幂等；用户手动删了 External Extensions 时的恢复入口） ──
+  ipcMain.handle("settings:webbridge-install-extensions", async () => {
+    try {
+      const spec = resolveWebbridgeExtensionSpec();
+      if (!spec) {
+        return {
+          success: false,
+          message:
+            "本构建未注入 WebBridge 扩展 ID 或缺少内置 CRX（dev 构建？）",
+        };
+      }
+      const summary = await installForAllDetectedBrowsers(spec);
+      return { success: true, data: summary };
+    } catch (err: any) {
+      return { success: false, message: err.message || String(err) };
+    }
+  });
+
+  // ── 清理 Chrome external_uninstalls 黑名单（用户 UI 卸载过 → 阻断 External Extensions JSON 安装） ──
+  ipcMain.handle(
+    "settings:webbridge-clean-blocklist",
+    async (_evt, browserId: string) => {
+      try {
+        const target = BROWSER_TARGETS.find((t) => t.id === browserId);
+        if (!target) {
+          return { success: false, message: `Unknown browser: ${browserId}` };
+        }
+        const extId = readWebbridgeExtensionId();
+        if (!extId) {
+          return {
+            success: false,
+            message: "本构建未注入 WebBridge 扩展 ID（dev 构建）",
+          };
+        }
+        // 1. 浏览器在跑 → 拒绝（Chrome 启动时会用内存 Preferences 覆盖磁盘改动）
+        //    Win Edge 后台残留 → 主动清理（关窗即认为用户意图退出）
+        const state = await getBrowserRunningState(target);
+        if (state === "foreground") {
+          return {
+            success: false,
+            code: "BROWSER_RUNNING",
+            message: `${target.name} 正在运行；请先完全退出后再点清理。`,
+          };
+        }
+        if (state === "background-only") {
+          const k = await killBackgroundProcesses(target);
+          log.info(
+            `[clean-blocklist] ${target.name} background-only 清理: killed=${k.killed}${
+              k.error ? ` error=${k.error}` : ""
+            }`,
+          );
+        }
+        // 2. 双检：UI 状态可能过期，实际已不在 blocklist
+        if (!(await isExtensionBlocklisted(target, extId))) {
+          return { success: true, code: "NOT_BLOCKLISTED" };
+        }
+        // 3. 改 Preferences
+        const result = await cleanExtensionBlocklist(target, extId);
+        return { success: true, code: result };
+      } catch (err: any) {
+        return { success: false, message: err.message || String(err) };
+      }
+    },
+  );
+
   // ── 读取 CLI 状态（enabled=用户偏好，installed=当前/旧版 wrapper 足迹） ──
   ipcMain.handle("settings:get-cli-status", async () => {
     try {
@@ -1647,16 +2216,12 @@ export function registerSettingsIpc(opts: SettingsIpcOptions = {}): void {
   });
 
   // ── 安装 CLI（老用户迁移入口，默认不阻断其它设置流程） ──
-  // 原始 error message 含绝对路径，只上报分类枚举给分析侧。
   ipcMain.handle("settings:install-cli", async () => {
     const result = await installCli();
     if (result.success) {
       analytics.track("cli_installed", { method: "settings" });
     } else {
-      analytics.track("cli_install_failed", {
-        method: "settings",
-        error_type: analytics.classifyErrorType(result.message),
-      });
+      analytics.track("cli_install_failed", { method: "settings", error: result.message });
     }
     return result;
   });
@@ -1667,10 +2232,7 @@ export function registerSettingsIpc(opts: SettingsIpcOptions = {}): void {
     if (result.success) {
       analytics.track("cli_uninstalled", { method: "settings" });
     } else {
-      analytics.track("cli_uninstall_failed", {
-        method: "settings",
-        error_type: analytics.classifyErrorType(result.message),
-      });
+      analytics.track("cli_uninstall_failed", { method: "settings", error: result.message });
     }
     return result;
   });
@@ -1765,6 +2327,41 @@ export function registerSettingsIpc(opts: SettingsIpcOptions = {}): void {
     }
   });
 
+}
+
+// 读取当前飞书配对模式状态，供主进程轮询器判断是否需要继续监听。
+export function getFeishuPairingModeState(): {
+  enabled: boolean;
+  dmPolicy: "open" | "pairing" | "allowlist";
+  approvedUserCount: number;
+} {
+  const config = readUserConfig();
+  const feishu = config?.channels?.feishu ?? {};
+  const enabled = isFeishuEnabled(config);
+  const dmPolicy = normalizeDmPolicy(feishu?.dmPolicy, "pairing");
+  const approvedUserIds = collectApprovedUserIds(FEISHU_CHANNEL, feishu?.allowFrom);
+  return {
+    enabled,
+    dmPolicy,
+    approvedUserCount: approvedUserIds.length,
+  };
+}
+
+// 读取当前企业微信配对模式状态，供主进程轮询器判断是否需要继续监听。
+export function getWecomPairingModeState(): {
+  enabled: boolean;
+  dmPolicy: "open" | "pairing" | "allowlist";
+  approvedUserCount: number;
+} {
+  const config = readUserConfig();
+  const wecom = config?.channels?.[WECOM_CHANNEL_ID] ?? {};
+  const enabled = config?.plugins?.entries?.["wecom-openclaw-plugin"]?.enabled === true;
+  const dmPolicy = normalizeDmPolicy(wecom?.dmPolicy, "pairing");
+  return {
+    enabled,
+    dmPolicy,
+    approvedUserCount: collectApprovedUserIds(WECOM_CHANNEL_ID, wecom?.allowFrom).length,
+  };
 }
 
 // 列出飞书待审批请求：解析 CLI 输出并统一成前端可消费结构。
@@ -1929,6 +2526,135 @@ function collectApprovedUserIds(channel: string, configAllowFrom: unknown): stri
   return dedupeEntries([...configEntries, ...storeEntries]);
 }
 
+// 返回首配自动批准窗口文件路径（sidecar，不污染 openclaw.json schema）。
+function resolveFeishuFirstPairingWindowPath(): string {
+  return path.join(resolveUserStateDir(), "credentials", FEISHU_FIRST_PAIRING_WINDOW_FILE);
+}
+
+// 读取首配自动批准窗口状态；解析失败返回 null，保证调用端逻辑简单。
+function readFeishuFirstPairingWindowState(): FeishuFirstPairingWindowState | null {
+  const filePath = resolveFeishuFirstPairingWindowPath();
+  if (!fs.existsSync(filePath)) {
+    return null;
+  }
+  try {
+    const parsed = parseJsonSafe(fs.readFileSync(filePath, "utf-8"));
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+      return null;
+    }
+    const openedAtMs = Number((parsed as Record<string, unknown>).openedAtMs);
+    const expiresAtMs = Number((parsed as Record<string, unknown>).expiresAtMs);
+    const consumedAtRaw = (parsed as Record<string, unknown>).consumedAtMs;
+    const consumedAtMs = consumedAtRaw == null ? null : Number(consumedAtRaw);
+    const consumedBy = String((parsed as Record<string, unknown>).consumedBy ?? "").trim();
+    if (!Number.isFinite(openedAtMs) || !Number.isFinite(expiresAtMs)) {
+      return null;
+    }
+    return {
+      openedAtMs,
+      expiresAtMs,
+      consumedAtMs: consumedAtMs == null || !Number.isFinite(consumedAtMs) ? null : consumedAtMs,
+      consumedBy,
+    };
+  } catch {
+    return null;
+  }
+}
+
+// 原子写入首配窗口状态文件，所有窗口相关状态变更都通过这个函数落盘。
+function writeFeishuFirstPairingWindowState(state: FeishuFirstPairingWindowState): void {
+  const filePath = resolveFeishuFirstPairingWindowPath();
+  const dir = path.dirname(filePath);
+  fs.mkdirSync(dir, { recursive: true });
+  fs.writeFileSync(filePath, JSON.stringify(state, null, 2), "utf-8");
+}
+
+// 开启首配自动批准时间窗；若已消费过则保持熔断，不再重开窗口。
+function openFeishuFirstPairingWindow(nowMs = Date.now()): void {
+  const prev = readFeishuFirstPairingWindowState();
+  if (prev?.consumedAtMs) {
+    return;
+  }
+  writeFeishuFirstPairingWindowState({
+    openedAtMs: nowMs,
+    expiresAtMs: nowMs + FEISHU_FIRST_PAIRING_WINDOW_TTL_MS,
+    consumedAtMs: null,
+    consumedBy: "",
+  });
+}
+
+// 关闭首配自动批准窗口：未消费场景删除文件；已消费场景保留熔断标记。
+export function closeFeishuFirstPairingWindow(): void {
+  const filePath = resolveFeishuFirstPairingWindowPath();
+  const prev = readFeishuFirstPairingWindowState();
+  if (prev?.consumedAtMs) {
+    return;
+  }
+  if (fs.existsSync(filePath)) {
+    fs.unlinkSync(filePath);
+  }
+}
+
+// 标记首配窗口已消费，无论批准成功或失败都熔断，避免重试风暴。
+export function consumeFeishuFirstPairingWindow(userId: string): void {
+  const nowMs = Date.now();
+  const prev = readFeishuFirstPairingWindowState();
+  if (prev) {
+    writeFeishuFirstPairingWindowState({
+      ...prev,
+      consumedAtMs: prev.consumedAtMs ?? nowMs,
+      consumedBy: prev.consumedBy || String(userId ?? "").trim(),
+    });
+    return;
+  }
+  writeFeishuFirstPairingWindowState({
+    openedAtMs: nowMs,
+    expiresAtMs: nowMs,
+    consumedAtMs: nowMs,
+    consumedBy: String(userId ?? "").trim(),
+  });
+}
+
+// 判断首配窗口是否处于生效期；过期或已消费都返回 false，并自动清理过期窗口。
+export function isFeishuFirstPairingWindowActive(nowMs = Date.now()): boolean {
+  const state = readFeishuFirstPairingWindowState();
+  if (!state) {
+    return false;
+  }
+  if (state.consumedAtMs) {
+    return false;
+  }
+  if (nowMs > state.expiresAtMs) {
+    closeFeishuFirstPairingWindow();
+    return false;
+  }
+  return nowMs >= state.openedAtMs;
+}
+
+// 根据当前飞书配置与授权状态维护首配窗口，避免把窗口状态散落在多个调用点。
+function reconcileFeishuFirstPairingWindow(config: any): void {
+  const enabled = isFeishuEnabled(config);
+  if (!enabled) {
+    closeFeishuFirstPairingWindow();
+    return;
+  }
+
+  const feishu = config?.channels?.feishu ?? {};
+  const dmPolicy = normalizeDmPolicy(feishu?.dmPolicy, "pairing");
+  if (dmPolicy !== "pairing") {
+    closeFeishuFirstPairingWindow();
+    return;
+  }
+
+  const approvedUserIds = collectApprovedUserIds(FEISHU_CHANNEL, feishu?.allowFrom);
+  if (approvedUserIds.length > 0) {
+    closeFeishuFirstPairingWindow();
+    return;
+  }
+
+  openFeishuFirstPairingWindow();
+}
+
 // 统一运行 openclaw CLI 子命令，复用 OneClaw 内嵌 runtime 与网关入口。
 async function runGatewayCli(args: string[]): Promise<CliRunResult> {
   const nodeBin = resolveNodeBin();
@@ -2029,7 +2755,7 @@ function writeChannelAllowFromStore(channel: string, entries: string[]): void {
   );
 }
 
-// 读取本地"已拒绝配对码"sidecar，用于过滤待审批列表。
+// 读取本地“已拒绝配对码”sidecar，用于过滤待审批列表。
 function readRejectedPairingStore(fileName: string): FeishuRejectedPairingStore {
   const filePath = path.join(resolveUserStateDir(), "credentials", fileName);
   if (!fs.existsSync(filePath)) {
@@ -2045,7 +2771,7 @@ function readRejectedPairingStore(fileName: string): FeishuRejectedPairingStore 
   }
 }
 
-// 写入本地"已拒绝配对码"sidecar，空数组时删除文件。
+// 写入本地“已拒绝配对码”sidecar，空数组时删除文件。
 function writeRejectedPairingStore(fileName: string, codes: string[]): void {
   const normalized = normalizeAllowFromEntries(codes);
   const dir = path.join(resolveUserStateDir(), "credentials");
@@ -2064,10 +2790,12 @@ function writeRejectedPairingStore(fileName: string, codes: string[]): void {
   fs.writeFileSync(filePath, JSON.stringify(payload, null, 2), "utf-8");
 }
 
+// 读取某个渠道的拒绝码列表。
 function readRejectedPairingCodes(fileName: string): string[] {
   return readRejectedPairingStore(fileName).codes;
 }
 
+// 追加单个拒绝码（幂等）。
 function appendRejectedPairingCode(fileName: string, code: string): void {
   const trimmed = String(code ?? "").trim();
   if (!trimmed) return;
@@ -2077,6 +2805,7 @@ function appendRejectedPairingCode(fileName: string, code: string): void {
   writeRejectedPairingStore(fileName, store.codes);
 }
 
+// 移除单个拒绝码（批准后自动清理）。
 function removeRejectedPairingCode(fileName: string, code: string): void {
   const trimmed = String(code ?? "").trim();
   if (!trimmed) return;
@@ -2086,6 +2815,7 @@ function removeRejectedPairingCode(fileName: string, code: string): void {
   writeRejectedPairingStore(fileName, nextCodes);
 }
 
+// 清理过期拒绝码：只保留当前 pending 列表里仍存在的 code。
 function pruneRejectedPairingCodes(fileName: string, activeCodes: Set<string>): void {
   const store = readRejectedPairingStore(fileName);
   if (store.codes.length === 0) return;
@@ -2094,6 +2824,7 @@ function pruneRejectedPairingCodes(fileName: string, activeCodes: Set<string>): 
   writeRejectedPairingStore(fileName, nextCodes);
 }
 
+// 渠道专用 sidecar 文件映射；目前只有飞书和企业微信会走这套拒绝码逻辑。
 function resolveRejectedPairingStoreFile(channel: string): string {
   if (channel === WECOM_CHANNEL_ID) {
     return WECOM_REJECTED_PAIRING_STORE_FILE;
@@ -2109,6 +2840,26 @@ function readFeishuAllowFromStore(): string[] {
 // 写入飞书 allowFrom store 文件（兼容保留原有字段）。
 function writeFeishuAllowFromStore(entries: string[]): void {
   writeChannelAllowFromStore(FEISHU_CHANNEL, entries);
+}
+
+// 读取拒绝码列表。
+function readFeishuRejectedPairingCodes(): string[] {
+  return readRejectedPairingCodes(FEISHU_REJECTED_PAIRING_STORE_FILE);
+}
+
+// 追加单个拒绝码（幂等）。
+function appendFeishuRejectedPairingCode(code: string): void {
+  appendRejectedPairingCode(FEISHU_REJECTED_PAIRING_STORE_FILE, code);
+}
+
+// 移除单个拒绝码（批准后自动清理）。
+function removeFeishuRejectedPairingCode(code: string): void {
+  removeRejectedPairingCode(FEISHU_REJECTED_PAIRING_STORE_FILE, code);
+}
+
+// 清理过期拒绝码：只保留当前 pending 列表里仍存在的 code。
+function pruneFeishuRejectedPairingCodes(activeCodes: Set<string>): void {
+  pruneRejectedPairingCodes(FEISHU_REJECTED_PAIRING_STORE_FILE, activeCodes);
 }
 
 // 补全授权条目的可读名称：用户/群聊优先查缓存，未命中则实时查询并回写缓存。
@@ -2482,7 +3233,7 @@ function extractProviderInfo(config: any): any {
     apiKey,
     baseURL,
     api,
-    supportImage: supportsImage,
+    supportsImage,
     configuredModels,
     raw: primary,
     savedProviders,
@@ -2534,4 +3285,3 @@ function maskApiKey(key: string): string {
   if (!key || key.length <= 8) return key ? "••••••••" : "";
   return key.slice(0, 4) + "••••" + key.slice(-4);
 }
-

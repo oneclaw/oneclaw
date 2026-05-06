@@ -18,6 +18,7 @@ import { renderExecApprovalPrompt } from "./views/exec-approval.ts";
 import { renderGatewayUrlConfirmation } from "./views/gateway-url-confirmation.ts";
 import { renderRestartGatewayDialog } from "./views/restart-gateway-dialog.ts";
 import { renderSharePrompt } from "./views/share-prompt.ts";
+import { renderWebbridgePillModal } from "./views/webbridge-pill-modal.ts";
 import { renderReleaseNotesModal } from "./views/release-notes-modal.ts";
 import { renderSetupView } from "./views/setup/setup-view.ts";
 import { renderSettingsView, cleanupSettingsView } from "./views/settings/settings-view.ts";
@@ -1588,6 +1589,12 @@ export function renderApp(state: AppViewState) {
             updateVersion: updateBannerState.version,
             updatePercent: updateBannerState.percent,
             updateShowBadge: updateBannerState.showBadge,
+            webbridgeRepairVisible: state.webbridgeRepairVisible,
+            webbridgeRepairBrowserName: state.webbridgeRepairBrowserName,
+            webbridgeRepairChecking: state.webbridgeRepairChecking,
+            onWebbridgeRepairClick: () => {
+              void state.onWebbridgeRepairClick();
+            },
             onSelectSession: (nextSessionKey: string) => handleSessionChange(state, nextSessionKey),
             onNewChat: () => createNewSession(state),
             onRenameSession: (key: string, newLabel: string) => {
@@ -2003,6 +2010,7 @@ export function renderApp(state: AppViewState) {
       ${renderRestartGatewayDialog(state)}
       ${renderSharePrompt(state)}
       ${renderReleaseNotesModal(state)}
+      ${renderWebbridgePillModal(state)}
       ${renderFeedbackDialog(feedbackState, {
         onClose: () => {
           feedbackState = createFeedbackDialogState();

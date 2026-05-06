@@ -468,6 +468,19 @@ function injectStyles() {
       width: 100%;
       margin-bottom: 16px;
     }
+    /* toggle 标题旁的 info 图标 — hover 显示 data-tooltip 文字 */
+    .oc-toggle-label .oc-info-icon {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      margin-left: 6px;
+      vertical-align: middle;
+      color: var(--text-secondary, #9ca3af);
+      cursor: help;
+    }
+    .oc-toggle-label .oc-info-icon:hover {
+      color: var(--text, #111);
+    }
 
     /* Override password-input to match setup form field sizes */
     .oc-setup-step .oc-password-input {

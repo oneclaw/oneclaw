@@ -135,6 +135,28 @@ type OneClawBridge = {
   reportSetupViewState?: (active: boolean) => void;
   onUpdateState?: (cb: (payload: OneClawUpdateState) => void) => (() => void) | void;
   getUpdateState?: () => Promise<OneClawUpdateState>;
+  // sidebar 「连接你的常用浏览器」pill 用：纯查询当前是否需要修复
+  settingsWebbridgeNeedsRepair?: () => Promise<{
+    success: boolean;
+    data?: {
+      visible: boolean;
+      defaultBrowser: { id: string; name: string } | null;
+    };
+    message?: string;
+  }>;
+  // pill 点击时主动修复（清 blocklist + 写 External JSON），需要浏览器关闭
+  settingsWebbridgePillRepair?: () => Promise<{
+    success: boolean;
+    code?: "READY" | "ALREADY_OK" | "BROWSER_RUNNING" | "DEFAULT_BROWSER_UNSUPPORTED" | "FAILED";
+    browserName?: string;
+    message?: string;
+    includesExtension?: boolean;
+    browserRunning?: boolean;
+    // 主进程已主动打开浏览器+引导页 → 前端跳过 modal（避免冗余双层提示）
+    openedBrowser?: boolean;
+  }>;
+  // setup-task 后台装完扩展、settings 修复完成时由主进程广播——chat-ui 据此重查 needs-repair
+  onWebbridgeStateChanged?: (cb: () => void) => (() => void) | void;
   getReleaseNotes?: () => Promise<ReleaseNotesData | null>;
   dismissReleaseNotes?: (version: string) => Promise<void>;
 };
@@ -358,6 +380,10 @@ export class OpenClawApp extends LitElement {
     settingsNotice: { state: true },
     showReleaseNotesModal: { state: true },
     releaseNotesData: { state: true },
+    webbridgeRepairVisible: { state: true },
+    webbridgeRepairBrowserName: { state: true },
+    webbridgeRepairChecking: { state: true },
+    webbridgePillModal: { state: true },
   };
 
   // 兼容 class field 的 define 语义：回灌实例字段到 Lit accessor，恢复响应式更新。
@@ -636,6 +662,23 @@ export class OpenClawApp extends LitElement {
   settingsNotice: string | null = null;
   showReleaseNotesModal = false;
   releaseNotesData: ReleaseNotesData | null = null;
+  // 当前是 webbridge 模式 + 浏览器扩展未启用 → 主窗左侧栏显示「连接你的常用浏览器」pill
+  // 用户点 pill → 重跑 needs-repair；扩展已启用则 pill 消失，否则保持
+  // checking 期间图标换成转圈 loader
+  webbridgeRepairVisible = false;
+  webbridgeRepairBrowserName: string | null = null;
+  webbridgeRepairChecking = false;
+  // Pill 修复反馈 modal —— null 隐藏；4 种 kind 决定标题/正文
+  // includesExtension: ready 场景下区分「修复了扩展（提示去启用）」vs「仅装 binary/skill（不提示）」
+  // browserRunning:    ready+includesExtension 场景下决定文案是「请重启」（在跑）还是「请打开」（已关）
+  //                    Chrome 跑着的时候不会主动读新写入的 External JSON，必须重启才会触发"启用扩展"弹窗
+  webbridgePillModal: {
+    kind: "ready" | "browser-running" | "unsupported" | "failed" | "success";
+    browserName?: string;
+    message?: string;
+    includesExtension?: boolean;
+    browserRunning?: boolean;
+  } | null = null;
   private sharePromptSendCount = 0;
   private sharePromptShownVersions = new Set<number>();
   private sharePromptCheckInFlight = false;
@@ -655,6 +698,7 @@ export class OpenClawApp extends LitElement {
   private appNavigateCleanup: (() => void) | null = null;
   private updateStateCleanup: (() => void) | null = null;
   private gatewayReadyCleanup: (() => void) | null = null;
+  private webbridgeStateCleanup: (() => void) | null = null;
 
   createRenderRoot() {
     return this;
@@ -666,6 +710,8 @@ export class OpenClawApp extends LitElement {
     this.bindAppNavigation();
     this.bindUpdateState();
     this.bindGatewayReady();
+    this.bindWebbridgeStateChanged();
+    this.bindWebbridgeRepairPoll();
     this.fetchReleaseNotes();
     // 启动时常驻 SSE 订阅 + 拉取 thread 列表（计算"过去未读"），
     // 让反馈入口红点在任意视图都能反映服务端推送的新消息。
@@ -694,6 +740,8 @@ export class OpenClawApp extends LitElement {
     this.updateStateCleanup = null;
     this.gatewayReadyCleanup?.();
     this.gatewayReadyCleanup = null;
+    this.webbridgeStateCleanup?.();
+    this.webbridgeStateCleanup = null;
     handleDisconnected(this as unknown as Parameters<typeof handleDisconnected>[0]);
     super.disconnectedCallback();
   }
@@ -795,7 +843,92 @@ export class OpenClawApp extends LitElement {
     }
   }
 
+  // 查 settings:webbridge-needs-repair → 控制左侧栏 pill 可见性 + 默认浏览器名（hover 用）
+  // 触发时机：
+  //   1) app 启动（bindWebbridgeRepairPoll 调一次）
+  //   2) gateway:ready（gateway 重启时即时刷新；见 bindGatewayReady）
+  //   3) webbridge:state-changed（setup-task 装完扩展、settings 修复完成时由主进程广播）
+  //   4) 用户点击 pill（onWebbridgeRepairClick；扩展启用是外部行为，OneClaw 拿不到事件，点一次查一次）
+  private async runWebbridgeRepairTick() {
+    const bridge = this.getOneClawBridge();
+    if (!bridge?.settingsWebbridgeNeedsRepair) return;
+    try {
+      const r = await bridge.settingsWebbridgeNeedsRepair();
+      const data = r?.success ? r?.data : undefined;
+      const visible = !!data?.visible;
+      const browserName = data?.defaultBrowser?.name ?? null;
+      if (visible !== this.webbridgeRepairVisible) {
+        this.webbridgeRepairVisible = visible;
+      }
+      if (browserName !== this.webbridgeRepairBrowserName) {
+        this.webbridgeRepairBrowserName = browserName;
+      }
+    } catch {
+      // 静默失败：不打扰用户
+    }
+  }
+
+  // pill 点击 → checking=true 显示转圈 → 跑主动修复 → 根据 code 给反馈 → 重查 needs-repair
+  // 修复路径：浏览器关 → 自动清 blocklist + 写 External JSON → alert 提示打开浏览器看启用提示
+  // 浏览器在跑 → alert 提示用户先关浏览器
+  async onWebbridgeRepairClick() {
+    if (this.webbridgeRepairChecking) return;
+    this.webbridgeRepairChecking = true;
+    try {
+      const bridge = this.getOneClawBridge();
+      if (bridge?.settingsWebbridgePillRepair) {
+        const r = await bridge.settingsWebbridgePillRepair();
+        const browserName = r?.browserName ?? this.webbridgeRepairBrowserName ?? "Chrome";
+        if (r?.success && r.code === "READY") {
+          // 主进程已经主动打开浏览器+引导页 → 不弹 modal，避免和浏览器里的引导页冗余
+          if (r.openedBrowser === true) {
+            // pill 仍由 needs-repair tick 控制——用户在浏览器启用扩展后下次 tick 自动消失
+          } else {
+            this.webbridgePillModal = {
+              kind: "ready",
+              browserName,
+              includesExtension: r.includesExtension === true,
+              browserRunning: r.browserRunning === true,
+            };
+          }
+        } else if (r?.success && r.code === "ALREADY_OK") {
+          // 三组件都 OK 且用户已在浏览器点过「启用扩展」——给一个明确的成功反馈
+          // pill 会被随后的 tick 隐藏；这条 modal 是用户的"修复确认信号"
+          this.webbridgePillModal = { kind: "success", browserName };
+        } else if (r?.code === "BROWSER_RUNNING") {
+          this.webbridgePillModal = { kind: "browser-running", browserName };
+        } else if (r?.code === "DEFAULT_BROWSER_UNSUPPORTED") {
+          this.webbridgePillModal = { kind: "unsupported" };
+        } else {
+          this.webbridgePillModal = { kind: "failed", message: r?.message };
+        }
+      }
+      // 修复后重查一次 needs-repair——若扩展真启用了 pill 自然消失
+      await this.runWebbridgeRepairTick();
+    } finally {
+      this.webbridgeRepairChecking = false;
+    }
+  }
+
+  private bindWebbridgeRepairPoll() {
+    void this.runWebbridgeRepairTick();
+  }
+
+  // 主进程通知 webbridge precheck 状态可能已变（setup 后台 task 装完扩展，或 settings 修复完成）
+  // 不重启 gateway 的场景下专用——避免 pill 卡在 app 启动那次 tick 的旧结果
+  private bindWebbridgeStateChanged() {
+    if (this.webbridgeStateCleanup) return;
+    const bridge = this.getOneClawBridge();
+    if (bridge?.onWebbridgeStateChanged) {
+      const unsubscribe = bridge.onWebbridgeStateChanged(() => {
+        void this.runWebbridgeRepairTick();
+      });
+      this.webbridgeStateCleanup = typeof unsubscribe === "function" ? unsubscribe : null;
+    }
+  }
+
   // 主进程通知 gateway 已就绪，立即重连（跳过指数退避盲等）
+  // 同时触发 webbridge precheck 重查——修复并启用会重启 gateway，借此事件即时刷新 pill
   private bindGatewayReady() {
     if (this.gatewayReadyCleanup) return;
     const bridge = this.getOneClawBridge();
@@ -804,6 +937,7 @@ export class OpenClawApp extends LitElement {
         if (!this.connected && this.client) {
           this.client.reconnectNow();
         }
+        void this.runWebbridgeRepairTick();
       });
       this.gatewayReadyCleanup = typeof unsubscribe === "function" ? unsubscribe : null;
     }
