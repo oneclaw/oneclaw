@@ -26,23 +26,23 @@ import {
 import { markSetupComplete } from "./oneclaw-config";
 import { recordSetupBaselineConfigSnapshot } from "./config-backup";
 import type { WindowManager } from "./window";
-import { applyBrowserModeConfig } from "./browser-mode-config";
-import { installWebbridge } from "./webbridge-installer";
 import {
-  installForDefaultBrowser,
-  isExtensionBlocklisted,
+  applyBrowserModeConfig,
   cleanExtensionBlocklist,
-} from "./browser-extension-installer";
-import { isBrowserInstalled } from "./browser-detector";
-import { getDefaultBrowser } from "./default-browser-detector";
-import {
-  getBrowserRunningState,
-  killBackgroundProcesses,
   DEFAULT_PROCESS_EXEC,
-} from "./browser-process-detector";
-import { runWebbridgeSetupTask } from "./webbridge-setup-task";
-import { installWebbridgeSkill } from "./webbridge-skill-installer";
-import { resolveWebbridgeExtensionSpec } from "./webbridge-extension-spec";
+  getBrowserRunningState,
+  getDefaultBrowser,
+  installForDefaultBrowser,
+  isBrowserInstalled,
+  isExtensionBlocklisted,
+  killBackgroundProcesses,
+} from "./browser";
+import {
+  installWebbridge,
+  installWebbridgeSkill,
+  resolveWebbridgeExtensionSpec,
+  runWebbridgeSetupTask,
+} from "./webbridge";
 import { readWebbridgeExtensionId } from "./constants";
 
 interface SetupIpcDeps {

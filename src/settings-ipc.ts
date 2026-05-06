@@ -18,37 +18,34 @@ import {
 } from "./constants";
 import {
   applyBrowserModeConfig,
+  BROWSER_TARGETS,
+  cleanExtensionBlocklist,
   coerceBrowserMode,
+  DEFAULT_PROCESS_EXEC,
   detectBrowserMode,
-} from "./browser-mode-config";
+  getBrowserRunningState,
+  getDefaultBrowser,
+  getExtensionStates,
+  installForAllDetectedBrowsers,
+  installForDefaultBrowser,
+  isBrowserInstalled,
+  isExtensionBlocklisted,
+  killBackgroundProcesses,
+  type ExtensionSpec,
+} from "./browser";
 import {
   migrateBrowserProfileForCurrentGateway,
   normalizeRequestedBrowserProfileForSave,
 } from "./browser-profile-config";
 import {
+  getWebbridgeInstallState,
+  getWebbridgePrecheck,
   installWebbridge,
+  installWebbridgeSkill,
   readCacheManifest,
-} from "./webbridge-installer";
-import {
-  installForAllDetectedBrowsers,
-  installForDefaultBrowser,
-  getExtensionStates,
-  isExtensionBlocklisted,
-  cleanExtensionBlocklist,
-  type ExtensionSpec,
-} from "./browser-extension-installer";
-import { resolveWebbridgeExtensionSpec } from "./webbridge-extension-spec";
-import { BROWSER_TARGETS, isBrowserInstalled } from "./browser-detector";
-import {
-  getBrowserRunningState,
-  killBackgroundProcesses,
-  DEFAULT_PROCESS_EXEC,
-} from "./browser-process-detector";
-import { getWebbridgeInstallState } from "./webbridge-status";
-import { getWebbridgePrecheck } from "./webbridge-precheck";
-import { getDefaultBrowser } from "./default-browser-detector";
-import { runWebbridgeSetupTask } from "./webbridge-setup-task";
-import { installWebbridgeSkill } from "./webbridge-skill-installer";
+  resolveWebbridgeExtensionSpec,
+  runWebbridgeSetupTask,
+} from "./webbridge";
 import { resolveOneclawConfigPath } from "./oneclaw-config";
 import {
   getConfigRecoveryData,

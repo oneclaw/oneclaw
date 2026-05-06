@@ -1,18 +1,348 @@
+// browser.ts — 浏览器检测 / 扩展安装 / 三模式配置
+// 合并自原 browser-detector.ts + browser-extension-installer.ts + browser-mode-config.ts
+import { execFile, spawnSync } from "child_process";
 import * as fs from "fs";
+import * as os from "os";
 import * as path from "path";
-import { execFile } from "child_process";
 import { promisify } from "util";
 import {
-  BROWSER_TARGETS,
-  BrowserTarget,
-  isBrowserInstalled,
-  resolveUserDataDir,
-} from "./browser-detector";
-import { getDefaultBrowser } from "./default-browser-detector";
-import {
-  isBrowserProcessRunning,
-  type ProcessExecutor,
-} from "./browser-process-detector";
+  CURRENT_CHROME_BROWSER_PROFILE,
+  LEGACY_CHROME_BROWSER_PROFILES,
+  migrateBrowserProfileForCurrentGateway,
+  normalizeRequestedBrowserProfileForSave,
+} from "./browser-profile-config";
+
+// ═══════════════════════════════════════════════════════════════════
+// 浏览器检测（targets / 默认浏览器 / 进程态）
+// ═══════════════════════════════════════════════════════════════════
+
+
+export interface BrowserTarget {
+  id: string;
+  name: string;
+  userDataDirMac: string;
+  userDataDirWin: string;
+  winRegistryKey: string;
+  // Preferences 所在子目录（相对 userDataDir）。Chromium 标准是 "Default"。
+  profileSubdir: string;
+  // 进程检测用：可执行文件名（macOS pgrep -f / Windows tasklist /FI）
+  processNameMac: string;
+  processNameWin: string;
+  // 真"装了"判定用：macOS app bundle 名（"Google Chrome.app"）
+  appNameMac: string;
+}
+
+export const BROWSER_TARGETS: readonly BrowserTarget[] = [
+  {
+    id: "chrome",
+    name: "Google Chrome",
+    userDataDirMac: "Library/Application Support/Google/Chrome",
+    userDataDirWin: "AppData/Local/Google/Chrome/User Data",
+    winRegistryKey: "HKCU\\Software\\Google\\Chrome\\Extensions",
+    profileSubdir: "Default",
+    processNameMac: "Google Chrome.app/Contents/MacOS/Google Chrome",
+    processNameWin: "chrome.exe",
+    appNameMac: "Google Chrome.app",
+  },
+  {
+    id: "edge",
+    name: "Microsoft Edge",
+    userDataDirMac: "Library/Application Support/Microsoft Edge",
+    userDataDirWin: "AppData/Local/Microsoft/Edge/User Data",
+    winRegistryKey: "HKCU\\Software\\Microsoft\\Edge\\Extensions",
+    profileSubdir: "Default",
+    processNameMac: "Microsoft Edge.app/Contents/MacOS/Microsoft Edge",
+    processNameWin: "msedge.exe",
+    appNameMac: "Microsoft Edge.app",
+  },
+];
+
+function resolveHome(): string {
+  const home =
+    process.platform === "win32" ? process.env.USERPROFILE : process.env.HOME;
+  return home ?? "";
+}
+
+export function resolveUserDataDir(target: BrowserTarget): string {
+  const rel =
+    process.platform === "win32" ? target.userDataDirWin : target.userDataDirMac;
+  return path.join(resolveHome(), rel);
+}
+
+// 真"装了"判定。
+// macOS：先看 /Applications/<App>.app 或 ~/Applications/<App>.app（覆盖系统装/用户装）；
+// 退而求其次：<userDataDir>/Local State 存在（Chromium 启动时创建，OneClaw 不会写）。
+// Windows：只用 <userDataDir>/Local State（Chromium 至少启动过一次）。
+// 注意：不能用「user data dir 是否存在」判定——OneClaw 写 External Extensions JSON 时
+// 会自己创建 user data dir 子目录，造成"幽灵安装"假象。
+//
+// 测试钩子：env ONECLAW_BROWSER_APPS_DIRS=":分隔" 可覆盖 macOS app 搜索路径
+// （绕开宿主机 /Applications 里真实装的浏览器对单元测试的污染）。
+function macAppSearchDirs(): string[] {
+  const override = process.env.ONECLAW_BROWSER_APPS_DIRS;
+  if (override) return override.split(":").filter(Boolean);
+  return ["/Applications", path.join(resolveHome(), "Applications")];
+}
+
+export function isBrowserInstalled(target: BrowserTarget): boolean {
+  if (process.platform === "darwin") {
+    for (const dir of macAppSearchDirs()) {
+      if (fs.existsSync(path.join(dir, target.appNameMac))) return true;
+    }
+  }
+  return fs.existsSync(path.join(resolveUserDataDir(target), "Local State"));
+}
+
+export function listInstalledBrowsers(): BrowserTarget[] {
+  return BROWSER_TARGETS.filter((t) => isBrowserInstalled(t));
+}
+
+// ───────────────────────────── 默认浏览器 ─────────────────────────────
+
+export interface DefaultBrowserResult {
+  target: BrowserTarget;
+}
+
+export interface DefaultBrowserDeps {
+  platform?: NodeJS.Platform;
+  runReg?: () => string | null;
+  readPlist?: () => any | null;
+}
+
+const PROG_ID_TO_TARGET: Record<string, string> = {
+  ChromeHTML: "chrome",
+  MSEdgeHTM: "edge",
+  MSEdgeMHT: "edge",
+};
+
+const BUNDLE_ID_TO_TARGET: Record<string, string> = {
+  "com.google.chrome": "chrome",
+  "com.microsoft.edgemac": "edge",
+};
+
+function defaultRunReg(): string | null {
+  try {
+    const r = spawnSync(
+      "reg",
+      [
+        "query",
+        "HKCU\\Software\\Microsoft\\Windows\\Shell\\Associations\\UrlAssociations\\http\\UserChoice",
+        "/v",
+        "ProgId",
+      ],
+      { encoding: "utf-8" },
+    );
+    if (r.status !== 0) return null;
+    const m = (r.stdout || "").match(/ProgId\s+REG_SZ\s+(\S+)/);
+    return m?.[1] ?? null;
+  } catch {
+    return null;
+  }
+}
+
+function defaultReadPlist(): any | null {
+  try {
+    const p = path.join(
+      os.homedir(),
+      "Library/Preferences/com.apple.LaunchServices/com.apple.launchservices.secure.plist",
+    );
+    if (!fs.existsSync(p)) return null;
+    const r = spawnSync("plutil", ["-convert", "json", "-o", "-", p], {
+      encoding: "utf-8",
+    });
+    if (r.status !== 0) return null;
+    return JSON.parse(r.stdout || "{}");
+  } catch {
+    return null;
+  }
+}
+
+export function getDefaultBrowser(
+  deps: DefaultBrowserDeps = {},
+): DefaultBrowserResult | null {
+  const platform = deps.platform ?? process.platform;
+  let targetId: string | undefined;
+
+  if (platform === "win32") {
+    const runReg = deps.runReg ?? defaultRunReg;
+    let progId: string | null;
+    try {
+      progId = runReg();
+    } catch {
+      return null;
+    }
+    if (!progId) return null;
+    targetId = PROG_ID_TO_TARGET[progId];
+  } else if (platform === "darwin") {
+    const readPlist = deps.readPlist ?? defaultReadPlist;
+    let plist: any;
+    try {
+      plist = readPlist();
+    } catch {
+      return null;
+    }
+    const handlers = plist?.LSHandlers;
+    if (!Array.isArray(handlers)) return null;
+    const https = handlers.find((h: any) => h?.LSHandlerURLScheme === "https");
+    const bundleId = https?.LSHandlerRoleAll;
+    if (typeof bundleId === "string") {
+      targetId = BUNDLE_ID_TO_TARGET[bundleId.toLowerCase()];
+    }
+  }
+
+  if (!targetId) return null;
+  const target = BROWSER_TARGETS.find((t) => t.id === targetId);
+  return target ? { target } : null;
+}
+
+// ───────────────────────────── 浏览器进程探测 ─────────────────────────────
+
+export type ProcessExecutor = (
+  cmd: string,
+  args: string[],
+) => Promise<{ stdout: string; code: number }>;
+
+export interface ProcessDetectorDeps {
+  exec?: ProcessExecutor;
+  platform?: NodeJS.Platform | string;
+}
+
+const execFileAsync = promisify(execFile);
+
+export const DEFAULT_PROCESS_EXEC: ProcessExecutor = async (cmd, args) => {
+  try {
+    const { stdout } = await execFileAsync(cmd, args);
+    return { stdout: String(stdout ?? ""), code: 0 };
+  } catch (err: any) {
+    return {
+      stdout: err.stdout ? String(err.stdout) : "",
+      code: typeof err.code === "number" ? err.code : 1,
+    };
+  }
+};
+
+/**
+ * 浏览器运行状态三态：
+ * - "not-running":      没有任何进程
+ * - "foreground":       至少一个进程有可见主窗口（用户感知"打开着"）
+ * - "background-only":  进程存在但全部无可见主窗口（典型场景：Win Edge 关窗后的后台扩展残留）
+ *
+ * macOS 不区分 background-only——退出 app 即真退；只返 not-running / foreground。
+ */
+export type BrowserRunningState =
+  | "not-running"
+  | "foreground"
+  | "background-only";
+
+function stripExe(name: string): string {
+  return name.replace(/\.exe$/i, "");
+}
+
+/**
+ * Win：用 PowerShell `Get-Process` + `MainWindowHandle` 判定可见主窗口。
+ *
+ * 为什么不用 `tasklist /v`：tasklist 的窗口标题字段是**本地化**的——
+ * 中文 Windows 显示 "暂缺"、日文 "なし"、英文 "N/A"。任何字符串过滤都会因
+ * 用户系统语言而失效。`MainWindowHandle` 是 Win32 API 直接返回的 HWND，
+ * 0 = 无可见主窗口，与系统 locale 无关。
+ *
+ * 输出协议：脚本 stdout 严格只输出三个字符串之一，便于直接 string compare。
+ */
+async function getWinRunningState(
+  target: BrowserTarget,
+  exec: ProcessExecutor,
+): Promise<BrowserRunningState> {
+  const procName = stripExe(target.processNameWin);
+  const ps =
+    `$p = Get-Process -Name '${procName}' -EA SilentlyContinue; ` +
+    `if (-not $p) { 'not-running' } ` +
+    `elseif (@($p | ? { $_.MainWindowHandle -ne 0 }).Count) { 'foreground' } ` +
+    `else { 'background-only' }`;
+  const r = await exec("powershell", ["-NoProfile", "-Command", ps]);
+  if (r.code !== 0) return "not-running";
+  const out = r.stdout.trim();
+  if (out === "foreground" || out === "background-only" || out === "not-running") {
+    return out;
+  }
+  return "not-running";
+}
+
+export async function getBrowserRunningState(
+  target: BrowserTarget,
+  deps: ProcessDetectorDeps = {},
+): Promise<BrowserRunningState> {
+  const exec = deps.exec ?? DEFAULT_PROCESS_EXEC;
+  const platform = deps.platform ?? process.platform;
+  try {
+    if (platform === "win32") {
+      return await getWinRunningState(target, exec);
+    }
+    const r = await exec("pgrep", ["-f", target.processNameMac]);
+    if (r.code === 0 && r.stdout.trim().length > 0) return "foreground";
+    return "not-running";
+  } catch {
+    return "not-running";
+  }
+}
+
+/**
+ * 简单"任一进程存在"检测——保留独立 tasklist/pgrep 实现：
+ * - 比 PowerShell 启动稍快，被 getExtensionStates 频繁调用
+ * - 语义不需要前台/后台区分（"进程在跑 → 内存 Preferences 会覆盖磁盘改动"）
+ * - tasklist 的 IMAGENAME 过滤是 locale-independent（不依赖窗口标题）
+ */
+export async function isBrowserProcessRunning(
+  target: BrowserTarget,
+  deps: ProcessDetectorDeps = {},
+): Promise<boolean> {
+  const exec = deps.exec ?? DEFAULT_PROCESS_EXEC;
+  const platform = deps.platform ?? process.platform;
+  try {
+    if (platform === "win32") {
+      const r = await exec("tasklist", [
+        "/FI",
+        `IMAGENAME eq ${target.processNameWin}`,
+        "/FO",
+        "CSV",
+        "/NH",
+      ]);
+      return (
+        r.code === 0 &&
+        r.stdout.toLowerCase().includes(target.processNameWin.toLowerCase())
+      );
+    }
+    const r = await exec("pgrep", ["-f", target.processNameMac]);
+    return r.code === 0 && r.stdout.trim().length > 0;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Win taskkill /F /T /IM <name>：强杀指定 image 的所有进程及子进程树。
+ * 用途：用户已关 Edge 窗口但后台扩展进程残留时，主动清理以让 External Extensions JSON
+ * 在下次冷启动被读取。Mac 上 no-op（macOS 没"background apps 保活"机制）。
+ */
+export async function killBackgroundProcesses(
+  target: BrowserTarget,
+  deps: ProcessDetectorDeps = {},
+): Promise<{ killed: boolean; error?: string }> {
+  const platform = deps.platform ?? process.platform;
+  if (platform !== "win32") return { killed: false };
+  const exec = deps.exec ?? DEFAULT_PROCESS_EXEC;
+  try {
+    const r = await exec("taskkill", ["/F", "/T", "/IM", target.processNameWin]);
+    if (r.code === 0) return { killed: true };
+    return { killed: false, error: r.stdout || `taskkill exit code ${r.code}` };
+  } catch (err: any) {
+    return { killed: false, error: err?.message ?? String(err) };
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// 扩展安装（External Extensions JSON / Win 注册表 / blocklist）
+// ═══════════════════════════════════════════════════════════════════
+
 
 export type InstallResult =
   | "installed"
@@ -54,7 +384,6 @@ export interface ExtensionSpec {
   crxVersion: string;
 }
 
-const execFileAsync = promisify(execFile);
 
 const defaultRegExecutor: RegExecutor = async (args) => {
   try {
@@ -540,4 +869,152 @@ export async function cleanExtensionBlocklist(
   );
   fs.writeFileSync(p, JSON.stringify(prefs), "utf-8");
   return "cleaned";
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// 三模式配置（openclaw / user / webbridge）
+// ═══════════════════════════════════════════════════════════════════
+
+export const BROWSER_MODES = ["openclaw", "user", "webbridge"] as const;
+
+export type BrowserMode = (typeof BROWSER_MODES)[number];
+
+// 老 IPC（feat/webbridge-on-main 早期版本）用的 alias —— 服务端宽容接受，落盘前归一化成 "user"。
+const LEGACY_BROWSER_MODE_ALIASES: Record<string, BrowserMode> = {
+  chrome: "user",
+};
+
+export function isBrowserMode(value: unknown): value is BrowserMode {
+  return (
+    typeof value === "string" &&
+    (BROWSER_MODES as readonly string[]).includes(value)
+  );
+}
+
+// 把传入字符串规范成现行 BrowserMode（吃下老 alias）
+export function coerceBrowserMode(value: unknown): BrowserMode | null {
+  if (typeof value !== "string") return null;
+  if (isBrowserMode(value)) return value;
+  return LEGACY_BROWSER_MODE_ALIASES[value] ?? null;
+}
+
+// openclaw.json 的最小形状——只列本模块会碰的字段；其他字段用 Record 兜底
+interface OneclawConfigShape {
+  browser?: {
+    defaultProfile?: string;
+    [key: string]: unknown;
+  };
+  plugins?: {
+    entries?: {
+      browser?: { enabled?: boolean; [key: string]: unknown };
+      [key: string]: unknown;
+    };
+    [key: string]: unknown;
+  };
+  skills?: {
+    entries?: {
+      "kimi-webbridge"?: { enabled?: boolean; [key: string]: unknown };
+      [key: string]: unknown;
+    };
+    [key: string]: unknown;
+  };
+  [key: string]: unknown;
+}
+
+export function applyBrowserModeConfig(
+  config: OneclawConfigShape,
+  mode: BrowserMode,
+): any {
+  switch (mode) {
+    case "openclaw":
+    case "user":
+      return applyOpenclawOrUserMode(config, mode);
+    case "webbridge":
+      return applyWebbridgeMode(config);
+  }
+}
+
+function applyWebbridgeMode(config: OneclawConfigShape): any {
+  return {
+    ...config,
+    plugins: {
+      ...(config.plugins ?? {}),
+      entries: {
+        ...(config.plugins?.entries ?? {}),
+        browser: {
+          ...(config.plugins?.entries?.browser ?? {}),
+          enabled: false,
+        },
+      },
+    },
+    skills: {
+      ...(config.skills ?? {}),
+      entries: {
+        ...(config.skills?.entries ?? {}),
+        "kimi-webbridge": {
+          ...(config.skills?.entries?.["kimi-webbridge"] ?? {}),
+          enabled: true,
+        },
+      },
+    },
+  };
+}
+
+export function detectBrowserMode(config: OneclawConfigShape): BrowserMode {
+  // webbridge 优先：插件被显式关掉 → 用户在 webbridge 模式
+  if (config?.plugins?.entries?.browser?.enabled === false) {
+    return "webbridge";
+  }
+  const stored =
+    typeof config?.browser?.defaultProfile === "string"
+      ? config.browser.defaultProfile.trim()
+      : "";
+  // 现代 user profile + 老 chrome 名都识别成 user 模式（OpenClaw 当前会话）
+  if (
+    stored === CURRENT_CHROME_BROWSER_PROFILE ||
+    LEGACY_CHROME_BROWSER_PROFILES.has(stored)
+  ) {
+    return "user";
+  }
+  return "openclaw";
+}
+
+function applyOpenclawOrUserMode(
+  config: OneclawConfigShape,
+  mode: "openclaw" | "user",
+): any {
+  // 复用 main 分支的 normalize 逻辑：
+  //   "openclaw" → 内置 dedicated profile
+  //   "user"     → CURRENT_CHROME_BROWSER_PROFILE，除非用户已显式创建同名自定义 profile
+  const stored = normalizeRequestedBrowserProfileForSave(config, mode);
+  const next = {
+    ...config,
+    browser: {
+      ...(config.browser ?? {}),
+      defaultProfile: stored,
+    },
+    plugins: {
+      ...(config.plugins ?? {}),
+      entries: {
+        ...(config.plugins?.entries ?? {}),
+        browser: {
+          ...(config.plugins?.entries?.browser ?? {}),
+          enabled: true,
+        },
+      },
+    },
+    skills: {
+      ...(config.skills ?? {}),
+      entries: {
+        ...(config.skills?.entries ?? {}),
+        "kimi-webbridge": {
+          ...(config.skills?.entries?.["kimi-webbridge"] ?? {}),
+          enabled: false,
+        },
+      },
+    },
+  };
+  // 顺手清掉旧 driver:"extension" profile，让 gateway 不会回到旧 relay 路径
+  migrateBrowserProfileForCurrentGateway(next);
+  return next;
 }

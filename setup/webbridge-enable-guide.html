@@ -321,8 +321,10 @@
     .chrome-popup-mock__btn-placeholder { background: #3f3f46; }
   }
   /* 真正保留的主操作按钮 + 红色 glow 动画
-     默认 = Chrome 风格（深绿底 + 「启用扩展程序」+ 主按钮在右）；
-     Edge 风格通过 .is-edge 修饰：黑底 + 「打开扩展」 + 主按钮在左 */
+     按钮位置由「平台」决定（Win 在左 / Mac 在右），颜色和文字由「浏览器」决定。
+     默认 = Mac 风格（主按钮在右）+ Chrome 颜色（深绿底）；
+     .is-button-left（Win）：把主按钮翻到左侧
+     .is-edge：覆盖颜色为黑底（文字由 JS 设置） */
   .chrome-popup-mock__btn {
     padding: 9px 18px;
     border-radius: 999px;
@@ -343,11 +345,11 @@
     0%, 100% { box-shadow: 0 0 0 0 rgba(192, 57, 43, 0.45); }
     50%      { box-shadow: 0 0 0 8px rgba(192, 57, 43, 0); }
   }
-  /* Edge 弹窗变体：主按钮放左侧 + 黑色背景 + 文字「打开扩展」；
-     辅助操作（删除）位置在右，仍用灰条占位 */
-  .chrome-popup-mock.is-edge .chrome-popup-mock__buttons {
+  /* 平台位置变体：Win 上主按钮在左侧；辅助操作（删除）位置在右，仍用灰条占位 */
+  .chrome-popup-mock.is-button-left .chrome-popup-mock__buttons {
     flex-direction: row-reverse;
   }
+  /* Edge 颜色变体：黑底覆盖默认深绿 */
   .chrome-popup-mock.is-edge .chrome-popup-mock__btn {
     background: #1f1f1f;
     color: #ffffff;
@@ -358,8 +360,8 @@
       color: #1f1f1f;
     }
   }
-  /* Edge 主按钮在左 → 箭头要往左移指向新位置 */
-  .arrow.is-edge {
+  /* Win：主按钮在左 → 箭头要往左移指向新位置 */
+  .arrow.is-button-left {
     right: 230px;
   }
 
@@ -429,6 +431,9 @@
       var ua = (navigator.userAgent || "").toLowerCase();
       var isEdge = browserParam === "edge" || (browserParam === "" && ua.indexOf("edg/") !== -1);
       var browserName = isEdge ? "Edge" : "Chrome";
+      // 平台判定：Win 上 Chrome/Edge 的「启用扩展」按钮在弹窗左侧，Mac 上在右侧。
+      // 跟浏览器无关，跟操作系统的 UI 习惯有关——按平台切换 mockup 按钮位置 + 箭头朝向。
+      var isWin = ua.indexOf("windows") !== -1;
       // 直达地址：Chrome=chrome://extensions/，Edge=edge://extensions/
       var scheme = isEdge ? "edge" : "chrome";
       var extUrl = scheme + "://extensions/";
@@ -537,11 +542,15 @@
       var installingText = document.getElementById("installingText");
       var fallback = document.getElementById("fallback");
 
-      // Edge 主按钮位置 + 颜色 + 文案都跟 Chrome 不一样，
-      // 用 is-edge 把弹窗 mockup 和箭头一起切换成 Edge 风格
+      // 颜色（Edge）和位置（Win）解耦：
+      //   - Edge 弹窗背景是黑底而非 Chrome 的深绿底 → .is-edge
+      //   - Win 上 Chrome/Edge 的「启用」按钮都在左侧 → .is-button-left（同时让箭头改指向左）
       if (isEdge) {
         if (popupMock) popupMock.classList.add("is-edge");
-        if (arrow) arrow.classList.add("is-edge");
+      }
+      if (isWin) {
+        if (popupMock) popupMock.classList.add("is-button-left");
+        if (arrow) arrow.classList.add("is-button-left");
       }
 
       installingText.textContent = copy.installingWait;
