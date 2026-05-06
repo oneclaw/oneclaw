@@ -39,16 +39,19 @@ export interface FeedbackCallbacks {
   onPreviewScreenshot: (src: string | null) => void;
 }
 
-export function renderFeedbackButton(onClick: () => void) {
+export function renderFeedbackButton(onClick: () => void, hasUnread = false) {
   return html`
     <button
-      class="feedback-trigger-btn"
+      class="feedback-trigger-btn ${hasUnread ? "feedback-trigger-btn--unread" : ""}"
       type="button"
       @click=${onClick}
       title=${t("feedback.title")}
       aria-label=${t("feedback.title")}
     >
-      ${icons.bug}
+      <span class="feedback-trigger-icon-wrap">
+        ${icons.bug}
+        ${hasUnread ? html`<span class="feedback-trigger-dot" aria-hidden="true"></span>` : nothing}
+      </span>
       <span class="feedback-trigger-label">${t("feedback.title")}</span>
     </button>
   `;
@@ -182,15 +185,19 @@ interface FeedbackThread {
   has_reply: boolean;
   created_at: string;
   updated_at: string;
+  last_reply_at?: string | null;  // 后端 §3.3 thread.updated 事件 + thread 列表已带；用于"过去未读"判定
 }
 
 interface FeedbackMessage {
   id: number;
-  thread_id: number;
-  role: "user" | "admin";
+  thread_id: number;          // 保留 UI 内部字段，SSE 入口将 feedback_id → thread_id 映射
+  role: "user" | "agent" | "official";
   content: string;
   file_keys: string[];
   created_at: string;
+  _pending?: boolean;          // 乐观更新标记：true = 临时气泡，灰度+重试状态
+  _failed?: boolean;           // 发送失败标记
+  _tempKey?: string;           // 客户端生成的临时 key，用于 HTTP 响应到达时替换
 }
 
 export interface FeedbackPanelState {
@@ -218,6 +225,15 @@ export interface FeedbackPanelState {
   detailReplyFilePreviews: string[];
   detailReplyFileNames: string[];
   detailReplySending: boolean;
+  // 实时化相关
+  unreadThreadIds: number[];   // 未读 thread id 列表，进入详情时清除该 id
+  sseConnected: boolean;       // SSE 是否已与 feedback 服务器握手成功
+  sseReconnecting: boolean;    // 当前是否在重连中
+  thinkingThreadIds: number[]; // 当前正在显示"AI 思考中"的 thread id（agent.thinking → agent.done 之间）
+  thinkingPhrase: string;      // 当前轮播的思考短语（由 app-render.ts 定时写入）
+  manualPendingThreadIds: number[]; // "人工回复模式"提示的 thread id（agent.manual_pending → message.created/agent.thinking 之间）
+  agentOnlineThreadIds: number[]; // "智能客服已上线"短暂提示的 thread id（agent.online 从 manual_pending 切回时显示，几秒后自动清除）
+  hasNewMessagesBelow: boolean; // 详情视图：用户不在底部时有新消息到达，显示"有新消息↓"浮动按钮
 }
 
 export function createFeedbackPanelState(): FeedbackPanelState {
@@ -243,6 +259,14 @@ export function createFeedbackPanelState(): FeedbackPanelState {
     detailReplyFilePreviews: [],
     detailReplyFileNames: [],
     detailReplySending: false,
+    unreadThreadIds: [],
+    sseConnected: false,
+    sseReconnecting: false,
+    thinkingThreadIds: [],
+    thinkingPhrase: "",
+    manualPendingThreadIds: [],
+    agentOnlineThreadIds: [],
+    hasNewMessagesBelow: false,
   };
 }
 
@@ -283,6 +307,8 @@ export interface FeedbackPanelCallbacks {
   onReplyPickFiles: () => void;
   onReplyRemoveFile: (index: number) => void;
   onReplySend: () => void;
+  onDetailScroll: () => void;         // 详情消息列表滚动事件
+  onScrollToBottom: () => void;       // "有新消息"按钮点击 → 滚到底部
   requestUpdate: () => void;
 }
 
@@ -307,6 +333,35 @@ export function renderFeedbackPanel(
         <img src=${state.newPreviewSrc} alt="preview" class="feedback-preview-img" />
       </div>
     ` : nothing}
+  `;
+}
+
+// 与 feedback 服务器的 SSE 连接状态徽章。三态：
+// - 已连接（绿点）  ：sseConnected=true
+// - 重连中（黄点）  ：sseReconnecting=true
+// - 未连接（灰点）  ：其他（如刚进入面板还未握手）
+function renderSseStatusBadge(state: FeedbackPanelState) {
+  const status = state.sseReconnecting
+    ? "reconnecting"
+    : state.sseConnected
+      ? "connected"
+      : "disconnected";
+  const labelKey =
+    status === "connected"
+      ? "feedback.sseConnected"
+      : status === "reconnecting"
+        ? "feedback.sseReconnecting"
+        : "feedback.sseDisconnected";
+  return html`
+    <span
+      class="feedback-sse-status feedback-sse-status--${status}"
+      role="status"
+      aria-live="polite"
+      title=${t(labelKey)}
+    >
+      <span class="feedback-sse-status__dot" aria-hidden="true"></span>
+      <span class="feedback-sse-status__label">${t(labelKey)}</span>
+    </span>
   `;
 }
 
@@ -346,7 +401,7 @@ function renderSidebarNav(
                   <div class="feedback-layout__nav-item-text">${thread.content}</div>
                   <div class="feedback-layout__nav-item-meta">
                     <span class="feedback-layout__nav-time">${timeAgo(thread.updated_at || thread.created_at)}</span>
-                    ${thread.has_reply
+                    ${state.unreadThreadIds.includes(thread.id)
                       ? html`<span class="feedback-layout__nav-badge">${t("feedback.hasReply")}</span>`
                       : nothing}
                   </div>
@@ -480,33 +535,59 @@ function renderDetailContent(
         </span>
       </div>
 
-      <div class="feedback-panel__messages">
-        ${state.detailLoading
-          ? html`<div class="feedback-panel__loading">${icons.loader}</div>`
-          : html`
-              <div class="feedback-msg feedback-msg--user">
-                <div class="feedback-msg__bubble">${thread.content}</div>
-                <div class="feedback-msg__time">${timeAgo(thread.created_at)}</div>
-              </div>
-              ${state.detailMessages.map((msg) => html`
-                <div class="feedback-msg ${msg.role === "user" ? "feedback-msg--user" : "feedback-msg--admin"}">
-                  ${msg.role === "admin"
-                    ? html`<div class="feedback-msg__label">${t("feedback.official")}</div>`
-                    : nothing}
-                  <div class="feedback-msg__bubble">${msg.content}</div>
-                  ${msg.file_keys?.length ? html`
-                    <div class="feedback-msg__attachments">
-                      ${msg.file_keys.map((key) => {
-                        const isImg = /\.(png|jpe?g|gif|webp|bmp)$/i.test(key);
-                        const name = key.split("_").slice(2).join("_") || key;
-                        return html`<span class="feedback-msg__attach-item">${isImg ? "[图片]" : `[${name}]`}</span>`;
-                      })}
-                    </div>
-                  ` : nothing}
-                  <div class="feedback-msg__time">${timeAgo(msg.created_at)}</div>
+      <div class="feedback-panel__messages-wrap">
+        <div class="feedback-panel__messages" @scroll=${() => callbacks.onDetailScroll()}>
+          ${state.detailLoading
+            ? html`<div class="feedback-panel__loading">${icons.loader}</div>`
+            : html`
+                <div class="feedback-msg feedback-msg--user">
+                  <div class="feedback-msg__bubble">${thread.content}</div>
+                  <div class="feedback-msg__time">${timeAgo(thread.created_at)}</div>
                 </div>
-              `)}
-            `}
+                ${state.detailMessages.map((msg) => html`
+                  <div class="feedback-msg ${msg.role === "user" ? "feedback-msg--user" : "feedback-msg--admin"}${msg._pending ? " feedback-msg--pending" : ""}${msg._failed ? " feedback-msg--failed" : ""}">
+                    ${msg.role !== "user"
+                      ? html`<div class="feedback-msg__label">${t("feedback.official")}</div>`
+                      : nothing}
+                    <div class="feedback-msg__bubble">${msg.content}</div>
+                    ${msg._failed ? html`<div class="feedback-msg__failed-hint">⚠ ${t("feedback.sendFailed")}</div>` : nothing}
+                    ${msg.file_keys?.length ? html`
+                      <div class="feedback-msg__attachments">
+                        ${msg.file_keys.map((key) => {
+                          const isImg = /\.(png|jpe?g|gif|webp|bmp)$/i.test(key);
+                          const name = key.split("_").slice(2).join("_") || key;
+                          return html`<span class="feedback-msg__attach-item">${isImg ? "[图片]" : `[${name}]`}</span>`;
+                        })}
+                      </div>
+                    ` : nothing}
+                    <div class="feedback-msg__time">${timeAgo(msg.created_at)}</div>
+                  </div>
+                `)}
+                ${thread.id !== undefined && state.thinkingThreadIds.includes(thread.id)
+                  ? html`
+                    <div class="feedback-msg feedback-msg--admin feedback-msg--thinking" aria-live="polite">
+                      <div class="feedback-msg__label">${t("feedback.official")}</div>
+                      <div class="feedback-msg__bubble feedback-msg__bubble--thinking">
+                        <span class="feedback-thinking-dots" aria-hidden="true"><span></span><span></span><span></span></span>
+                        <span class="feedback-thinking-text">${state.thinkingPhrase || t("feedback.aiThinking")}</span>
+                      </div>
+                    </div>
+                  `
+                  : nothing}
+                ${thread.id !== undefined && state.manualPendingThreadIds.includes(thread.id)
+                  ? html`<div class="feedback-manual-pending" aria-live="polite">${t("feedback.manualPending")}</div>`
+                  : thread.id !== undefined && state.agentOnlineThreadIds.includes(thread.id)
+                    ? html`<div class="feedback-manual-pending" aria-live="polite">${t("feedback.agentOnline")}</div>`
+                    : nothing}
+              `}
+        </div>
+        ${state.hasNewMessagesBelow ? html`
+          <button
+            class="feedback-panel__new-msg-btn"
+            type="button"
+            @click=${() => callbacks.onScrollToBottom()}
+          >${t("feedback.newMessagesBelow")} ↓</button>
+        ` : nothing}
       </div>
 
       ${isOpen
@@ -546,7 +627,7 @@ function renderDetailContent(
                 .value=${state.detailReplyContent}
                 @input=${(e: Event) => callbacks.onReplyChange((e.target as HTMLInputElement).value)}
                 @keydown=${(e: KeyboardEvent) => {
-                  if (e.key === "Enter" && !e.shiftKey && (state.detailReplyContent.trim() || state.detailReplyFiles.length > 0)) {
+                  if (e.key === "Enter" && !e.isComposing && !e.shiftKey && (state.detailReplyContent.trim() || state.detailReplyFiles.length > 0)) {
                     e.preventDefault();
                     callbacks.onReplySend();
                   }
@@ -565,3 +646,5 @@ function renderDetailContent(
     </div>
   `;
 }
+
+export type { FeedbackMessage, FeedbackThread };
