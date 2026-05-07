@@ -6,6 +6,7 @@ import * as https from "https";
 import { resolveUserStateDir } from "./constants";
 import type { GatewayState } from "./gateway-process";
 import * as log from "./logger";
+import { FeedbackSSE } from "./feedback-sse";
 
 // 反馈服务地址（构建时通过环境变量注入，回退到默认值）
 const FEEDBACK_URL =
@@ -24,6 +25,7 @@ interface FeedbackParams {
 interface FeedbackResult {
   ok: boolean;
   id?: number;
+  message?: unknown;   // POST /messages 时回填刚插入的 message 对象（供乐观更新替换）
   error?: string;
 }
 
@@ -88,11 +90,23 @@ function postMultipart(url: string, body: Buffer, boundary: string): Promise<Fee
           try {
             const json = JSON.parse(data);
             if (res.statusCode === 200) {
-              resolve({ ok: true, id: json.id });
+              // 兼容三种响应体：
+              //   1) { id, message }    — 包装格式
+              //   2) { id, content, ... } — 后端直接返回 message 对象（POST /messages 当前行为）
+              //   3) { id }             — feedback 主提交
+              if (json && typeof json === "object" && "message" in json) {
+                resolve({ ok: true, id: json.id, message: json.message });
+              } else if (json && typeof json === "object" && "id" in json && "content" in json) {
+                resolve({ ok: true, id: json.id, message: json });
+              } else {
+                resolve({ ok: true, id: json?.id });
+              }
             } else {
+              log.error(`postMultipart 非 200 响应: status=${res.statusCode} body=${data.slice(0, 500)}`);
               resolve({ ok: false, error: json.error || `HTTP ${res.statusCode}` });
             }
-          } catch {
+          } catch (e) {
+            log.error(`postMultipart 响应解析失败: status=${res.statusCode} body=${data.slice(0, 500)} err=${e}`);
             resolve({ ok: false, error: `HTTP ${res.statusCode}` });
           }
         });
@@ -235,6 +249,28 @@ function guessContentType(filename: string): string {
   return map[ext] || "application/octet-stream";
 }
 
+let sseClient: FeedbackSSE | null = null;
+const sseSubscribers = new Set<Electron.WebContents>();
+
+/** 仅广播给真正调用过 feedback:subscribe 的 webContents，避免 settings/setup 等无关窗口收到事件 */
+function broadcastToSubscribers(channel: string, payload?: unknown): void {
+  for (const wc of sseSubscribers) {
+    if (wc.isDestroyed()) {
+      sseSubscribers.delete(wc);
+      continue;
+    }
+    if (payload === undefined) wc.send(channel);
+    else wc.send(channel, payload);
+  }
+}
+
+/** 应用退出时调用，强制停止 SSE 连接 */
+export function stopFeedbackSse(): void {
+  sseClient?.stop();
+  sseClient = null;
+  sseSubscribers.clear();
+}
+
 // 注册反馈相关 IPC handler
 export function registerFeedbackIpc(deps: FeedbackIpcDeps): void {
   // feedback:threads — 获取用户的反馈列表
@@ -257,9 +293,11 @@ export function registerFeedbackIpc(deps: FeedbackIpcDeps): void {
   // feedback:reply — 用户追问（支持附件）
   ipcMain.handle("feedback:reply", async (_event, id: number, content: string, files?: Array<{name: string; base64: string}>) => {
     if (typeof id !== "number" || !Number.isInteger(id) || id <= 0) {
+      log.error(`feedback:reply 非法 thread id: ${id}`);
       return { ok: false, error: "invalid thread id" };
     }
     if ((!content || !content.trim()) && (!files || files.length === 0)) {
+      log.error(`feedback:reply 空内容: id=${id}`);
       return { ok: false, error: "content or files required" };
     }
     const deviceId = readDeviceId();
@@ -277,7 +315,41 @@ export function registerFeedbackIpc(deps: FeedbackIpcDeps): void {
     }
     parts.push(Buffer.from(`--${boundary}--\r\n`));
     const body = Buffer.concat(parts);
-    return postMultipart(url, body, boundary);
+    log.info(`feedback:reply 请求 POST ${url} content=${content.length}字 files=${files?.length ?? 0} bodySize=${body.length}`);
+    const result = await postMultipart(url, body, boundary);
+    if (result.ok) {
+      log.info(`feedback:reply 成功: id=${id} messageId=${result.id}`);
+    } else {
+      log.error(`feedback:reply 失败: id=${id} error=${result.error}`);
+    }
+    return result;
+  });
+
+  // feedback:show-error-dialog — 发送失败时弹出原生错误对话框，告知用户具体原因
+  ipcMain.handle("feedback:show-error-dialog", async (event, params: { title: string; message: string; detail?: string }) => {
+    const win = BrowserWindow.fromWebContents(event.sender);
+    // macOS 的 NSAlert 不显示 title 字段，只显示 message（粗体）+ detail。把 title 提到 message 顶部，原 message 顺延到 detail。
+    const isMac = process.platform === "darwin";
+    const message = isMac && params.title && params.title !== params.message
+      ? params.title
+      : params.message || params.title;
+    const detail = isMac
+      ? [params.message, params.detail].filter(Boolean).join("\n\n")
+      : params.detail || "";
+    const opts = {
+      type: "error" as const,
+      title: params.title || "发送失败",
+      message: message || "",
+      detail: detail || "",
+      buttons: ["好的"],
+      defaultId: 0,
+      noLink: true,
+    };
+    if (win) {
+      await dialog.showMessageBox(win, opts);
+    } else {
+      await dialog.showMessageBox(opts);
+    }
   });
 
   // feedback:pick-files — 打开文件选择器，默认目录为 .openclaw
@@ -455,5 +527,36 @@ export function registerFeedbackIpc(deps: FeedbackIpcDeps): void {
       log.error(`反馈提交失败: ${result.error}`);
     }
     return result;
+  });
+
+  // feedback:subscribe — 建立 SSE 长连接（幂等）
+  ipcMain.handle("feedback:subscribe", (event) => {
+    sseSubscribers.add(event.sender);
+    event.sender.once("destroyed", () => sseSubscribers.delete(event.sender));
+
+    if (sseClient) return { ok: true }; // 已有连接，复用
+
+    const deviceId = readDeviceId();
+    const base = FEEDBACK_URL.replace(/\/feedback\/?$/, "");
+    const url = `${base}/user/events?device_id=${encodeURIComponent(deviceId)}`;
+    log.info(`feedback:subscribe 建立 SSE 连接: ${base}/user/events`);
+    sseClient = new FeedbackSSE(url);
+    sseClient.on("event", (evt) => broadcastToSubscribers("feedback:event", evt));
+    sseClient.on("reconnecting", () => broadcastToSubscribers("feedback:reconnecting"));
+    sseClient.on("reconnected", () => broadcastToSubscribers("feedback:reconnected"));
+    sseClient.on("open", () => broadcastToSubscribers("feedback:open"));
+    sseClient.start();
+    return { ok: true };
+  });
+
+  // feedback:unsubscribe — 主动断开（用户离开反馈面板时）
+  ipcMain.handle("feedback:unsubscribe", (event) => {
+    sseSubscribers.delete(event.sender);
+    if (sseSubscribers.size === 0) {
+      sseClient?.stop();
+      sseClient = null;
+      log.info("feedback:unsubscribe 最后一个订阅者退出，SSE 已停止");
+    }
+    return { ok: true };
   });
 }
