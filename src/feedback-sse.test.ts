@@ -1,7 +1,7 @@
 // src/feedback-sse.test.ts
 import test from "node:test";
 import assert from "node:assert/strict";
-import { parseSseFrames } from "./feedback-sse";
+import { parseSseFrames, FeedbackSSE } from "./feedback-sse";
 
 test("parseSseFrames 应按 \\n\\n 切出完整帧并返回剩余 buffer", () => {
   const buf = "event: message\ndata: {\"type\":\"message.created\",\"thread_id\":1,\"message\":{\"id\":10}}\n\nevent: ping\ndata: {}\n\nevent: message\ndata: {\"type\":\"thread";
@@ -51,4 +51,21 @@ test("parseSseFrames 遇到未知 type 默认丢弃，不抛异常", () => {
   assert.equal(events.length, 1);
   assert.equal(events[0].type, "message.created");
   assert.equal(rest, "");
+});
+
+test("scheduleReconnect 在并发触发时只调度一次连接", async () => {
+  // 用 stub 替换 connect()，仅验证调度幂等
+  const sse = new FeedbackSSE("http://test/events");
+  let connectCalls = 0;
+  (sse as any).connect = () => {
+    connectCalls++;
+  };
+  // 模拟 req.destroy() 同时触发 req.error 和 res.error 两条路径
+  (sse as any).scheduleReconnect();
+  (sse as any).scheduleReconnect();
+  (sse as any).scheduleReconnect();
+  // 等首个 setTimeout 触发（reconnectDelay 初始 1000ms，给 1100 留余量）
+  await new Promise((r) => setTimeout(r, 1100));
+  assert.equal(connectCalls, 1);
+  sse.stop();
 });
