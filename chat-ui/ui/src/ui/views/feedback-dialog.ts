@@ -227,8 +227,6 @@ export interface FeedbackPanelState {
   detailReplySending: boolean;
   // 实时化相关
   unreadThreadIds: number[];   // 未读 thread id 列表，进入详情时清除该 id
-  sseConnected: boolean;       // SSE 是否已与 feedback 服务器握手成功
-  sseReconnecting: boolean;    // 当前是否在重连中
   thinkingThreadIds: number[]; // 当前正在显示"AI 思考中"的 thread id（agent.thinking → agent.done 之间）
   thinkingPhrase: string;      // 当前轮播的思考短语（由 app-render.ts 定时写入）
   manualPendingThreadIds: number[]; // "人工回复模式"提示的 thread id（agent.manual_pending → message.created/agent.thinking 之间）
@@ -260,8 +258,6 @@ export function createFeedbackPanelState(): FeedbackPanelState {
     detailReplyFileNames: [],
     detailReplySending: false,
     unreadThreadIds: [],
-    sseConnected: false,
-    sseReconnecting: false,
     thinkingThreadIds: [],
     thinkingPhrase: "",
     manualPendingThreadIds: [],
@@ -333,35 +329,6 @@ export function renderFeedbackPanel(
         <img src=${state.newPreviewSrc} alt="preview" class="feedback-preview-img" />
       </div>
     ` : nothing}
-  `;
-}
-
-// 与 feedback 服务器的 SSE 连接状态徽章。三态：
-// - 已连接（绿点）  ：sseConnected=true
-// - 重连中（黄点）  ：sseReconnecting=true
-// - 未连接（灰点）  ：其他（如刚进入面板还未握手）
-function renderSseStatusBadge(state: FeedbackPanelState) {
-  const status = state.sseReconnecting
-    ? "reconnecting"
-    : state.sseConnected
-      ? "connected"
-      : "disconnected";
-  const labelKey =
-    status === "connected"
-      ? "feedback.sseConnected"
-      : status === "reconnecting"
-        ? "feedback.sseReconnecting"
-        : "feedback.sseDisconnected";
-  return html`
-    <span
-      class="feedback-sse-status feedback-sse-status--${status}"
-      role="status"
-      aria-live="polite"
-      title=${t(labelKey)}
-    >
-      <span class="feedback-sse-status__dot" aria-hidden="true"></span>
-      <span class="feedback-sse-status__label">${t(labelKey)}</span>
-    </span>
   `;
 }
 

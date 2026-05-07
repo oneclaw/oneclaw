@@ -250,11 +250,25 @@ function guessContentType(filename: string): string {
 }
 
 let sseClient: FeedbackSSE | null = null;
+const sseSubscribers = new Set<Electron.WebContents>();
+
+/** 仅广播给真正调用过 feedback:subscribe 的 webContents，避免 settings/setup 等无关窗口收到事件 */
+function broadcastToSubscribers(channel: string, payload?: unknown): void {
+  for (const wc of sseSubscribers) {
+    if (wc.isDestroyed()) {
+      sseSubscribers.delete(wc);
+      continue;
+    }
+    if (payload === undefined) wc.send(channel);
+    else wc.send(channel, payload);
+  }
+}
 
 /** 应用退出时调用，强制停止 SSE 连接 */
 export function stopFeedbackSse(): void {
   sseClient?.stop();
   sseClient = null;
+  sseSubscribers.clear();
 }
 
 // 注册反馈相关 IPC handler
@@ -314,11 +328,19 @@ export function registerFeedbackIpc(deps: FeedbackIpcDeps): void {
   // feedback:show-error-dialog — 发送失败时弹出原生错误对话框，告知用户具体原因
   ipcMain.handle("feedback:show-error-dialog", async (event, params: { title: string; message: string; detail?: string }) => {
     const win = BrowserWindow.fromWebContents(event.sender);
+    // macOS 的 NSAlert 不显示 title 字段，只显示 message（粗体）+ detail。把 title 提到 message 顶部，原 message 顺延到 detail。
+    const isMac = process.platform === "darwin";
+    const message = isMac && params.title && params.title !== params.message
+      ? params.title
+      : params.message || params.title;
+    const detail = isMac
+      ? [params.message, params.detail].filter(Boolean).join("\n\n")
+      : params.detail || "";
     const opts = {
       type: "error" as const,
       title: params.title || "发送失败",
-      message: params.message || "",
-      detail: params.detail || "",
+      message: message || "",
+      detail: detail || "",
       buttons: ["好的"],
       defaultId: 0,
       noLink: true,
@@ -508,42 +530,33 @@ export function registerFeedbackIpc(deps: FeedbackIpcDeps): void {
   });
 
   // feedback:subscribe — 建立 SSE 长连接（幂等）
-  ipcMain.handle("feedback:subscribe", () => {
-    if (sseClient) return { ok: true };
+  ipcMain.handle("feedback:subscribe", (event) => {
+    sseSubscribers.add(event.sender);
+    event.sender.once("destroyed", () => sseSubscribers.delete(event.sender));
+
+    if (sseClient) return { ok: true }; // 已有连接，复用
+
     const deviceId = readDeviceId();
     const base = FEEDBACK_URL.replace(/\/feedback\/?$/, "");
     const url = `${base}/user/events?device_id=${encodeURIComponent(deviceId)}`;
     log.info(`feedback:subscribe 建立 SSE 连接: ${base}/user/events`);
     sseClient = new FeedbackSSE(url);
-    sseClient.on("event", (evt) => {
-      for (const w of BrowserWindow.getAllWindows()) {
-        if (!w.isDestroyed()) w.webContents.send("feedback:event", evt);
-      }
-    });
-    sseClient.on("reconnecting", () => {
-      for (const w of BrowserWindow.getAllWindows()) {
-        if (!w.isDestroyed()) w.webContents.send("feedback:reconnecting");
-      }
-    });
-    sseClient.on("reconnected", () => {
-      for (const w of BrowserWindow.getAllWindows()) {
-        if (!w.isDestroyed()) w.webContents.send("feedback:reconnected");
-      }
-    });
-    sseClient.on("open", () => {
-      for (const w of BrowserWindow.getAllWindows()) {
-        if (!w.isDestroyed()) w.webContents.send("feedback:open");
-      }
-    });
+    sseClient.on("event", (evt) => broadcastToSubscribers("feedback:event", evt));
+    sseClient.on("reconnecting", () => broadcastToSubscribers("feedback:reconnecting"));
+    sseClient.on("reconnected", () => broadcastToSubscribers("feedback:reconnected"));
+    sseClient.on("open", () => broadcastToSubscribers("feedback:open"));
     sseClient.start();
     return { ok: true };
   });
 
   // feedback:unsubscribe — 主动断开（用户离开反馈面板时）
-  ipcMain.handle("feedback:unsubscribe", () => {
-    sseClient?.stop();
-    sseClient = null;
-    log.info("feedback:unsubscribe SSE 已停止");
+  ipcMain.handle("feedback:unsubscribe", (event) => {
+    sseSubscribers.delete(event.sender);
+    if (sseSubscribers.size === 0) {
+      sseClient?.stop();
+      sseClient = null;
+      log.info("feedback:unsubscribe 最后一个订阅者退出，SSE 已停止");
+    }
     return { ok: true };
   });
 }

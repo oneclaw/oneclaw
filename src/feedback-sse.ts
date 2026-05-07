@@ -140,6 +140,14 @@ export class FeedbackSSE extends EventEmitter {
 
   private connect(): void {
     if (this.closed) return;
+    // 清掉上一条连接的 listener 和 buffer，杜绝幽灵 res 污染共享 buffer
+    if (this.req) {
+      this.req.removeAllListeners();
+      this.req.destroy();
+      this.req = null;
+    }
+    this.buffer = "";
+
     const parsed = new URL(this.url);
     const mod = parsed.protocol === "https:" ? https : http;
     this.req = mod.request(
@@ -190,6 +198,7 @@ export class FeedbackSSE extends EventEmitter {
 
   private scheduleReconnect(): void {
     if (this.closed) return;
+    if (this.reconnectTimer) return; // 已在调度，幂等返回，避免 req/res 双 error 同时排队两个 setTimeout
     const delay = this.reconnectDelay;
     this.reconnectDelay = Math.min(this.reconnectDelay * 2, 8000);
     this.wasReconnecting = true;

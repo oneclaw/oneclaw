@@ -76,6 +76,14 @@ declare global {
       feedbackThread?: (id: number) => Promise<{ ok: boolean; data?: any; error?: string }>;
       feedbackReply?: (id: number, content: string, files?: Array<{name: string; base64: string}>) => Promise<{ ok: boolean; id?: number; message?: unknown; error?: string }>;
       feedbackPickFiles?: () => Promise<{ files: Array<{name: string; base64: string}> } | null>;
+      feedbackShowErrorDialog?: (params: { title: string; message: string; detail?: string }) => Promise<void>;
+      feedbackSubscribe?: () => Promise<{ ok: boolean }>;
+      feedbackUnsubscribe?: () => Promise<{ ok: boolean }>;
+      onFeedbackEvent?: (cb: (evt: unknown) => void) => () => void;
+      onFeedbackOpen?: (cb: () => void) => () => void;
+      onFeedbackReconnecting?: (cb: () => void) => () => void;
+      onFeedbackReconnected?: (cb: () => void) => () => void;
+      captureWindow?: () => Promise<string | null>;
     };
   }
 }
@@ -293,7 +301,7 @@ async function openFeedbackView(state: AppViewState) {
   // 先截图（视图切换前），再打开新建表单
   let capturedBase64: string | null = null;
   try {
-    capturedBase64 = await (window as any).oneclaw.captureWindow();
+    capturedBase64 = (await window.oneclaw?.captureWindow?.()) ?? null;
   } catch { /* 截图失败不阻塞 */ }
 
   setOneClawView(state, "feedback");
@@ -359,15 +367,26 @@ async function loadFeedbackThreads(state: AppViewState) {
 }
 
 async function loadFeedbackThreadDetail(state: AppViewState, id: number) {
+  // 重连时同样调用本函数；为保住"在途的 pending 占位"，仅当当前正打开的就是 id 时保留占位，
+  // 切换到不同 thread 时按原逻辑清空。
+  const samethread = feedbackPanelState.detailThread?.id === id;
+  const pendingPlaceholders = samethread
+    ? (feedbackPanelState.detailMessages ?? []).filter((m) => m._pending)
+    : [];
   feedbackPanelState = { ...feedbackPanelState, view: "detail", detailLoading: true, detailThread: null, detailMessages: [], detailReplyContent: "", detailReplyFiles: [], detailReplyFilePreviews: [], detailReplyFileNames: [] };
   state.requestUpdate();
   try {
     const result = await window.oneclaw?.feedbackThread?.(id);
     if (result?.ok && result.data) {
+      const fresh: FeedbackMessage[] = result.data.messages ?? [];
+      // 合并 pending 占位回去，按时间排序；id 去重避免占位与服务端真实消息重复
+      const realIds = new Set(fresh.filter((m) => m.id > 0).map((m) => m.id));
+      const survivedPending = pendingPlaceholders.filter((m) => m.id <= 0 || !realIds.has(m.id));
+      const merged = [...fresh, ...survivedPending].sort((a, b) => a.created_at.localeCompare(b.created_at));
       feedbackPanelState = {
         ...feedbackPanelState,
         detailThread: result.data.feedback ?? result.data,
-        detailMessages: result.data.messages ?? [],
+        detailMessages: merged,
         detailLoading: false,
       };
     } else {
@@ -458,7 +477,7 @@ function translateFeedbackError(err: string | undefined): { title: string; messa
 /** 弹出原生错误对话框（通过 IPC 调用主进程的 dialog.showMessageBox） */
 function showFeedbackReplyErrorDialog(err: string | undefined): Promise<void> | void {
   const payload = translateFeedbackError(err);
-  return (window as any).oneclaw?.feedbackShowErrorDialog?.(payload);
+  return window.oneclaw?.feedbackShowErrorDialog?.(payload);
 }
 
 /** 详情页 scroll 事件回调：用户滚到底部时清除"有新消息"提示 */
@@ -587,16 +606,10 @@ function clearAgentOnline(threadId: number) {
 
 function appendDetailMessageDedup(msg: FeedbackMessage) {
   const list = feedbackPanelState.detailMessages ?? [];
-  // 以 id 为主键去重；id <= 0 表示乐观占位，不参与去重判定
+  // 以 id 为主键去重；id <= 0 表示乐观占位，不参与去重判定。
+  // 不再按 content 移除占位 —— SSE echo 乱序时按 content 匹配会错配；占位由 POST 响应路径用 _tempKey 精确替换。
   if (msg.id > 0 && list.some((m) => m.id === msg.id)) return;
-  // 只移除"最早"一条匹配的占位，避免用户连发同样内容时把后续占位也吞掉
-  const placeholderIdx = list.findIndex(
-    (m) => m._pending && m._tempKey && msg.role === "user" && m.content === msg.content,
-  );
-  const filtered = placeholderIdx >= 0
-    ? [...list.slice(0, placeholderIdx), ...list.slice(placeholderIdx + 1)]
-    : list;
-  const merged = [...filtered, msg].sort((a, b) => a.created_at.localeCompare(b.created_at));
+  const merged = [...list, msg].sort((a, b) => a.created_at.localeCompare(b.created_at));
   feedbackPanelState = { ...feedbackPanelState, detailMessages: merged };
 }
 
@@ -728,44 +741,24 @@ function handleFeedbackEvent(state: AppViewState, evt: FeedbackSseEvent) {
 
 function subscribeFeedbackSse(state: AppViewState) {
   if (feedbackSseUnsub) return; // 幂等
-  // 重置连接状态：握手完成（onFeedbackOpen）后才置 true
-  feedbackPanelState = { ...feedbackPanelState, sseConnected: false, sseReconnecting: false };
-  state.requestUpdate();
-  void (window as any).oneclaw?.feedbackSubscribe?.();
-  feedbackSseUnsub = (window as any).oneclaw?.onFeedbackEvent?.((evt: FeedbackSseEvent) => {
-    handleFeedbackEvent(state, evt);
+  void window.oneclaw?.feedbackSubscribe?.();
+  feedbackSseUnsub = window.oneclaw?.onFeedbackEvent?.((evt) => {
+    handleFeedbackEvent(state, evt as FeedbackSseEvent);
   }) ?? null;
-  feedbackOpenUnsub = (window as any).oneclaw?.onFeedbackOpen?.(() => {
-    feedbackPanelState = { ...feedbackPanelState, sseConnected: true, sseReconnecting: false };
-    state.requestUpdate();
-  }) ?? null;
-  feedbackReconnectUnsub = (window as any).oneclaw?.onFeedbackReconnecting?.(() => {
-    // 仅切换 UI 状态；refetch 等到 reconnected 才触发，避免在 outage 期间反复打空炮
-    feedbackPanelState = { ...feedbackPanelState, sseConnected: false, sseReconnecting: true };
-    state.requestUpdate();
-  }) ?? null;
-  feedbackReconnectedUnsub = (window as any).oneclaw?.onFeedbackReconnected?.(() => {
+  feedbackReconnectedUnsub = window.oneclaw?.onFeedbackReconnected?.(() => {
     // 重连成功（首字节到达）→ 兜底刷新列表 + 打开的详情
-    feedbackPanelState = { ...feedbackPanelState, sseConnected: true, sseReconnecting: false };
-    state.requestUpdate();
     loadFeedbackThreads(state);
     const openId = feedbackPanelState.detailThread?.id ?? null;
     if (openId) void loadFeedbackThreadDetail(state, openId);
   }) ?? null;
 }
 
-function unsubscribeFeedbackSse(state: AppViewState) {
+function unsubscribeFeedbackSse(_state: AppViewState) {
   feedbackSseUnsub?.();
-  feedbackOpenUnsub?.();
-  feedbackReconnectUnsub?.();
   feedbackReconnectedUnsub?.();
   feedbackSseUnsub = null;
-  feedbackOpenUnsub = null;
-  feedbackReconnectUnsub = null;
   feedbackReconnectedUnsub = null;
-  void (window as any).oneclaw?.feedbackUnsubscribe?.();
-  feedbackPanelState = { ...feedbackPanelState, sseConnected: false, sseReconnecting: false };
-  state.requestUpdate();
+  void window.oneclaw?.feedbackUnsubscribe?.();
   // 注意：不在这里清 thinkingThreadIds —— 由 setOneClawView 调用 pauseThinking 保留状态，
   // 用户重新进入时通过 resumeThinking 恢复。clearAllThinking 仅在应用退出等场景使用。
 }
@@ -1048,7 +1041,12 @@ function buildFeedbackPanelCallbacks(state: AppViewState) {
           merged.sort((a, b) => a.created_at.localeCompare(b.created_at));
           feedbackPanelState = { ...feedbackPanelState, detailMessages: merged };
         } else if (result?.ok) {
-          // 3b. 后端 200 但没回 message（兼容老版本）：保留临时占位，依赖 SSE echo 替换；无需改 state
+          // 3b. 后端 200 但没回 message：客户端按 _tempKey 清占位，否则会永远 pending。
+          // SSE echo 到达时按 id 去重，不会重复显示；老服务端不发 SSE echo 时会丢气泡，下次拉详情时补回。
+          feedbackPanelState = {
+            ...feedbackPanelState,
+            detailMessages: feedbackPanelState.detailMessages.filter((msg) => msg._tempKey !== tempKey),
+          };
         } else {
           // 3c. 失败：把临时气泡标红（保留给用户，避免丢字）+ 弹原生错误对话框
           feedbackPanelState = {
@@ -1103,9 +1101,7 @@ let feedbackState: FeedbackDialogState = createFeedbackDialogState();
 
 let feedbackPanelState: FeedbackPanelState = createFeedbackPanelState();
 let feedbackSseUnsub: (() => void) | null = null;
-let feedbackReconnectUnsub: (() => void) | null = null;
 let feedbackReconnectedUnsub: (() => void) | null = null;
-let feedbackOpenUnsub: (() => void) | null = null;
 
 // toast 定时器句柄
 let toastTimer: ReturnType<typeof setTimeout> | null = null;
