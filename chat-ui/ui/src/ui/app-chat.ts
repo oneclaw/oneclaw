@@ -23,7 +23,6 @@ export type ChatHost = {
   basePath: string;
   hello: GatewayHelloOk | null;
   chatAvatarUrl: string | null;
-  refreshSessionsAfterChat: Set<string>;
   sessionsResult: { sessions: Array<{ key: string; label?: string }> } | null;
 };
 
@@ -86,7 +85,6 @@ function enqueueChatMessage(
   host: ChatHost,
   text: string,
   attachments?: ChatAttachment[],
-  refreshSessions?: boolean,
 ) {
   const trimmed = text.trim();
   const hasAttachments = Boolean(attachments && attachments.length > 0);
@@ -100,7 +98,6 @@ function enqueueChatMessage(
       text: trimmed,
       createdAt: Date.now(),
       attachments: hasAttachments ? attachments?.map((att) => ({ ...att })) : undefined,
-      refreshSessions,
     },
   ];
 }
@@ -174,12 +171,12 @@ async function sendChatMessageNow(
     attachments?: ChatAttachment[];
     previousAttachments?: ChatAttachment[];
     restoreAttachments?: boolean;
-    refreshSessions?: boolean;
   },
 ) {
   resetToolStream(host as unknown as Parameters<typeof resetToolStream>[0]);
-  const runId = await sendChatMessage(host as unknown as OpenClawApp, message, opts?.attachments, (host as any).thinkingLevel);
-  const ok = Boolean(runId);
+  const ok = Boolean(
+    await sendChatMessage(host as unknown as OpenClawApp, message, opts?.attachments, (host as any).thinkingLevel),
+  );
   if (!ok && opts?.previousDraft != null) {
     host.chatMessage = opts.previousDraft;
   }
@@ -203,9 +200,6 @@ async function sendChatMessageNow(
   if (ok && !host.chatRunId) {
     void flushChatQueue(host);
   }
-  if (ok && opts?.refreshSessions && runId) {
-    host.refreshSessionsAfterChat.add(runId);
-  }
   return ok;
 }
 
@@ -220,7 +214,6 @@ async function flushChatQueue(host: ChatHost) {
   host.chatQueue = rest;
   const ok = await sendChatMessageNow(host, next.text, {
     attachments: next.attachments,
-    refreshSessions: next.refreshSessions,
   });
   if (!ok) {
     host.chatQueue = [next, ...host.chatQueue];
@@ -255,7 +248,6 @@ export async function handleSendChat(
     return false;
   }
 
-  const refreshSessions = isChatResetCommand(message);
   if (messageOverride == null) {
     host.chatMessage = "";
     // Clear attachments when sending
@@ -263,7 +255,7 @@ export async function handleSendChat(
   }
 
   if (isChatBusy(host)) {
-    enqueueChatMessage(host, message, attachmentsToSend, refreshSessions);
+    enqueueChatMessage(host, message, attachmentsToSend);
     return true;
   }
 
@@ -273,7 +265,6 @@ export async function handleSendChat(
     attachments: hasAttachments ? attachmentsToSend : undefined,
     previousAttachments: messageOverride == null ? attachments : undefined,
     restoreAttachments: Boolean(messageOverride && opts?.restoreDraft),
-    refreshSessions,
   });
   return ok;
 }

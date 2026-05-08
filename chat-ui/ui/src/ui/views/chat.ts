@@ -1,7 +1,7 @@
 import { html, nothing } from "lit";
 import { ref } from "lit/directives/ref.js";
 import { repeat } from "lit/directives/repeat.js";
-import type { SessionsListResult } from "../types.ts";
+import type { GatewaySessionRow, SessionsListResult } from "../types.ts";
 import type { ChatItem, MessageGroup } from "../types/chat-types.ts";
 import type { ChatAttachment, ChatQueueItem, ConfiguredModel } from "../ui-types.ts";
 import {
@@ -14,6 +14,7 @@ import { icons } from "../icons.ts";
 import { t } from "../i18n.ts";
 import { detectTextDirection } from "../text-direction.ts";
 import { renderMarkdownSidebar } from "./markdown-sidebar.ts";
+import { resolveContextMeterStats } from "../context-meter.ts";
 import "../components/resizable-divider.ts";
 import { computeStopButtonVisible } from "./chat-stop-button-gate.ts";
 
@@ -59,6 +60,7 @@ export type ChatProps = {
   // 模型选择器
   configuredModels?: ConfiguredModel[];
   currentModel?: string | null;
+  dirtyMeterSessions?: ReadonlySet<string>;
   onModelChange?: (modelKey: string) => void;
   // 思考开关
   thinkingToggleLevel?: string;
@@ -99,6 +101,58 @@ function adjustTextareaHeight(el: HTMLTextAreaElement, deferred = false) {
   } else {
     apply();
   }
+}
+
+/**
+ * Context Meter — 放在发送按钮左侧，展示当前对话记忆占用。
+ * 数据源：
+ *   - used = session.totalTokens（最后一次调用的 prompt token 数，gateway 在
+ *            turn 结束后持久化）
+ *   - max  = session.contextTokens（gateway 按调用时用的模型写入的窗口大小）
+ *            缺失时回退到 lookupContextWindow(session.model)，不跨会话信任 currentModel
+ * 仅展示「当前会话」占用比例，跨会话独立；模型未知且 used>0 时整体隐藏。
+ *
+ * 模型切换：用户切完 model 后，该 sessionKey 会被加入 dirtyMeterSessions 集合，
+ * 直到下一轮 usage（totalTokens 单调推进）落库才清除——天然 per-session 独立。
+ */
+function contextMeterText(
+  key: string,
+  values: { percent: string; used: string; max: string },
+) {
+  return t(key)
+    .replace("{percent}", values.percent)
+    .replace("{used}", values.used)
+    .replace("{max}", values.max);
+}
+
+function renderContextMeter(
+  session: GatewaySessionRow | null | undefined,
+  dirtySessions: ReadonlySet<string> | undefined,
+) {
+  if (!session) return nothing;
+  const stats = resolveContextMeterStats(session, dirtySessions);
+  if (!stats) return nothing;
+  const values = {
+    percent: String(stats.percent),
+    used: stats.used.toLocaleString(),
+    max: stats.max.toLocaleString(),
+  };
+  const label = contextMeterText("chat.contextMeterAria", values);
+  const title = contextMeterText("chat.contextMeterHint", values);
+  return html`
+    <div class="chat-compose__ctx-meter" data-tooltip=${title} data-tooltip-wide="true">
+      <div
+        class="chat-compose__ctx-meter-bar"
+        role="progressbar"
+        aria-label=${label}
+        aria-valuemin="0"
+        aria-valuemax="100"
+        aria-valuenow=${String(stats.percent)}
+      >
+        <div class="chat-compose__ctx-meter-fill" style=${`width: ${stats.widthPct}%`}></div>
+      </div>
+    </div>
+  `;
 }
 
 function renderCompactionIndicator(status: CompactionIndicatorStatus | null | undefined) {
@@ -578,6 +632,7 @@ export function renderChat(props: ChatProps) {
             }
           </div>
           <div class="chat-compose__toolbar-right">
+            ${renderContextMeter(activeSession, props.dirtyMeterSessions)}
             ${isBusy && canAbort
               ? html`<button
                   class="chat-compose__send-btn"

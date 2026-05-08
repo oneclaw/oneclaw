@@ -44,6 +44,7 @@ export type GatewaySessionRow = {
   label?: string;
   displayName?: string;
   updatedAt?: number;
+  model?: string;
   totalTokens?: number;
   contextTokens?: number;
   thinkingLevel?: string;

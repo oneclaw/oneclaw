@@ -30,7 +30,6 @@ function makeHost() {
     chatAvatarUrl: "https://example.com/avatar.png",
     basePath: "",
     hello: null,
-    refreshSessionsAfterChat: new Set<string>(),
     sessionsResult: null,
     lastError: null,
     applySettings(next: Record<string, unknown>) {

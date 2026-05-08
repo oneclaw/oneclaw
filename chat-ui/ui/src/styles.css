@@ -7424,6 +7424,7 @@ img.chat-avatar {
 .chat-compose__toolbar-right {
   display: flex;
   align-items: center;
+  gap: 8px;
 }
 
 /* 工具按钮 — 无外圆角边框 */
@@ -7600,6 +7601,56 @@ img.chat-avatar {
   font-weight: 600;
 }
 
+/* ── Context Meter ──
+ * 发送按钮左侧的对话记忆占用指示：仅一根短进度条（无标签 / 无百分比）。
+ * 单色黑/白/灰，无色阶变化；仅反映 activeSession 的占用比，会话切换会即时更新。
+ * 完整数值在 hover tooltip 中可见（aria-label / title）。
+ */
+.chat-compose__ctx-meter {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  width: auto;
+  height: 32px;
+  margin: 0 6px 0 0;
+  flex-shrink: 0;
+  align-self: center;
+  cursor: default;
+  user-select: none;
+}
+
+.chat-compose__ctx-meter-bar {
+  display: inline-block;
+  width: 42px;
+  height: 5px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--muted) 24%, transparent);
+  overflow: hidden;
+}
+
+.chat-compose__ctx-meter-fill {
+  height: 100%;
+  background: color-mix(in srgb, var(--text) 72%, var(--muted));
+  border-radius: inherit;
+  transition: width 300ms ease;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .chat-compose__ctx-meter-fill {
+    transition: none;
+  }
+}
+
+@media (max-width: 560px) {
+  .chat-compose__ctx-meter {
+    margin-right: 4px;
+  }
+
+  .chat-compose__ctx-meter-bar {
+    width: 34px;
+  }
+}
+
 /* 发送按钮 — 圆形 */
 .chat-compose__send-btn {
   display: inline-flex;
@@ -7708,9 +7759,7 @@ img.chat-avatar {
   color: var(--text-on-accent);
   background: rgba(0, 0, 0, 0.78);
   border-radius: var(--radius-xs);
-  max-width: 260px;
-  white-space: normal;
-  word-break: break-word;
+  white-space: nowrap;
   pointer-events: none;
   opacity: 0;
   transition: opacity 150ms ease;
@@ -7780,6 +7829,15 @@ img.chat-avatar {
   animation: wb-modal-spin 0.85s linear infinite;
 }
 @keyframes wb-modal-spin { to { transform: rotate(360deg); } }
+
+.fixed-tooltip--wide {
+  padding: 8px 10px;
+  line-height: 1.45;
+  max-width: min(700px, calc(100vw - 24px));
+  width: max-content;
+  white-space: pre-line;
+  text-align: left;
+}
 
 .workspace__header-btn svg {
   width: 18px;
