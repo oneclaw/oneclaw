@@ -333,3 +333,12 @@ export function isSetupComplete(): boolean {
     return false;
   }
 }
+
+// ── OfficeCLI 二进制路径 ──
+
+/** OfficeCLI 二进制路径，不存在时返回 null */
+export function resolveOfficecliBin(): string | null {
+  const exe = IS_WIN ? "officecli.exe" : "officecli";
+  const p = path.join(resolveResourcesPath(), "officecli", exe);
+  return fs.existsSync(p) ? p : null;
+}

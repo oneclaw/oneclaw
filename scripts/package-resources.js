@@ -898,6 +898,7 @@ function installDependencies(opts, gatewayDir) {
     pruneDanglingBinLinks(nmDir);
     assertNativeDepsMatchTarget(nmDir, opts.platform, opts.arch);
     patchWindowsOpenclawArtifacts(gatewayDir, opts.platform);
+    injectBuiltinSkills(gatewayDir);
     return;
   }
 
@@ -947,6 +948,7 @@ function installDependencies(opts, gatewayDir) {
   pruneDanglingBinLinks(nmDir);
   assertNativeDepsMatchTarget(nmDir, opts.platform, opts.arch);
   patchWindowsOpenclawArtifacts(gatewayDir, opts.platform);
+  injectBuiltinSkills(gatewayDir);
   fs.writeFileSync(stampPath, targetStamp);
   log("node_modules 裁剪完成");
 }
@@ -1134,6 +1136,35 @@ function patchAsarBoundaryCheck(gatewayDir) {
 
 // ─── Step 2.5: 注入 bundled 插件（kimi-claw + kimi-search） ───
 
+// 把仓库 builtin-skills/ 下的 skill 注入 openclaw bundled skills 目录。
+// 调用顺序约束：必须在 pruneNodeModules() 之后执行 —— pruneNodeModules 的 walk()
+// 会递归触发 pruneOpenclawSkills()（按白名单删除非允许 skill），若注入早于裁剪，
+// 注入的 skill 会因不在白名单而被删除。当前 installDependencies() 在两个分支
+// （cache-hit / 全量安装）中均已按 pruneNodeModules → injectBuiltinSkills 顺序调用。
+function injectBuiltinSkills(gatewayDir) {
+  const builtinDir = path.join(__dirname, "..", "builtin-skills");
+  if (!fs.existsSync(builtinDir)) return;
+
+  const skillDirs = fs
+    .readdirSync(builtinDir, { withFileTypes: true })
+    .filter((e) => e.isDirectory() && !e.name.startsWith("."))
+    .filter((e) => fs.existsSync(path.join(builtinDir, e.name, "SKILL.md")));
+  if (skillDirs.length === 0) return;
+
+  const destBase = path.join(gatewayDir, "node_modules", "openclaw", "skills");
+  ensureDir(destBase);
+
+  for (const entry of skillDirs) {
+    const dest = path.join(destBase, entry.name);
+    if (fs.existsSync(dest)) {
+      die(`builtin skill "${entry.name}" 与上游 openclaw skill 同名，请先从白名单移除`);
+    }
+    fs.cpSync(path.join(builtinDir, entry.name), dest, { recursive: true });
+  }
+  log(`已注入 ${skillDirs.length} 个 OneClaw 内置 skill`);
+}
+
+// ─── Step 2.5: 注入 bundled 插件（kimi-claw + kimi-search + qqbot + dingtalk） ───
 // 插件定义（id → 下载/缓存参数）
 //
 // 注：dingtalk-connector 由 extensions-mirror（外部插件扫描路径）回滚到 bundled
@@ -2314,6 +2345,150 @@ function countFilesRecursive(dir) {
   return count;
 }
 
+// ─── Step 7: 下载 OfficeCLI 二进制 ───
+
+/**
+ * OfficeCLI 平台映射：Node.js (platform, arch) → GitHub Release 资产名
+ */
+function getOfficecliAssetName(platform, arch) {
+  const map = {
+    "darwin-arm64": "officecli-mac-arm64",
+    "darwin-x64": "officecli-mac-x64",
+    "win32-x64": "officecli-win-x64.exe",
+    "win32-arm64": "officecli-win-arm64.exe",
+  };
+  const key = `${platform}-${arch}`;
+  const name = map[key];
+  if (!name) die(`OfficeCLI 不支持平台 ${key}`);
+  return name;
+}
+
+/**
+ * 下载 OfficeCLI 单体二进制并做 SHA256 校验
+ * - 缓存: .cache/officecli/<version>/<assetName>
+ * - 增量: <targetBase>/officecli/.officecli-stamp
+ * - 输出: <targetBase>/officecli/officecli[.exe]
+ */
+async function downloadOfficeCli(platform, arch, targetBase) {
+  const pkg = JSON.parse(fs.readFileSync(path.join(ROOT, "package.json"), "utf8"));
+  const version = pkg.oneclaw?.officecli;
+  if (!version) {
+    log("package.json oneclaw.officecli 未指定，跳过 OfficeCLI");
+    return;
+  }
+
+  const assetName = getOfficecliAssetName(platform, arch);
+  const outputDir = path.join(targetBase, "officecli");
+  const outputBin = path.join(outputDir, platform === "win32" ? "officecli.exe" : "officecli");
+
+  // 缓存目录
+  const cacheDir = path.join(ROOT, ".cache", "officecli", version);
+  ensureDir(cacheDir);
+
+  const baseUrl = `https://github.com/iOfficeAI/OfficeCLI/releases/download/v${version}`;
+  const cachedBin = path.join(cacheDir, assetName);
+  const cachedSums = path.join(cacheDir, "SHA256SUMS");
+  const { createHash } = require("crypto");
+  const { pipeline } = require("node:stream/promises");
+
+  const ensureCachedSums = async () => {
+    if (!fs.existsSync(cachedSums)) {
+      log("下载 SHA256SUMS ...");
+      await downloadFileWithFallback([`${baseUrl}/SHA256SUMS`], cachedSums);
+    }
+  };
+
+  const readExpectedHash = () => {
+    const sumsContent = fs.readFileSync(cachedSums, "utf-8");
+    const expectedLine = sumsContent.split("\n").find((l) => l.includes(assetName));
+    if (!expectedLine) {
+      die(`SHA256SUMS 中未找到 ${assetName}`);
+    }
+    return expectedLine.trim().split(/\s+/)[0];
+  };
+
+  const hashFile = async (filePath) => {
+    const hash = createHash("sha256");
+    await pipeline(fs.createReadStream(filePath), hash);
+    return hash.digest("hex");
+  };
+
+  const readOutputState = () => {
+    const stat = fs.statSync(outputBin, { bigint: true });
+    return {
+      size: stat.size.toString(),
+      mtimeNs: stat.mtimeNs.toString(),
+      ctimeNs: stat.ctimeNs.toString(),
+    };
+  };
+
+  // 增量检测：stamp 内嵌期望 hash 与文件变更元数据，命中时只比对便宜元数据，
+  // 避免每次构建都拉取 SHA256SUMS 或重新对 60MB 二进制做全量哈希。
+  const stampFile = path.join(outputDir, ".officecli-stamp");
+  const stampPrefix = `${version}-${platform}-${arch}`;
+  if (fs.existsSync(stampFile)) {
+    const rawStamp = fs.readFileSync(stampFile, "utf-8").trim();
+    const parts = rawStamp.split("|");
+    if (parts.length === 5 && parts[0] === stampPrefix) {
+      const [, stampHash, stampSize, stampMtimeNs, stampCtimeNs] = parts;
+      if (fs.existsSync(outputBin)) {
+        const actual = readOutputState();
+        if (
+          actual.size === stampSize &&
+          actual.mtimeNs === stampMtimeNs &&
+          actual.ctimeNs === stampCtimeNs
+        ) {
+          log(`OfficeCLI 已是 ${stampPrefix} (sha256=${stampHash.slice(0, 12)}…)，跳过`);
+          return;
+        }
+        log(`OfficeCLI stamp 匹配但输出文件已变化，重新写入`);
+      } else {
+        log("OfficeCLI stamp 匹配但输出文件缺失，重新写入");
+      }
+    }
+    // 旧格式或 prefix 不匹配：直接走完整下载流程，最后写入新格式 stamp。
+  }
+
+  // 下载 SHA256SUMS（每版本只下一次）
+  await ensureCachedSums();
+
+  // 下载二进制（如果缓存中没有）
+  if (fs.existsSync(cachedBin)) {
+    log(`使用缓存: ${assetName}`);
+  } else {
+    log(`正在下载 ${assetName} ...`);
+    await downloadFileWithFallback([`${baseUrl}/${assetName}`], cachedBin);
+    log(`下载完成: ${assetName}`);
+  }
+
+  // SHA256 校验
+  const hash = await hashFile(cachedBin);
+  const expectedHash = readExpectedHash();
+  if (hash !== expectedHash) {
+    // 校验失败，清除缓存重试
+    safeUnlink(cachedBin);
+    die(`SHA256 校验失败: ${assetName} (期望 ${expectedHash}, 实际 ${hash})`);
+  }
+  log(`SHA256 校验通过: ${assetName}`);
+
+  // 输出到目标目录
+  ensureDir(outputDir);
+  fs.copyFileSync(cachedBin, outputBin);
+
+  // macOS/Linux 设置可执行权限
+  if (platform !== "win32") {
+    fs.chmodSync(outputBin, 0o755);
+  }
+
+  // 写入版本戳：包含期望 hash 与文件变更元数据，下次命中时无需联网或重新哈希。
+  const outputState = readOutputState();
+  fs.writeFileSync(
+    stampFile,
+    `${stampPrefix}|${expectedHash}|${outputState.size}|${outputState.mtimeNs}|${outputState.ctimeNs}`
+  );
+  log(`OfficeCLI v${version} → ${path.relative(ROOT, outputBin)}`);
+}
+
 // 验证目标目录关键文件是否存在
 function verifyOutput(targetPaths, opts) {
   log("正在验证输出文件...");
@@ -2335,6 +2510,7 @@ function verifyOutput(targetPaths, opts) {
       path.join(targetRel, "gateway.asar"),
       path.join(targetRel, "build-config.json"),
       path.join(targetRel, "app-icon.png"),
+      path.join(targetRel, "officecli", platform === "darwin" ? "officecli" : "officecli.exe"),
     ];
 
     // External channel plugins 不进 gateway.asar，需要单独校验 mirror 输出。
@@ -2368,6 +2544,7 @@ function verifyOutput(targetPaths, opts) {
     path.join(targetRel, "gateway", "node_modules", "clawhub", "bin", "clawdhub.js"),
     path.join(targetRel, "build-config.json"),
     path.join(targetRel, "app-icon.png"),
+    path.join(targetRel, "officecli", platform === "win32" ? "officecli.exe" : "officecli"),
   ];
 
   // Windows arm64 交叉编译时含 native addon 的插件可能注入失败，校验时降级为 warning
@@ -2552,6 +2729,12 @@ async function main() {
   } else {
     log("Step 6: 跳过 ASAR 打包（未指定 --asar）");
   }
+
+  console.log();
+
+  // Step 7: 下载 OfficeCLI 二进制
+  log("Step 7: 下载 OfficeCLI 二进制");
+  await downloadOfficeCli(opts.platform, opts.arch, targetPaths.targetBase);
 
   console.log();
 
