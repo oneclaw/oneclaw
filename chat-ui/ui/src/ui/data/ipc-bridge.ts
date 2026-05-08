@@ -153,11 +153,37 @@ export interface MemoryConfig {
 }
 
 export interface AdvancedConfig {
+  // 浏览器模式 3 选：webbridge / openclaw / user。"chrome" 是早期分支的 alias，
+  // 仍可能从老后端传上来，前端用归一化吃掉。
+  browserMode?: "webbridge" | "openclaw" | "user" | "chrome";
+  // 旧字段：gateway defaultProfile，向后兼容（旧 IPC 没 browserMode 时回退用）
   browserProfile: string;
   imessageEnabled: boolean;
   launchAtLoginSupported: boolean;
   launchAtLogin: boolean;
   clawHubRegistry: string;
+}
+
+export interface WebbridgePrecheckData {
+  ok: boolean;
+  missing: { binary: boolean; skill: boolean; extension: boolean };
+  defaultBrowser: { id: string; name: string } | null;
+  defaultUnsupported: boolean;
+}
+
+// repair-and-enable handler 返回的非 success 错误码
+export type WebbridgeRepairCode =
+  | "DEFAULT_BROWSER_UNSUPPORTED"
+  | "BROWSER_RUNNING"
+  | "REPAIR_FAILED";
+
+export interface WebbridgeRepairResult {
+  success: boolean;
+  code?: WebbridgeRepairCode;
+  browserName?: string;
+  message?: string;
+  openedBrowser?: boolean;
+  data?: unknown;
 }
 
 export interface CliStatus {
@@ -302,6 +328,10 @@ interface OneClawBridgeExtended {
       settingsGetCliStatus?: () => Promise<any>;
       settingsInstallCli?: () => Promise<any>;
       settingsUninstallCli?: () => Promise<any>;
+      // Settings: WebBridge
+      settingsWebbridgePrecheck?: () => Promise<any>;
+      settingsWebbridgeRepairAndEnable?: () => Promise<any>;
+      settingsGetDefaultBrowserName?: () => Promise<any>;
       // Settings: Backup
       settingsListConfigBackups?: () => Promise<any>;
       settingsRestoreConfigBackup?: (params: Record<string, unknown>) => Promise<any>;
@@ -633,6 +663,30 @@ export async function settingsInstallCli(): Promise<void> {
 
 export async function settingsUninstallCli(): Promise<void> {
   unwrapVoid(await oc().settingsUninstallCli());
+}
+
+// ---------------------------------------------------------------------------
+// Settings: WebBridge (3)
+// ---------------------------------------------------------------------------
+
+// 切换到 webbridge 模式前的 precheck（read-only）。返回缺失项 + 默认浏览器信息。
+export async function settingsWebbridgePrecheck(): Promise<WebbridgePrecheckData> {
+  return unwrapData<WebbridgePrecheckData>(
+    await oc().settingsWebbridgePrecheck(),
+  );
+}
+
+// 修复（按 precheck 选择性安装）+ 写 config + 重启 gateway。失败时不抛异常，返回结构化 code。
+export async function settingsWebbridgeRepairAndEnable(): Promise<WebbridgeRepairResult> {
+  const result = (await oc().settingsWebbridgeRepairAndEnable()) as WebbridgeRepairResult;
+  return result ?? { success: false, message: "no response" };
+}
+
+// 系统默认浏览器；非 Chrome/Edge 时 data 为 null
+export async function settingsGetDefaultBrowserName(): Promise<{ id: string; name: string } | null> {
+  return unwrapData<{ id: string; name: string } | null>(
+    await oc().settingsGetDefaultBrowserName(),
+  );
 }
 
 // ---------------------------------------------------------------------------

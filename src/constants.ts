@@ -1,6 +1,7 @@
 import { app } from "electron";
 import * as path from "path";
 import * as fs from "fs";
+import * as os from "os";
 import { execFileSync } from "child_process";
 import { isSetupCompleteFromConfig } from "./setup-completion";
 import { readOneclawConfig } from "./oneclaw-config";
@@ -242,6 +243,95 @@ export function resolveClawhubEntry(): string {
 /** 用户 bin 目录（~/.openclaw/bin/，存放 CLI wrapper 脚本） */
 export function resolveUserBinDir(): string {
   return path.join(resolveUserStateDir(), "bin");
+}
+
+/** WebBridge 二进制和缓存根目录（~/.kimi-webbridge/） */
+// HOME/USERPROFILE 在 CI、sandbox、无人值守服务环境下可能没设置。
+// 落到 os.homedir() 是最后的安全网——比返回相对路径 `.kimi-webbridge`
+// 让二进制下载到当前工作目录要好得多（后续 binary 探测会失败）。
+export function resolveWebbridgeDataDir(): string {
+  const home =
+    (IS_WIN ? process.env.USERPROFILE : process.env.HOME) || os.homedir();
+  return path.join(home, ".kimi-webbridge");
+}
+
+/** WebBridge daemon 二进制完整路径（~/.kimi-webbridge/bin/kimi-webbridge[.exe]） */
+export function resolveWebbridgeBinaryPath(): string {
+  const exe = IS_WIN ? "kimi-webbridge.exe" : "kimi-webbridge";
+  return path.join(resolveWebbridgeDataDir(), "bin", exe);
+}
+
+/**
+ * 内置的 WebBridge CRX 安装包路径。
+ * 改用 external_crx + external_version 离线安装，绕过 Chrome 默认走的
+ * clients2.google.com 更新端点（在中国大陆访问受限）。CRX 在 dev 模式直接
+ * 来自仓库 resources/webbridge/，打包后由 afterPack 注入到 app bundle 内。
+ */
+export function resolveWebbridgeCrxPath(): string {
+  if (app.isPackaged) {
+    return path.join(
+      process.resourcesPath,
+      "resources",
+      "webbridge",
+      "kimi-webbridge.crx",
+    );
+  }
+  return path.join(
+    app.getAppPath(),
+    "resources",
+    "webbridge",
+    "kimi-webbridge.crx",
+  );
+}
+
+/** CRX 旁边的元数据 JSON（含 version / extensionId），与 CRX 同步更新 */
+export function resolveWebbridgeCrxMetadataPath(): string {
+  if (app.isPackaged) {
+    return path.join(
+      process.resourcesPath,
+      "resources",
+      "webbridge",
+      "kimi-webbridge.json",
+    );
+  }
+  return path.join(
+    app.getAppPath(),
+    "resources",
+    "webbridge",
+    "kimi-webbridge.json",
+  );
+}
+
+export interface WebbridgeCrxMetadata {
+  extensionId: string;
+  version: string;
+}
+
+/**
+ * 读 CRX 元数据。Chrome 的 external_crx 协议要求宣告的 version 与 CRX 内嵌
+ * manifest.json 的 version 一致——后者由 build-time 解包 CRX 并写入 sidecar JSON。
+ */
+export function readWebbridgeCrxMetadata(): WebbridgeCrxMetadata | null {
+  try {
+    const p = resolveWebbridgeCrxMetadataPath();
+    const raw = JSON.parse(fs.readFileSync(p, "utf-8"));
+    const extensionId =
+      typeof raw?.extensionId === "string" ? raw.extensionId.trim() : "";
+    const version =
+      typeof raw?.version === "string" ? raw.version.trim() : "";
+    if (!extensionId || !version) return null;
+    return { extensionId, version };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * 浏览器扩展 ID 的唯一可信来源 —— resources/webbridge/kimi-webbridge.json
+ * （CRX 旁边的 sidecar，跟 CRX 一起打包进 app）。
+ */
+export function readWebbridgeExtensionId(): string {
+  return readWebbridgeCrxMetadata()?.extensionId ?? "";
 }
 
 /** 用户状态目录（~/.openclaw/） */

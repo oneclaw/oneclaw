@@ -1,0 +1,576 @@
+<!doctype html>
+<html lang="zh">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>启用 WebBridge 扩展</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  html { min-height: 100%; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+    background: linear-gradient(135deg, #fafaf9 0%, #fff5f3 100%);
+    color: #18181b;
+    min-height: 100vh;
+    /* 顶部对齐 + 水平居中：短内容时上方留白足够，长内容也不会溢出视窗 */
+    display: flex;
+    align-items: center;
+    flex-direction: column;
+    text-align: center;
+    padding: 72px 32px 64px;
+    overflow-x: hidden;
+  }
+  @media (prefers-color-scheme: dark) {
+    body {
+      background: linear-gradient(135deg, #0f0f10 0%, #1a0e0d 100%);
+      color: #f4f4f5;
+    }
+    p.lead { color: #a1a1aa !important; }
+    p.aside { color: #71717a !important; }
+  }
+
+  /* 动画大箭头 —— 从屏幕中部斜指向右上角的 Chrome 弹窗 mockup
+     默认隐藏，与 mockup 同步淡入 */
+  .arrow {
+    position: fixed;
+    top: 320px;       /* mockup 高约 280px + 顶部 24px 留白 → 箭头从 mockup 下方开始 */
+    right: 120px;      /* mockup 右下角的「启用扩展程序」按钮位置 */
+    width: 180px;
+    height: 190px;
+    color: #c0392b;
+    pointer-events: none;
+    opacity: 0;
+    transform-origin: 100% 0%;
+    filter: drop-shadow(0 6px 18px rgba(192, 57, 43, 0.35));
+    transition: opacity 0.5s ease;
+  }
+  .arrow.is-visible {
+    opacity: 1;
+    animation: nudge 1.4s ease-in-out infinite;
+  }
+  .arrow svg { width: 100%; height: 100%; }
+  @keyframes nudge {
+    0%, 100% { transform: translate(0, 0); }
+    50%      { transform: translate(14px, -14px); }
+  }
+
+  .container {
+    max-width: 640px;
+    margin: 0 auto;
+  }
+
+  h1 {
+    margin: 0 0 20px;
+    font-size: 36px;
+    font-weight: 700;
+    letter-spacing: -0.5px;
+    line-height: 1.25;
+  }
+  p.lead {
+    margin: 0 0 12px;
+    font-size: 17px;
+    line-height: 1.65;
+    color: #52525b;
+  }
+  .brand {
+    color: #c0392b;
+    font-weight: 600;
+  }
+  p.aside {
+    margin: 32px 0 0;
+    font-size: 13px;
+    color: #a1a1aa;
+  }
+
+  /* 安装中提示条 —— 在弹窗出现前给用户一个明确的等待信号 */
+  .installing {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    margin: 24px auto 0;
+    padding: 10px 18px;
+    border-radius: 999px;
+    background: rgba(192, 57, 43, 0.08);
+    border: 1px solid rgba(192, 57, 43, 0.22);
+    color: #c0392b;
+    font-size: 14px;
+    font-weight: 500;
+  }
+  @media (prefers-color-scheme: dark) {
+    .installing {
+      background: rgba(192, 57, 43, 0.15);
+      border-color: rgba(192, 57, 43, 0.35);
+      color: #f4a89e;
+    }
+  }
+  .installing.is-done {
+    background: rgba(34, 197, 94, 0.10);
+    border-color: rgba(34, 197, 94, 0.30);
+    color: #15803d;
+  }
+  @media (prefers-color-scheme: dark) {
+    .installing.is-done {
+      background: rgba(34, 197, 94, 0.18);
+      border-color: rgba(34, 197, 94, 0.40);
+      color: #86efac;
+    }
+  }
+  /* 切到"请手动启用"阶段时复用主题红，提示用户视线下移 */
+  .installing.is-fallback {
+    background: rgba(192, 57, 43, 0.10);
+    border-color: rgba(192, 57, 43, 0.30);
+    color: #c0392b;
+  }
+  @media (prefers-color-scheme: dark) {
+    .installing.is-fallback {
+      background: rgba(192, 57, 43, 0.20);
+      border-color: rgba(192, 57, 43, 0.40);
+      color: #f4a89e;
+    }
+  }
+  .installing .spinner {
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    border: 2px solid currentColor;
+    border-right-color: transparent;
+    animation: spin 0.9s linear infinite;
+  }
+  .installing.is-done .spinner,
+  .installing.is-fallback .spinner {
+    display: none;
+  }
+  @keyframes spin {
+    to { transform: rotate(360deg); }
+  }
+
+  /* 手动启用兜底卡片：~6 秒后淡入。覆盖断网 / 用户没看到弹窗这两种场景 */
+  .fallback {
+    width: 100%;
+    max-width: 560px;
+    margin: 36px auto 0;
+    padding: 28px 32px;
+    background: rgba(255, 255, 255, 0.65);
+    border: 1px solid rgba(192, 57, 43, 0.18);
+    border-radius: 16px;
+    text-align: left;
+    box-shadow: 0 4px 24px rgba(192, 57, 43, 0.06);
+    opacity: 0;
+    transform: translateY(8px);
+    transition: opacity 0.6s ease, transform 0.6s ease;
+  }
+  @media (prefers-color-scheme: dark) {
+    .fallback {
+      background: rgba(30, 18, 16, 0.55);
+      border-color: rgba(192, 57, 43, 0.30);
+      box-shadow: 0 4px 24px rgba(0, 0, 0, 0.35);
+    }
+  }
+  .fallback.is-visible {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  .fallback h2 {
+    margin: 0 0 18px;
+    font-size: 16px;
+    font-weight: 600;
+    color: #c0392b;
+  }
+  .fallback-steps {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    counter-reset: step;
+  }
+  .fallback-steps li {
+    counter-increment: step;
+    position: relative;
+    padding-left: 40px;
+    margin-bottom: 14px;
+    font-size: 15px;
+    line-height: 1.6;
+    color: #27272a;
+  }
+  @media (prefers-color-scheme: dark) {
+    .fallback-steps li { color: #e4e4e7; }
+  }
+  .fallback-steps li:last-child { margin-bottom: 0; }
+  .fallback-steps li::before {
+    content: counter(step);
+    position: absolute;
+    left: 0;
+    top: 1px;
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    background: #c0392b;
+    color: white;
+    font-weight: 600;
+    font-size: 13px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .kbd {
+    display: inline-block;
+    padding: 1px 8px;
+    border-radius: 4px;
+    background: rgba(0, 0, 0, 0.06);
+    font-family: ui-monospace, SFMono-Regular, "SF Mono", Consolas, monospace;
+    font-size: 14px;
+    font-weight: 600;
+    color: #18181b;
+  }
+  .ui-label {
+    display: inline-block;
+    padding: 0 6px;
+    border-radius: 3px;
+    background: rgba(192, 57, 43, 0.08);
+    color: #c0392b;
+    font-weight: 500;
+  }
+  @media (prefers-color-scheme: dark) {
+    .kbd { background: rgba(255, 255, 255, 0.10); color: #f4f4f5; }
+    .ui-label { background: rgba(192, 57, 43, 0.18); color: #f4a89e; }
+  }
+
+  /* 可复制地址样式：以 .kbd 为基础，hover/active 给反馈，user-select:all 让单击三连击友好 */
+  .kbd--copyable {
+    cursor: pointer;
+    user-select: all;
+    transition: background 0.15s ease, color 0.15s ease;
+  }
+  .kbd--copyable:hover { background: rgba(192, 57, 43, 0.12); color: #c0392b; }
+  @media (prefers-color-scheme: dark) {
+    .kbd--copyable:hover { background: rgba(192, 57, 43, 0.25); color: #f4a89e; }
+  }
+  .kbd--copyable.is-copied {
+    background: rgba(34, 197, 94, 0.16);
+    color: #15803d;
+  }
+  @media (prefers-color-scheme: dark) {
+    .kbd--copyable.is-copied { background: rgba(34, 197, 94, 0.25); color: #86efac; }
+  }
+
+  /* Chrome「已添加扩展程序」弹窗 mockup —— 用浅灰色 skeleton 块代替真实文案，
+     避免和真实弹窗混淆；只保留高亮的「启用扩展程序」按钮 + 红色 glow 动画作为视觉指引。 */
+  .chrome-popup-mock {
+    position: fixed;
+    top: 10px;
+    right: 10px;
+    width: 380px;
+    background: #fdfbf6;
+    border-radius: 16px;
+    padding: 24px 26px 22px;
+    box-shadow:
+      0 16px 48px rgba(0, 0, 0, 0.16),
+      0 4px 12px rgba(0, 0, 0, 0.06);
+    text-align: left;
+    opacity: 0;
+    transform: translateY(-8px);
+    transition: opacity 0.5s ease, transform 0.5s ease;
+    z-index: 5;
+    pointer-events: none;
+    user-select: none;
+  }
+  .chrome-popup-mock.is-visible {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  @media (prefers-color-scheme: dark) {
+    .chrome-popup-mock {
+      background: #2a2a2a;
+      box-shadow:
+        0 16px 48px rgba(0, 0, 0, 0.55),
+        0 4px 12px rgba(0, 0, 0, 0.3);
+    }
+  }
+  /* 灰色 skeleton 方条 —— 替换原来的标题/描述/权限文本，避免和真实文案混淆 */
+  .chrome-popup-mock__bar {
+    height: 10px;
+    background: #e4e4e7;
+    border-radius: 5px;
+    margin-bottom: 10px;
+  }
+  .chrome-popup-mock__bar:last-child { margin-bottom: 0; }
+  .chrome-popup-mock__bar--title { height: 14px; width: 70%; margin-bottom: 14px; }
+  .chrome-popup-mock__bar--text-1 { width: 100%; }
+  .chrome-popup-mock__bar--text-2 { width: 86%; margin-bottom: 18px; }
+  .chrome-popup-mock__bar--label   { width: 36%; }
+  .chrome-popup-mock__bar--bullet  { width: 78%; margin-left: 22px; height: 8px; }
+  .chrome-popup-mock__bar--bullet-2 { width: 64%; }
+  .chrome-popup-mock__bar--bullet-last { margin-bottom: 18px; }
+  @media (prefers-color-scheme: dark) {
+    .chrome-popup-mock__bar { background: #3f3f46; }
+  }
+  .chrome-popup-mock__buttons {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    margin-top: 6px;
+  }
+  /* 「从 Chrome 中移除」位置也用一个灰条占位（不可点） */
+  .chrome-popup-mock__btn-placeholder {
+    width: 110px;
+    height: 32px;
+    border-radius: 999px;
+    background: #e4e4e7;
+  }
+  @media (prefers-color-scheme: dark) {
+    .chrome-popup-mock__btn-placeholder { background: #3f3f46; }
+  }
+  /* 真正保留的主操作按钮 + 红色 glow 动画
+     按钮位置由「平台」决定（Win 在左 / Mac 在右），颜色和文字由「浏览器」决定。
+     默认 = Mac 风格（主按钮在右）+ Chrome 颜色（深绿底）；
+     .is-button-left（Win）：把主按钮翻到左侧
+     .is-edge：覆盖颜色为黑底（文字由 JS 设置） */
+  .chrome-popup-mock__btn {
+    padding: 9px 18px;
+    border-radius: 999px;
+    font-size: 13px;
+    font-weight: 500;
+    border: none;
+    font-family: inherit;
+    cursor: default;
+    background: #0e3b32;
+    color: #ffffff;
+    box-shadow: 0 0 0 0 rgba(192, 57, 43, 0);
+    animation: btn-glow 1.8s ease-in-out infinite;
+  }
+  @media (prefers-color-scheme: dark) {
+    .chrome-popup-mock__btn { background: #4a9b86; color: #ffffff; }
+  }
+  @keyframes btn-glow {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(192, 57, 43, 0.45); }
+    50%      { box-shadow: 0 0 0 8px rgba(192, 57, 43, 0); }
+  }
+  /* 平台位置变体：Win 上主按钮在左侧；辅助操作（删除）位置在右，仍用灰条占位 */
+  .chrome-popup-mock.is-button-left .chrome-popup-mock__buttons {
+    flex-direction: row-reverse;
+  }
+  /* Edge 颜色变体：黑底覆盖默认深绿 */
+  .chrome-popup-mock.is-edge .chrome-popup-mock__btn {
+    background: #1f1f1f;
+    color: #ffffff;
+  }
+  @media (prefers-color-scheme: dark) {
+    .chrome-popup-mock.is-edge .chrome-popup-mock__btn {
+      background: #f1f1f1;
+      color: #1f1f1f;
+    }
+  }
+  /* Win：主按钮在左 → 箭头要往左移指向新位置 */
+  .arrow.is-button-left {
+    right: 230px;
+  }
+
+  @media (max-width: 720px) {
+    .arrow { display: none; }
+    .chrome-popup-mock { display: none; }
+    body { padding: 48px 24px; }
+    h1 { font-size: 28px; }
+    .fallback { padding: 22px 20px; }
+  }
+</style>
+</head>
+<body>
+  <!-- Chrome「已添加扩展程序」弹窗示意图：用灰色 skeleton 块代替文本，
+       只保留「启用扩展程序」按钮 + 红色 glow 动画提示用户操作位置 -->
+  <div class="chrome-popup-mock" id="chromePopupMock" aria-hidden="true">
+    <div class="chrome-popup-mock__bar chrome-popup-mock__bar--title"></div>
+    <div class="chrome-popup-mock__bar chrome-popup-mock__bar--text-1"></div>
+    <div class="chrome-popup-mock__bar chrome-popup-mock__bar--text-2"></div>
+    <div class="chrome-popup-mock__bar chrome-popup-mock__bar--label"></div>
+    <div class="chrome-popup-mock__bar chrome-popup-mock__bar--bullet"></div>
+    <div class="chrome-popup-mock__bar chrome-popup-mock__bar--bullet chrome-popup-mock__bar--bullet-2"></div>
+    <div class="chrome-popup-mock__bar chrome-popup-mock__bar--bullet chrome-popup-mock__bar--bullet-last"></div>
+    <div class="chrome-popup-mock__buttons">
+      <div class="chrome-popup-mock__btn-placeholder"></div>
+      <button class="chrome-popup-mock__btn" id="popupBtnEnable" tabindex="-1">启用扩展程序</button>
+    </div>
+  </div>
+
+  <!-- 动画箭头：从屏幕中部斜指向 mockup 弹窗的「启用扩展程序」按钮 -->
+  <div class="arrow" aria-hidden="true">
+    <svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <marker id="arrowhead" markerWidth="6" markerHeight="6" refX="3" refY="3" orient="auto">
+          <polygon points="0 0, 6 3, 0 6" fill="currentColor"/>
+        </marker>
+      </defs>
+      <path d="M 12 88 Q 60 60 90 12" stroke="currentColor" stroke-width="6" fill="none" stroke-linecap="round" marker-end="url(#arrowhead)"/>
+    </svg>
+  </div>
+
+  <div class="container">
+    <h1 id="title">请点击右上角弹窗中的「启用扩展」</h1>
+    <p class="lead" id="lead">这只需做一次。启用后，<span class="brand">OneClaw</span> 就能控制你的浏览器，让 AI 帮你浏览网页、自动填表、读邮件。</p>
+    <div class="installing" id="installing" aria-live="polite">
+      <span class="spinner" aria-hidden="true"></span>
+      <span id="installingText">扩展正在安装，请稍候片刻……</span>
+    </div>
+
+    <!-- 兜底：弹窗没出现时（多数是断网场景）的手动启用步骤 -->
+    <div class="fallback" id="fallback" aria-live="polite">
+      <h2 id="fallbackTitle">如果没看到弹窗，请按以下步骤手动启用</h2>
+      <ol class="fallback-steps" id="fallbackSteps"></ol>
+    </div>
+
+    <p class="aside" id="aside">完成后可关闭此页面</p>
+  </div>
+
+  <script>
+    (function () {
+      var params = new URLSearchParams(location.search);
+      var lang = (params.get("lang") || navigator.language || "").toLowerCase();
+      var isEn = lang.indexOf("en") === 0;
+
+      // 浏览器判定：URL 参数优先，否则按 UA 猜（Edge UA 含 "Edg/"），最后兜底 Chrome。
+      var browserParam = (params.get("browser") || "").toLowerCase();
+      var ua = (navigator.userAgent || "").toLowerCase();
+      var isEdge = browserParam === "edge" || (browserParam === "" && ua.indexOf("edg/") !== -1);
+      var browserName = isEdge ? "Edge" : "Chrome";
+      // 平台判定：Win 上 Chrome/Edge 的「启用扩展」按钮在弹窗左侧，Mac 上在右侧。
+      // 跟浏览器无关，跟操作系统的 UI 习惯有关——按平台切换 mockup 按钮位置 + 箭头朝向。
+      var isWin = ua.indexOf("windows") !== -1;
+      // 直达地址：Chrome=chrome://extensions/，Edge=edge://extensions/
+      var scheme = isEdge ? "edge" : "chrome";
+      var extUrl = scheme + "://extensions/";
+
+      // Chrome 弹窗主按钮 = 「启用扩展程序」(Enable extension)
+      // Edge   弹窗主按钮 = 「打开扩展」(Open extension)  —— 文字、位置、颜色全不同
+      var actionLabel = isEdge
+        ? (isEn ? "Open extension" : "打开扩展")
+        : (isEn ? "Enable extension" : "启用扩展程序");
+
+      // 先把可复制地址 token 拼出来（既要插进 step1 的 innerHTML，也要在复制按钮里读）
+      // <span class="kbd kbd--copyable" data-copy="<URL>"><URL></span>
+      function copyableTag(url) {
+        return '<span class="kbd kbd--copyable" data-copy="' + url + '">' + url + '</span>';
+      }
+
+      var copy = isEn
+        ? {
+            title: 'Click "' + actionLabel + '" in the popup at the top right',
+            lead: 'You only need to do this once. Once enabled, <span class="brand">OneClaw</span> can control your browser so AI can browse pages, fill forms, and read your email for you.',
+            aside: "You can close this page once done",
+            installingWait: "Installing the extension, please wait…",
+            installingDone: 'Almost done — the "' + actionLabel + '" popup should appear at the top right',
+            installingFallback: "Popup not showing? Use the manual steps below ↓",
+            fallbackTitle: "If the popup didn't appear, enable manually:",
+            steps: [
+              "Paste " + copyableTag(extUrl) + " into " + browserName + "'s address bar and press Enter (click the address to copy)",
+              'Find <span class="brand">Kimi WebBridge</span> in the list and toggle the switch to enable it',
+            ],
+            popupBtnEnable: actionLabel,
+            copied: "Copied",
+          }
+        : {
+            title: "请点击右上角弹窗中的「" + actionLabel + "」",
+            lead: '这只需做一次。启用后，<span class="brand">OneClaw</span> 就能控制你的浏览器，让 AI 帮你浏览网页、自动填表、读邮件。',
+            aside: "完成后可关闭此页面",
+            installingWait: "扩展正在安装，请稍候片刻……",
+            installingDone: "应该快好了 —— 浏览器右上角即将出现「" + actionLabel + "」弹窗",
+            installingFallback: "弹窗没出现？请按下方步骤手动启用 ↓",
+            fallbackTitle: "如果没看到弹窗，请按以下步骤手动启用",
+            steps: [
+              "在 " + browserName + " 地址栏粘贴 " + copyableTag(extUrl) + " 并回车（点击地址即可复制）",
+              '在列表中找到 <span class="brand">Kimi WebBridge</span>，点击右侧开关启用',
+            ],
+            popupBtnEnable: actionLabel,
+            copied: "已复制",
+          };
+
+      if (isEn) {
+        document.documentElement.lang = "en";
+        document.title = "Enable WebBridge Extension";
+      }
+
+      // 应用文案（含 fallback 步骤 + Chrome popup mockup）
+      document.getElementById("title").textContent = copy.title;
+      document.getElementById("lead").innerHTML = copy.lead;
+      document.getElementById("aside").textContent = copy.aside;
+      document.getElementById("fallbackTitle").textContent = copy.fallbackTitle;
+      var stepsEl = document.getElementById("fallbackSteps");
+      copy.steps.forEach(function (s) {
+        var li = document.createElement("li");
+        li.innerHTML = s;
+        stepsEl.appendChild(li);
+      });
+      // mockup 唯一保留文本：「启用扩展程序」按钮
+      document.getElementById("popupBtnEnable").textContent = copy.popupBtnEnable;
+
+      // 给 step 1 里的可复制地址绑定点击 → 写剪贴板 + 短暂回显「已复制」
+      Array.prototype.forEach.call(
+        document.querySelectorAll(".kbd--copyable"),
+        function (el) {
+          var resetTimer = null;
+          el.addEventListener("click", function () {
+            var url = el.getAttribute("data-copy") || el.textContent;
+            var ok = false;
+            try {
+              if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(url);
+                ok = true;
+              } else {
+                // 降级：选中并 execCommand
+                var sel = window.getSelection();
+                var range = document.createRange();
+                range.selectNodeContents(el);
+                sel.removeAllRanges();
+                sel.addRange(range);
+                ok = document.execCommand && document.execCommand("copy");
+              }
+            } catch (_) { ok = false; }
+            if (!ok) return;
+            var orig = el.textContent;
+            el.classList.add("is-copied");
+            el.textContent = copy.copied;
+            if (resetTimer) clearTimeout(resetTimer);
+            resetTimer = setTimeout(function () {
+              el.classList.remove("is-copied");
+              el.textContent = orig;
+            }, 1400);
+          });
+        }
+      );
+
+      var arrow = document.querySelector(".arrow");
+      var popupMock = document.getElementById("chromePopupMock");
+      var installing = document.getElementById("installing");
+      var installingText = document.getElementById("installingText");
+      var fallback = document.getElementById("fallback");
+
+      // 颜色（Edge）和位置（Win）解耦：
+      //   - Edge 弹窗背景是黑底而非 Chrome 的深绿底 → .is-edge
+      //   - Win 上 Chrome/Edge 的「启用」按钮都在左侧 → .is-button-left（同时让箭头改指向左）
+      if (isEdge) {
+        if (popupMock) popupMock.classList.add("is-edge");
+      }
+      if (isWin) {
+        if (popupMock) popupMock.classList.add("is-button-left");
+        if (arrow) arrow.classList.add("is-button-left");
+      }
+
+      installingText.textContent = copy.installingWait;
+
+      // 2 秒：联网快路径 —— pill 转完成态 + Chrome popup mockup + 红色箭头同时淡入
+      setTimeout(function () {
+        installing.classList.add("is-done");
+        installingText.textContent = copy.installingDone;
+        if (popupMock) popupMock.classList.add("is-visible");
+        if (arrow) arrow.classList.add("is-visible");
+      }, 2000);
+
+      // 6 秒：兜底路径 —— 弹窗仍未让用户看到（断网 / 错过），把 pill 切成提示视线下移，淡入手动步骤
+      setTimeout(function () {
+        installing.classList.remove("is-done");
+        installing.classList.add("is-fallback");
+        installingText.textContent = copy.installingFallback;
+        if (fallback) fallback.classList.add("is-visible");
+      }, 6000);
+    })();
+  </script>
+</body>
+</html>

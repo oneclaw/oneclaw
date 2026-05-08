@@ -148,6 +148,11 @@
     Delete "$TEMP\oneclaw-uninstall-path.ps1"
   SectionEnd
 
+  ; 默认不勾选：删除 WebBridge 二进制、缓存、日志
+  Section /o "un.删除 WebBridge 二进制和缓存 (~/.kimi-webbridge)"
+    RMDir /r "$PROFILE\.kimi-webbridge"
+  SectionEnd
+
   ; 默认不勾选（/o）：删除用户数据和配置，防止误删
   Section /o "un.删除所有用户数据和配置 (~/.openclaw)"
     ; 整个 ~/.openclaw/ 目录：配置、日志、凭据、备份、技能、对话历史

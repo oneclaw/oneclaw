@@ -112,6 +112,25 @@ exports.default = async function afterPack(context) {
     console.log(`[afterPack] 已注入 ${name}`);
   }
 
+  // ── 注入 WebBridge 内置 CRX（平台无关，从仓库根 resources/webbridge/ 拷贝） ──
+  // CRX 走本地安装协议（external_crx + external_version），绕过被墙的 clients2.google.com。
+  // 必须放在 app bundle 的 resources/resources/webbridge/ 下，与 constants.ts 的
+  // resolveWebbridgeCrxPath() 保持一致。缺 CRX 直接 fail——离线安装是该构建唯一的扩展安装路径。
+  const crxSrcDir = path.join(__dirname, "..", "resources", "webbridge");
+  const crxFile = path.join(crxSrcDir, "kimi-webbridge.crx");
+  const crxMeta = path.join(crxSrcDir, "kimi-webbridge.json");
+  if (!fs.existsSync(crxFile) || !fs.existsSync(crxMeta)) {
+    throw new Error(
+      `[afterPack] 缺少 WebBridge CRX 资源: ${crxFile} 或 ${crxMeta}`,
+    );
+  }
+  const crxDestDir = path.join(targetBase, "webbridge");
+  fs.mkdirSync(crxDestDir, { recursive: true });
+  fs.copyFileSync(crxFile, path.join(crxDestDir, "kimi-webbridge.crx"));
+  fs.copyFileSync(crxMeta, path.join(crxDestDir, "kimi-webbridge.json"));
+  const crxSizeKB = (fs.statSync(crxFile).size / 1024).toFixed(0);
+  console.log(`[afterPack] 已注入 webbridge/kimi-webbridge.crx (${crxSizeKB} KB)`);
+
   // ── 用 Electron binary 替换独立 Node.js（节省 80-100MB） ──
   const productName = context.packager.appInfo.productFilename;
   replaceNodeBinary(platform, targetBase, productName);

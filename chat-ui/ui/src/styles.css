@@ -6498,6 +6498,38 @@ img.chat-avatar {
   box-shadow: 0 0 0 3px rgba(192, 57, 43, 0.15);
 }
 
+/* WebBridge 待修复提示：可点击，红色与"重启更新"pill 一致 */
+.oneclaw-sidebar__item--webbridge-repair {
+  width: 100%;
+  position: relative;
+  cursor: pointer;
+  color: var(--accent);
+  background: var(--accent-subtle);
+}
+
+.oneclaw-sidebar__item--webbridge-repair:hover {
+  background: rgba(192, 57, 43, 0.2);
+}
+
+.oneclaw-sidebar__item--webbridge-repair .oneclaw-sidebar__label {
+  font-weight: 600;
+}
+
+.oneclaw-sidebar__item--webbridge-repair .oneclaw-sidebar__icon {
+  color: var(--accent);
+}
+
+/* checking：图标转圈，hover 维持原色避免“可点”错觉（已经在查了） */
+.oneclaw-sidebar__item--webbridge-repair.is-checking .oneclaw-sidebar__icon svg {
+  animation: spin 1s linear infinite;
+}
+.oneclaw-sidebar__item--webbridge-repair.is-checking {
+  cursor: progress;
+}
+.oneclaw-sidebar__item--webbridge-repair.is-checking:hover {
+  background: var(--accent-subtle);
+}
+
 /* 选中态：灰色背景，无彩色 */
 .oneclaw-sidebar__item.active {
   color: var(--text-strong);
@@ -7670,18 +7702,84 @@ img.chat-avatar {
 .fixed-tooltip {
   position: fixed;
   transform: translate(-50%, -100%);
-  padding: 4px 8px;
+  padding: 6px 10px;
   font-size: 12px;
-  line-height: 1.3;
+  line-height: 1.4;
   color: var(--text-on-accent);
   background: rgba(0, 0, 0, 0.78);
   border-radius: var(--radius-xs);
-  white-space: nowrap;
+  max-width: 260px;
+  white-space: normal;
+  word-break: break-word;
   pointer-events: none;
   opacity: 0;
   transition: opacity 150ms ease;
   z-index: 10000;
 }
+
+/* WebBridge pill 修复反馈 modal — 视觉与 settings 的 wb-modal 保持一致 */
+.wb-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.4);
+  /* 顶部对齐 + 固定 padding-top：卡片高度变化（错误消息出现/消失）不会让卡片重新居中而抖动 */
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding-top: 18vh;
+  z-index: 1000;
+}
+.wb-modal-overlay.hidden { display: none; }
+.wb-modal-card {
+  background: var(--bg-elevated);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md, 8px);
+  padding: 24px;
+  /* 固定宽度：内容（错误消息长短、按钮文字 vs spinner）无论怎么变都不会让卡片左右抖动 */
+  width: 420px;
+  box-sizing: border-box;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.18);
+}
+.wb-modal-title { margin: 0 0 8px; font-size: 16px; font-weight: 600; color: var(--text-strong); }
+.wb-modal-desc { margin: 0 0 16px; color: var(--text-secondary); font-size: 13px; line-height: 1.5; }
+.wb-modal-actions { display: flex; justify-content: flex-end; gap: 8px; }
+
+/* WebBridge settings 修复 modal 内的组件清单（advanced tab 用） */
+.wb-repair-list { list-style: none; padding: 0; margin: 0 0 16px; }
+.wb-repair-item { padding: 6px 0; font-size: 14px; color: var(--text); }
+.wb-repair-item.missing { color: var(--accent, #c0392b); }
+.wb-repair-item.ok { color: var(--ok, #16a085); }
+.wb-modal-msg { margin: 0 0 12px; padding: 8px 12px; border-radius: var(--radius-xs, 4px); font-size: 13px; }
+.wb-modal-msg.info { background: var(--accent-subtle, rgba(192, 57, 43, 0.08)); color: var(--accent, #c0392b); }
+.wb-modal-msg.error { background: var(--accent-subtle, rgba(192, 57, 43, 0.08)); color: var(--accent, #c0392b); }
+
+/* radio 下方「⚠ 需要修复」红色小链接 */
+.wb-health-link {
+  display: inline-block;
+  margin-top: 8px;
+  font-size: 13px;
+  color: var(--accent, #c0392b);
+  text-decoration: none;
+  cursor: pointer;
+}
+.wb-health-link:hover { text-decoration: underline; }
+
+/* 修复并启用 / 再次检查 按钮：固定宽度，saving 时 spinner 替换文字，按钮尺寸完全不变 */
+/* 用 width 而不是 min-width，"修复并启用"（zh ~123px）/ "Repair & Enable"（en ~150px）自然宽度都比 min-width 大 */
+.wb-modal-actions .oc-settings__btn,
+.wb-modal-actions .oc-settings__btn--primary {
+  width: 160px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.wb-modal-spinner {
+  width: 16px;
+  height: 16px;
+  animation: wb-modal-spin 0.85s linear infinite;
+}
+@keyframes wb-modal-spin { to { transform: rotate(360deg); } }
 
 .workspace__header-btn svg {
   width: 18px;

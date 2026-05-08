@@ -26,14 +26,41 @@ import {
 import { markSetupComplete } from "./oneclaw-config";
 import { recordSetupBaselineConfigSnapshot } from "./config-backup";
 import type { WindowManager } from "./window";
+import {
+  applyBrowserModeConfig,
+  cleanExtensionBlocklist,
+  getBrowserRunningState,
+  getDefaultBrowser,
+  installForDefaultBrowser,
+  isBrowserInstalled,
+  isExtensionBlocklisted,
+  killBackgroundProcesses,
+} from "./browser";
+import {
+  installWebbridge,
+  installWebbridgeSkill,
+  resolveWebbridgeExtensionSpec,
+  runWebbridgeSetupTask,
+} from "./webbridge";
+import { readWebbridgeExtensionId } from "./constants";
 
 interface SetupIpcDeps {
   windowManager: WindowManager;
   ensureGatewayRunning: (source: string) => Promise<boolean>;
   onOAuthLoginSuccess?: () => void;
+  // Setup 完成后若降级到 openclaw 模式重写 config，触发 gateway 重启
+  onBrowserModeChanged?: () => void;
 }
 
 let latestSetupCompletedProps: Record<string, string> | null = null;
+
+// 通知所有窗口：webbridge precheck 状态可能已变（用于刷新左侧栏 pill）。
+// 不重启 gateway 的场景（setup-task 静默装好扩展）必须主动通知，否则 chat-ui pill 卡在旧结果。
+function broadcastWebbridgeStateChanged(): void {
+  for (const w of BrowserWindow.getAllWindows()) {
+    if (!w.isDestroyed()) w.webContents.send("webbridge:state-changed");
+  }
+}
 
 type SetupActionResult = {
   success: boolean;
@@ -229,9 +256,9 @@ export function registerSetupIpc(deps: SetupIpcDeps): void {
         config.gateway.mode = "local";
         ensureGatewayAuthTokenInConfig(config);
 
-        // 默认使用独立浏览器实例，免去用户手动安装 Chrome 扩展
-        config.browser ??= {};
-        config.browser.defaultProfile = "openclaw";
+        // 默认使用 kimi-webbridge 模式：browser 插件关闭 + skill 默认启用
+        // Setup 完成后台会下载二进制 + 装浏览器扩展；下载失败会降级到 openclaw 模式
+        Object.assign(config, applyBrowserModeConfig(config, "webbridge"));
 
         // 显式禁用 iMessage 频道（openclaw 默认启用，会因 macOS 权限拒绝产生大量错误日志）
         config.channels ??= {};
@@ -261,10 +288,12 @@ export function registerSetupIpc(deps: SetupIpcDeps): void {
   });
 
   // ── Setup 完成：启动 Gateway → 标记完成 → 导航到 Chat ──
-  ipcMain.handle("setup:complete", async (_event, params?: { installCli?: boolean; launchAtLogin?: boolean; sessionMemory?: boolean }) => {
+  ipcMain.handle("setup:complete", async (_event, params?: { installCli?: boolean; launchAtLogin?: boolean; sessionMemory?: boolean; enableWebbridge?: boolean }) => {
     const launchAtLogin = typeof params?.launchAtLogin === "boolean" ? params.launchAtLogin : undefined;
     const sessionMemory = params?.sessionMemory !== false;
-    return runTrackedSetupAction("complete", { launch_at_login: launchAtLogin, session_memory: sessionMemory }, async () => {
+    // enableWebbridge 显式 false 才禁用——missing/undefined 都按"启用"处理（兼容老前端）
+    const enableWebbridge = params?.enableWebbridge !== false;
+    return runTrackedSetupAction("complete", { launch_at_login: launchAtLogin, session_memory: sessionMemory, enable_webbridge: enableWebbridge }, async () => {
       if (typeof launchAtLogin === "boolean") {
         setLaunchAtLoginEnabled(app, launchAtLogin);
       }
@@ -283,6 +312,18 @@ export function registerSetupIpc(deps: SetupIpcDeps): void {
         writeUserConfig(config);
       } catch (err: any) {
         log.error(`[setup] 写入 hooks 配置失败: ${err?.message ?? err}`);
+      }
+
+      // 用户在 Setup 末关闭了 WebBridge toggle → 直接写 openclaw 模式，不跑 webbridge 后台任务
+      if (!enableWebbridge) {
+        try {
+          const config = readUserConfig();
+          Object.assign(config, applyBrowserModeConfig(config, "openclaw"));
+          writeUserConfig(config);
+          log.info("[setup] 用户禁用 WebBridge → 已写入 openclaw 模式");
+        } catch (err: any) {
+          log.error(`[setup] 写入 openclaw 模式失败: ${err?.message ?? err}`);
+        }
       }
 
       // Inline completion: start gateway → mark complete → navigate to chat
@@ -340,6 +381,109 @@ export function registerSetupIpc(deps: SetupIpcDeps): void {
           });
         }
       }
+
+      // 用户在 Setup 末关闭 WebBridge toggle → 不跑后台 task，直接 return
+      if (!enableWebbridge) {
+        return { success: true };
+      }
+
+      // 后台静默 task：下载 webbridge 二进制 + 装浏览器扩展。
+      // fire-and-forget——Setup 已结束，主窗已打开，不阻塞用户。
+      // 下载失败时会降级到 openclaw 模式并通过 onBrowserModeChanged 触发 gateway 重启；
+      // 失败状态由主窗左侧栏的"WebBridge 插件需要修复"提示通知用户。
+      runWebbridgeSetupTask({
+        installer: () => installWebbridge(),
+        // Pre-step：用户之前从 chrome://extensions UI 删过扩展时，extId 会落到
+        // Preferences.extensions.external_uninstalls 黑名单，之后写 External Extensions JSON
+        // Chrome 启动会"读 JSON → 查黑名单 → 命中 → 静默跳过安装"，导致 setup 看起来全部成功
+        // 但扩展永远装不上。这里在装扩展前做一次"清黑名单或延后"：
+        //   - 浏览器没在跑       → 清黑名单 + 装扩展（best effort）
+        //   - 浏览器在 background → 杀进程 + 清黑名单 + 装扩展
+        //   - 浏览器在 foreground → 跳过本次安装，保持 webbridge 模式让侧边栏 pill 接管提示
+        //                          （绝不 throw 走 openclaw 降级——那会导致 pill 完全不显示）
+        installExtensions: async (extId) => {
+          // 单一默认浏览器策略：只对系统默认浏览器（Chrome/Edge）操作。
+          // 默认非 Chrome/Edge → 返回 [] → setup-task 严格语义降级 openclaw 模式。
+          const def = await getDefaultBrowser();
+          if (!def) {
+            log.info(
+              "[setup] 系统默认浏览器不是 Chrome 或 Edge，跳过 webbridge 扩展安装（将降级到 openclaw 模式）",
+            );
+            return [];
+          }
+          const target = def.target;
+          if (
+            isBrowserInstalled(target) &&
+            (await isExtensionBlocklisted(target, extId))
+          ) {
+            const state = await getBrowserRunningState(target);
+            if (state === "foreground") {
+              // 不 throw：保持 webbridge 模式，pill 显示「连接你的常用浏览器」
+              // 用户后续从 Settings → 高级 → 修复并启用，那条路径会要求关浏览器再清 blocklist + 装扩展
+              log.info(
+                `[setup] ${target.name} 正在运行且扩展在 external_uninstalls 黑名单——跳过本次扩展安装，保持 webbridge 模式让侧边栏 pill 接管提示`,
+              );
+              return [
+                {
+                  browserId: target.id,
+                  browserName: target.name,
+                  result: "skipped",
+                },
+              ];
+            }
+            // background-only：Win Edge 经典坑——窗口已关但后台扩展进程还在。
+            // 强杀让 External Extensions JSON 在用户下次打开时被冷读取。
+            if (state === "background-only") {
+              const k = await killBackgroundProcesses(target);
+              log.info(
+                `[setup] ${target.name} background-only 进程清理: killed=${k.killed}${
+                  k.error ? ` error=${k.error}` : ""
+                }`,
+              );
+            }
+            const r = await cleanExtensionBlocklist(target, extId);
+            log.info(`[setup] ${target.name} blocklist cleanup: ${r}`);
+          }
+          const spec = resolveWebbridgeExtensionSpec();
+          if (!spec) {
+            log.error(
+              "[setup] 无法解析 WebBridge ExtensionSpec（build-config 或 CRX 缺失），跳过扩展安装",
+            );
+            return [];
+          }
+          return installForDefaultBrowser(spec);
+        },
+        readConfig: readUserConfig,
+        writeConfig: writeUserConfig,
+        applyMode: applyBrowserModeConfig,
+        extensionId: readWebbridgeExtensionId(),
+        onConfigRewritten: () => deps.onBrowserModeChanged?.(),
+        installSkill: (bp) => installWebbridgeSkill(bp),
+        logger: {
+          info: (msg) => log.info(msg),
+          error: (msg) => log.error(msg),
+        },
+      })
+        .then((summary) => {
+          analytics.track("webbridge_setup_task", {
+            outcome: summary.outcome,
+            webbridge_installed: summary.webbridgeInstalled,
+            has_error: Boolean(summary.error),
+          });
+          // 失败 → setup task 内部已 fallback openclaw；用户后续通过侧边栏 pill modal 看到修复入口
+          if (summary.outcome !== "webbridge-ready") {
+            log.info(`[setup] webbridge 安装失败，已降级 openclaw：${summary.error ?? "未知原因"}`);
+          }
+          // 成功路径不会触发 gateway 重启 → 主动广播一次让 chat-ui pill 重查 precheck
+          // （不然 pill 卡在 app 启动那次 tick 的旧结果上：装扩展前=true，装好后没人通知刷新）
+          broadcastWebbridgeStateChanged();
+        })
+        .catch((err) => {
+          log.error(
+            `[setup] webbridge background task 意外异常: ${err?.message ?? err}`,
+          );
+          broadcastWebbridgeStateChanged();
+        });
 
       return { success: true };
     });

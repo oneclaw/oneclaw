@@ -99,6 +99,23 @@ contextBridge.exposeInMainWorld("oneclaw", {
   settingsGetAdvanced: () => ipcRenderer.invoke("settings:get-advanced"),
   settingsSaveAdvanced: (params: Record<string, unknown>) =>
     ipcRenderer.invoke("settings:save-advanced", params),
+  settingsWebbridgeStatus: () => ipcRenderer.invoke("settings:webbridge-status"),
+  settingsWebbridgeInstallExtensions: () =>
+    ipcRenderer.invoke("settings:webbridge-install-extensions"),
+  settingsWebbridgeCleanBlocklist: (browserId: string) =>
+    ipcRenderer.invoke("settings:webbridge-clean-blocklist", browserId),
+  settingsWebbridgePrecheck: () =>
+    ipcRenderer.invoke("settings:webbridge-precheck"),
+  settingsWebbridgeRepairAndEnable: () =>
+    ipcRenderer.invoke("settings:webbridge-repair-and-enable"),
+  settingsGetDefaultBrowserName: () =>
+    ipcRenderer.invoke("settings:get-default-browser-name"),
+  // 主窗左侧栏 WebBridge 修复 pill 用：返回 { visible: boolean }
+  settingsWebbridgeNeedsRepair: () =>
+    ipcRenderer.invoke("settings:webbridge-needs-repair"),
+  // 主窗左侧栏 pill 点击时调用：清 blocklist + 写 External JSON（仅当浏览器已关闭）
+  settingsWebbridgePillRepair: () =>
+    ipcRenderer.invoke("settings:webbridge-pill-repair"),
   settingsGetCliStatus: () => ipcRenderer.invoke("settings:get-cli-status"),
   settingsInstallCli: () => ipcRenderer.invoke("settings:install-cli"),
   settingsUninstallCli: () => ipcRenderer.invoke("settings:uninstall-cli"),
@@ -177,6 +194,13 @@ contextBridge.exposeInMainWorld("oneclaw", {
     const listener = () => cb();
     ipcRenderer.on("gateway:ready", listener);
     return () => ipcRenderer.removeListener("gateway:ready", listener);
+  },
+  // 主进程通知 webbridge precheck 状态可能已变（setup-task 后台装完扩展、settings 修复完成等）
+  // chat-ui 据此重查 settings:webbridge-needs-repair，避免 pill 卡在旧结果
+  onWebbridgeStateChanged: (cb: () => void) => {
+    const listener = () => cb();
+    ipcRenderer.on("webbridge:state-changed", listener);
+    return () => ipcRenderer.removeListener("webbridge:state-changed", listener);
   },
 
   // 截取当前窗口截图，返回 base64 PNG
