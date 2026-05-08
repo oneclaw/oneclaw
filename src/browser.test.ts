@@ -45,13 +45,82 @@ test("BROWSER_TARGETS 仅 chrome / edge + isBrowserInstalled 看 Local State", w
   assert.equal(isBrowserInstalled(chrome), true);
 }));
 
-test("getDefaultBrowser: mac com.google.chrome / win MSEdgeHTM / Firefox→null", () => {
-  assert.equal(getDefaultBrowser({
-    platform: "darwin", runReg: () => null,
-    readPlist: () => ({ LSHandlers: [{ LSHandlerURLScheme: "https", LSHandlerRoleAll: "com.google.chrome" }] }),
-  })?.target.id, "chrome");
-  assert.equal(getDefaultBrowser({ platform: "win32", runReg: () => "MSEdgeHTM", readPlist: () => null })?.target.id, "edge");
-  assert.equal(getDefaultBrowser({ platform: "win32", runReg: () => "FirefoxURL-x", readPlist: () => null }), null);
+test("getDefaultBrowser: 用 path 匹配 .app / .exe；非 Chrome/Edge → null；getInfo reject → null", async () => {
+  // mac path 形如 /Applications/Google Chrome.app
+  const macChrome = await getDefaultBrowser({
+    platform: "darwin",
+    getInfo: async () => ({ name: "Google Chrome", path: "/Applications/Google Chrome.app", icon: null }),
+  });
+  assert.equal(macChrome?.target.id, "chrome");
+
+  // win path 形如 C:\...\msedge.exe
+  const winEdge = await getDefaultBrowser({
+    platform: "win32",
+    getInfo: async () => ({ name: "Microsoft Edge", path: "C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe", icon: null }),
+  });
+  assert.equal(winEdge?.target.id, "edge");
+
+  // Firefox / Safari 不在白名单 → null
+  const firefox = await getDefaultBrowser({
+    platform: "darwin",
+    getInfo: async () => ({ name: "Firefox", path: "/Applications/Firefox.app", icon: null }),
+  });
+  assert.equal(firefox, null);
+
+  // API 抛错（罕见）→ null（不挂）
+  const errored = await getDefaultBrowser({
+    platform: "darwin",
+    getInfo: async () => { throw new Error("LS lookup failed"); },
+  });
+  assert.equal(errored, null);
+});
+
+test("getDefaultBrowser: Win 上 Chrome Beta/Dev/Canary 与 Edge Beta/Dev 不会被误认成 stable", async () => {
+  // Chrome stable 几种常见安装路径都应识别成功
+  const stableA = await getDefaultBrowser({
+    platform: "win32",
+    getInfo: async () => ({ name: "Google Chrome", path: "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe", icon: null }),
+  });
+  assert.equal(stableA?.target.id, "chrome");
+  const stableB = await getDefaultBrowser({
+    platform: "win32",
+    getInfo: async () => ({ name: "Google Chrome", path: "C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe", icon: null }),
+  });
+  assert.equal(stableB?.target.id, "chrome");
+
+  // Beta / Dev / Canary 路径段不同，必须 null（旧 reg 实现里 ChromeBetaHTML 也不命中 ChromeHTML）
+  const beta = await getDefaultBrowser({
+    platform: "win32",
+    getInfo: async () => ({ name: "Google Chrome Beta", path: "C:\\Program Files\\Google\\Chrome Beta\\Application\\chrome.exe", icon: null }),
+  });
+  assert.equal(beta, null);
+  const dev = await getDefaultBrowser({
+    platform: "win32",
+    getInfo: async () => ({ name: "Google Chrome Dev", path: "C:\\Program Files\\Google\\Chrome Dev\\Application\\chrome.exe", icon: null }),
+  });
+  assert.equal(dev, null);
+  const canary = await getDefaultBrowser({
+    platform: "win32",
+    getInfo: async () => ({ name: "Google Chrome SxS", path: "C:\\Users\\u\\AppData\\Local\\Google\\Chrome SxS\\Application\\chrome.exe", icon: null }),
+  });
+  assert.equal(canary, null);
+
+  // Edge stable / Beta / Dev 同样
+  const edgeStable = await getDefaultBrowser({
+    platform: "win32",
+    getInfo: async () => ({ name: "Microsoft Edge", path: "C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe", icon: null }),
+  });
+  assert.equal(edgeStable?.target.id, "edge");
+  const edgeBeta = await getDefaultBrowser({
+    platform: "win32",
+    getInfo: async () => ({ name: "Microsoft Edge Beta", path: "C:\\Program Files (x86)\\Microsoft\\Edge Beta\\Application\\msedge.exe", icon: null }),
+  });
+  assert.equal(edgeBeta, null);
+  const edgeDev = await getDefaultBrowser({
+    platform: "win32",
+    getInfo: async () => ({ name: "Microsoft Edge Dev", path: "C:\\Program Files (x86)\\Microsoft\\Edge Dev\\Application\\msedge.exe", icon: null }),
+  });
+  assert.equal(edgeDev, null);
 });
 
 test("三模式 apply+detect 往返：webbridge 把 skill 翻回 true", () => {

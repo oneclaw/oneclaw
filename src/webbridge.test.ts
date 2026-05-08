@@ -149,12 +149,12 @@ test("installWebbridgeSkill: 调 install-skill -y；exec 抛错 → success=fals
 test("getWebbridgePrecheck: 全 OK / binary 缺 / 默认浏览器不支持 / webbridge 漂移", async () => {
   const base = {
     binaryPath: "/x", extensionId: "id", skillPaths: ["/s"],
-    getDefaultBrowser: () => ({ target: { id: "chrome", name: "Chrome" } }),
+    getDefaultBrowser: async () => ({ target: { id: "chrome", name: "Chrome" } }),
     readExtensionStates: async () => [OK_CHROME],
   };
   assert.equal((await getWebbridgePrecheck({ ...base, fileExists: () => true })).ok, true);
   assert.equal((await getWebbridgePrecheck({ ...base, fileExists: (p) => p === "/s" })).missing.binary, true);
-  const noBrowser = await getWebbridgePrecheck({ ...base, fileExists: () => true, getDefaultBrowser: () => null });
+  const noBrowser = await getWebbridgePrecheck({ ...base, fileExists: () => true, getDefaultBrowser: async () => null });
   assert.equal(noBrowser.defaultUnsupported, true);
   assert.equal(noBrowser.missing.extension, true);
   const drift = await getWebbridgePrecheck({

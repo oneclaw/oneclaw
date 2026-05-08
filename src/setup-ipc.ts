@@ -404,7 +404,7 @@ export function registerSetupIpc(deps: SetupIpcDeps): void {
         installExtensions: async (extId) => {
           // 单一默认浏览器策略：只对系统默认浏览器（Chrome/Edge）操作。
           // 默认非 Chrome/Edge → 返回 [] → setup-task 严格语义降级 openclaw 模式。
-          const def = getDefaultBrowser();
+          const def = await getDefaultBrowser();
           if (!def) {
             log.info(
               "[setup] 系统默认浏览器不是 Chrome 或 Edge，跳过 webbridge 扩展安装（将降级到 openclaw 模式）",

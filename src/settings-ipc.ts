@@ -297,7 +297,7 @@ export function registerSettingsIpc(opts: SettingsIpcOptions = {}): void {
       const content = fs.readFileSync(sourcePath, "utf-8");
       fs.writeFileSync(tempPath, content, "utf-8");
       const lang = app.getLocale().toLowerCase().startsWith("zh") ? "zh" : "en";
-      const def = getDefaultBrowser();
+      const def = await getDefaultBrowser();
       const browserParam =
         def?.target.id === "edge" ? "edge" : def?.target.id === "chrome" ? "chrome" : "";
       const url = pathToFileURL(tempPath);
@@ -1723,7 +1723,7 @@ export function registerSettingsIpc(opts: SettingsIpcOptions = {}): void {
           if (coercedMode) {
             // webbridge 模式服务端兜底：三项都过才能切（防前端被绕过 / 条件在选中到保存之间变化）
             if (coercedMode === "webbridge") {
-              const def = getDefaultBrowser();
+              const def = await getDefaultBrowser();
               const pre = await getWebbridgePrecheck({
                 binaryPath: resolveWebbridgeBinaryPath(),
                 extensionId: readWebbridgeExtensionId(),
@@ -1798,7 +1798,7 @@ export function registerSettingsIpc(opts: SettingsIpcOptions = {}): void {
   // 翻倍延迟。非默认浏览器上的 running 字段会是 false（我们不再关心）。
   ipcMain.handle("settings:webbridge-status", async () => {
     try {
-      const def = getDefaultBrowser();
+      const def = await getDefaultBrowser();
       const state = await getWebbridgeInstallState({
         binaryPath: resolveWebbridgeBinaryPath(),
         dataDir: resolveWebbridgeDataDir(),
@@ -1820,7 +1820,7 @@ export function registerSettingsIpc(opts: SettingsIpcOptions = {}): void {
   // ── WebBridge 切换前置 precheck（read-only；binary/skill/extension 三项 + default browser） ──
   ipcMain.handle("settings:webbridge-precheck", async () => {
     try {
-      const def = getDefaultBrowser();
+      const def = await getDefaultBrowser();
       const result = await getWebbridgePrecheck({
         binaryPath: resolveWebbridgeBinaryPath(),
         extensionId: readWebbridgeExtensionId(),
@@ -1841,8 +1841,8 @@ export function registerSettingsIpc(opts: SettingsIpcOptions = {}): void {
   });
 
   // ── 拿系统默认浏览器名（给 setup done modal 文案用） ──
-  ipcMain.handle("settings:get-default-browser-name", () => {
-    const d = getDefaultBrowser();
+  ipcMain.handle("settings:get-default-browser-name", async () => {
+    const d = await getDefaultBrowser();
     return {
       success: true,
       data: d ? { id: d.target.id, name: d.target.name } : null,
@@ -1915,7 +1915,7 @@ export function registerSettingsIpc(opts: SettingsIpcOptions = {}): void {
   ipcMain.handle("settings:webbridge-repair-and-enable", async () => {
     try {
       // 0. 默认浏览器必须是 Chrome/Edge，不然没法修
-      const def = getDefaultBrowser();
+      const def = await getDefaultBrowser();
       if (!def) {
         return {
           success: false,
@@ -2046,7 +2046,7 @@ export function registerSettingsIpc(opts: SettingsIpcOptions = {}): void {
   //   "FAILED"                      → 修复中途失败
   ipcMain.handle("settings:webbridge-pill-repair", async () => {
     try {
-      const def = getDefaultBrowser();
+      const def = await getDefaultBrowser();
       if (!def) {
         return { success: false, code: "DEFAULT_BROWSER_UNSUPPORTED" };
       }

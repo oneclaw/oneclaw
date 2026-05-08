@@ -1,8 +1,7 @@
 // browser.ts — 浏览器检测 / 扩展安装 / 三模式配置
 // 合并自原 browser-detector.ts + browser-extension-installer.ts + browser-mode-config.ts
-import { execFile, spawnSync } from "child_process";
+import { execFile } from "child_process";
 import * as fs from "fs";
-import * as os from "os";
 import * as path from "path";
 import { promisify } from "util";
 import {
@@ -30,6 +29,11 @@ export interface BrowserTarget {
   processNameWin: string;
   // 真"装了"判定用：macOS app bundle 名（"Google Chrome.app"）
   appNameMac: string;
+  // 默认浏览器识别用：Win stable 安装路径的稳定片段。
+  // 必须用完整路径片段而不是 processNameWin —— Chrome Beta / Dev / Canary 的 exe 名也是
+  // chrome.exe，但路径里 vendor/channel 段不一样（"Chrome Beta" / "Chrome Dev" / "Chrome SxS"）。
+  // 老 reg 实现通过 ProgId 区分（ChromeHTML vs ChromeBetaHTML），新实现通过路径片段对齐。
+  winInstallPathFragment: string;
 }
 
 export const BROWSER_TARGETS: readonly BrowserTarget[] = [
@@ -43,6 +47,8 @@ export const BROWSER_TARGETS: readonly BrowserTarget[] = [
     processNameMac: "Google Chrome.app/Contents/MacOS/Google Chrome",
     processNameWin: "chrome.exe",
     appNameMac: "Google Chrome.app",
+    // Beta/Dev/Canary 路径分别为 \Chrome Beta\、\Chrome Dev\、\Chrome SxS\，仅 stable 命中
+    winInstallPathFragment: "\\Google\\Chrome\\Application\\chrome.exe",
   },
   {
     id: "edge",
@@ -54,6 +60,8 @@ export const BROWSER_TARGETS: readonly BrowserTarget[] = [
     processNameMac: "Microsoft Edge.app/Contents/MacOS/Microsoft Edge",
     processNameWin: "msedge.exe",
     appNameMac: "Microsoft Edge.app",
+    // Beta/Dev 路径分别为 \Edge Beta\、\Edge Dev\，仅 stable 命中
+    winInstallPathFragment: "\\Microsoft\\Edge\\Application\\msedge.exe",
   },
 ];
 
@@ -98,100 +106,70 @@ export function listInstalledBrowsers(): BrowserTarget[] {
 }
 
 // ───────────────────────────── 默认浏览器 ─────────────────────────────
+// 老实现走 `plutil` (mac) / `reg query` (win) 子进程 + 解析 stdout，spawnSync
+// 同步阻塞 + 文本格式脆弱（mac 系统语言 / Win locale 都可能影响 reg 输出）。
+// 现在直接调 Electron 自带的 app.getApplicationInfoForProtocol，它内部就是
+// LSCopyDefaultApplicationURLForURL（mac）/ IApplicationAssociationRegistration
+// （win）的官方包装，返回 .app bundle / .exe 的稳定路径。
+//
+// 测试通过 deps.getInfo 注入 mock，生产路径 lazy require electron 避免
+// import-time 触碰（tsx --test 跑 browser.test.ts 不在 Electron 上下文）。
 
 export interface DefaultBrowserResult {
   target: BrowserTarget;
 }
 
+export interface ProtocolAppInfo {
+  name: string;
+  path: string;
+  icon: unknown;
+}
+
 export interface DefaultBrowserDeps {
   platform?: NodeJS.Platform;
-  runReg?: () => string | null;
-  readPlist?: () => any | null;
+  getInfo?: () => Promise<ProtocolAppInfo>;
 }
 
-const PROG_ID_TO_TARGET: Record<string, string> = {
-  ChromeHTML: "chrome",
-  MSEdgeHTM: "edge",
-  MSEdgeMHT: "edge",
-};
-
-const BUNDLE_ID_TO_TARGET: Record<string, string> = {
-  "com.google.chrome": "chrome",
-  "com.microsoft.edgemac": "edge",
-};
-
-function defaultRunReg(): string | null {
-  try {
-    const r = spawnSync(
-      "reg",
-      [
-        "query",
-        "HKCU\\Software\\Microsoft\\Windows\\Shell\\Associations\\UrlAssociations\\http\\UserChoice",
-        "/v",
-        "ProgId",
-      ],
-      { encoding: "utf-8" },
-    );
-    if (r.status !== 0) return null;
-    const m = (r.stdout || "").match(/ProgId\s+REG_SZ\s+(\S+)/);
-    return m?.[1] ?? null;
-  } catch {
-    return null;
-  }
+function defaultGetInfo(): Promise<ProtocolAppInfo> {
+  // lazy require：browser.ts 顶层避免 import electron，否则 tsx 测试爆炸
+  const { app } = require("electron") as typeof import("electron");
+  // 带 host 的 URL：裸 "https://" 在部分 Electron 版本底层 URL 解析会失败
+  return app.getApplicationInfoForProtocol("https://example.com/");
 }
 
-function defaultReadPlist(): any | null {
-  try {
-    const p = path.join(
-      os.homedir(),
-      "Library/Preferences/com.apple.LaunchServices/com.apple.launchservices.secure.plist",
-    );
-    if (!fs.existsSync(p)) return null;
-    const r = spawnSync("plutil", ["-convert", "json", "-o", "-", p], {
-      encoding: "utf-8",
-    });
-    if (r.status !== 0) return null;
-    return JSON.parse(r.stdout || "{}");
-  } catch {
-    return null;
-  }
-}
-
-export function getDefaultBrowser(
+export async function getDefaultBrowser(
   deps: DefaultBrowserDeps = {},
-): DefaultBrowserResult | null {
+): Promise<DefaultBrowserResult | null> {
   const platform = deps.platform ?? process.platform;
-  let targetId: string | undefined;
-
-  if (platform === "win32") {
-    const runReg = deps.runReg ?? defaultRunReg;
-    let progId: string | null;
-    try {
-      progId = runReg();
-    } catch {
-      return null;
-    }
-    if (!progId) return null;
-    targetId = PROG_ID_TO_TARGET[progId];
-  } else if (platform === "darwin") {
-    const readPlist = deps.readPlist ?? defaultReadPlist;
-    let plist: any;
-    try {
-      plist = readPlist();
-    } catch {
-      return null;
-    }
-    const handlers = plist?.LSHandlers;
-    if (!Array.isArray(handlers)) return null;
-    const https = handlers.find((h: any) => h?.LSHandlerURLScheme === "https");
-    const bundleId = https?.LSHandlerRoleAll;
-    if (typeof bundleId === "string") {
-      targetId = BUNDLE_ID_TO_TARGET[bundleId.toLowerCase()];
-    }
+  const getInfo = deps.getInfo ?? defaultGetInfo;
+  let info: ProtocolAppInfo;
+  try {
+    info = await getInfo();
+  } catch {
+    return null;
   }
-
-  if (!targetId) return null;
-  const target = BROWSER_TARGETS.find((t) => t.id === targetId);
+  if (!info?.path || typeof info.path !== "string") return null;
+  // 直接用 BROWSER_TARGETS 已有的字段做 path 匹配，不再维护单独的 ProgId / BundleId 表。
+  const target = BROWSER_TARGETS.find((t) => {
+    if (platform === "darwin") {
+      // mac path 形如 /Applications/Google Chrome.app
+      // endsWith("Google Chrome.app") 不会命中 "Google Chrome Beta.app"，已天然区分 channel
+      return (
+        info.path.endsWith(t.appNameMac) ||
+        info.path.includes(`/${t.appNameMac}/`)
+      );
+    }
+    if (platform === "win32") {
+      // win path 形如 C:\Program Files\Google\Chrome\Application\chrome.exe
+      // 必须用完整路径片段匹配。Chrome Beta / Dev / Canary 的 exe 名也是 chrome.exe，
+      // 但路径里 channel 段不一样（"Chrome Beta" / "Chrome Dev" / "Chrome SxS"），
+      // 仅匹配 exe 名后缀会让 Beta 被误认为 stable。
+      // 大小写 + 反斜杠 normalize（虽然 Win API 通常返回反斜杠）
+      const normalized = info.path.toLowerCase().replace(/\//g, "\\");
+      return normalized.includes(t.winInstallPathFragment.toLowerCase());
+    }
+    return false;
+  });
   return target ? { target } : null;
 }
 
@@ -662,11 +640,11 @@ export async function installForAllDetectedBrowsers(
 export async function installForDefaultBrowser(
   spec: ExtensionSpec,
   options: CommonOptions & {
-    getDefault?: () => { target: BrowserTarget } | null;
+    getDefault?: () => Promise<{ target: BrowserTarget } | null>;
   } = {},
 ): Promise<BrowserInstallSummary[]> {
   const getDefault = options.getDefault ?? getDefaultBrowser;
-  const def = getDefault();
+  const def = await getDefault();
   if (!def) return [];
   try {
     const result = await installExtension(def.target, spec, options);

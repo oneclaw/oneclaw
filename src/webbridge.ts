@@ -807,7 +807,7 @@ export interface WebbridgePrecheckDeps {
   extensionId: string;
   fileExists: (p: string) => boolean;
   readExtensionStates: (extId: string) => Promise<BrowserState[]>;
-  getDefaultBrowser: () => { target: { id: string; name: string } } | null;
+  getDefaultBrowser: () => Promise<{ target: { id: string; name: string } } | null>;
   /**
    * 读 openclaw.json 里 `skills.entries["kimi-webbridge"].enabled`：
    * - undefined → 视为已启用（缺省即启用）
@@ -843,7 +843,7 @@ export async function getWebbridgePrecheck(
     currentMode === "webbridge" && skillEnabled === false;
   const skillMissing = fileMissing || skillDisabledDrift;
 
-  const def = deps.getDefaultBrowser();
+  const def = await deps.getDefaultBrowser();
   const defaultUnsupported = !def;
   const defaultBrowser = def
     ? { id: def.target.id, name: def.target.name }
