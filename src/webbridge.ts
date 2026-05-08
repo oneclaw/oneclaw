@@ -108,14 +108,14 @@ export function httpHead(initialUrl: string): Promise<HeadResult> {
             return;
           }
           const lenRaw = res.headers["content-length"];
+          // Number.isFinite 而非 `|| null`：后者会把合法的 0 误当未知长度
+          const len =
+            typeof lenRaw === "string" ? Number.parseInt(lenRaw, 10) : NaN;
           resolve({
             etag: (res.headers.etag as string | undefined) ?? null,
             lastModified:
               (res.headers["last-modified"] as string | undefined) ?? null,
-            contentLength:
-              typeof lenRaw === "string"
-                ? Number.parseInt(lenRaw, 10) || null
-                : null,
+            contentLength: Number.isFinite(len) ? len : null,
           });
           res.resume();
         })
@@ -185,10 +185,9 @@ export function downloadToFile(
         }
 
         const lenRaw = res.headers["content-length"];
-        const total =
-          typeof lenRaw === "string"
-            ? Number.parseInt(lenRaw, 10) || null
-            : null;
+        const lenParsed =
+          typeof lenRaw === "string" ? Number.parseInt(lenRaw, 10) : NaN;
+        const total = Number.isFinite(lenParsed) ? lenParsed : null;
 
         const file = fs.createWriteStream(tmpPath);
         let downloaded = 0;
@@ -334,15 +333,40 @@ function sleep(ms: number): Promise<void> {
 }
 
 // 解析默认路径——延迟到调用时，避免 import 期就触碰 process.env
+// 兜底 os.homedir()：HOME/USERPROFILE 在 CI / sandbox 下可能没设置，
+// 没有兜底时 path.join("", ".kimi-webbridge") 会落成相对路径，
+// 让 binary 下载到当前工作目录。
 function resolveDefaultDataDir(): string {
   const home =
-    process.platform === "win32" ? process.env.USERPROFILE : process.env.HOME;
-  return path.join(home ?? "", ".kimi-webbridge");
+    (process.platform === "win32" ? process.env.USERPROFILE : process.env.HOME) ||
+    os.homedir();
+  return path.join(home, ".kimi-webbridge");
 }
 
 function resolveDefaultBinaryPath(dataDir: string): string {
   const exe = process.platform === "win32" ? "kimi-webbridge.exe" : "kimi-webbridge";
   return path.join(dataDir, "bin", exe);
+}
+
+// HEAD 也走 transient 重试 —— 没有这个的话，install 路径在网络抖一下就直接
+// 降级到 openclaw，而下载阶段的重试根本没机会触发。同样的指数退避策略。
+async function httpHeadWithRetry(
+  url: string,
+  maxRetries: number,
+): Promise<HeadResult> {
+  let lastErr: unknown = null;
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      return await httpHead(url);
+    } catch (err) {
+      lastErr = err;
+      if (attempt === maxRetries || !isTransientError(err)) {
+        throw err;
+      }
+      await sleep(RETRY_BASE_DELAY_MS * Math.pow(3, attempt));
+    }
+  }
+  throw lastErr;
 }
 
 export async function installWebbridge(
@@ -358,8 +382,8 @@ export async function installWebbridge(
   const url = `${base}/${version}/releases/${filename}`;
   const maxRetries = options.maxRetries ?? DEFAULT_MAX_RETRIES;
 
-  // HEAD 拿 ETag（同时作为版本探测；404/403 会在这里直接抛出）
-  const head = await httpHead(url);
+  // HEAD 拿 ETag（同时作为版本探测；404/403 会在这里直接抛出，transient 错误自动重试）
+  const head = await httpHeadWithRetry(url, maxRetries);
 
   if (!options.force) {
     const cache = readCacheManifest(dataDir);
@@ -585,6 +609,32 @@ export async function runWebbridgeSetupTask(
       return fail(
         "浏览器扩展批量安装失败",
         err instanceof Error ? err.message : String(err),
+        binaryPath,
+      );
+    }
+    // 严格校验：installExtensions 不抛异常但返回不可用结果时同样判失败。
+    //   - 空数组：默认浏览器不是 Chrome/Edge（installForDefaultBrowser 路径）
+    //   - 全部 result 为 browser-not-installed / 带 error：扩展实际没装上
+    // 任何一种情况下都不应让 outcome=webbridge-ready，否则 setup-ipc 不会触发
+    // 降级 + 用户进入 webbridge 模式但浏览器接管能力不存在。
+    if (extensionSummary.length === 0) {
+      return fail(
+        "浏览器扩展未安装：默认浏览器不是 Chrome/Edge",
+        "no extension target",
+        binaryPath,
+      );
+    }
+    const acceptableResults = new Set(["installed", "updated", "skipped"]);
+    const anyOk = extensionSummary.some(
+      (r) => acceptableResults.has(r.result) && !r.error,
+    );
+    if (!anyOk) {
+      const detail = extensionSummary
+        .map((r) => `${r.browserId}=${r.result}${r.error ? `(${r.error})` : ""}`)
+        .join(" ");
+      return fail(
+        "浏览器扩展未安装：所有目标浏览器都失败",
+        detail,
         binaryPath,
       );
     }

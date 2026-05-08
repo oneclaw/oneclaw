@@ -96,6 +96,31 @@ test("runWebbridgeSetupTask: 全 OK → webbridge-ready；installer 抛错 → f
   assert.equal(notified, 1);
 });
 
+test("runWebbridgeSetupTask: installExtensions 返回 [] / 全 browser-not-installed 都判失败并降级", async () => {
+  // 默认浏览器不是 Chrome/Edge，installForDefaultBrowser 返回 [] —— 必须降级
+  const empty = await runWebbridgeSetupTask(setupDeps({
+    installExtensions: async () => [],
+  }));
+  assert.equal(empty.outcome, "fell-back-to-openclaw");
+  assert.match(empty.error ?? "", /no extension target/);
+
+  // 浏览器探测到了但实际没装上（browser-not-installed） —— 同样降级
+  const bni = await runWebbridgeSetupTask(setupDeps({
+    installExtensions: async () => [
+      { browserId: "chrome", browserName: "Chrome", result: "browser-not-installed" },
+    ],
+  }));
+  assert.equal(bni.outcome, "fell-back-to-openclaw");
+
+  // 带 error 的 summary 即便 result 看起来 OK 也判失败（防御性写法）
+  const errored = await runWebbridgeSetupTask(setupDeps({
+    installExtensions: async () => [
+      { browserId: "chrome", browserName: "Chrome", result: "installed", error: "EACCES" },
+    ],
+  }));
+  assert.equal(errored.outcome, "fell-back-to-openclaw");
+});
+
 test("getWebbridgeInstallState: binary 缺 → installed=false；存在 + manifest → version", async () => {
   const base = { binaryPath: "/x", dataDir: "/y", readExtensionStates: async () => [], extensionId: EXT };
   const miss = await getWebbridgeInstallState({ ...base, fileExists: () => false, readManifest: () => null });

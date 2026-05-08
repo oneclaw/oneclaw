@@ -29,7 +29,6 @@ import type { WindowManager } from "./window";
 import {
   applyBrowserModeConfig,
   cleanExtensionBlocklist,
-  DEFAULT_PROCESS_EXEC,
   getBrowserRunningState,
   getDefaultBrowser,
   installForDefaultBrowser,
@@ -417,9 +416,7 @@ export function registerSetupIpc(deps: SetupIpcDeps): void {
             isBrowserInstalled(target) &&
             (await isExtensionBlocklisted(target, extId))
           ) {
-            const state = await getBrowserRunningState(target, {
-              exec: DEFAULT_PROCESS_EXEC,
-            });
+            const state = await getBrowserRunningState(target);
             if (state === "foreground") {
               // 不 throw：保持 webbridge 模式，pill 显示「连接你的常用浏览器」
               // 用户后续从 Settings → 高级 → 修复并启用，那条路径会要求关浏览器再清 blocklist + 装扩展
@@ -437,9 +434,7 @@ export function registerSetupIpc(deps: SetupIpcDeps): void {
             // background-only：Win Edge 经典坑——窗口已关但后台扩展进程还在。
             // 强杀让 External Extensions JSON 在用户下次打开时被冷读取。
             if (state === "background-only") {
-              const k = await killBackgroundProcesses(target, {
-                exec: DEFAULT_PROCESS_EXEC,
-              });
+              const k = await killBackgroundProcesses(target);
               log.info(
                 `[setup] ${target.name} background-only 进程清理: killed=${k.killed}${
                   k.error ? ` error=${k.error}` : ""

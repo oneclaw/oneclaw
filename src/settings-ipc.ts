@@ -1,5 +1,6 @@
 import { app, ipcMain, session, shell } from "electron";
 import * as os from "os";
+import { pathToFileURL } from "url";
 import { spawn } from "child_process";
 import {
   resolveGatewayCwd,
@@ -275,7 +276,13 @@ export function registerSettingsIpc(opts: SettingsIpcOptions = {}): void {
   // setup/webbridge-enable-guide.html 在 packaged 时被打进 app.asar，shell.openExternal
   // 不能直接打开 asar 内的文件，所以先读出来写到系统临时目录，再用 file:// 打开。
   // ?lang=zh|en, ?browser=chrome|edge —— 让 enable-guide 显示对应的语言和浏览器图标。
-  const openWebbridgeEnableGuideInBrowser = (): boolean => {
+  //
+  // 必须 await openExternal 并返回真实结果：
+  //   - Win 路径形如 `C:\Users\...` 用字符串拼接 `file://${tempPath}` 不是合法 URL，
+  //     pathToFileURL() 才能正确处理盘符 + 反斜杠 + URL 编码
+  //   - openExternal 是 Promise；fire-and-forget 让"打开失败"也被当成 success，
+  //     调用方据此跳过 modal，结果就是用户既看不到引导页也看不到本地提示
+  const openWebbridgeEnableGuideInBrowser = async (): Promise<boolean> => {
     try {
       const sourcePath = path.join(
         __dirname,
@@ -293,8 +300,10 @@ export function registerSettingsIpc(opts: SettingsIpcOptions = {}): void {
       const def = getDefaultBrowser();
       const browserParam =
         def?.target.id === "edge" ? "edge" : def?.target.id === "chrome" ? "chrome" : "";
-      const qs = browserParam ? `?lang=${lang}&browser=${browserParam}` : `?lang=${lang}`;
-      void shell.openExternal(`file://${tempPath}${qs}`);
+      const url = pathToFileURL(tempPath);
+      url.searchParams.set("lang", lang);
+      if (browserParam) url.searchParams.set("browser", browserParam);
+      await shell.openExternal(url.toString());
       return true;
     } catch (err) {
       log.error(
@@ -1834,7 +1843,10 @@ export function registerSettingsIpc(opts: SettingsIpcOptions = {}): void {
   // ── 拿系统默认浏览器名（给 setup done modal 文案用） ──
   ipcMain.handle("settings:get-default-browser-name", () => {
     const d = getDefaultBrowser();
-    return d ? { id: d.target.id, name: d.target.name } : null;
+    return {
+      success: true,
+      data: d ? { id: d.target.id, name: d.target.name } : null,
+    };
   });
 
   // ── 主窗左侧栏「连接你的常用浏览器」pill ──
@@ -2013,8 +2025,9 @@ export function registerSettingsIpc(opts: SettingsIpcOptions = {}): void {
       writeUserConfigAndRestart(config);
       // 含扩展修复 → 主动 open 引导页（同时启动浏览器触发"启用扩展"prompt）
       // 跟 pill-repair 行为一致：避免用户多走一步「手动开浏览器」
-      const openedBrowser =
-        pre.missing.extension && openWebbridgeEnableGuideInBrowser();
+      const openedBrowser = pre.missing.extension
+        ? await openWebbridgeEnableGuideInBrowser()
+        : false;
       return { success: true, data: summary, openedBrowser };
     } catch (err: any) {
       return { success: false, message: err.message || String(err) };
@@ -2072,7 +2085,9 @@ export function registerSettingsIpc(opts: SettingsIpcOptions = {}): void {
         const browserRunning = isBrowserInstalled(def.target)
           ? (await getBrowserRunningState(def.target)) !== "not-running"
           : false;
-        const openedBrowser = !browserRunning && openWebbridgeEnableGuideInBrowser();
+        const openedBrowser = !browserRunning
+          ? await openWebbridgeEnableGuideInBrowser()
+          : false;
         return {
           success: true,
           code: "READY",
@@ -2159,8 +2174,9 @@ export function registerSettingsIpc(opts: SettingsIpcOptions = {}): void {
       // 修复路径走到这里时浏览器一定已关闭（缺扩展时 step 2 已要求关 + 杀 background）
       // 含扩展修复 → 主动 open 引导页（同时启动浏览器触发"启用扩展"prompt）
       // 仅 binary/skill 修复 → 不开浏览器，前端弹简短「WebBridge 已修复」modal
-      const openedBrowser =
-        pre.missing.extension && openWebbridgeEnableGuideInBrowser();
+      const openedBrowser = pre.missing.extension
+        ? await openWebbridgeEnableGuideInBrowser()
+        : false;
       return {
         success: true,
         code: "READY",
@@ -2236,8 +2252,15 @@ export function registerSettingsIpc(opts: SettingsIpcOptions = {}): void {
         if (!(await isExtensionBlocklisted(target, extId))) {
           return { success: true, code: "NOT_BLOCKLISTED" };
         }
-        // 3. 改 Preferences
+        // 3. 改 Preferences（含二次读取验证）
         const result = await cleanExtensionBlocklist(target, extId);
+        if (result === "verify-failed") {
+          return {
+            success: false,
+            code: "VERIFY_FAILED",
+            message: `${target.name} 配置写入后再读取仍命中黑名单；请完全退出 ${target.name} 后重试。`,
+          };
+        }
         return { success: true, code: result };
       } catch (err: any) {
         return { success: false, message: err.message || String(err) };

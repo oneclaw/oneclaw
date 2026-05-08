@@ -561,16 +561,24 @@ export async function installExtension(
   const existing = readMacJsonIfValid(target, spec.extId);
   if (macJsonMatchesSpec(existing, spec)) return "skipped";
   fs.mkdirSync(path.dirname(jsonPath), { recursive: true });
-  fs.writeFileSync(
+  atomicWriteFile(
     jsonPath,
     JSON.stringify(
       { external_crx: spec.crxPath, external_version: spec.crxVersion },
       null,
       2,
     ),
-    "utf-8",
   );
   return existing === null ? "installed" : "updated";
+}
+
+// 写临时文件 → rename 替换。崩溃 / 断电 / 磁盘满时只会留下 .tmp 残骸，
+// 不会让目标文件出现半写状态——尤其重要的是 Chrome `Preferences`，那是
+// 用户配置不是 OneClaw 私有数据，损坏代价大。
+function atomicWriteFile(targetPath: string, data: string): void {
+  const tmpPath = `${targetPath}.oneclaw.tmp-${process.pid}`;
+  fs.writeFileSync(tmpPath, data, "utf-8");
+  fs.renameSync(tmpPath, targetPath);
 }
 
 export async function uninstallExtension(
@@ -757,7 +765,11 @@ export async function getExtensionStates(
 export type BlocklistCleanResult =
   | "cleaned"
   | "not-blocklisted"
-  | "preferences-missing";
+  | "preferences-missing"
+  // 杀进程→改写完成后再读 Preferences 仍然命中 blocklist。
+  // 大概率是用户在我们 kill 完到 rename 之间手动开了浏览器，
+  // Chrome 启动会用内存状态覆盖磁盘——此时让用户先关浏览器再重试。
+  | "verify-failed";
 
 function preferencesPath(target: BrowserTarget): string {
   return path.join(
@@ -867,7 +879,14 @@ export async function cleanExtensionBlocklist(
   prefs.extensions.external_uninstalls = list.filter(
     (x: unknown) => x !== extId,
   );
-  fs.writeFileSync(p, JSON.stringify(prefs), "utf-8");
+  atomicWriteFile(p, JSON.stringify(prefs));
+  // 二次验证：确认改动落盘且没被并发的 Chrome 进程覆盖。
+  // 重新读取(走完整的 readPreferencesIfValid 校验)，extId 仍在则失败。
+  const verify = readPreferencesIfValid(target);
+  const verifyList = verify?.extensions?.external_uninstalls;
+  if (Array.isArray(verifyList) && verifyList.includes(extId)) {
+    return "verify-failed";
+  }
   return "cleaned";
 }
 

@@ -682,9 +682,11 @@ export async function settingsWebbridgeRepairAndEnable(): Promise<WebbridgeRepai
   return result ?? { success: false, message: "no response" };
 }
 
-// 系统默认浏览器；非 Chrome/Edge 时返回 null（handler 直接返回原始对象，无 success 包装）
+// 系统默认浏览器；非 Chrome/Edge 时 data 为 null
 export async function settingsGetDefaultBrowserName(): Promise<{ id: string; name: string } | null> {
-  return (await oc().settingsGetDefaultBrowserName()) as { id: string; name: string } | null;
+  return unwrapData<{ id: string; name: string } | null>(
+    await oc().settingsGetDefaultBrowserName(),
+  );
 }
 
 // ---------------------------------------------------------------------------

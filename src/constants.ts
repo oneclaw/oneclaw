@@ -1,6 +1,7 @@
 import { app } from "electron";
 import * as path from "path";
 import * as fs from "fs";
+import * as os from "os";
 import { execFileSync } from "child_process";
 import { isSetupCompleteFromConfig } from "./setup-completion";
 import { readOneclawConfig } from "./oneclaw-config";
@@ -245,9 +246,13 @@ export function resolveUserBinDir(): string {
 }
 
 /** WebBridge 二进制和缓存根目录（~/.kimi-webbridge/） */
+// HOME/USERPROFILE 在 CI、sandbox、无人值守服务环境下可能没设置。
+// 落到 os.homedir() 是最后的安全网——比返回相对路径 `.kimi-webbridge`
+// 让二进制下载到当前工作目录要好得多（后续 binary 探测会失败）。
 export function resolveWebbridgeDataDir(): string {
-  const home = IS_WIN ? process.env.USERPROFILE : process.env.HOME;
-  return path.join(home ?? "", ".kimi-webbridge");
+  const home =
+    (IS_WIN ? process.env.USERPROFILE : process.env.HOME) || os.homedir();
+  return path.join(home, ".kimi-webbridge");
 }
 
 /** WebBridge daemon 二进制完整路径（~/.kimi-webbridge/bin/kimi-webbridge[.exe]） */
