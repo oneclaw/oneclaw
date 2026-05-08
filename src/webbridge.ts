@@ -81,6 +81,7 @@ export interface HeadResult {
 }
 
 const MAX_REDIRECTS = 5;
+const HEAD_TIMEOUT_MS = 15_000;
 
 function chooseTransport(url: string): typeof https | typeof http {
   return new URL(url).protocol === "http:" ? http : https;
@@ -89,13 +90,27 @@ function chooseTransport(url: string): typeof https | typeof http {
 export function httpHead(initialUrl: string): Promise<HeadResult> {
   return new Promise((resolve, reject) => {
     let redirects = 0;
+    let settled = false;
+    const fail = (err: Error) => {
+      if (settled) return;
+      settled = true;
+      reject(err);
+    };
+    const ok = (r: HeadResult) => {
+      if (settled) return;
+      settled = true;
+      resolve(r);
+    };
     const request = (url: string) => {
-      chooseTransport(url)
-        .request(url, { method: "HEAD" }, (res) => {
+      const req = chooseTransport(url).request(
+        url,
+        { method: "HEAD" },
+        (res) => {
           const status = res.statusCode ?? 0;
           if (status >= 300 && status < 400 && res.headers.location) {
             if (++redirects > MAX_REDIRECTS) {
-              reject(new Error(`Too many redirects (>${MAX_REDIRECTS})`));
+              fail(new Error(`Too many redirects (>${MAX_REDIRECTS})`));
+              res.resume();
               return;
             }
             request(new URL(res.headers.location, url).toString());
@@ -103,7 +118,7 @@ export function httpHead(initialUrl: string): Promise<HeadResult> {
             return;
           }
           if (status !== 200) {
-            reject(new Error(`HTTP ${status} — ${url}`));
+            fail(new Error(`HTTP ${status} — ${url}`));
             res.resume();
             return;
           }
@@ -111,16 +126,23 @@ export function httpHead(initialUrl: string): Promise<HeadResult> {
           // Number.isFinite 而非 `|| null`：后者会把合法的 0 误当未知长度
           const len =
             typeof lenRaw === "string" ? Number.parseInt(lenRaw, 10) : NaN;
-          resolve({
+          ok({
             etag: (res.headers.etag as string | undefined) ?? null,
             lastModified:
               (res.headers["last-modified"] as string | undefined) ?? null,
             contentLength: Number.isFinite(len) ? len : null,
           });
           res.resume();
-        })
-        .on("error", reject)
-        .end();
+        },
+      );
+      // socket-level inactivity timeout：每次重定向递归都会创建新 req，每个 req
+      // 各自计时，整体最坏 = (MAX_REDIRECTS+1) * HEAD_TIMEOUT_MS。GFW / IPv6-only
+      // 卡死场景下的兜底——没这条 setup-task 会永远不返回。
+      req.setTimeout(HEAD_TIMEOUT_MS, () => {
+        req.destroy(new Error(`HEAD timeout after ${HEAD_TIMEOUT_MS}ms — ${url}`));
+      });
+      req.on("error", fail);
+      req.end();
     };
     request(initialUrl);
   });
