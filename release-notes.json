@@ -1,5 +1,12 @@
 [
   {
+    "version": "2026.511.0",
+    "notes": {
+      "zh": "设置页面新增 Token 用量统计，按会话查看输入 / 输出 / 缓存消耗\n对话输入框新增上下文容量进度条\n内置 Office (Word / PowerPoint / Excel) 文档技能\n内置 OneClaw 与 OpenClaw 使用手册技能\n反馈对话改为实时刷新（SSE）\n工具调用过程流式展示\n模型预设刷新至 2026 年 4 月阵容\n频道私聊配对体验优化与多项稳定性修复",
+      "en": "Add per-session token usage stats in Settings (input / output / cache)\nAdd context meter on the compose area\nBundle Office (Word / PowerPoint / Excel) skills\nBundle OneClaw and OpenClaw user manual skill\nReal-time feedback chat via SSE\nStream intermediate tool calls during runs\nRefresh model presets to April 2026 lineup\nChannel pairing polish and various stability fixes"
+    }
+  },
+  {
     "version": "2026.424.0",
     "notes": {
       "zh": "升级了 openclaw 4.5 内核",
