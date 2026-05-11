@@ -221,6 +221,7 @@ const dict: Record<Locale, Record<string, string>> = {
     "settings.nav.memory": "记忆",
     "settings.nav.appearance": "外观",
     "settings.nav.advanced": "高级",
+    "settings.nav.sessionUsage": "会话用量",
     "settings.nav.backup": "备份恢复",
     "settings.nav.about": "软件更新",
 
@@ -302,6 +303,18 @@ const dict: Record<Locale, Record<string, string>> = {
     "settings.backup.noticeGatewayRecoverFailed": "自动回退失败，请手动选择备份恢复",
     "settings.backup.confirmRestore": "确定要恢复 {fileName} 吗？",
     "settings.backup.confirmRestoreLKG": "确定要恢复最后正常配置吗？",
+
+    // Settings: Session Usage
+    "settings.sessionUsage.pageTitle": "会话用量",
+    "settings.sessionUsage.pageDesc": "按会话累计的 Token 用量（按最近更新倒序）",
+    "settings.sessionUsage.loadFailedHint": "加载失败，请重启 Gateway 后重新打开本页面。",
+    "settings.sessionUsage.empty": "暂无可统计的会话",
+    "settings.sessionUsage.tokenIn": "输入",
+    "settings.sessionUsage.tokenOut": "输出",
+    "settings.sessionUsage.tokenCacheRead": "缓存读",
+    "settings.sessionUsage.mainBadge": "主会话",
+    "settings.sessionUsage.totals.label": "总Token用量",
+    "settings.sessionUsage.details.title": "明细",
 
     // Settings: About
     "settings.about.version": "版本信息",
@@ -771,6 +784,7 @@ const dict: Record<Locale, Record<string, string>> = {
     "settings.nav.memory": "Memory",
     "settings.nav.appearance": "Appearance",
     "settings.nav.advanced": "Advanced",
+    "settings.nav.sessionUsage": "Session Usage",
     "settings.nav.backup": "Backup & Restore",
     "settings.nav.about": "Software Update",
 
@@ -852,6 +866,18 @@ const dict: Record<Locale, Record<string, string>> = {
     "settings.backup.noticeGatewayRecoverFailed": "Auto recovery failed. Please select a backup manually",
     "settings.backup.confirmRestore": "Restore {fileName}?",
     "settings.backup.confirmRestoreLKG": "Restore last known good config?",
+
+    // Settings: Session Usage
+    "settings.sessionUsage.pageTitle": "Session Usage",
+    "settings.sessionUsage.pageDesc": "Cumulative token usage per session (sorted by most recent)",
+    "settings.sessionUsage.loadFailedHint": "Failed to load. Please restart the gateway and reopen this page.",
+    "settings.sessionUsage.empty": "No sessions to report",
+    "settings.sessionUsage.tokenIn": "in",
+    "settings.sessionUsage.tokenOut": "out",
+    "settings.sessionUsage.tokenCacheRead": "cacheR",
+    "settings.sessionUsage.mainBadge": "Main",
+    "settings.sessionUsage.totals.label": "Total Token Usage",
+    "settings.sessionUsage.details.title": "Details",
 
     // Settings: About
     "settings.about.version": "Version",

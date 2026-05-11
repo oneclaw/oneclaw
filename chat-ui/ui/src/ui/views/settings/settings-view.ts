@@ -15,6 +15,7 @@ import { renderTabAdvanced, resetAdvancedTab } from "./tab-advanced.ts";
 import { renderTabBackup, cleanupBackupTab } from "./tab-backup.ts";
 import { renderTabAbout, cleanupAboutTab } from "./tab-about.ts";
 import { renderTabProvider, resetProviderTab } from "./tab-provider.ts";
+import { renderTabSessionUsage, resetSessionUsageTab } from "./tab-session-usage.ts";
 
 /* ── module-level state ── */
 
@@ -72,6 +73,7 @@ function cleanupTab(tabId: string) {
     case "channels": cleanupChannelsTab(); break;
     case "backup": cleanupBackupTab(); break;
     case "about": cleanupAboutTab(); break;
+    case "session-usage": resetSessionUsageTab(); break;
   }
 }
 
@@ -86,6 +88,7 @@ function renderActiveTab(state: AppViewState) {
     case "memory": return renderTabMemory(state);
     case "appearance": return renderTabAppearance(state);
     case "advanced": return renderTabAdvanced(state);
+    case "session-usage": return renderTabSessionUsage(state);
     case "backup": return renderTabBackup(state, s.notice);
     case "about": return renderTabAbout(state);
     default: return renderTabChannels(state);
@@ -594,6 +597,7 @@ export function invalidateAllSettings() {
   resetMemoryTab();
   resetAppearanceTab();
   resetAdvancedTab();
+  resetSessionUsageTab();
   cleanupChannelsTab();
   cleanupBackupTab();
   cleanupAboutTab();
@@ -611,6 +615,7 @@ export function cleanupSettingsView() {
   resetMemoryTab();
   resetAppearanceTab();
   resetAdvancedTab();
+  resetSessionUsageTab();
   cleanupChannelsTab();
   cleanupBackupTab();
   cleanupAboutTab();
