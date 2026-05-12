@@ -105,6 +105,7 @@ import {
 } from "./wecom-config";
 import {
   extractWeixinConfig,
+  ensureWeixinPluginReady,
   saveWeixinConfig,
   isWeixinPluginBundled,
   startWeixinQrLogin,
@@ -113,6 +114,7 @@ import {
   listWeixinAccountIds,
   clearWeixinAccounts,
 } from "./weixin-config";
+import { reconcileExtensionsOnAppLaunch } from "./extension-mirror";
 import {
   FEISHU_CHANNEL_ID,
   isFeishuEnabled,
@@ -867,7 +869,7 @@ export function registerSettingsIpc(opts: SettingsIpcOptions = {}): void {
     if (!app.isPackaged) {
       return `开发模式未检测到企业微信插件，请先运行 npm run package:resources（当前目标：${process.platform}-${process.arch}）。`;
     }
-    return "企业微信插件组件缺失，请重新安装 OneClaw。";
+    return "企业微信插件组件缺失，请遵循插件文档指引进行安装。";
   }
 
   ipcMain.handle("settings:get-qqbot-config", async () => {
@@ -1245,6 +1247,9 @@ export function registerSettingsIpc(opts: SettingsIpcOptions = {}): void {
       { platform: "weixin", enabled },
       async () => {
         try {
+          if (enabled) {
+            await ensureWeixinPluginReady(reconcileExtensionsOnAppLaunch);
+          }
           const config = readUserConfig();
           saveWeixinConfig(config, { enabled });
           writeUserConfigAndRestart(config);
@@ -1285,6 +1290,7 @@ export function registerSettingsIpc(opts: SettingsIpcOptions = {}): void {
 
       // 扫码确认成功 → 保存凭据并重启 Gateway
       if (result.status === "confirmed" && result.accountId && result.botToken) {
+        await ensureWeixinPluginReady(reconcileExtensionsOnAppLaunch);
         const config = readUserConfig();
         const normalizedId = persistWeixinLoginSuccess(config, result);
         writeUserConfigAndRestart(config);

@@ -5,7 +5,9 @@ import os from "node:os";
 import path from "node:path";
 
 import {
+  ensureWeixinPluginReady,
   extractWeixinConfig,
+  isWeixinPluginBundled,
   persistWeixinLoginSuccess,
   WEIXIN_CHANNEL_ID,
   WEIXIN_PLUGIN_ID,
@@ -67,4 +69,60 @@ test("persistWeixinLoginSuccess 应同时写入账号凭据并启用微信 chann
     baseUrl: "https://ilinkai.weixin.qq.com",
     userId: "user-1",
   });
+});
+
+test("ensureWeixinPluginReady 应先执行 reconcile 再检查微信插件目录", async (t) => {
+  const stateDir = fs.mkdtempSync(path.join(os.tmpdir(), "oneclaw-weixin-"));
+  const prevStateDir = process.env.OPENCLAW_STATE_DIR;
+  process.env.OPENCLAW_STATE_DIR = stateDir;
+
+  t.after(() => {
+    if (prevStateDir === undefined) {
+      delete process.env.OPENCLAW_STATE_DIR;
+    } else {
+      process.env.OPENCLAW_STATE_DIR = prevStateDir;
+    }
+    fs.rmSync(stateDir, { recursive: true, force: true });
+  });
+
+  let reconciled = false;
+  assert.equal(isWeixinPluginBundled(), false);
+
+  await ensureWeixinPluginReady(async () => {
+    reconciled = true;
+    const pluginDir = path.join(stateDir, "extensions", WEIXIN_PLUGIN_ID);
+    fs.mkdirSync(path.join(pluginDir, "dist"), { recursive: true });
+    fs.writeFileSync(path.join(pluginDir, "openclaw.plugin.json"), "{}\n", "utf-8");
+    fs.writeFileSync(path.join(pluginDir, "dist", "index.js"), "module.exports = {};\n", "utf-8");
+  });
+
+  assert.equal(reconciled, true);
+  assert.equal(isWeixinPluginBundled(), true);
+});
+
+test("ensureWeixinPluginReady 应在 reconcile 后仍缺插件时拒绝启用微信", async (t) => {
+  const stateDir = fs.mkdtempSync(path.join(os.tmpdir(), "oneclaw-weixin-"));
+  const prevStateDir = process.env.OPENCLAW_STATE_DIR;
+  process.env.OPENCLAW_STATE_DIR = stateDir;
+
+  t.after(() => {
+    if (prevStateDir === undefined) {
+      delete process.env.OPENCLAW_STATE_DIR;
+    } else {
+      process.env.OPENCLAW_STATE_DIR = prevStateDir;
+    }
+    fs.rmSync(stateDir, { recursive: true, force: true });
+  });
+
+  let reconciled = false;
+
+  await assert.rejects(
+    ensureWeixinPluginReady(async () => {
+      reconciled = true;
+    }),
+    /微信插件未安装/,
+  );
+
+  assert.equal(reconciled, true);
+  assert.equal(isWeixinPluginBundled(), false);
 });
