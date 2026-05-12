@@ -34,6 +34,14 @@ export function isWeixinPluginBundled(): boolean {
   return hasEntry && fs.existsSync(path.join(pluginDir, "openclaw.plugin.json"));
 }
 
+// 启用微信前必须先把 mirror 同步到 external plugin 目录，避免写出 gateway 不认识的 channel。
+export async function ensureWeixinPluginReady(reconcileExtensions: () => Promise<void>): Promise<void> {
+  await reconcileExtensions();
+  if (!isWeixinPluginBundled()) {
+    throw new Error("微信插件未安装，请重新启动 OneClaw 或重新安装应用。");
+  }
+}
+
 // 从当前用户配置中提取微信配置，供设置页回显。
 export function extractWeixinConfig(config: any): ExtractedWeixinConfig {
   const entry = config?.plugins?.entries?.[WEIXIN_PLUGIN_ID];

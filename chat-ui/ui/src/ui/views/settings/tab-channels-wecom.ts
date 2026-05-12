@@ -154,7 +154,7 @@ export function renderChannelWecom(state: AppViewState) {
     <div class="oc-settings__section">
       <div style="display:flex;align-items:flex-start;justify-content:flex-end;margin-bottom:8px">
         <div style="display:flex;gap:12px;flex-shrink:0">
-          <a class="oc-settings__link" href="#" @click=${(e: Event) => { e.preventDefault(); ipc.openExternal("https://github.com/nicepkg/openclaw/blob/main/docs/wecom.md"); }}>${t("settings.channels.wecom.pluginReadme")} &rarr;</a>
+          <a class="oc-settings__link" href="#" @click=${(e: Event) => { e.preventDefault(); ipc.openExternal("https://doc.weixin.qq.com/doc/w3_AFYA1wY6ACoCNRxfnyGRJQaSa6jjJ?scode=AJEAIQdfAAo0RJmzxLAFYA1wY6ACo"); }}>${t("settings.channels.wecom.pluginReadme")} &rarr;</a>
           <a class="oc-settings__link" href="#" @click=${(e: Event) => { e.preventDefault(); ipc.openExternal("https://work.weixin.qq.com/wework_admin/frame"); }}>${t("settings.channels.wecom.openConsole")} &rarr;</a>
         </div>
       </div>
