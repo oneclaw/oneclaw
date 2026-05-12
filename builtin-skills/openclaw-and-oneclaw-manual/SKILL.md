@@ -1,6 +1,6 @@
 ---
 name: openclaw-and-oneclaw-manual
-description: "Use when user asks about OneClaw/OpenClaw product — configuration, troubleshooting, or capability boundaries. MUST query BEFORE answering or promising. Few-shot triggers: '怎么配置 Kimi API Key' → query channel A/C; '帮我剪个视频' → query capability boundary; '为什么你会忘记我们的对话' → query FAQ; '为什么卡了/变慢了' → query FAQ; '怎么换模型/开机启动怎么关' → query manual; '能不能帮我控制微信发消息' → query boundary before responding."
+description: "Use when user asks about OneClaw/OpenClaw product — configuration, troubleshooting, capability boundaries, or product meta behavior. MUST query official channels BEFORE answering or promising; do NOT substitute LLM common knowledge for product facts. Few-shot triggers — [config] '怎么配置 Kimi API Key / 怎么换模型 / 备份恢复 / 怎么更新卸载重置' → channel A, then B for integrations; [config] '快捷键 / 插件 / MCP / 配置文件在哪 / 开机启动 / 代理设置' → channel A; [config] '飞书 / 钉钉 / 企微 / QQ / 微信机器人怎么接' → channel B; [meta — product behavior 'why' questions] '为什么你会忘记 / 上下文丢了 / 记不住以前说的', '为什么卡了 / 变慢了 / 没反应 / 响应不完整', '扫不到二维码 / 配好了连不上 / Kimi 搜索不灵', '上下文多长 / 模型版本 / 更新后为什么变了' → channel A (manual index → FAQ link), never LLM common knowledge; [boundary] '帮我剪视频 / 音频 / 生图 / 截图 / 转码 / TTS' → channel A then C."
 metadata:
   {
     "openclaw":
@@ -25,34 +25,21 @@ metadata:
 
 ## 查询通道
 
-### 通道 A — OneClaw 手册（能力 / 边界 / 设置）
+### 通道 A — OneClaw 手册 + FAQ（能力 / 边界 / 设置 / 故障排查 / 产品 meta）
 
 **工具：WebFetch**
 
 入口：`https://oneclaw.cn/manual/index.md`
 
 ```
-1. WebFetch https://oneclaw.cn/manual/index.md   → 拿当前文件列表
-2. 按语义挑 1–2 个 .md
-3. WebFetch https://oneclaw.cn/manual/<文件名>.md → 读原文
+1. WebFetch https://oneclaw.cn/manual/index.md   → 拿当前可用资源清单（手册 .md、FAQ 入口等）
+2. 按语义挑相关链接
+3. WebFetch <链接>                                → 读原文 / 继续顺链接深入
 ```
 
-**不要硬编码文件名**——文件会动态增删，始终先抓 index。
+**不要硬编码资源 URL**——内容会动态增删，始终先抓 index。具体怎么取 FAQ、参数格式等细节由 index 自带说明，不要在脑里假设。
 
-### 通道 B — FAQ（故障排查）
-
-**工具：Bash (curl)**
-
-```bash
-# 列表
-curl -s https://feedback.oneclaw.cn/api/v1/open/faq
-# 详情
-curl -s https://feedback.oneclaw.cn/api/v1/open/faq/<faq_token>
-```
-
-先 list 拿 `{token, title}`，挑相关 token，再 get 正文。**不要硬编码 token**。限速 60 req/min，429 时退避。
-
-### 通道 C — OneClaw 教程（集成配置）
+### 通道 B — OneClaw 教程（集成配置）
 
 **工具：WebFetch**
 
@@ -65,7 +52,7 @@ curl -s https://feedback.oneclaw.cn/api/v1/open/faq/<faq_token>
 2. WebFetch https://oneclaw.cn/docs/<子页>  → 读详细步骤
 ```
 
-### 通道 D — OpenClaw 上游文档（能力深挖）
+### 通道 C — OpenClaw 上游文档（能力深挖）
 
 **工具：WebFetch**
 
@@ -87,11 +74,11 @@ Kimi/模型/API Key 怎么配、快捷键、插件/MCP、开机启动、代理�
 
 | 问题示例 | 通道 |
 |----------|------|
-| 怎么配置 Kimi API Key / 怎么换模型 | A → C |
+| 怎么配置 Kimi API Key / 怎么换模型 | A → B |
 | 快捷键 / 插件 / MCP 配置 | A |
 | 开机启动 / 代理设置 / 配置文件在哪 | A |
-| 怎么更新 / 卸载 / 重置 / 备份恢复 | A → C |
-| 飞书/钉钉/企微/QQ/微信机器人接入 | C |
+| 怎么更新 / 卸载 / 重置 / 备份恢复 | A → B |
+| 飞书/钉钉/企微/QQ/微信机器人接入 | B |
 
 #### (2) OneClaw 产品 meta 问题
 
@@ -99,10 +86,10 @@ Kimi/模型/API Key 怎么配、快捷键、插件/MCP、开机启动、代理�
 
 | 问题示例 | 通道 |
 |----------|------|
-| 为什么你会忘记 / 上下文丢了 / 记不住以前说的 | B |
-| 为什么重启 / 变慢 / 卡了 / 响应不完整 / 没反应 | B |
-| 上下文多长 / 模型版本 / 更新后为什么变了 | B → A |
-| 为什么 Kimi 搜索不灵 / 扫不到二维码 / 配好了连不上 | B |
+| 为什么你会忘记 / 上下文丢了 / 记不住以前说的 | A |
+| 为什么重启 / 变慢 / 卡了 / 响应不完整 / 没反应 | A |
+| 上下文多长 / 模型版本 / 更新后为什么变了 | A |
+| 为什么 Kimi 搜索不灵 / 扫不到二维码 / 配好了连不上 | A |
 
 #### (3) 能力边界类
 
@@ -110,16 +97,16 @@ Kimi/模型/API Key 怎么配、快捷键、插件/MCP、开机启动、代理�
 
 | 问题示例 | 通道 |
 |----------|------|
-| 编辑/生成视频音频图像（ffmpeg、剪辑、合成、配音、生图、转码、TTS） | A → D |
-| 控制本地 app/硬件（微信/QQ、PS、麦克风、摄像头、系统设置） | A → D |
-| 跑重任务（批量千条、GB 下载、跨日、实时监控） | A → D |
-| 任何你此刻不确定是否支持的能力 | A → D |
+| 编辑/生成视频音频图像（ffmpeg、剪辑、合成、配音、生图、转码、TTS） | A → C |
+| 控制本地 app/硬件（微信/QQ、PS、麦克风、摄像头、系统设置） | A → C |
+| 跑重任务（批量千条、GB 下载、跨日、实时监控） | A → C |
+| 任何你此刻不确定是否支持的能力 | A → C |
 
 #### 路由规则
 
-- 配置/设置：先查 A，A 没覆盖查 C
-- 产品 meta / 故障排查：走 B
-- 能力边界：先查 A，A 没覆盖再查 D
+- 配置/设置：先查 A，A 没覆盖查 B
+- 产品 meta / 故障排查：走 A（manual index 里含 FAQ 入口）
+- 能力边界：先查 A，A 没覆盖再查 C
 - 复合问题：并发查多个通道
 
 ## 响应策略
@@ -135,10 +122,10 @@ Kimi/模型/API Key 怎么配、快捷键、插件/MCP、开机启动、代理�
 | 「帮我剪视频」→ 直接「好的我来剪」 | 先查手册，确认是否支持 |
 | 「我会用 `ffmpeg -i … -vf …` 剪成竖版」 | 流程描述 = 承诺。先查手册确认 |
 | 「让我一步一步来，我先截图看看微信」 | 分步伪装谨慎。先查手册 |
-| 问"为什么你会忘记" → 答"LLM 上下文窗口有限……" | 产品行为 ≠ LLM 常识。查 FAQ 引用官方口径 |
-| 问"Kimi API Key 怎么配" → 凭记忆答路径 | 配置路径每版可能变。查通道 A/C 原文 |
+| 问"为什么你会忘记" → 答"LLM 上下文窗口有限……" | 产品行为 ≠ LLM 常识。先查通道 A，从 manual index 进 FAQ 引用官方口径 |
+| 问"Kimi API Key 怎么配" → 凭记忆答路径 | 配置路径每版可能变。查通道 A/B 原文 |
 | 问"怎么换模型 / 开机启动怎么关" → 脑补 UI 路径 | 所有 OneClaw 设置必须查手册 |
-| 问"为什么卡了" → 答"可能是网络 / 模型问题" | 故障排查走通道 B FAQ |
+| 问"为什么卡了" → 答"可能是网络 / 模型问题" | 故障排查走通道 A（manual index → FAQ） |
 
 ## 何时不用查
 
