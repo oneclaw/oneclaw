@@ -1,6 +1,6 @@
 ---
 name: openclaw-and-oneclaw-manual
-description: "Use when user asks about OneClaw/OpenClaw product — configuration, troubleshooting, capability boundaries, or product meta behavior. MUST query official channels BEFORE answering or promising; do NOT substitute LLM common knowledge for product facts. Few-shot triggers — [config] '怎么配置 Kimi API Key / 怎么换模型 / 备份恢复 / 怎么更新卸载重置' → channel A, then B for integrations; [config] '快捷键 / 插件 / MCP / 配置文件在哪 / 开机启动 / 代理设置' → channel A; [config] '飞书 / 钉钉 / 企微 / QQ / 微信机器人怎么接' → channel B; [meta — product behavior 'why' questions] '为什么你会忘记 / 上下文丢了 / 记不住以前说的', '为什么卡了 / 变慢了 / 没反应 / 响应不完整', '扫不到二维码 / 配好了连不上 / Kimi 搜索不灵', '上下文多长 / 模型版本 / 更新后为什么变了' → channel A (manual index → FAQ link), never LLM common knowledge; [boundary] '帮我剪视频 / 音频 / 生图 / 截图 / 转码 / TTS' → channel A then C."
+description: "凡用户问句或请求涉及 OneClaw/OpenClaw 产品的配置、行为或能力（且不是普通 shell 命令执行），先查官方手册再答 —— LLM 通用常识不算产品事实。三类典型场景：(1) 配置/集成（'怎么配 X' / '怎么接 Y'）；(2) 产品行为（'为什么 X 会 Y' / '上下文怎么算'）；(3) 能力边界（'帮我做 X' / '能不能 Y'）。回答或承诺执行前都要查；流程描述（'我用 ffmpeg / 我先截图…'）= 承诺，也算。Trigger on any OneClaw/OpenClaw-specific config/behavior/capability question or request; query official channels before answering or promising."
 metadata:
   {
     "openclaw":
