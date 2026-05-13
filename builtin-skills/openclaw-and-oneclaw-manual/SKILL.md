@@ -1,6 +1,6 @@
 ---
 name: openclaw-and-oneclaw-manual
-description: "凡用户问句或请求涉及 OneClaw/OpenClaw 产品的配置、行为或能力（且不是普通 shell 命令执行），先查官方手册再答 —— LLM 通用常识不算产品事实。三类典型场景：(1) 配置/集成（'怎么配 X' / '怎么接 Y'）；(2) 产品行为（'为什么 X 会 Y' / '上下文怎么算'）；(3) 能力边界（'帮我做 X' / '能不能 Y'）。回答或承诺执行前都要查；流程描述（'我用 ffmpeg / 我先截图…'）= 承诺，也算。Trigger on any OneClaw/OpenClaw-specific config/behavior/capability question or request; query official channels before answering or promising."
+description: "Use BEFORE answering when the user's request concerns the OneClaw/OpenClaw product itself: (1) configuration / setup; (2) troubleshooting or 'why does it behave like this' questions about product runtime; (3) capability boundary — user asks for an action and you are NOT certain the product natively supports it; (4) multi-turn dead-end — after several turns of attempts and the user's problem is still unresolved, stop guessing and consult the manual. LLM common knowledge is not a product fact — answer from official docs, not generic LLM/OS knowledge. **EXCEPTION (you MAY SKIP)**: when another OneClaw skill clearly matches the request, that native skill takes priority. Trigger keywords: API Key, Kimi, provider, model settings, switch model, config file, 设置, 配置, 模型切换, 怎么设置, 在哪配, 故障, 报错, 限制, 为什么. Few-shot triggers: 'Kimi API Key 在哪配？', '怎么换模型？', 'OneClaw 能剪视频吗？'."
 metadata:
   {
     "openclaw":
