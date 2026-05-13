@@ -1,6 +1,7 @@
 import * as fs from "fs";
 import * as path from "path";
 import { resolveGatewayPackageDir } from "./constants";
+import { syncPluginAllowOnEnable } from "./kimi-config";
 
 export const QQBOT_PLUGIN_ID = "qqbot";
 
@@ -87,6 +88,8 @@ export function saveQqbotConfig(config: any, params: SaveQqbotConfigParams): voi
     };
     return;
   }
+
+  syncPluginAllowOnEnable(config, QQBOT_PLUGIN_ID);
 
   config.channels[QQBOT_PLUGIN_ID] = {
     ...existingChannel,
