@@ -1,6 +1,5 @@
 /**
  * Setup wizard constants — providers, presets, models, and URLs.
- * Migrated from setup/setup.js.
  */
 import { t } from "../../i18n.ts";
 
@@ -22,13 +21,14 @@ export const CUSTOM_MODEL_SENTINEL = "__custom__";
 export const PROVIDERS: Record<string, ProviderDef> = {
   moonshot: {
     placeholder: "sk-...",
-    models: ["kimi-k2.5", "kimi-k2-0905-preview"],
+    models: ["kimi-k2.6", "kimi-k2.5", "kimi-k2-0905-preview"],
     hasSubPlatform: true,
   },
   anthropic: {
     placeholder: "sk-ant-...",
     platformUrl: "https://console.anthropic.com?utm_source=oneclaw",
     models: [
+      "claude-opus-4-7",
       "claude-sonnet-4-6",
       "claude-opus-4-6",
       "claude-sonnet-4-5-20250929",
@@ -39,7 +39,7 @@ export const PROVIDERS: Record<string, ProviderDef> = {
   openai: {
     placeholder: "sk-...",
     platformUrl: "https://platform.openai.com?utm_source=oneclaw",
-    models: ["gpt-5.4", "gpt-5.2", "gpt-5.2-codex"],
+    models: ["gpt-5.4", "gpt-5.4-mini", "gpt-5.2", "gpt-5.2-codex"],
   },
   google: {
     placeholder: "AI...",
@@ -56,27 +56,27 @@ export const CUSTOM_PRESETS: Record<string, CustomPresetDef> = {
   minimax: {
     providerKey: "minimax",
     placeholder: "eyJ...",
-    models: ["MiniMax-M2.5", "MiniMax-M2.5-highspeed"],
+    models: ["MiniMax-M2.7", "MiniMax-M2.7-highspeed", "MiniMax-M2.5", "MiniMax-M2.5-highspeed"],
   },
   "minimax-cn": {
     providerKey: "minimax-cn",
     placeholder: "eyJ...",
-    models: ["MiniMax-M2.5", "MiniMax-M2.5-highspeed"],
+    models: ["MiniMax-M2.7", "MiniMax-M2.7-highspeed", "MiniMax-M2.5", "MiniMax-M2.5-highspeed"],
   },
   "zai-global": {
     providerKey: "zai-global",
     placeholder: "...",
-    models: ["glm-5", "glm-4.7", "glm-4.7-flash", "glm-4.7-flashx"],
+    models: ["glm-5.1", "glm-5", "glm-4.7", "glm-4.7-flash", "glm-4.7-flashx"],
   },
   "zai-cn": {
     providerKey: "zai-cn",
     placeholder: "...",
-    models: ["glm-5", "glm-4.7", "glm-4.7-flash", "glm-4.7-flashx"],
+    models: ["glm-5.1", "glm-5", "glm-4.7", "glm-4.7-flash", "glm-4.7-flashx"],
   },
   "zai-cn-coding": {
     providerKey: "zai-cn-coding",
     placeholder: "...",
-    models: ["glm-5", "glm-4.7", "glm-4.7-flash", "glm-4.7-flashx"],
+    models: ["glm-5.1", "glm-5", "glm-4.7", "glm-4.7-flash", "glm-4.7-flashx"],
   },
   volcengine: {
     providerKey: "volcengine",
@@ -88,18 +88,18 @@ export const CUSTOM_PRESETS: Record<string, CustomPresetDef> = {
     placeholder: "...",
     models: [
       "doubao-seed-2.0-code", "doubao-seed-2.0-pro", "doubao-seed-2.0-lite", "doubao-seed-code",
-      "minimax-m2.5", "glm-4.7", "deepseek-v3.2", "kimi-k2.5", "ark-code-latest",
+      "minimax-m2.7", "glm-5.1", "deepseek-v3.2", "kimi-k2.6", "ark-code-latest",
     ],
   },
   qwen: {
     providerKey: "qwen",
     placeholder: "sk-...",
-    models: ["qwen-coder-plus-latest", "qwen-plus-latest", "qwen-max-latest", "qwen-turbo-latest"],
+    models: ["qwen3.6-max-preview", "qwen3.6-plus", "qwen-coder-plus-latest", "qwen-plus-latest", "qwen-max-latest", "qwen-turbo-latest"],
   },
   "qwen-coding": {
     providerKey: "qwen-coding",
     placeholder: "sk-sp-...",
-    models: ["qwen3.5-plus", "kimi-k2.5", "glm-5", "MiniMax-M2.5"],
+    models: ["qwen3.6-plus", "qwen3.5-plus", "kimi-k2.6", "glm-5.1", "MiniMax-M2.7"],
   },
   deepseek: {
     providerKey: "deepseek",
@@ -108,7 +108,7 @@ export const CUSTOM_PRESETS: Record<string, CustomPresetDef> = {
   },
 };
 
-export const KIMI_CODE_MODELS = ["k2p5"];
+export const KIMI_CODE_MODELS = ["kimi-for-coding"];
 
 export const SUB_PLATFORM_URLS: Record<string, string> = {
   "moonshot-cn": "https://platform.moonshot.cn?utm_source=oneclaw",

@@ -163,8 +163,8 @@ async function handleOAuthLogin(state: AppViewState, goToStep: (step: number) =>
     }
 
     const modelID = s.showCustomModelInput
-      ? (s.customModelId.trim() || "k2p5")
-      : (s.modelId || "k2p5");
+      ? (s.customModelId.trim() || "kimi-for-coding")
+      : (s.modelId || "kimi-for-coding");
 
     const verifyResult = await ipc.verifyKey({
       provider: "moonshot",
