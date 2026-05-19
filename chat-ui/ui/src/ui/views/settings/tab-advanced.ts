@@ -10,8 +10,6 @@
  *   - 三组件（binary/skill/extension）任一缺 → 弹 RepairModal「修复并启用」
  *   - 默认浏览器不是 Chrome/Edge → 弹 RepairModal 的 default-unsupported 视图
  *   - 全过 → 接受切换
- *
- * 旧 settings/settings.js 已实现完整闭环；本文件是对应 Lit 移植。
  */
 import { html, nothing } from "lit";
 import type { AppViewState } from "../../app-view-state.ts";

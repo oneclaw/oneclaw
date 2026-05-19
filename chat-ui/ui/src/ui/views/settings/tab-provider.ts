@@ -1,6 +1,5 @@
 /**
  * Settings: Provider Tab — two-column model list + provider form.
- * Migrated from settings/settings.js provider section.
  */
 import { html, nothing } from "lit";
 import type { AppViewState } from "../../app-view-state.ts";
