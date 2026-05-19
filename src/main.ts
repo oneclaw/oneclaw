@@ -737,18 +737,13 @@ ipcMain.on("app:setup-view-state", (_event, active: boolean) => {
   windowManager.inSetupView = active;
 });
 
-// ── macOS Dock 可见性：窗口全隐藏时切换纯托盘模式 ──
+// ── macOS Dock 可见性：始终保留 Dock 图标 ──
+// 红灯关闭走 hide-to-tray，若同时 hide Dock，用户会误以为 App 已退出（feedback #1060）。
+// 保留 Dock 让用户随时点击恢复窗口；后台常驻仍由 Tray 维持。
 
 function updateDockVisibility(): void {
   if (process.platform !== "darwin" || !app.dock) return;
-  const anyVisible = BrowserWindow.getAllWindows().some(
-    (w) => !w.isDestroyed() && w.isVisible(),
-  );
-  if (anyVisible) {
-    app.dock.show();
-  } else {
-    app.dock.hide();
-  }
+  app.dock.show();
 }
 
 let hasAppFocus = false;
