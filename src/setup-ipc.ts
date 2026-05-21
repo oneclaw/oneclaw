@@ -225,7 +225,7 @@ export function registerSetupIpc(deps: SetupIpcDeps): void {
 
         // Moonshot 子平台需要特殊处理
         if (provider === "moonshot") {
-          saveMoonshotConfig(config, apiKey, modelID, subPlatform);
+          saveMoonshotConfig(config, apiKey, modelID, subPlatform, supportImage);
           // 配置 kimi-code 时自动启用搜索插件 + 记忆搜索 embedding
           if (subPlatform === "kimi-code") {
             saveKimiSearchConfig(config, { enabled: true });

@@ -227,7 +227,6 @@ function buildParams(apiKey: string): Record<string, unknown> | null {
       params.baseURL = s.baseUrl.trim();
       params.modelID = mid;
       params.apiType = s.apiType;
-      params.supportImage = s.imageSupport;
     }
   } else {
     const mid = s.showCustomModelInput ? s.customModelId.trim() : s.modelId;
@@ -428,6 +427,8 @@ async function handleSave(state: AppViewState) {
       state.requestUpdate();
       return;
     }
+
+    params.supportImage = verifyResult.supportsImage;
 
     const payload: Record<string, unknown> = buildSavePayload(params);
     if (s.modelAlias.trim()) payload.modelAlias = s.modelAlias.trim();
@@ -939,16 +940,6 @@ export function renderTabProvider(state: AppViewState) {
               <label class="oc-settings__label">${t("setup.provider.customModelId")}</label>
               <input class="oc-settings__input" .value=${s.customModelId}
                 @input=${(e: Event) => { s.customModelId = (e.target as HTMLInputElement).value; }} />
-            </div>
-          ` : nothing}
-
-          ${isManualCustom ? html`
-            <div class="oc-settings__form-group">
-              <label class="oc-settings__checkbox">
-                <input type="checkbox" .checked=${s.imageSupport}
-                  @change=${(e: Event) => { s.imageSupport = (e.target as HTMLInputElement).checked; state.requestUpdate(); }} />
-                ${t("setup.provider.imageSupport")}
-              </label>
             </div>
           ` : nothing}
 

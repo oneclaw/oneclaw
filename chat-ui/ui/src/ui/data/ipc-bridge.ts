@@ -21,6 +21,7 @@ export interface VerifyResult {
   success: boolean;
   error?: string;
   message?: string;
+  supportsImage?: boolean;
 }
 
 export interface SetupCompleteResult {

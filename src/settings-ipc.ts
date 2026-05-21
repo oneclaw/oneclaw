@@ -66,6 +66,7 @@ import {
   saveMoonshotConfig,
   readUserConfig,
   writeUserConfig,
+  resolveModelInput,
 } from "./provider-config";
 import { SHARE_COPY_PAYLOAD } from "./share-copy";
 import { readSkillStoreRegistry, writeSkillStoreRegistry } from "./skill-store";
@@ -558,7 +559,7 @@ export function registerSettingsIpc(opts: SettingsIpcOptions = {}): void {
                 prov.models[modelIdx] = entry;
               }
               if (supportImage !== undefined) {
-                entry.input = supportImage ? ["text", "image"] : ["text"];
+                entry.input = resolveModelInput(providerKey, modelId, supportImage);
               }
             }
           }
@@ -595,11 +596,11 @@ export function registerSettingsIpc(opts: SettingsIpcOptions = {}): void {
                 }
               }
               if (!Array.isArray(existingProv.models)) existingProv.models = [];
-              existingProv.models.push({ id: modelID, name: modelID, input: ["text", "image"] });
+              existingProv.models.push({ id: modelID, name: modelID, input: resolveModelInput(provKey, modelID, supportImage) });
             } else {
               // provider 不存在 → 用 saveMoonshotConfig 创建
               const prevPrimary = config.agents.defaults.model.primary;
-              saveMoonshotConfig(config, apiKey, modelID, subPlatform);
+              saveMoonshotConfig(config, apiKey, modelID, subPlatform, supportImage);
               // 恢复 primary（add 模式不切换默认）
               if (prevPrimary) {
                 config.agents.defaults.model.primary = prevPrimary;
@@ -644,8 +645,7 @@ export function registerSettingsIpc(opts: SettingsIpcOptions = {}): void {
               }
               existingProv.apiKey = apiKey;
               if (!Array.isArray(existingProv.models)) existingProv.models = [];
-              const input = supportImage !== false ? ["text", "image"] : ["text"];
-              existingProv.models.push({ id: modelID, name: modelID, input });
+              existingProv.models.push({ id: modelID, name: modelID, input: resolveModelInput(configKey, modelID, supportImage) });
             } else {
               // provider 不存在 → 创建新 provider entry
               config.models.providers[configKey] = buildProviderConfig(provider, apiKey, modelID, baseURL, api, supportImage, customPreset);
@@ -667,7 +667,7 @@ export function registerSettingsIpc(opts: SettingsIpcOptions = {}): void {
             const prevModels: any[] = config.models.providers[provKey]?.models ?? [];
 
             const prevPrimary = config.agents.defaults.model.primary;
-            saveMoonshotConfig(config, apiKey, modelID, subPlatform);
+            saveMoonshotConfig(config, apiKey, modelID, subPlatform, supportImage);
 
             if (setAsDefault === false && prevPrimary) {
               config.agents.defaults.model.primary = prevPrimary;
@@ -3174,4 +3174,3 @@ function maskApiKey(key: string): string {
   if (!key || key.length <= 8) return key ? "••••••••" : "";
   return key.slice(0, 4) + "••••" + key.slice(-4);
 }
-

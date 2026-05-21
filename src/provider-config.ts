@@ -4,6 +4,8 @@ import * as fs from "fs";
 import { resolveUserConfigPath, resolveUserStateDir } from "./constants";
 import { syncOpenClawStateAfterWrite } from "./openclaw-health-state";
 import { backupCurrentUserConfig } from "./config-backup";
+import { probeImageSupport, type ImageProbeAuth, type ImageProbeOutcome } from "./provider-image-probe";
+import { lookupModelInput } from "./model-catalog";
 
 // ── Provider 配置预设（与 kimiclaw ProviderSetupView.swift 对齐） ──
 
@@ -120,6 +122,19 @@ export function deriveCustomConfigKey(baseURL: string): string {
   }
 }
 
+/**
+ * 统一解析模型的 input 能力。
+ * 只信任验证阶段显式传入的图片能力探测结果，默认保守写入 ["text"]。
+ */
+export function resolveModelInput(
+  _providerKey: string,
+  _modelId: string,
+  explicitSupportsImage?: boolean,
+): string[] {
+  if (explicitSupportsImage === true) return ["text", "image"];
+  return ["text"];
+}
+
 // ── 构建 Provider 配置对象 ──
 
 export function buildProviderConfig(
@@ -132,30 +147,31 @@ export function buildProviderConfig(
   customPreset?: string
 ): Record<string, unknown> {
   const preset = PROVIDER_PRESETS[provider];
+  const customPre = customPreset ? CUSTOM_PROVIDER_PRESETS[customPreset] : undefined;
+  const configKey = customPre
+    ? customPre.providerKey
+    : preset ? provider : (baseURL ? deriveCustomConfigKey(baseURL) : "custom");
 
-  // 预设 provider（Anthropic/OpenAI/Google）一律声明图片能力
+  const input = resolveModelInput(configKey, modelID, supportImage);
+
   if (preset) {
     return {
       apiKey,
       baseUrl: preset.baseUrl,
       api: preset.api,
-      models: [{ id: modelID, name: modelID, input: ["text", "image"] }],
+      models: [{ id: modelID, name: modelID, input }],
     };
   }
 
-  // Custom 内置预设命中时，使用预设的 baseUrl 和 api（前端传了 baseURL 时优先用前端值）
-  const customPre = customPreset ? CUSTOM_PROVIDER_PRESETS[customPreset] : undefined;
   if (customPre) {
     return {
       apiKey,
       baseUrl: baseURL || customPre.baseUrl,
       api: customPre.api,
-      models: [{ id: modelID, name: modelID, input: ["text", "image"] }],
+      models: [{ id: modelID, name: modelID, input }],
     };
   }
 
-  // Custom provider — 根据用户勾选决定是否声明图片能力
-  const input = supportImage !== false ? ["text", "image"] : ["text"];
   return {
     apiKey,
     baseUrl: baseURL,
@@ -170,17 +186,20 @@ export function saveMoonshotConfig(
   config: any,
   apiKey: string,
   modelID: string,
-  subPlatform: string
+  subPlatform: string,
+  supportImage?: boolean,
 ): void {
   const sub = MOONSHOT_SUB_PLATFORMS[subPlatform] || MOONSHOT_SUB_PLATFORMS["moonshot-cn"];
   const providerKey = sub.providerKey;
+
+  const input = resolveModelInput(providerKey, modelID, supportImage);
 
   // 所有子平台统一写法：apiKey + baseUrl + api + models 写入 providers
   config.models.providers[providerKey] = {
     apiKey,
     baseUrl: sub.baseUrl,
     api: sub.api,
-    models: [{ id: modelID, name: modelID, input: ["text", "image"], reasoning: true }],
+    models: [{ id: modelID, name: modelID, input, reasoning: true }],
   };
 
   config.agents.defaults.model.primary = `${providerKey}/${modelID}`;
@@ -437,9 +456,7 @@ export async function verifyCustom(apiKey: string, baseURL?: string, apiType?: s
   }
 }
 
-// ── 统一验证入口（根据 provider 名称分派） ──
-
-export async function verifyProvider(params: {
+type VerifyProviderParams = {
   provider: string;
   apiKey?: string;
   baseURL?: string;
@@ -452,7 +469,112 @@ export async function verifyProvider(params: {
   clientSecret?: string;
   customPreset?: string;
   proxyPort?: number;
-}): Promise<{ success: boolean; message?: string }> {
+};
+
+export type VerifyProviderResult = {
+  success: boolean;
+  message?: string;
+  supportsImage?: boolean;
+};
+
+type ImageSupportDeps = {
+  probeImageSupport?: typeof probeImageSupport;
+  lookupModelInput?: typeof lookupModelInput;
+  request?: typeof jsonRequest;
+};
+
+function resolveImageProbeConfig(params: VerifyProviderParams): {
+  apiType: string;
+  baseURL?: string;
+  auth: ImageProbeAuth;
+} | null {
+  const { provider, baseURL, subPlatform, apiType, customPreset, proxyPort } = params;
+
+  if (provider === "anthropic") {
+    return { apiType: "anthropic-messages", baseURL: PROVIDER_PRESETS.anthropic.baseUrl, auth: "x-api-key" };
+  }
+  if (provider === "openai") {
+    return { apiType: "openai-completions", baseURL: PROVIDER_PRESETS.openai.baseUrl, auth: "bearer" };
+  }
+  if (provider === "google") {
+    return { apiType: "google-generative-ai", baseURL: PROVIDER_PRESETS.google.baseUrl, auth: "none" };
+  }
+  if (provider === "moonshot") {
+    if (subPlatform === "kimi-code") {
+      return { apiType: "anthropic-messages", baseURL: proxyPort ? `http://127.0.0.1:${proxyPort}/coding` : undefined, auth: "none" };
+    }
+    const sub = MOONSHOT_SUB_PLATFORMS[subPlatform || "moonshot-cn"] || MOONSHOT_SUB_PLATFORMS["moonshot-cn"];
+    return { apiType: sub.api, baseURL: sub.baseUrl, auth: sub.api === "anthropic-messages" ? "x-api-key" : "bearer" };
+  }
+  if (provider === "custom") {
+    const customPre = customPreset ? CUSTOM_PROVIDER_PRESETS[customPreset] : undefined;
+    const effectiveApi = customPre ? customPre.api : (apiType || "openai-completions");
+    return {
+      apiType: effectiveApi,
+      baseURL: baseURL || customPre?.baseUrl,
+      auth: effectiveApi === "anthropic-messages" ? "x-api-key" : "bearer",
+    };
+  }
+
+  return null;
+}
+
+export async function resolveVerifiedImageSupport(
+  params: VerifyProviderParams,
+  deps: ImageSupportDeps = {},
+): Promise<boolean | undefined> {
+  const probeConfig = resolveImageProbeConfig(params);
+  if (!probeConfig) return undefined;
+  const outcome: ImageProbeOutcome = await (deps.probeImageSupport ?? probeImageSupport)({
+    ...probeConfig,
+    modelID: params.modelID,
+    apiKey: params.apiKey,
+    request: deps.request ?? jsonRequest,
+  });
+
+  let catalogProviderKey = params.provider;
+  let allowModelIdFallback = true;
+  if (params.provider === "moonshot") {
+    const sub = MOONSHOT_SUB_PLATFORMS[params.subPlatform || "moonshot-cn"] || MOONSHOT_SUB_PLATFORMS["moonshot-cn"];
+    catalogProviderKey = sub.providerKey;
+  } else if (params.provider === "custom") {
+    const customPre = params.customPreset ? CUSTOM_PROVIDER_PRESETS[params.customPreset] : undefined;
+    if (customPre) {
+      catalogProviderKey = customPre.providerKey;
+    } else {
+      catalogProviderKey = params.baseURL ? deriveCustomConfigKey(params.baseURL) : "custom";
+      allowModelIdFallback = false;
+    }
+  }
+
+  return resolveImageSupportFromOutcome(
+    catalogProviderKey,
+    params.modelID,
+    outcome,
+    allowModelIdFallback,
+    deps.lookupModelInput ?? lookupModelInput,
+  );
+}
+
+async function resolveImageSupportFromOutcome(
+  providerKey: string,
+  modelId: string | undefined,
+  outcome: ImageProbeOutcome,
+  allowModelIdFallback = true,
+  lookup: typeof lookupModelInput = lookupModelInput,
+): Promise<boolean> {
+  if (outcome.kind === "supported") return true;
+  if (outcome.kind === "unsupported") return false;
+  if (!modelId) return false;
+  const input = await lookup(providerKey, modelId, { allowModelIdFallback });
+  return input === "text,image";
+}
+
+// ── 统一验证入口（根据 provider 名称分派） ──
+
+export async function verifyProvider(
+  params: VerifyProviderParams,
+): Promise<VerifyProviderResult> {
   const {
     provider,
     apiKey,
@@ -506,7 +628,10 @@ export async function verifyProvider(params: {
       default:
         return { success: false, message: `未知 Provider: ${provider}` };
     }
-    return { success: true };
+    const supportsImage = await resolveVerifiedImageSupport(params);
+    return supportsImage === undefined
+      ? { success: true }
+      : { success: true, supportsImage };
   } catch (err: any) {
     return { success: false, message: err.message || String(err) };
   }
@@ -569,12 +694,16 @@ export function jsonRequest(
           if (code >= 200 && code < 300) {
             resolve();
           } else if (code === 401 || code === 403) {
-            reject(new Error(`API Key 无效 (${code})`));
+            const err: Error & { status?: number } = new Error(`API Key 无效 (${code})`);
+            err.status = code;
+            reject(err);
           } else {
             // 真实错误文本（已 JSON 解码），上限 1000 字以兼容罕见的极长 message。
             const text = extractProviderErrorMessage(body);
             const trimmed = text.length > 1000 ? `${text.slice(0, 1000)}…` : text;
-            reject(new Error(`请求失败 (${code}): ${trimmed}`));
+            const err: Error & { status?: number } = new Error(`请求失败 (${code}): ${trimmed}`);
+            err.status = code;
+            reject(err);
           }
         });
       }
