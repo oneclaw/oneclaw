@@ -5,7 +5,7 @@ contextBridge.exposeInMainWorld("oneclaw", {
   // Gateway 控制
   restartGateway: () => ipcRenderer.send("gateway:restart"),
   startGateway: () => ipcRenderer.send("gateway:start"),
-  stopGateway: () => ipcRenderer.send("gateway:stop"),
+  stopGateway: () => ipcRenderer.invoke("gateway:stop"),
   getGatewayState: () => ipcRenderer.invoke("gateway:state"),
 
   // 自动更新
@@ -120,6 +120,10 @@ contextBridge.exposeInMainWorld("oneclaw", {
   settingsInstallCli: () => ipcRenderer.invoke("settings:install-cli"),
   settingsUninstallCli: () => ipcRenderer.invoke("settings:uninstall-cli"),
   settingsListConfigBackups: () => ipcRenderer.invoke("settings:list-config-backups"),
+  settingsExportOpenclawState: () => ipcRenderer.invoke("settings:export-openclaw-state"),
+  settingsSelectOpenclawStateArchive: () => ipcRenderer.invoke("settings:select-openclaw-state-archive"),
+  settingsImportOpenclawState: (params: Record<string, unknown>) =>
+    ipcRenderer.invoke("settings:import-openclaw-state", params),
   settingsRestoreConfigBackup: (params: Record<string, unknown>) =>
     ipcRenderer.invoke("settings:restore-config-backup", params),
   settingsRestoreLastKnownGood: () => ipcRenderer.invoke("settings:restore-last-known-good"),
@@ -190,8 +194,11 @@ contextBridge.exposeInMainWorld("oneclaw", {
   openWebUI: () => ipcRenderer.send("app:open-webui"),
   getGatewayPort: () => ipcRenderer.invoke("gateway:port"),
   // 主进程通知 gateway 已就绪，Chat UI 可立即重连（跳过盲等指数退避）
-  onGatewayReady: (cb: () => void) => {
-    const listener = () => cb();
+  onGatewayReady: (cb: (payload?: { token?: string | null; gatewayUrl?: string | null }) => void) => {
+    const listener = (
+      _event: Electron.IpcRendererEvent,
+      payload?: { token?: string | null; gatewayUrl?: string | null },
+    ) => cb(payload);
     ipcRenderer.on("gateway:ready", listener);
     return () => ipcRenderer.removeListener("gateway:ready", listener);
   },

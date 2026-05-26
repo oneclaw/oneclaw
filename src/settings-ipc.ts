@@ -1,4 +1,4 @@
-import { app, ipcMain, session, shell } from "electron";
+import { app, BrowserWindow, dialog, ipcMain, session, shell } from "electron";
 import * as os from "os";
 import { pathToFileURL } from "url";
 import { spawn } from "child_process";
@@ -126,6 +126,14 @@ import { ensureGatewayAuthTokenInConfig, resolveGatewayAuthToken } from "./gatew
 import { callGatewayRpc } from "./gateway-rpc";
 import { getLaunchAtLoginState, setLaunchAtLoginEnabled } from "./launch-at-login";
 import { installCli, uninstallCli, getCliStatus } from "./cli-integration";
+import {
+  buildOpenclawStateArchiveDefaultFileName,
+  exportOpenclawStateToArchive,
+} from "./openclaw-state-archive";
+import {
+  buildOpenclawStateExportOverwriteWarning,
+  resolveOpenclawStateExportTarget,
+} from "./openclaw-state-export-target";
 import * as analytics from "./analytics";
 import * as log from "./logger";
 import * as path from "path";
@@ -235,12 +243,13 @@ async function runTrackedSettingsAction<T extends SettingsActionResult>(
 }
 
 interface SettingsIpcOptions {
+  importOpenclawState: (filePath: string) => Promise<void>;
   requestGatewayRestart?: () => void;
   getGatewayToken?: () => string;
 }
 
 // 注册 Settings 相关 IPC
-export function registerSettingsIpc(opts: SettingsIpcOptions = {}): void {
+export function registerSettingsIpc(opts: SettingsIpcOptions): void {
   // 写入配置后自动重启 gateway，避免新增 handler 遗漏重启调用
   const writeUserConfigAndRestart: typeof writeUserConfig = (config) => {
     writeUserConfig(config);
@@ -2319,6 +2328,82 @@ export function registerSettingsIpc(opts: SettingsIpcOptions = {}): void {
   ipcMain.handle("settings:list-config-backups", async () => {
     try {
       return { success: true, data: getConfigRecoveryData() };
+    } catch (err: any) {
+      return { success: false, message: err.message || String(err) };
+    }
+  });
+
+  // ── 导出 .openclaw 为标准 ZIP ──
+  ipcMain.handle("settings:export-openclaw-state", async (event) => {
+    try {
+      const win = BrowserWindow.fromWebContents(event.sender);
+      const options: Electron.SaveDialogOptions = {
+        defaultPath: buildOpenclawStateArchiveDefaultFileName(),
+        filters: [{ name: "ZIP Archive", extensions: ["zip"] }],
+      };
+      const result = win
+        ? await dialog.showSaveDialog(win, options)
+        : await dialog.showSaveDialog(options);
+      if (result.canceled || !result.filePath) {
+        return { success: true, data: { canceled: true } };
+      }
+
+      const target = resolveOpenclawStateExportTarget(result.filePath);
+      if (target.overwriteExisting) {
+        const warning = buildOpenclawStateExportOverwriteWarning(target.filePath);
+        const warningOptions: Electron.MessageBoxOptions = {
+          type: "warning",
+          buttons: [warning.confirmLabel, warning.cancelLabel],
+          defaultId: warning.defaultId,
+          cancelId: warning.cancelId,
+          noLink: true,
+          message: warning.message,
+          detail: warning.detail,
+        };
+        const confirmation = win
+          ? await dialog.showMessageBox(win, warningOptions)
+          : await dialog.showMessageBox(warningOptions);
+        if (confirmation.response !== 0) {
+          return { success: true, data: { canceled: true } };
+        }
+      }
+
+      await exportOpenclawStateToArchive(resolveUserStateDir(), target.filePath);
+      return { success: true, data: { canceled: false, filePath: target.filePath } };
+    } catch (err: any) {
+      return { success: false, message: err.message || String(err) };
+    }
+  });
+
+  // ── 选择 .openclaw ZIP；前端会先预检，再停 gateway，再导入 ──
+  ipcMain.handle("settings:select-openclaw-state-archive", async (event) => {
+    try {
+      const win = BrowserWindow.fromWebContents(event.sender);
+      const options: Electron.OpenDialogOptions = {
+        properties: ["openFile"],
+        filters: [{ name: "ZIP Archive", extensions: ["zip"] }],
+      };
+      const result = win
+        ? await dialog.showOpenDialog(win, options)
+        : await dialog.showOpenDialog(options);
+      if (result.canceled || result.filePaths.length === 0) {
+        return { success: true, data: { canceled: true } };
+      }
+      return { success: true, data: { canceled: false, filePath: result.filePaths[0] } };
+    } catch (err: any) {
+      return { success: false, message: err.message || String(err) };
+    }
+  });
+
+  // ── 导入 .openclaw ZIP：受保护流程在停 gateway 前完成唯一校验，失败时不触碰 .openclaw ──
+  ipcMain.handle("settings:import-openclaw-state", async (_event, params) => {
+    const filePath = typeof params?.filePath === "string" ? params.filePath : "";
+    try {
+      if (!filePath) {
+        return { success: false, message: "请选择要导入的 ZIP 数据包。" };
+      }
+      await opts.importOpenclawState(filePath);
+      return { success: true };
     } catch (err: any) {
       return { success: false, message: err.message || String(err) };
     }

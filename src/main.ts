@@ -21,7 +21,7 @@ import {
   setProgressCallback,
   setUpdateBannerStateCallback,
 } from "./auto-updater";
-import { isSetupComplete, resolveGatewayPort, resolveGatewayLogPath } from "./constants";
+import { isSetupComplete, resolveGatewayPort, resolveGatewayLogPath, resolveUserStateDir, resolveUserConfigPath } from "./constants";
 import { resolveGatewayAuthToken } from "./gateway-auth";
 import {
   getConfigRecoveryData,
@@ -39,6 +39,10 @@ import { uninstallGatewayDaemon, killPortProcess, getPortPid } from "./install-d
 import { detectOwnership, migrateFromLegacy, readOneclawConfig, writeOneclawConfig, appendChannelUtm } from "./oneclaw-config";
 import { startTokenRefresh, stopTokenRefresh, loadOAuthToken } from "./kimi-oauth";
 import { startAuthProxy, stopAuthProxy, setProxyAccessToken, setProxySearchDedicatedKey, getProxyPort } from "./kimi-auth-proxy";
+import { importOpenclawStateFromArchive, validateOpenclawStateArchive } from "./openclaw-state-archive";
+import { syncOpenClawStateAfterWrite } from "./openclaw-health-state";
+import { createOpenclawStateImportLifecycle } from "./openclaw-state-import-lifecycle";
+import { reconcileHostStateAfterOpenclawImport } from "./openclaw-state-import-host-reconcile";
 import * as log from "./logger";
 import * as analytics from "./analytics";
 
@@ -121,7 +125,13 @@ const gateway = new GatewayProcess({
     // gateway 就绪后立即通知 Chat UI 重连，避免盲等指数退避
     if (state === "running") {
       for (const w of BrowserWindow.getAllWindows()) {
-        if (!w.isDestroyed()) w.webContents.send("gateway:ready");
+        if (!w.isDestroyed()) {
+          const port = gateway.getPort();
+          w.webContents.send("gateway:ready", {
+            token: gateway.getToken(),
+            gatewayUrl: `ws://127.0.0.1:${port}`,
+          });
+        }
       }
     }
   },
@@ -336,6 +346,8 @@ function syncKimiSearchEnv(): void {
       // 代理模式：插件初始化需要 env var 存在，设占位符让插件通过检查
       // 实际请求走 proxy baseUrl，由代理注入真实 token
       gateway.setExtraEnv({ KIMI_PLUGIN_API_KEY: "proxy-managed" });
+    } else {
+      gateway.setExtraEnv({ KIMI_PLUGIN_API_KEY: "" });
     }
   } catch {
     // 配置读取失败不阻塞启动
@@ -345,9 +357,7 @@ function syncKimiSearchEnv(): void {
 // 启动 Gateway（最多尝试 3 次，覆盖 Windows 冷启动慢导致的前两次超时）
 async function ensureGatewayRunning(source: string): Promise<boolean> {
   migrateLegacyFeishuConfigForGatewayStart();
-  // 启动前从配置同步 token，避免 Setup 后仍使用旧内存 token。
-  gateway.setToken(resolveGatewayAuthToken());
-  syncKimiSearchEnv();
+  await syncGatewayRuntimeConfigFromDisk();
 
   for (let attempt = 1; attempt <= MAX_GATEWAY_START_ATTEMPTS; attempt++) {
     if (attempt === 1) {
@@ -393,12 +403,6 @@ async function startGatewayAndShowMain(source: string, opts: StartMainOptions = 
   const reportFailure = opts.reportFailure ?? true;
 
   log.info(`启动链路开始: ${source}`);
-  await ensureAuthProxy();
-
-  // OAuth token 后台刷新（仅 OAuth 用户需要）
-  if (loadOAuthToken()) {
-    ensureOAuthTokenRefresh();
-  }
 
   // 把内置 channel plugin 从 mirror reconcile 到 ~/.openclaw/extensions/。
   // 必须在 gateway 启动前 await——openclaw 首次扫描 plugin root 时要看到完整目录。
@@ -434,30 +438,87 @@ async function startGatewayAndShowMain(source: string, opts: StartMainOptions = 
   return running;
 }
 
-// 手动控制 Gateway：统一入口，确保启动前同步最新 token。
-function requestGatewayStart(source: string): void {
+// 启动前从磁盘重读运行参数；导入 .openclaw 或 Setup 完成后内存里的
+// port/token/proxy/token refresh 可能已经过期。
+async function syncGatewayRuntimeConfigFromDisk(): Promise<void> {
+  gateway.setPort(resolveGatewayPort());
   gateway.setToken(resolveGatewayAuthToken());
+  await ensureAuthProxy();
+  if (loadOAuthToken()) ensureOAuthTokenRefresh();
+  else stopTokenRefresh();
   syncKimiSearchEnv();
-  gateway.start().catch((err) => {
+}
+
+// 跟踪最近一次用户触发的 start/restart 游离 promise（已 .catch 包裹，必定 resolve）。
+// 导入 .openclaw 前会 await 它，确保在途启动不会与清空/还原状态目录并发。
+// 注意：仅 requestGatewayStart/requestGatewayRestart 喂这个变量；ensureGatewayRunning
+// （启动/Setup/导入自身的启动路径）刻意不跟踪，否则导入会 await 自己的 start 而死锁。
+// 那条未跟踪路径与 Settings 触发的导入在现实中不会重叠，且由 stop({ waitForStarting }) 兜底。
+let inflightGatewayOp: Promise<void> = Promise.resolve();
+
+// 手动控制 Gateway：统一入口，确保启动前同步最新 port/token。
+function requestGatewayStart(source: string): void {
+  if (openclawStateImportLifecycle.isImportActive()) {
+    log.info(`[gateway] start ignored during .openclaw import: ${source}`);
+    return;
+  }
+  inflightGatewayOp = (async () => {
+    await syncGatewayRuntimeConfigFromDisk();
+    await gateway.start();
+  })().catch((err) => {
     log.error(`Gateway 启动失败(${source}): ${err}`);
   });
 }
 
 // 重启 debounce：多次快速调用只执行最后一次，避免连环重启
 let restartTimer: ReturnType<typeof setTimeout> | null = null;
+function cancelPendingGatewayRestart(source: string): void {
+  if (!restartTimer) return;
+  clearTimeout(restartTimer);
+  restartTimer = null;
+  log.info(`[gateway] pending restart canceled: ${source}`);
+}
+
 function requestGatewayRestart(source: string): void {
+  if (openclawStateImportLifecycle.isImportActive()) {
+    log.info(`[gateway] restart ignored during .openclaw import: ${source}`);
+    return;
+  }
   if (restartTimer) clearTimeout(restartTimer);
   log.info(`[gateway] restart requested: ${source}`);
   restartTimer = setTimeout(() => {
     restartTimer = null;
+    if (openclawStateImportLifecycle.isImportActive()) {
+      log.info(`[gateway] restart skipped during .openclaw import: ${source}`);
+      return;
+    }
     log.info(`[gateway] restart executing: ${source}`);
-    gateway.setToken(resolveGatewayAuthToken());
-    syncKimiSearchEnv();
-    gateway.restart().catch((err) => {
+    inflightGatewayOp = (async () => {
+      await syncGatewayRuntimeConfigFromDisk();
+      await gateway.restart();
+    })().catch((err) => {
       log.error(`Gateway 重启失败(${source}): ${err}`);
     });
   }, 800);
 }
+
+const openclawStateImportLifecycle = createOpenclawStateImportLifecycle({
+  quiesceGateway: async () => {
+    cancelPendingGatewayRestart("settings:import-openclaw-state");
+    await inflightGatewayOp;
+  },
+  validateArchive: (filePath) => validateOpenclawStateArchive(filePath, resolveUserStateDir()),
+  stopGateway: () => gateway.stop({ waitForStarting: true }),
+  importArchive: (filePath) => log.withFileLoggingPaused(() => importOpenclawStateFromArchive(filePath, resolveUserStateDir())),
+  reconcileHostState: reconcileHostStateAfterOpenclawImport,
+  syncImportedConfigState: () => syncOpenClawStateAfterWrite(resolveUserConfigPath()),
+  startGateway: async () => {
+    const running = await ensureGatewayRunning("settings:import-openclaw-state");
+    if (!running) {
+      throw new Error(".openclaw 已导入，但 Gateway 启动失败。请检查导入的配置或恢复最近可用快照。");
+    }
+  },
+});
 
 // 解析当前最优 token：OAuth > 手动 key
 function resolveCurrentToken(): string {
@@ -520,7 +581,12 @@ async function ensureAuthProxy(): Promise<void> {
   try {
     const config = readUserConfig();
     // 只有配置了 kimi-coding provider 才启动代理
-    if (!config?.models?.providers?.["kimi-coding"]) return;
+    if (!config?.models?.providers?.["kimi-coding"]) {
+      setProxyAccessToken("");
+      setProxySearchDedicatedKey("");
+      await stopAuthProxy();
+      return;
+    }
 
     // 设置 token
     const token = resolveCurrentToken();
@@ -528,7 +594,7 @@ async function ensureAuthProxy(): Promise<void> {
 
     // 设置 Kimi Search 专属 key
     const searchKey = readKimiSearchDedicatedApiKey();
-    if (searchKey) setProxySearchDedicatedKey(searchKey);
+    setProxySearchDedicatedKey(searchKey || "");
 
     // 启动代理（优先历史端口）
     const preferredPort = parseProxyPortFromConfig();
@@ -559,7 +625,14 @@ function requestGatewayStop(source: string): void {
 
 ipcMain.on("gateway:restart", () => requestGatewayRestart("ipc:restart"));
 ipcMain.on("gateway:start", () => requestGatewayStart("ipc:start"));
-ipcMain.on("gateway:stop", () => requestGatewayStop("ipc:stop"));
+ipcMain.handle("gateway:stop", async () => {
+  try {
+    await gateway.stop();
+  } catch (err) {
+    log.error(`Gateway 停止失败(ipc:stop): ${err}`);
+    throw err;
+  }
+});
 ipcMain.handle("gateway:state", () => gateway.getState());
 ipcMain.on("app:quit", () => app.quit());
 ipcMain.on("app:check-updates", () => checkForUpdates(true));
@@ -706,6 +779,7 @@ registerSetupIpc({
 registerSettingsIpc({
   requestGatewayRestart: () => requestGatewayRestart("settings:kimi-search"),
   getGatewayToken: () => gateway.getToken(),
+  importOpenclawState: (filePath) => openclawStateImportLifecycle.importOpenclawState(filePath),
 });
 registerSkillStoreIpc();
 registerWorkspaceIpc();

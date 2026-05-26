@@ -18,6 +18,7 @@ try {
 // 使用 WriteStream 异步缓冲写入，避免高频 appendFileSync 阻塞主进程
 let logStream: fs.WriteStream | null = null;
 let writeCount = 0;
+let fileWritesPaused = false;
 const ROTATION_CHECK_INTERVAL = 1000;
 
 function getLogStream(): fs.WriteStream {
@@ -26,6 +27,37 @@ function getLogStream(): fs.WriteStream {
     logStream.on("error", () => { logStream = null; });
   }
   return logStream;
+}
+
+async function closeLogStream(): Promise<void> {
+  const stream = logStream;
+  if (!stream) return;
+  logStream = null;
+  await new Promise<void>((resolve) => {
+    let settled = false;
+    const finish = () => {
+      if (!settled) {
+        settled = true;
+        resolve();
+      }
+    };
+    stream.once("close", finish);
+    stream.once("error", finish);
+    stream.end();
+    setTimeout(finish, 1000).unref?.();
+  });
+}
+
+export async function withFileLoggingPaused<T>(fn: () => Promise<T>): Promise<T> {
+  // .openclaw import deletes app.log on Windows; close the stream first so
+  // fs.rm can remove that file without an open-handle failure.
+  fileWritesPaused = true;
+  await closeLogStream();
+  try {
+    return await fn();
+  } finally {
+    fileWritesPaused = false;
+  }
 }
 
 function checkRotation(): void {
@@ -45,10 +77,12 @@ function checkRotation(): void {
 // 写一行日志到文件 + console 镜像
 function write(level: string, msg: string): void {
   const line = `[${new Date().toISOString()}] [${level}] ${msg}\n`;
-  try {
-    getLogStream().write(line);
-    checkRotation();
-  } catch {}
+  if (!fileWritesPaused) {
+    try {
+      getLogStream().write(line);
+      checkRotation();
+    } catch {}
+  }
 
   try {
     if (level === "ERROR") {

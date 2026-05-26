@@ -204,6 +204,16 @@ export interface BackupData {
   backups: BackupEntry[];
 }
 
+export interface OpenclawStateExportResult {
+  canceled: boolean;
+  filePath?: string;
+}
+
+export interface OpenclawStateArchiveSelection {
+  canceled: boolean;
+  filePath?: string;
+}
+
 export interface AboutInfo {
   oneClawVersion: string;
   openClawVersion: string;
@@ -335,6 +345,9 @@ interface OneClawBridgeExtended {
       settingsGetDefaultBrowserName?: () => Promise<any>;
       // Settings: Backup
       settingsListConfigBackups?: () => Promise<any>;
+      settingsExportOpenclawState?: () => Promise<any>;
+      settingsSelectOpenclawStateArchive?: () => Promise<any>;
+      settingsImportOpenclawState?: (params: Record<string, unknown>) => Promise<any>;
       settingsRestoreConfigBackup?: (params: Record<string, unknown>) => Promise<any>;
       settingsRestoreLastKnownGood?: () => Promise<any>;
       settingsResetConfigAndRelaunch?: () => Promise<any>;
@@ -344,7 +357,7 @@ interface OneClawBridgeExtended {
       getGatewayState?: () => Promise<any>;
       restartGateway?: () => void;
       startGateway?: () => void;
-      stopGateway?: () => void;
+      stopGateway?: () => Promise<any>;
       getGatewayPort?: () => Promise<number>;
       // Update
       getUpdateState?: () => Promise<any>;
@@ -698,6 +711,18 @@ export async function settingsListConfigBackups(): Promise<BackupData> {
   return unwrapData<BackupData>(await oc().settingsListConfigBackups());
 }
 
+export async function settingsExportOpenclawState(): Promise<OpenclawStateExportResult> {
+  return unwrapData<OpenclawStateExportResult>(await oc().settingsExportOpenclawState());
+}
+
+export async function settingsSelectOpenclawStateArchive(): Promise<OpenclawStateArchiveSelection> {
+  return unwrapData<OpenclawStateArchiveSelection>(await oc().settingsSelectOpenclawStateArchive());
+}
+
+export async function settingsImportOpenclawState(params: { filePath: string }): Promise<void> {
+  unwrapVoid(await oc().settingsImportOpenclawState(params));
+}
+
 export async function settingsRestoreConfigBackup(params: { fileName: string }): Promise<void> {
   unwrapVoid(await oc().settingsRestoreConfigBackup(params));
 }
@@ -734,8 +759,8 @@ export function startGateway(): void {
   oc().startGateway();
 }
 
-export function stopGateway(): void {
-  oc().stopGateway();
+export function stopGateway(): Promise<void> {
+  return oc().stopGateway() as Promise<void>;
 }
 
 export function getGatewayPort(): Promise<number> {

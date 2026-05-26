@@ -268,8 +268,31 @@ export class GatewayProcess {
   }
 
   // 停止 Gateway：async，返回时保证进程已终结
-  async stop(): Promise<void> {
-    if (!this.proc || this.state === "stopped" || this.state === "stopping") return;
+  // waitForStarting 仅供导入路径使用：start() 的 starting 窗口里 proc 仍为 null，
+  // 若此时走下方 !this.proc 早退，导入会在 start 仍访问状态目录时清空它。传入后
+  // 会先等启动落定（running 或 stopped）再继续。退出/重启/IPC-stop 不传，行为不变。
+  async stop(opts: { waitForStarting?: boolean } = {}): Promise<void> {
+    if (this.state === "stopping") {
+      const existingStopDeadline = Date.now() + 5500;
+      while (this.getState() === "stopping" && Date.now() < existingStopDeadline) {
+        await sleep(100);
+      }
+      if (this.getState() === "stopping") {
+        await this.forceStopAfterTimeout();
+      }
+      return;
+    }
+    if (opts.waitForStarting && this.state === "starting") {
+      diagLog("stop() 等待在途 start 落定（waitForStarting）");
+      const deadline = Date.now() + HEALTH_TIMEOUT_MS + 2000;
+      while (this.state === "starting" && Date.now() < deadline) {
+        await sleep(100);
+      }
+      if (this.state === "starting") {
+        diagLog("WARN: waitForStarting 超时，start 仍未落定，继续执行 stop");
+      }
+    }
+    if (!this.proc || this.state === "stopped") return;
 
     const pid = this.proc.pid ?? 0;
     this.setState("stopping");
@@ -289,14 +312,18 @@ export class GatewayProcess {
 
     // 第三步：超时兜底 — POSIX 升级 SIGKILL，Windows 已经是 /F 了
     if (this.getState() === "stopping") {
-      diagLog("WARN: 停止超时，强制终止");
-      if (this.proc && !IS_WIN) {
-        this.proc.kill("SIGKILL");
-        await sleep(500);
-      }
-      this.proc = null;
-      this.setState("stopped");
+      await this.forceStopAfterTimeout();
     }
+  }
+
+  private async forceStopAfterTimeout(): Promise<void> {
+    diagLog("WARN: 停止超时，强制终止");
+    if (this.proc && !IS_WIN) {
+      this.proc.kill("SIGKILL");
+      await sleep(500);
+    }
+    this.proc = null;
+    this.setState("stopped");
   }
 
   // 停止已存在的旧 gateway（端口冲突时自动调用）
