@@ -163,7 +163,7 @@ export function renderChannelFeishu(state: AppViewState) {
       <div style="display:flex;align-items:flex-start;justify-content:flex-end;margin-bottom:8px">
         <div style="display:flex;gap:12px;flex-shrink:0">
           <a class="oc-settings__link" href="#" @click=${(e: Event) => { e.preventDefault(); ipc.openExternal("https://oneclaw.cn/docs/tutorials/feishu-bot.html"); }}>${t("settings.channels.feishu.setupGuide")} &rarr;</a>
-          <a class="oc-settings__link" href="#" @click=${(e: Event) => { e.preventDefault(); ipc.openExternal("https://open.feishu.cn/app"); }}>${t("settings.channels.feishu.openConsole")} &rarr;</a>
+          <a class="oc-settings__link" href="#" @click=${(e: Event) => { e.preventDefault(); ipc.openExternal("https://open.feishu.cn/page/launcher?from=backend_oneclick"); }}>${t("settings.channels.feishu.openConsole")} &rarr;</a>
         </div>
       </div>
 
