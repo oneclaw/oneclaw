@@ -14,6 +14,7 @@ import {
   PROVIDERS, CUSTOM_PRESETS, KIMI_CODE_MODELS, SUB_PLATFORM_URLS,
   CUSTOM_MODEL_SENTINEL, PROVIDER_DISPLAY_ORDER, getProviderLabels,
 } from "../setup/setup-constants.ts";
+import { deriveUsageView, type UsageLabels } from "./tab-provider-usage.lib.ts";
 
 /* ── types ── */
 
@@ -46,6 +47,7 @@ function createProviderState() {
     error: null as string | null,
     successMsg: null as string | null,
     usageData: null as any,
+    usageLoading: false,
     apiKey: "",
     modelId: "",
     customModelId: "",
@@ -175,38 +177,6 @@ function fillSavedProviderFields(saved: any) {
   if (saved.api) s.apiType = saved.api;
   if (saved.supportImage !== undefined) s.imageSupport = !!saved.supportImage;
   if (saved.customPreset) s.customPreset = saved.customPreset;
-}
-
-function formatResetDuration(seconds: number): string {
-  if (!seconds || seconds <= 0) return "";
-  const h = Math.floor(seconds / 3600);
-  const m = Math.floor((seconds % 3600) / 60);
-  const isZh = getLocale() === "zh";
-  if (h > 0) return h + (isZh ? "小时后重置" : "h reset");
-  if (m > 0) return m + (isZh ? "分钟后重置" : "m reset");
-  return isZh ? "即将重置" : "resetting soon";
-}
-
-function parseResetAt(val: string): number {
-  if (!val) return 0;
-  try {
-    let str = String(val);
-    if (str.includes(".") && str.endsWith("Z")) {
-      const parts = str.slice(0, -1).split(".");
-      str = parts[0] + "." + parts[1].slice(0, 3) + "Z";
-    }
-    const dt = new Date(str);
-    const diff = (dt.getTime() - Date.now()) / 1000;
-    return diff > 0 ? Math.round(diff) : 0;
-  } catch { return 0; }
-}
-
-function extractResetSeconds(data: any): number {
-  const keys = ["reset_at", "resetAt", "reset_time", "resetTime"];
-  for (const k of keys) { if (data[k]) return parseResetAt(data[k]); }
-  const durKeys = ["reset_in", "resetIn", "ttl", "window"];
-  for (const k of durKeys) { const v = parseInt(data[k], 10); if (v > 0) return v; }
-  return 0;
 }
 
 /* ── build params / payload ── */
@@ -513,11 +483,19 @@ async function checkOAuthStatus(state: AppViewState) {
 
 async function loadUsage(state: AppViewState) {
   if (!isKimiCodeProvider()) return;
+  if (s.usageLoading) return;
+  s.usageLoading = true;
+  state.requestUpdate();
   try {
     const result = await ipc.kimiGetUsage();
     if (result?.data) s.usageData = result.data;
+  } catch {
+    // Silent: refresh failures keep the existing data visible; first-load
+    // failures keep the panel hidden (usageData stays null).
+  } finally {
+    s.usageLoading = false;
     state.requestUpdate();
-  } catch {}
+  }
 }
 
 function onProviderChange(provider: string, state: AppViewState) {
@@ -734,6 +712,28 @@ function injectStyles() {
       transition: width 0.3s ease;
     }
     .oc-provider-usage-reset { font-size: 11px; color: var(--text-muted, #a1a1aa); white-space: nowrap; }
+    .oc-provider-usage-wrap { display: flex; flex-direction: column; gap: 6px; }
+    .oc-provider-usage-toolbar { display: flex; justify-content: flex-end; }
+    .oc-provider-usage-refresh {
+      width: 24px;
+      height: 24px;
+      border-radius: 6px;
+      border: 1px solid var(--border, #e0e0e0);
+      background: transparent;
+      color: var(--text-muted, #71717a);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      padding: 0;
+    }
+    .oc-provider-usage-refresh:hover:not(:disabled) {
+      color: var(--text-strong, #18181b);
+      background: var(--bg-secondary, #fbfbfb);
+    }
+    .oc-provider-usage-refresh:disabled { cursor: progress; opacity: 0.7; }
+    .oc-provider-usage-refresh.is-loading svg { animation: oc-setup-spin 0.8s linear infinite; }
+    @keyframes oc-setup-spin { to { transform: rotate(360deg); } }
 
     /* Collapse indicator */
     .oc-provider-collapse { margin-bottom: 8px; }
@@ -1016,38 +1016,51 @@ function renderOAuthSection(state: AppViewState) {
 
 function renderUsagePanel(state: AppViewState) {
   if (!s.usageData) return nothing;
-  const data = s.usageData;
+  const locale = getLocale() === "zh" ? "zh" : "en";
+  const labels: UsageLabels = {
+    rateFallback: t("settings.provider.usage.rateLimit"),
+    hourUsage: t("settings.provider.usage.hourUsage"),
+    minuteUsage: t("settings.provider.usage.minuteUsage"),
+  };
+  const view = deriveUsageView(s.usageData, locale, labels);
+  if (!view.week && !view.rate) return nothing;
 
-  const usage = data.usage ?? {};
-  const usedW = parseInt(usage.used ?? "0", 10) || (usage.remaining !== undefined ? ((parseInt(usage.limit ?? "0", 10) || 0) - (parseInt(usage.remaining ?? "0", 10) || 0)) : 0);
-  const limitW = parseInt(usage.limit ?? "0", 10) || 0;
-  const resetW = extractResetSeconds(usage);
-  const pctW = limitW > 0 ? Math.min(100, (usedW / limitW) * 100) : 0;
-
-  const limits = Array.isArray(data.limits) ? data.limits : [];
-  let usedL = 0, limitL = 0, resetL = 0;
-  if (limits.length > 0) {
-    const item = limits[0];
-    const detail = (item.detail && typeof item.detail === "object") ? item.detail : item;
-    usedL = parseInt(detail.used ?? "0", 10) || (detail.remaining !== undefined ? ((parseInt(detail.limit ?? "0", 10) || 0) - (parseInt(detail.remaining ?? "0", 10) || 0)) : 0);
-    limitL = parseInt(detail.limit ?? "0", 10) || 0;
-    resetL = extractResetSeconds(detail);
-  }
-  const pctL = limitL > 0 ? Math.min(100, (usedL / limitL) * 100) : 0;
+  const refreshTitle = t("settings.provider.usage.refresh");
+  const renderCard = (card: NonNullable<typeof view.week>) => html`
+    <div class="oc-provider-usage-card" title=${card.rawText}>
+      <div class="oc-provider-usage-title">${card.title || t("settings.provider.usage.weekUsage")}</div>
+      <div class="oc-provider-usage-value">${card.pctText}</div>
+      <div class="oc-provider-usage-bar"><div class="oc-provider-usage-bar-fill" style="width:${card.pct}%"></div></div>
+      ${card.resetText ? html`<div class="oc-provider-usage-reset">${card.resetText}</div>` : nothing}
+    </div>
+  `;
+  const weekCard = view.week
+    ? renderCard({ ...view.week, title: t("settings.provider.usage.weekUsage") })
+    : nothing;
+  const rateCard = view.rate ? renderCard(view.rate) : nothing;
 
   return html`
-    <div class="oc-provider-usage">
-      <div class="oc-provider-usage-card">
-        <div class="oc-provider-usage-title">${t("settings.provider.usage.weekUsage")}</div>
-        <div class="oc-provider-usage-value">${usedW} / ${limitW}</div>
-        <div class="oc-provider-usage-bar"><div class="oc-provider-usage-bar-fill" style="width:${pctW}%"></div></div>
-        ${resetW > 0 ? html`<div class="oc-provider-usage-reset">${t("settings.provider.usage.resetIn")} ${formatResetDuration(resetW)}</div>` : nothing}
+    <div class="oc-provider-usage-wrap">
+      <div class="oc-provider-usage-toolbar">
+        <button
+          class="oc-provider-usage-refresh ${s.usageLoading ? "is-loading" : ""}"
+          title=${refreshTitle}
+          aria-label=${refreshTitle}
+          ?disabled=${s.usageLoading}
+          @click=${() => loadUsage(state)}
+        >
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+               stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M3 12a9 9 0 0 1 15-6.7L21 8"/>
+            <path d="M21 3v5h-5"/>
+            <path d="M21 12a9 9 0 0 1-15 6.7L3 16"/>
+            <path d="M3 21v-5h5"/>
+          </svg>
+        </button>
       </div>
-      <div class="oc-provider-usage-card">
-        <div class="oc-provider-usage-title">${t("settings.provider.usage.rateLimit")}</div>
-        <div class="oc-provider-usage-value">${usedL} / ${limitL}</div>
-        <div class="oc-provider-usage-bar"><div class="oc-provider-usage-bar-fill" style="width:${pctL}%"></div></div>
-        ${resetL > 0 ? html`<div class="oc-provider-usage-reset">${t("settings.provider.usage.resetIn")} ${formatResetDuration(resetL)}</div>` : nothing}
+      <div class="oc-provider-usage">
+        ${weekCard}
+        ${rateCard}
       </div>
     </div>
   `;

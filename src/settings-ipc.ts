@@ -1629,9 +1629,10 @@ export function registerSettingsIpc(opts: SettingsIpcOptions): void {
   ipcMain.handle("kimi:get-usage", async () => {
     try {
       const config = readUserConfig();
-      const info = extractProviderInfo(config);
-      // 仅 kimi-code 子平台支持用量查询
-      if (info.provider !== "moonshot" || info.subPlatform !== "kimi-code") {
+      // 仅要求 Kimi Code provider 已配置即可，不再绑定默认模型。
+      // 允许「列表里选中 Kimi Code 但当前默认是别的模型」时也能查到用量。
+      const isKimiCodeConfigured = !!(config?.models?.providers?.["kimi-coding"]?.apiKey);
+      if (!isKimiCodeConfigured) {
         return { success: false, message: "Usage is only available for Kimi." };
       }
       const { loadOAuthToken, refreshOAuthToken } = await import("./kimi-oauth");

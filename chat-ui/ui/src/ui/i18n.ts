@@ -432,6 +432,8 @@ const dict: Record<Locale, Record<string, string>> = {
     "settings.provider.usage.rateLimit": "速率限制",
     "settings.provider.usage.refresh": "刷新",
     "settings.provider.usage.resetIn": "重置于",
+    "settings.provider.usage.hourUsage": "{n} 小时用量",
+    "settings.provider.usage.minuteUsage": "{n} 分钟用量",
 
     // Setup
     "setup.provider.apiKey": "API Key",
@@ -1004,6 +1006,8 @@ const dict: Record<Locale, Record<string, string>> = {
     "settings.provider.usage.rateLimit": "Rate Limit",
     "settings.provider.usage.refresh": "Refresh",
     "settings.provider.usage.resetIn": "Resets in",
+    "settings.provider.usage.hourUsage": "{n}h usage",
+    "settings.provider.usage.minuteUsage": "{n}m usage",
 
     // Setup
     "setup.provider.apiKey": "API Key",
