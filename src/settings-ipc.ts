@@ -39,6 +39,7 @@ import {
   normalizeRequestedBrowserProfileForSave,
 } from "./browser-profile-config";
 import {
+  createSingleFlight,
   getWebbridgeInstallState,
   getWebbridgePrecheck,
   installWebbridge,
@@ -46,6 +47,9 @@ import {
   readCacheManifest,
   resolveWebbridgeExtensionSpec,
   runWebbridgeSetupTask,
+  stopWebbridgeProcesses,
+  wipeWebbridgeInstall,
+  type WebbridgeWipeHandle,
 } from "./webbridge";
 import { resolveOneclawConfigPath } from "./oneclaw-config";
 import {
@@ -1752,6 +1756,7 @@ export function registerSettingsIpc(opts: SettingsIpcOptions): void {
                 getDefaultBrowser,
                 readSkillEnabled: readKimiWebbridgeSkillEnabled,
                 currentBrowserMode: getCurrentBrowserMode(),
+                readManifest: () => readCacheManifest(resolveWebbridgeDataDir()),
               });
               if (!pre.ok) {
                 return {
@@ -1849,6 +1854,7 @@ export function registerSettingsIpc(opts: SettingsIpcOptions): void {
         getDefaultBrowser,
         readSkillEnabled: readKimiWebbridgeSkillEnabled,
         currentBrowserMode: getCurrentBrowserMode(),
+        readManifest: () => readCacheManifest(resolveWebbridgeDataDir()),
       });
       return { success: true, data: result };
     } catch (err: any) {
@@ -1895,6 +1901,7 @@ export function registerSettingsIpc(opts: SettingsIpcOptions): void {
         getDefaultBrowser,
         readSkillEnabled: readKimiWebbridgeSkillEnabled,
         currentBrowserMode: getCurrentBrowserMode(),
+        readManifest: () => readCacheManifest(resolveWebbridgeDataDir()),
       });
       if (!pre.ok) {
         return {
@@ -1928,7 +1935,19 @@ export function registerSettingsIpc(opts: SettingsIpcOptions): void {
 
   // ── WebBridge 修复并启用：按 precheck 结果选择性修复 → 写 config + 重启 gateway ──
   // 单一默认浏览器策略：只对系统默认浏览器（Chrome/Edge）做修复；默认非支持直接拒绝。
+  // 两个修复入口（设置页按钮 + 侧边栏 pill）共用一把并发闸：修复涉及
+  // wipe 旧安装 + 重新下载，并发跑两次会互相踩文件。
+  const webbridgeRepairGate = createSingleFlight();
+
   ipcMain.handle("settings:webbridge-repair-and-enable", async () => {
+    if (!webbridgeRepairGate.tryEnter()) {
+      return {
+        success: false,
+        code: "REPAIR_IN_FLIGHT",
+        message: "WebBridge 修复正在进行中，请稍候再试。",
+      };
+    }
+    let wipe: WebbridgeWipeHandle | null = null;
     try {
       // 0. 默认浏览器必须是 Chrome/Edge，不然没法修
       const def = await getDefaultBrowser();
@@ -1957,6 +1976,7 @@ export function registerSettingsIpc(opts: SettingsIpcOptions): void {
         getDefaultBrowser,
         readSkillEnabled: readKimiWebbridgeSkillEnabled,
         currentBrowserMode: getCurrentBrowserMode(),
+        readManifest: () => readCacheManifest(resolveWebbridgeDataDir()),
       });
 
       // 2. 只有 extension 项要修时才检查默认浏览器是否在跑
@@ -1999,9 +2019,34 @@ export function registerSettingsIpc(opts: SettingsIpcOptions): void {
         }
       }
 
+      // 3.5 版本不一致 → 先把旧安装（dataDir + 两条 skill 路径）移入备份再装。
+      //     必须放在 BROWSER_RUNNING 等 early-return 之后：确保移走之后一定会走到安装。
+      //     manifest 不在原位 → installWebbridge 的 ETag 跳过不会命中 → 必然下载固定版本。
+      //     precheck 已把 missing.binary/skill 置 true，下面的 skip 标志自然不会跳过。
+      //     安装成功 commit 删备份；失败 restore 回滚，用户回到修复前的可用状态。
+      if (pre.versionMismatch) {
+        // 必须先停 daemon 再 wipe：Windows 上运行中的 exe 锁住目录，不停则
+        // 备份 rename 必失败（原地保留、未进备份），随后 force 安装原地覆盖，
+        // 一旦后续步骤失败 restore 将无备份可还原 → "新 binary + 旧 skill"混合态。
+        // 本分支必然重装（force），不存在无谓杀进程的问题。
+        await stopWebbridgeProcesses();
+        wipe = wipeWebbridgeInstall();
+        log.info(
+          `[webbridge-repair] 检测到 webbridge 版本与 OneClaw 期望不一致，已移入备份待重装: ${wipe.removed.join(", ")}`,
+        );
+      }
+
       // 4. 选择性修复：只对真正缺的项跑安装；扩展只装到默认浏览器
       const summary = await runWebbridgeSetupTask({
-        installer: () => installWebbridge({ force: false }),
+        installer: () =>
+          // 版本不一致 → 强制下载：绕过 ETag 跳过，确保收敛到固定版本并刷新
+          // manifest 标签（wipe 备份即使没能移走旧安装，这里也兜底）。
+          // stopProcesses：替换前停掉运行中的 daemon——Windows 上它锁着 exe
+          // 不停则 rename 必 EPERM；Mac 上不停则旧 daemon 继续跑旧版本。
+          installWebbridge({
+            force: pre.versionMismatch,
+            stopProcesses: () => stopWebbridgeProcesses(),
+          }),
         installExtensions: async () => {
           const spec = resolveWebbridgeExtensionSpec();
           if (!spec) {
@@ -2028,6 +2073,12 @@ export function registerSettingsIpc(opts: SettingsIpcOptions): void {
         },
       });
       if (summary.outcome !== "webbridge-ready") {
+        if (wipe) {
+          const restored = wipe.restore();
+          log.info(
+            `[webbridge-repair] 修复失败，已回滚到修复前的旧安装: ${restored.join(", ")}`,
+          );
+        }
         return {
           success: false,
           code: "REPAIR_FAILED",
@@ -2035,6 +2086,7 @@ export function registerSettingsIpc(opts: SettingsIpcOptions): void {
           summary,
         };
       }
+      wipe?.commit();
       // 三项全过 → 写 webbridge config + 重启 gateway
       const config = readUserConfig();
       Object.assign(config, applyBrowserModeConfig(config, "webbridge"));
@@ -2046,7 +2098,10 @@ export function registerSettingsIpc(opts: SettingsIpcOptions): void {
         : false;
       return { success: true, data: summary, openedBrowser };
     } catch (err: any) {
+      wipe?.restore();
       return { success: false, message: err.message || String(err) };
+    } finally {
+      webbridgeRepairGate.exit();
     }
   });
 
@@ -2061,6 +2116,14 @@ export function registerSettingsIpc(opts: SettingsIpcOptions): void {
   //   "DEFAULT_BROWSER_UNSUPPORTED" → 默认浏览器不是 Chrome/Edge
   //   "FAILED"                      → 修复中途失败
   ipcMain.handle("settings:webbridge-pill-repair", async () => {
+    if (!webbridgeRepairGate.tryEnter()) {
+      return {
+        success: false,
+        code: "REPAIR_IN_FLIGHT",
+        message: "WebBridge 修复正在进行中，请稍候再试。",
+      };
+    }
+    let wipe: WebbridgeWipeHandle | null = null;
     try {
       const def = await getDefaultBrowser();
       if (!def) {
@@ -2082,6 +2145,7 @@ export function registerSettingsIpc(opts: SettingsIpcOptions): void {
         getDefaultBrowser,
         readSkillEnabled: readKimiWebbridgeSkillEnabled,
         currentBrowserMode: getCurrentBrowserMode(),
+        readManifest: () => readCacheManifest(resolveWebbridgeDataDir()),
       });
 
       if (pre.ok) {
@@ -2144,9 +2208,28 @@ export function registerSettingsIpc(opts: SettingsIpcOptions): void {
         }
       }
 
+      // 3.5 版本不一致 → 先把旧安装移入备份再装（同 repair-and-enable，见该 handler 注释）
+      if (pre.versionMismatch) {
+        // 先停 daemon 再 wipe（Windows 文件锁会让备份 rename 失败导致回滚覆盖不全，
+        // 详见 repair-and-enable handler 同位置注释）
+        await stopWebbridgeProcesses();
+        wipe = wipeWebbridgeInstall();
+        log.info(
+          `[webbridge-pill-repair] 检测到 webbridge 版本与 OneClaw 期望不一致，已移入备份待重装: ${wipe.removed.join(", ")}`,
+        );
+      }
+
       // 4. 选择性修复：按 precheck 缺啥跑啥
       const summary = await runWebbridgeSetupTask({
-        installer: () => installWebbridge({ force: false }),
+        installer: () =>
+          // 版本不一致 → 强制下载：绕过 ETag 跳过，确保收敛到固定版本并刷新
+          // manifest 标签（wipe 备份即使没能移走旧安装，这里也兜底）。
+          // stopProcesses：替换前停掉运行中的 daemon——Windows 上它锁着 exe
+          // 不停则 rename 必 EPERM；Mac 上不停则旧 daemon 继续跑旧版本。
+          installWebbridge({
+            force: pre.versionMismatch,
+            stopProcesses: () => stopWebbridgeProcesses(),
+          }),
         installExtensions: async () => {
           const spec = resolveWebbridgeExtensionSpec();
           if (!spec) {
@@ -2174,12 +2257,19 @@ export function registerSettingsIpc(opts: SettingsIpcOptions): void {
       });
 
       if (summary.outcome !== "webbridge-ready") {
+        if (wipe) {
+          const restored = wipe.restore();
+          log.info(
+            `[webbridge-pill-repair] 修复失败，已回滚到修复前的旧安装: ${restored.join(", ")}`,
+          );
+        }
         return {
           success: false,
           code: "FAILED",
           message: summary.error ?? "unknown",
         };
       }
+      wipe?.commit();
 
       // 5. 写 config 重启 gateway——确保新装的 binary/skill enable=true 立即生效
       // 即便已经在 webbridge 模式，applyBrowserModeConfig 会把 skill enabled 翻回 true（修复 drift）
@@ -2204,11 +2294,14 @@ export function registerSettingsIpc(opts: SettingsIpcOptions): void {
         openedBrowser,
       };
     } catch (err: any) {
+      wipe?.restore();
       return {
         success: false,
         code: "FAILED",
         message: err?.message || String(err),
       };
+    } finally {
+      webbridgeRepairGate.exit();
     }
   });
 
