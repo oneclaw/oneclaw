@@ -111,7 +111,7 @@ A: 飞书、企业微信、钉钉、QQ Bot、微信。在设置 → 渠道 中�
 
 如果 OneClaw 帮到了你，请给个 ⭐ Star 支持一下！你的每一颗 Star 都是我们持续改进的动力 💪❤️
 
-[![Star History Chart](https://api.star-history.com/svg?repos=oneclaw/oneclaw&type=Date)](https://star-history.com/#oneclaw/oneclaw&Date)
+[![Star History Chart](https://star-history.dera.page/svg?repos=oneclaw/oneclaw&type=Date)](https://star-history.dera.page/#oneclaw/oneclaw&Date)
 
 ### 🤝 参与贡献
 
