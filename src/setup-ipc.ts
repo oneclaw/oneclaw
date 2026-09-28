@@ -41,6 +41,7 @@ import {
   installWebbridgeSkill,
   resolveWebbridgeExtensionSpec,
   runWebbridgeSetupTask,
+  stopWebbridgeProcesses,
 } from "./webbridge";
 import { readWebbridgeExtensionId } from "./constants";
 
@@ -392,7 +393,11 @@ export function registerSetupIpc(deps: SetupIpcDeps): void {
       // 下载失败时会降级到 openclaw 模式并通过 onBrowserModeChanged 触发 gateway 重启；
       // 失败状态由主窗左侧栏的"WebBridge 插件需要修复"提示通知用户。
       runWebbridgeSetupTask({
-        installer: () => installWebbridge(),
+        // stopProcesses：装机前若已有 webbridge daemon 在跑（如用户先用过
+        // install.sh / 其它 agent），替换二进制前先停掉，否则 Windows 必 EPERM。
+        // ETag 命中跳过下载时不会调用，不会无谓打断在用的 daemon。
+        installer: () =>
+          installWebbridge({ stopProcesses: () => stopWebbridgeProcesses() }),
         // Pre-step：用户之前从 chrome://extensions UI 删过扩展时，extId 会落到
         // Preferences.extensions.external_uninstalls 黑名单，之后写 External Extensions JSON
         // Chrome 启动会"读 JSON → 查黑名单 → 命中 → 静默跳过安装"，导致 setup 看起来全部成功

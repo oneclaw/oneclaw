@@ -10,6 +10,7 @@ import { promisify } from "util";
 import { URL } from "url";
 import {
   readWebbridgeCrxMetadata,
+  resolveUserStateDir,
   resolveWebbridgeCrxPath,
 } from "./constants";
 import type {
@@ -29,11 +30,16 @@ export function buildDownloadUrl(version: string, filename: string): string {
   return `${CDN_BASE_URL}/${version}/releases/${filename}`;
 }
 
+// webbridge 版本随 OneClaw 发版锁定，不跟随 CDN latest 漂移（升级时改这里并验证
+// CDN 三个平台二进制可下载）。latest 曾导致 #1330：v1.9.12 改了 skill 安装路径，
+// OneClaw 无感知，precheck 与实际安装位置脱节。
+export const PINNED_WEBBRIDGE_VERSION = "v1.9.17";
+
 export function resolveWebbridgeVersion(override?: string): string {
   if (override) return override;
   const env = process.env.KIMI_WEBBRIDGE_VERSION?.trim();
   if (env) return env;
-  return "latest";
+  return PINNED_WEBBRIDGE_VERSION;
 }
 
 export interface CacheManifest {
@@ -330,6 +336,12 @@ export interface InstallOptions {
   onProgress?: ProgressHandler;
   force?: boolean;
   maxRetries?: number;
+  /**
+   * 真正要下载替换二进制前调用（ETag 跳过时不调）。
+   * 生产传 stopWebbridgeProcesses：Windows 上运行中的 daemon 锁住 exe，
+   * 不先停掉则 rename 替换必然 EPERM；daemon 无自更新/自拉起，杀后按需重启。
+   */
+  stopProcesses?: () => Promise<void>;
 }
 
 export interface InstallResult {
@@ -424,6 +436,9 @@ export async function installWebbridge(
       };
     }
   }
+
+  // 确定要替换二进制 → 先停掉运行中的 webbridge 进程（Windows 文件锁；见 InstallOptions.stopProcesses）
+  await options.stopProcesses?.();
 
   // 下载（重试 transient 错误）
   let lastErr: unknown = null;
@@ -800,18 +815,142 @@ export async function installWebbridgeSkill(
   }
 }
 
+export interface StopProcessesDeps {
+  execFileAsync?: ExecFileAsync;
+  platform?: NodeJS.Platform | string;
+  binaryPath?: string;
+}
+
+const STOP_PROCESSES_TIMEOUT_MS = 10_000;
+
+/**
+ * 停掉所有运行中的 kimi-webbridge 进程（daemon 及其子进程）。
+ * Windows 按镜像名杀（任何安装位置都命中）；POSIX 按二进制路径杀。
+ * daemon 没有自动更新/自动拉起逻辑，杀掉后版本收敛完全由安装方掌控，
+ * 后续由 skill/agent 按需 `kimi-webbridge start` 重启。
+ */
+export async function stopWebbridgeProcesses(
+  deps: StopProcessesDeps = {},
+): Promise<void> {
+  const platform = deps.platform ?? process.platform;
+  const exec = deps.execFileAsync ?? DEFAULT_EXEC_FILE;
+  try {
+    if (platform === "win32") {
+      await exec("taskkill", ["/F", "/T", "/IM", "kimi-webbridge.exe"], {
+        timeout: STOP_PROCESSES_TIMEOUT_MS,
+        windowsHide: true,
+      });
+    } else {
+      const binaryPath =
+        deps.binaryPath ?? resolveDefaultBinaryPath(resolveDefaultDataDir());
+      await exec("pkill", ["-f", binaryPath], {
+        timeout: STOP_PROCESSES_TIMEOUT_MS,
+        windowsHide: true,
+      });
+    }
+  } catch {
+    // 无匹配进程时 taskkill(128)/pkill(1) 退出码非 0 → 等价于"已停止"
+  }
+}
+
 // ───────────────────────── Precheck ─────────────────────────
 
 function home(): string {
   return process.env.HOME ?? process.env.USERPROFILE ?? os.homedir();
 }
 
-// OneClaw 只关心自己的 OpenClaw runtime（~/.agents/skills/kimi-webbridge）。
+// OneClaw 只关心自己的 OpenClaw runtime 的 skill 副本。
+// webbridge v1.9.12（2026-05-23）起 install-skill 的 OpenClaw 安装目标从
+// ~/.agents/skills 改为 <stateDir>/skills（gateway 实际加载的位置），
+// 新旧两条路径任一存在即视为已安装：新装机器命中新路径，老机器靠旧路径通过。
 // install-skill -y 会顺手装到检测到的其它 AI runtime（Claude / Codex / Kimi CLI），
-// 但那些不属于 OneClaw 必须保证的能力，所以 precheck 只看这一处。
+// 但那些不属于 OneClaw 必须保证的能力，所以 precheck 只看这两处。
 export const KIMI_WEBBRIDGE_SKILL_PATHS: string[] = [
+  path.join(resolveUserStateDir(), "skills/kimi-webbridge"),
   path.join(home(), ".agents/skills/kimi-webbridge"),
 ];
+
+export interface WebbridgeWipeHandle {
+  /** 实际存在并被移走的路径（日志用）。 */
+  removed: string[];
+  /** 安装成功后调用：删除备份，旧安装彻底退场。 */
+  commit: () => void;
+  /**
+   * 安装失败后调用：清掉部分安装产物、把备份移回原位，用户回到修复前的可用状态。
+   * commit 之后调用是安全 no-op（catch 兜底里无脑调即可）。返回实际恢复的路径。
+   */
+  restore: () => string[];
+}
+
+// 版本不一致时的清理：把 dataDir（binary + manifest）与 OneClaw 关心的两条 skill
+// 路径移到 <path>.repair-bak 备份，让随后的安装从零开始（manifest 不在原位 →
+// ETag 跳过不会命中 → 必然重新下载）。安装成功 commit 删备份；失败 restore 回滚，
+// 避免"修复失败比不修复更糟"（旧安装被删光、用户彻底没法用）。
+// 只动 KIMI_WEBBRIDGE_SKILL_PATHS，不碰 install-skill 装到其它 AI runtime 的副本。
+export function wipeWebbridgeInstall(
+  opts: { dataDir?: string; skillPaths?: string[] } = {},
+): WebbridgeWipeHandle {
+  // 这些路径在别处只做只读探测，HOME 解析异常顶多探测落空；但这里有破坏性
+  // 文件操作——相对路径会落到 cwd 下面，basename 对不上说明路径被拼坏了，一律跳过。
+  const targets = [
+    opts.dataDir ?? resolveDefaultDataDir(),
+    ...(opts.skillPaths ?? KIMI_WEBBRIDGE_SKILL_PATHS),
+  ].filter(
+    (t) =>
+      path.isAbsolute(t) &&
+      [".kimi-webbridge", "kimi-webbridge"].includes(path.basename(t)),
+  );
+  const backedUp: Array<{ target: string; bak: string }> = [];
+  const removed: string[] = [];
+  for (const t of targets) {
+    if (!fs.existsSync(t)) continue;
+    const bak = `${t}.repair-bak`;
+    try {
+      fs.rmSync(bak, { recursive: true, force: true }); // 清上次失败的残留备份
+      fs.renameSync(t, bak);
+      backedUp.push({ target: t, bak });
+      removed.push(t);
+    } catch {
+      // rename 失败（极少见，如父目录不可写）→ 原地不动跳过。
+      // 不变量：要么备份成功可还原，要么没动过——绝不能"删了但还原不了"。
+      // 重装收敛不依赖这里：版本不一致时调用方对 installWebbridge 传 force，
+      // 绕过 ETag 跳过强制下载固定版本并刷新 manifest。
+    }
+  }
+  return {
+    removed,
+    commit: () => {
+      for (const { bak } of backedUp.splice(0)) {
+        fs.rmSync(bak, { recursive: true, force: true });
+      }
+    },
+    restore: () => {
+      const restoredPaths: string[] = [];
+      for (const { target, bak } of backedUp.splice(0)) {
+        if (!fs.existsSync(bak)) continue;
+        fs.rmSync(target, { recursive: true, force: true });
+        fs.renameSync(bak, target);
+        restoredPaths.push(target);
+      }
+      return restoredPaths;
+    },
+  };
+}
+
+// 修复操作的并发闸：同一时刻只允许一次修复在跑（wipe/重装期间再进一次会互相踩）。
+// 放在 webbridge.ts 而不是 settings-ipc.ts，纯粹为了可单测。
+export function createSingleFlight(): {
+  tryEnter: () => boolean;
+  exit: () => void;
+} {
+  let busy = false;
+  return {
+    tryEnter: () => (busy ? false : (busy = true)),
+    exit: () => {
+      busy = false;
+    },
+  };
+}
 
 export interface WebbridgePrecheckResult {
   ok: boolean;
@@ -822,6 +961,12 @@ export interface WebbridgePrecheckResult {
   };
   defaultBrowser: { id: string; name: string } | null;
   defaultUnsupported: boolean;
+  /**
+   * 已装版本与 OneClaw 期望版本不一致（manifest 存在且 version ≠ expectedVersion，
+   * 含旧代码写入的 "latest" 标签）。为 true 时 missing.binary / missing.skill 同时
+   * 置 true——修复 UI 零改动即显示需重装；修复 handler 据此先 wipe 再装。
+   */
+  versionMismatch: boolean;
 }
 
 export interface WebbridgePrecheckDeps {
@@ -848,6 +993,14 @@ export interface WebbridgePrecheckDeps {
    */
   currentBrowserMode?: "webbridge" | "openclaw" | "user";
   skillPaths?: string[];
+  /**
+   * 读 ~/.kimi-webbridge/.download-cache.json（installWebbridge 每次写入）。
+   * 不注入 → 默认视为无 manifest，不做版本一致性判断（向后兼容旧调用方与测试）；
+   * 生产调用方应注入 () => readCacheManifest(resolveWebbridgeDataDir()) 使检测生效。
+   */
+  readManifest?: () => CacheManifest | null;
+  /** 期望版本，默认 resolveWebbridgeVersion()（固定版本，env 覆盖仍生效）。 */
+  expectedVersion?: string;
 }
 
 export async function getWebbridgePrecheck(
@@ -864,6 +1017,17 @@ export async function getWebbridgePrecheck(
   const skillDisabledDrift =
     currentMode === "webbridge" && skillEnabled === false;
   const skillMissing = fileMissing || skillDisabledDrift;
+
+  // 版本一致性：manifest 标签 ≠ 期望版本（老用户是 "latest"）→ binary 和 skill 都按
+  // 需重装处理（skill 内容随二进制版本走，无法单独校验版本，只能整体重装收敛）。
+  // manifest 读不到但二进制在 → 版本无从证明（manifest 被删/损坏），同样收敛重装；
+  // 二进制也不在 → 全新用户，走正常安装路径，不算 mismatch。
+  // 完全没注入 readManifest（旧调用方/测试）→ 检测不启用，保持宽容。
+  const manifest = deps.readManifest?.() ?? null;
+  const expectedVersion = deps.expectedVersion ?? resolveWebbridgeVersion();
+  const versionMismatch =
+    deps.readManifest !== undefined &&
+    (manifest !== null ? manifest.version !== expectedVersion : !binaryMissing);
 
   const def = await deps.getDefaultBrowser();
   const defaultUnsupported = !def;
@@ -892,13 +1056,14 @@ export async function getWebbridgePrecheck(
   }
 
   return {
-    ok: !binaryMissing && !skillMissing && !extMissing,
+    ok: !binaryMissing && !skillMissing && !extMissing && !versionMismatch,
     missing: {
-      binary: binaryMissing,
-      skill: skillMissing,
+      binary: binaryMissing || versionMismatch,
+      skill: skillMissing || versionMismatch,
       extension: extMissing,
     },
     defaultBrowser,
     defaultUnsupported,
+    versionMismatch,
   };
 }

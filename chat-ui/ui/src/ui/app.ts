@@ -149,7 +149,7 @@ type OneClawBridge = {
   // pill 点击时主动修复（清 blocklist + 写 External JSON），需要浏览器关闭
   settingsWebbridgePillRepair?: () => Promise<{
     success: boolean;
-    code?: "READY" | "ALREADY_OK" | "BROWSER_RUNNING" | "DEFAULT_BROWSER_UNSUPPORTED" | "FAILED";
+    code?: "READY" | "ALREADY_OK" | "BROWSER_RUNNING" | "DEFAULT_BROWSER_UNSUPPORTED" | "REPAIR_IN_FLIGHT" | "FAILED";
     browserName?: string;
     message?: string;
     includesExtension?: boolean;

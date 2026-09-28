@@ -170,12 +170,17 @@ export interface WebbridgePrecheckData {
   missing: { binary: boolean; skill: boolean; extension: boolean };
   defaultBrowser: { id: string; name: string } | null;
   defaultUnsupported: boolean;
+  // 已装 webbridge 版本与 OneClaw 固定版本不一致，或二进制在但版本清单读不到
+  // （无从证明版本，按不一致收敛）。修复时主进程会先备份旧安装再重装，失败自动回滚；
+  // 为 true 时 missing.binary/skill 已同时置 true，UI 无需单独处理
+  versionMismatch: boolean;
 }
 
 // repair-and-enable handler 返回的非 success 错误码
 export type WebbridgeRepairCode =
   | "DEFAULT_BROWSER_UNSUPPORTED"
   | "BROWSER_RUNNING"
+  | "REPAIR_IN_FLIGHT"
   | "REPAIR_FAILED";
 
 export interface WebbridgeRepairResult {
